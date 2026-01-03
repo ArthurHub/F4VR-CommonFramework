@@ -9,6 +9,42 @@
 #include "ModBase.h"
 #include "Version.h"
 
+namespace
+{
+    bool isPathForbiddenAscii(const unsigned char c)
+    {
+        if (c < 0x20 || c == 0x7F)
+            return true;
+        switch (c) {
+        case '<':
+        case '>':
+        case ':':
+        case '"':
+        case '/':
+        case '\\':
+        case '|':
+        case '?':
+        case '*':
+            return true;
+        default:
+            return false;
+        }
+    }
+
+    bool isPathSafeAscii(const unsigned char c)
+    {
+        return (c >= '0' && c <= '9') ||
+            (c >= 'A' && c <= 'Z') ||
+            (c >= 'a' && c <= 'z') ||
+            c == '_' || c == '-' || c == '.' || c == ' ';
+    }
+
+    char charToHexDigit(const unsigned char v)
+    {
+        return v < 10 ? static_cast<char>('0' + v) : static_cast<char>('a' + (v - 10));
+    }
+}
+
 namespace f4cf::common
 {
     /**
@@ -207,12 +243,26 @@ namespace f4cf::common
      */
     std::string sanitizePathWindows(const std::string& path)
     {
-        std::string sanitized = path;
-        constexpr auto illegal = "<>:\"/\\|?*";
-        std::erase_if(sanitized, [](const unsigned char c) {
-            return c < 32 || std::string_view(illegal).find(c) != std::string_view::npos;
-        });
-        return sanitized;
+        std::string out;
+        out.reserve(path.size() * 3); // worst case
+
+        for (const unsigned char b : path) {
+            if (isPathForbiddenAscii(b)) {
+                // skip forbidden characters
+            } else if (b < 0x80 && isPathSafeAscii(b)) {
+                out.push_back(static_cast<char>(b));
+            } else {
+                out.push_back(charToHexDigit((b >> 4) & 0xF));
+                out.push_back(charToHexDigit(b & 0xF));
+            }
+        }
+
+        // Windows: filenames cannot end with '.' or space
+        while (!out.empty() && (out.back() == '.' || out.back() == ' ')) {
+            out.pop_back();
+        }
+
+        return out;
     }
 
     /**
