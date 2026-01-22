@@ -355,14 +355,36 @@ namespace f4cf::f4vr
     }
 
     /**
+     * Get the first child node of the given node if exists.
+     */
+    RE::NiAVObject* get1StChildNode(RE::NiAVObject* node)
+    {
+        if (!node) {
+            return nullptr;
+        }
+        if (const auto niNode = node->IsNode()) {
+            if (!niNode->children.empty()) {
+                return niNode->children[0].get();
+            }
+        }
+        return nullptr;
+    }
+
+    /**
      * Find a node by name restricted to firest level of children only.
      */
-    RE::NiNode* find1StChildNode(RE::NiAVObject* node, const char* name) { return findNode(node, name, 1); }
+    RE::NiNode* find1StChildNode(RE::NiAVObject* node, const char* name)
+    {
+        return findNode(node, name, 1);
+    }
 
     /**
      * Return true if the node is visible, false if it is hidden or null.
      */
-    bool isNodeVisible(const RE::NiAVObject* node) { return node && !(node->flags.flags & 0x1); }
+    bool isNodeVisible(const RE::NiAVObject* node)
+    {
+        return node && !(node->flags.flags & 0x1);
+    }
 
     /**
      * Change flags to show or hide a node
