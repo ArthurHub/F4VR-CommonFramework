@@ -119,6 +119,21 @@ namespace f4cf::logger
     MAKE_SOURCE_LOGGER(error, err);
     MAKE_SOURCE_LOGGER(critical, critical);
 
+    inline bool isTraceEnabled()
+    {
+        return internal::_logger && internal::_logger->should_log(spdlog::level::trace);
+    }
+
+    inline bool isDebugEnabled()
+    {
+        return internal::_logger && internal::_logger->should_log(spdlog::level::debug);
+    }
+
+    inline bool isInfoEnabled()
+    {
+        return internal::_logger && internal::_logger->should_log(spdlog::level::info);
+    }
+
     /**
      * Same as calling info() but only one message log per "time" in milliseconds, other logs are dropped.
      * Use the message format as a key to identify the log messages that should be sampled.
