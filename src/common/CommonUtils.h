@@ -1,6 +1,7 @@
 #pragma once
 
 #include <optional>
+#include <string_view>
 #include <vector>
 #include <Windows.h>
 
@@ -14,6 +15,7 @@ namespace f4cf::common
     std::string ltrim(std::string s);
     std::string rtrim(std::string s);
     std::string trim(const std::string& s);
+    bool hasNonWhitespaceText(std::string_view s);
 
     // Resource related functions
     std::optional<std::string> getEmbeddedResourceAsStringIfExists(WORD resourceId);

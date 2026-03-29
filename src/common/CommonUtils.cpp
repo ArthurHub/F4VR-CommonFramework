@@ -1,5 +1,6 @@
 #include "CommonUtils.h"
 
+#include <cctype>
 #include <chrono>
 #include <filesystem>
 #include <fstream>
@@ -87,6 +88,13 @@ namespace f4cf::common
     std::string trim(const std::string& s)
     {
         return ltrim(rtrim(s));
+    }
+
+    bool hasNonWhitespaceText(const std::string_view s)
+    {
+        return std::ranges::any_of(s, [](const unsigned char ch) {
+            return !std::isspace(ch);
+        });
     }
 
     /**
