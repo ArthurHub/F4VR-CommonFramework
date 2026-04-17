@@ -75,7 +75,7 @@ namespace f4cf::vrcf
     {
         Thumbstick = 0,
         Trigger,
-        Unknown1,
+        Grip,
         Unknown2,
         Unknown3,
     };
