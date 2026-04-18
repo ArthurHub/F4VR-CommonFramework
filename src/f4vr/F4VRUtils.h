@@ -18,6 +18,7 @@ namespace f4cf::f4vr
     void setWandsVisibility(bool show, bool leftWand);
     bool IsWeaponDrawn();
     bool isMeleeWeaponEquipped();
+    bool isUnarmedWeaponEquipped();
     std::string getEquippedWeaponName();
     bool hasKeyword(const F4SEVR::TESObjectARMO* armor, std::uint32_t keywordFormId);
     bool isJumpingOrInAir();

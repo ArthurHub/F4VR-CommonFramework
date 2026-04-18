@@ -29,6 +29,9 @@ namespace f4cf::f4vr
     using _IsSneaking = bool(*)(F4SEVR::Actor* a_actor);
     inline REL::Relocation<_IsSneaking> IsSneaking(REL::Offset(0x24d20));
 
+    typedef RE::TESObjectWEAP* (*_GetEquippedWeapon)(RE::BSScript::Internal::VirtualMachine* registry, std::uint64_t stackID, RE::Actor* actor, std::uint64_t aiEquipIndex);
+    inline REL::Relocation<_GetEquippedWeapon> GetEquippedWeapon(REL::Offset(0x140d790));
+
     /**
      * The papyrus Actor.SetRestrained method that prevents the player from moving, rotating, and shooting.
      */

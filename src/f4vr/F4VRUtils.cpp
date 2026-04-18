@@ -74,6 +74,15 @@ namespace f4cf::f4vr
     }
 
     /**
+     * @return true if the player is in melee/unarmed stance with no weapon item equipped (pure fists).
+     */
+    bool isUnarmedWeaponEquipped()
+    {
+        return CombatUtilities_IsActorUsingMelee(getPlayer())
+            && GetEquippedWeapon(RE::BSScript::Internal::VirtualMachine::GetSingleton(), 0, RE::PlayerCharacter::GetSingleton(), 0) == nullptr;
+    }
+
+    /**
      * Get the game name of the equipped weapon.
      */
     std::string getEquippedWeaponName()
