@@ -1,7 +1,8 @@
 {
   "permissions": {
+    "defaultMode": "acceptEdits",
     "allow": [
-      "Bash(grep -E \"\\\\.\\(cpp|h|hlsl\\)$\")"
+      "Bash"
     ]
   }
 }
