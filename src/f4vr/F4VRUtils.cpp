@@ -1,7 +1,6 @@
 #include "F4VRUtils.h"
 
 #include "PlayerNodes.h"
-#include "f4sevr/Forms.h"
 #include "f4sevr/PapyrusUtils.h"
 
 namespace f4cf::f4vr
@@ -54,7 +53,7 @@ namespace f4cf::f4vr
     /**
      * @return true if the player has any weapon in the hand (including fists).
      */
-    bool IsWeaponDrawn() { return getPlayer()->actorState.IsWeaponDrawn(); }
+    bool IsWeaponDrawn() { return getPlayer()->GetWeaponMagicDrawn(); }
 
     /**
      * @return true if the equipped weapon is a melee weapon type.
@@ -87,18 +86,23 @@ namespace f4cf::f4vr
      */
     std::string getEquippedWeaponName()
     {
-        const auto* equipData = getPlayer()->middleProcess->unk08->equipData;
-        return equipData ? equipData->item->GetFullName() : "";
+        const auto* process = getPlayer()->currentProcess;
+        const auto* middleHigh = process ? process->middleHigh : nullptr;
+        if (!middleHigh || middleHigh->equippedItems.empty()) {
+            return "";
+        }
+        const auto* item = middleHigh->equippedItems[0].item.object;
+        return item ? std::string{ RE::TESFullName::GetFullName(*item) } : std::string{};
     }
 
-    bool hasKeyword(const F4SEVR::TESObjectARMO* armor, const std::uint32_t keywordFormId)
+    bool hasKeyword(const RE::TESObjectARMO* armor, const std::uint32_t keywordFormId)
     {
         if (!armor) {
             return false;
         }
-        for (std::uint32_t i = 0; i < armor->keywordForm.numKeywords; i++) {
-            if (armor->keywordForm.keywords[i]) {
-                if (armor->keywordForm.keywords[i]->formID == keywordFormId) {
+        for (std::uint32_t i = 0; i < armor->numKeywords; i++) {
+            if (armor->keywords[i]) {
+                if (armor->keywords[i]->formID == keywordFormId) {
                     return true;
                 }
             }
@@ -113,19 +117,16 @@ namespace f4cf::f4vr
     // Thanks Shizof and SmoothMovementVR for below code
     bool isInPowerArmor()
     {
-        const auto player = getPlayer();
-        if ((player)->equipData) {
-            if ((player)->equipData->slots[0x03].item != nullptr) {
-                if (const auto equippedForm = (player)->equipData->slots[0x03].item) {
-                    if (equippedForm->formType == RE::ENUM_FORM_ID::kARMO) {
-                        if (const auto armor = reinterpret_cast<const F4SEVR::TESObjectARMO*>(equippedForm)) {
-                            return hasKeyword(armor, KEYWORD_POWER_ARMOR) || hasKeyword(armor, KEYWORD_POWER_ARMOR_FRAME);
-                        }
-                    }
-                }
-            }
+        const auto biped = getPlayer()->biped.get();
+        if (!biped) {
+            return false;
         }
-        return false;
+        const auto* equippedForm = biped->object[0x03].parent.object;
+        if (!equippedForm || equippedForm->formType != RE::ENUM_FORM_ID::kARMO) {
+            return false;
+        }
+        const auto* armor = static_cast<const RE::TESObjectARMO*>(equippedForm);
+        return hasKeyword(armor, KEYWORD_POWER_ARMOR) || hasKeyword(armor, KEYWORD_POWER_ARMOR_FRAME);
     }
 
     /**

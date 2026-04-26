@@ -4,7 +4,6 @@
 // ReSharper disable CppClangTidyBugproneReservedIdentifier
 
 #include "MiscStructs.h"
-#include "f4sevr/Forms.h"
 
 class BSAnimationManager;
 
@@ -20,13 +19,13 @@ namespace f4cf::f4vr
 
     inline REL::Relocation testin(REL::Offset(0x5a3b888));
 
-    using _IsInAir = bool(*)(F4SEVR::Actor* actor);
+    using _IsInAir = bool(*)(RE::Actor* actor);
     inline REL::Relocation<_IsInAir> IsInAir(REL::Offset(0x00DC3230));
 
-    using _GetSitState = int(*)(RE::BSScript::Internal::VirtualMachine* registry, std::uint64_t stackID, F4SEVR::Actor* actor);
+    using _GetSitState = int(*)(RE::BSScript::Internal::VirtualMachine* registry, std::uint64_t stackID, RE::Actor* actor);
     inline REL::Relocation<_GetSitState> GetSitState(REL::Offset(0x40e410));
 
-    using _IsSneaking = bool(*)(F4SEVR::Actor* a_actor);
+    using _IsSneaking = bool(*)(RE::Actor* a_actor);
     inline REL::Relocation<_IsSneaking> IsSneaking(REL::Offset(0x24d20));
 
     typedef RE::TESObjectWEAP* (*_GetEquippedWeapon)(RE::BSScript::Internal::VirtualMachine* registry, std::uint64_t stackID, RE::Actor* actor, std::uint64_t aiEquipIndex);
@@ -49,19 +48,19 @@ namespace f4cf::f4vr
     using _NiNode_UpdateWorldBound = void(*)(RE::NiNode* node);
     inline REL::Relocation<_NiNode_UpdateWorldBound> NiNode_UpdateWorldBound(REL::Offset(0x1c18ab0));
 
-    using _AIProcess_Set2DUpdateFlags = void(*)(F4SEVR::Actor::MiddleProcess* proc, uint64_t flags);
+    using _AIProcess_Set2DUpdateFlags = void(*)(RE::AIProcess* proc, uint64_t flags);
     inline REL::Relocation<_AIProcess_Set2DUpdateFlags> AIProcess_Set3DUpdateFlags(REL::Offset(0xec8ce0));
 
-    using _CombatUtilities_IsActorUsingMelee = bool(*)(F4SEVR::Actor* a_actor);
+    using _CombatUtilities_IsActorUsingMelee = bool(*)(RE::Actor* a_actor);
     inline REL::Relocation<_CombatUtilities_IsActorUsingMelee> CombatUtilities_IsActorUsingMelee(REL::Offset(0x1133bb0));
 
-    using _CombatUtilities_IsActorUsingMagic = bool(*)(F4SEVR::Actor* a_actor);
+    using _CombatUtilities_IsActorUsingMagic = bool(*)(RE::Actor* a_actor);
     inline REL::Relocation<_CombatUtilities_IsActorUsingMagic> CombatUtilities_IsActorUsingMagic(REL::Offset(0x1133c30));
 
     using _AttackBlockHandler_IsPlayerThrowingWeapon = bool(*)();
     inline REL::Relocation<_AttackBlockHandler_IsPlayerThrowingWeapon> AttackBlockHandler_IsPlayerThrowingWeapon(REL::Offset(0xfcbcd0));
 
-    using _Actor_CanThrow = bool(*)(F4SEVR::Actor* a_actor, uint32_t equipIndex);
+    using _Actor_CanThrow = bool(*)(RE::Actor* a_actor, uint32_t equipIndex);
     inline REL::Relocation<_Actor_CanThrow> Actor_CanThrow(REL::Offset(0xe52050));
     inline REL::Relocation<uint32_t> g_equipIndex(REL::Offset(0x3706d2c));
 
@@ -106,22 +105,22 @@ namespace f4cf::f4vr
     using _TESObjectCELL_GetLandHeight = uint64_t(*)(RE::TESObjectCELL* cell, const RE::NiPoint3* coord, const float* height);
     inline REL::Relocation<_TESObjectCELL_GetLandHeight> TESObjectCell_GetLandHeight(REL::Offset(0x039b230));
 
-    using _Actor_SwitchRace = void(*)(F4SEVR::Actor* a_actor, RE::TESRace* a_race, bool param3, bool param4);
+    using _Actor_SwitchRace = void(*)(RE::Actor* a_actor, RE::TESRace* a_race, bool param3, bool param4);
     inline REL::Relocation<_Actor_SwitchRace> Actor_SwitchRace(REL::Offset(0xe07850));
 
-    using _Actor_Reset3D = void(*)(F4SEVR::Actor* a_actor, double param2, uint64_t param3, bool param4, uint64_t param5);
+    using _Actor_Reset3D = void(*)(RE::Actor* a_actor, double param2, uint64_t param3, bool param4, uint64_t param5);
     inline REL::Relocation<_Actor_Reset3D> Actor_Reset3D(REL::Offset(0xddad60));
 
-    using _PowerArmor_ActorInPowerArmor = bool(*)(F4SEVR::Actor* a_actor);
+    using _PowerArmor_ActorInPowerArmor = bool(*)(RE::Actor* a_actor);
     inline REL::Relocation<_PowerArmor_ActorInPowerArmor> PowerArmor_ActorInPowerArmor(REL::Offset(0x9bf5d0));
 
-    using _PowerArmor_SwitchToPowerArmor = bool(*)(F4SEVR::Actor* a_actor, RE::TESObjectREFR* a_refr, uint64_t a_char);
+    using _PowerArmor_SwitchToPowerArmor = bool(*)(RE::Actor* a_actor, RE::TESObjectREFR* a_refr, uint64_t a_char);
     inline REL::Relocation<_PowerArmor_SwitchToPowerArmor> PowerArmor_SwitchToPowerArmor(REL::Offset(0x9bfbc0));
 
-    using _AIProcess_Update3DModel = void(*)(F4SEVR::Actor::MiddleProcess* proc, F4SEVR::Actor* a_actor, uint64_t flags, uint64_t someNum);
+    using _AIProcess_Update3DModel = void(*)(RE::AIProcess* proc, RE::Actor* a_actor, uint64_t flags, uint64_t someNum);
     inline REL::Relocation<_AIProcess_Update3DModel> AIProcess_Update3DModel(REL::Offset(0x0e3c9c0));
 
-    using _PowerArmor_SwitchFromPowerArmorFurnitureLoaded = void(*)(F4SEVR::Actor* a_actor, uint64_t somenum);
+    using _PowerArmor_SwitchFromPowerArmorFurnitureLoaded = void(*)(RE::Actor* a_actor, uint64_t somenum);
     inline REL::Relocation<_PowerArmor_SwitchFromPowerArmorFurnitureLoaded> PowerArmor_SwitchFromPowerArmorFurnitureLoaded(REL::Offset(0x9c1450));
 
     inline REL::Relocation<uint64_t> g_frameCounter(REL::Offset(0x65a2b48));
@@ -134,13 +133,13 @@ namespace f4cf::f4vr
     // using _TESDataHandler_CreateReferenceAtLocation = void* (*)(DataHandler* dataHandler, void* newRefr, f4vr::NEW_REFR_DATA* refrData);
     // inline REL::Relocation<_TESDataHandler_CreateReferenceAtLocation> TESDataHandler_CreateReferenceAtLocation(REL::Offset(0x11bd80));
 
-    using _Actor_GetCurrentWeapon = RE::TESObjectWEAP * (*)(F4SEVR::Actor* a_actor, RE::TESObjectWEAP* weap, RE::BGSEquipIndex idx);
+    using _Actor_GetCurrentWeapon = RE::TESObjectWEAP * (*)(RE::Actor* a_actor, RE::TESObjectWEAP* weap, RE::BGSEquipIndex idx);
     inline REL::Relocation<_Actor_GetCurrentWeapon> Actor_GetCurrentWeapon(REL::Offset(0xe50da0));
 
-    using _Actor_GetCurrentAmmo = RE::TESAmmo * (*)(F4SEVR::Actor* a_actor, RE::BGSEquipIndex idx);
+    using _Actor_GetCurrentAmmo = RE::TESAmmo * (*)(RE::Actor* a_actor, RE::BGSEquipIndex idx);
     inline REL::Relocation<_Actor_GetCurrentAmmo> Actor_GetCurrentAmmo(REL::Offset(0xe05ba0));
 
-    using _Actor_GetWeaponEquipIndex = void(*)(F4SEVR::Actor* a_actor, RE::BGSEquipIndex* idx, BGSObjectInstance* instance);
+    using _Actor_GetWeaponEquipIndex = void(*)(RE::Actor* a_actor, RE::BGSEquipIndex* idx, BGSObjectInstance* instance);
     inline REL::Relocation<_Actor_GetWeaponEquipIndex> Actor_GetWeaponEquipIndex(REL::Offset(0xe50e70));
 
     using _TESObjectREFR_Set3D = void(*)(RE::TESObjectREFR* a_refr, RE::NiAVObject* a_obj, bool unk);
@@ -185,13 +184,13 @@ namespace f4cf::f4vr
     using _TESObjectCell_GetbhkWorld = RE::bhkWorld * (*)(RE::TESObjectCELL* a_cell);
     inline REL::Relocation<_TESObjectCell_GetbhkWorld> TESObjectCell_GetbhkWorld(REL::Offset(0x39b070));
 
-    using _Actor_GetAmmoClipPercentage = float(*)(F4SEVR::Actor* a_actor, RE::BGSEquipIndex a_idx);
+    using _Actor_GetAmmoClipPercentage = float(*)(RE::Actor* a_actor, RE::BGSEquipIndex a_idx);
     inline REL::Relocation<_Actor_GetAmmoClipPercentage> Actor_GetAmmoClipPercentage(REL::Offset(0xddf6c0));
 
-    using _Actor_GetCurrentAmmoCount = float(*)(F4SEVR::Actor* a_actor, RE::BGSEquipIndex a_idx);
+    using _Actor_GetCurrentAmmoCount = float(*)(RE::Actor* a_actor, RE::BGSEquipIndex a_idx);
     inline REL::Relocation<_Actor_GetCurrentAmmoCount> Actor_GetCurrentAmmoCount(REL::Offset(0xddf690));
 
-    using _Actor_SetCurrentAmmoCount = float(*)(F4SEVR::Actor* a_actor, RE::BGSEquipIndex a_idx, int a_count);
+    using _Actor_SetCurrentAmmoCount = float(*)(RE::Actor* a_actor, RE::BGSEquipIndex a_idx, int a_count);
     inline REL::Relocation<_Actor_SetCurrentAmmoCount> Actor_SetCurrentAmmoCount(REL::Offset(0xddf790));
 
     using _ExtraDataList_setAmmoCount = void(*)(RE::ExtraDataList* a_list, int a_count);
@@ -209,10 +208,10 @@ namespace f4cf::f4vr
     // using _MemoryManager_Allocate = void* (*)(Heap* manager, uint64_t size, uint32_t someint, bool somebool);
     // inline REL::Relocation<_MemoryManager_Allocate> MemoryManager_Allocate(REL::Offset(0x1b91950));
 
-    using _togglePipboyLight = void* (*)(F4SEVR::Actor* a_actor);
+    using _togglePipboyLight = void* (*)(RE::Actor* a_actor);
     inline REL::Relocation<_togglePipboyLight> togglePipboyLight(REL::Offset(0xf27720));
 
-    using _isPipboyLightOn = bool* (*)(F4SEVR::Actor* a_actor);
+    using _isPipboyLightOn = bool* (*)(RE::Actor* a_actor);
     inline REL::Relocation<_isPipboyLightOn> isPipboyLightOn(REL::Offset(0xf27790));
 
     using _isPlayerRadioEnabled = uint64_t(*)();
@@ -233,10 +232,10 @@ namespace f4cf::f4vr
     using _ForceGamePause = void(*)(RE::MenuControls* a_mgr);
     inline REL::Relocation<_ForceGamePause> ForceGamePause(REL::Offset(0x1323370));
 
-    using _AIProcess_ClearMuzzleFlashes = void* (*)(F4SEVR::Actor::MiddleProcess* middleProcess);
+    using _AIProcess_ClearMuzzleFlashes = void* (*)(RE::AIProcess* middleProcess);
     inline REL::Relocation<_AIProcess_ClearMuzzleFlashes> AIProcess_ClearMuzzleFlashes(REL::Offset(0xecc710));
 
-    using _AIProcess_CreateMuzzleFlash = void* (*)(F4SEVR::Actor::MiddleProcess* middleProcess, uint64_t projectile, F4SEVR::Actor* actor);
+    using _AIProcess_CreateMuzzleFlash = void* (*)(RE::AIProcess* middleProcess, uint64_t projectile, RE::Actor* actor);
     inline REL::Relocation<_AIProcess_CreateMuzzleFlash> AIProcess_CreateMuzzleFlash(REL::Offset(0xecc570));
 
     // using _SettingCollectionList_GetPtr = RE::Setting * (*)(SettingCollectionList* list, const char* name);
@@ -307,7 +306,7 @@ namespace f4cf::f4vr
     inline REL::Relocation<_someRandomFunc> someRandomFunc(REL::Offset(0xd3c820));
     inline REL::Relocation hookSomeRandomFunc(REL::Offset(0xd8405e));
 
-    using _Actor_ReEquipAll = void(*)(F4SEVR::Actor* a_actor);
+    using _Actor_ReEquipAll = void(*)(RE::Actor* a_actor);
     inline REL::Relocation<_Actor_ReEquipAll> Actor_ReEquipAll(REL::Offset(0xddf050));
     inline REL::Relocation hookActor_ReEquipAllExit(REL::Offset(0xf01528));
 

@@ -1,6 +1,5 @@
 #include "PapyrusArgs.h"
 
-#include "Forms.h"
 #include "PapyrusVM.h"
 
 namespace F4SEVR

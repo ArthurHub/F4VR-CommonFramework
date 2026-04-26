@@ -6,10 +6,11 @@
 #include <vector>
 
 #include "Common.h"
-#include "Forms.h"
 
 namespace F4SEVR
 {
+    class TESForm;
+    class TESObjectREFR;
     class VMState;
     class VMValue;
     class VMArgList;

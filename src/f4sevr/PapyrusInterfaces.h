@@ -4,6 +4,7 @@
 
 namespace F4SEVR
 {
+    class TESObjectREFR;
     class VMIdentifier;
 
     // 08

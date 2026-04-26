@@ -52,10 +52,9 @@ namespace f4cf::f4vr
         RE::NiNode* LockPickParentNode; //0x0828
     };
 
-    inline F4SEVR::PlayerCharacter* getPlayer()
+    inline RE::PlayerCharacter* getPlayer()
     {
-        const auto player = RE::PlayerCharacter::GetSingleton();
-        return reinterpret_cast<F4SEVR::PlayerCharacter*>(player);
+        return RE::PlayerCharacter::GetSingleton();
     }
 
     inline PlayerNodes* getPlayerNodes()
@@ -67,18 +66,17 @@ namespace f4cf::f4vr
 
     inline RE::NiNode* getWorldRootNode()
     {
-        const auto g_player = getPlayer();
-        return g_player ? g_player->unkF0->rootNode : nullptr;
+        const auto player = getPlayer();
+        if (!player || !player->loadedData || !player->loadedData->data3D) {
+            return nullptr;
+        }
+        return player->loadedData->data3D->IsNode();
     }
 
     inline RE::NiNode* getRootNode()
     {
-        const auto player = getPlayer();
-        if (!player || !player->unkF0 || !player->unkF0->rootNode) {
-            return nullptr;
-        }
-        const auto root = player->unkF0->rootNode;
-        if (root->children.empty()) {
+        const auto root = getWorldRootNode();
+        if (!root || root->children.empty()) {
             return nullptr;
         }
         return root->children[0] ? root->children[0]->IsNode() : nullptr;
@@ -94,7 +92,7 @@ namespace f4cf::f4vr
     inline RE::NiNode* getFirstPersonSkeleton()
     {
         const auto player = getPlayer();
-        return player ? player->firstPersonSkeleton : nullptr;
+        return player ? player->firstPerson3D.get() : nullptr;
     }
 
     inline BSFlattenedBoneTree* getFirstPersonBoneTree()
@@ -106,12 +104,14 @@ namespace f4cf::f4vr
         return fpSkeleton->children[0] ? reinterpret_cast<BSFlattenedBoneTree*>(fpSkeleton->children[0]->IsNode()) : nullptr;
     }
 
-    inline F4SEVR::EquippedWeaponData* getEquippedWeaponData()
+    inline RE::EquippedWeaponData* getEquippedWeaponData()
     {
-        const auto midProcUnk08 = getPlayer()->middleProcess->unk08;
-        return midProcUnk08 && midProcUnk08->equipData
-            ? midProcUnk08->equipData->equippedData
-            : nullptr;
+        const auto* process = getPlayer()->currentProcess;
+        const auto* middleHigh = process ? process->middleHigh : nullptr;
+        if (!middleHigh || middleHigh->equippedItems.empty()) {
+            return nullptr;
+        }
+        return static_cast<RE::EquippedWeaponData*>(middleHigh->equippedItems[0].data.get());
     }
 
     inline RE::NiNode* getCommonNode()
@@ -121,7 +121,7 @@ namespace f4cf::f4vr
 
     inline RE::NiNode* getWeaponNode()
     {
-        return findNode(getPlayer()->firstPersonSkeleton, "Weapon");
+        return findNode(getFirstPersonSkeleton(), "Weapon");
     }
 
     inline RE::NiNode* getPrimaryWandNode()
@@ -139,15 +139,14 @@ namespace f4cf::f4vr
         return !meleeNode->children.empty() ? meleeNode->children[0]->IsNode() : nullptr;
     }
 
-    inline F4SEVR::PlayerCamera* getPlayerCamera()
+    inline RE::PlayerCamera* getPlayerCamera()
     {
-        static REL::Relocation<F4SEVR::PlayerCamera**> g_playerCamera(REL::Offset(0x5930608));
-        return *g_playerCamera.get();
+        return RE::PlayerCamera::GetSingleton();
     }
 
     inline RE::NiPoint3 getCameraPosition()
     {
-        return getPlayerCamera()->cameraNode->world.translate;
+        return getPlayerCamera()->cameraRoot->world.translate;
     }
 
     inline RE::NiNode* getLeftHandNode()
