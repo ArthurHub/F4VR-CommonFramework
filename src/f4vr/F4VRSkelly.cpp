@@ -11,10 +11,11 @@ namespace f4cf::f4vr
 
         const auto rt = getFlattenedBoneTree();
         for (auto i = 0; i < rt->numTransforms; i++) {
-            logger::debug("BoneTree Init -> Push {} into position {}", rt->transforms[i].name.c_str(), i);
+            logger::trace("BoneTree Init -> Push {} into position {}", rt->transforms[i].name.c_str(), i);
             _boneTreeMap.insert({ rt->transforms[i].name.c_str(), i });
             _boneTreeVec.emplace_back(rt->transforms[i].name.c_str());
         }
+        logger::debug("BoneTree Map Initialized with {} entries", _boneTreeMap.size());
     }
 
     const std::string& Skelly::getBoneName(const int index)
