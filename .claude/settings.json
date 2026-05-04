@@ -1,8 +1,15 @@
 {
   "permissions": {
-    "defaultMode": "acceptEdits",
     "allow": [
-      "Bash"
-    ]
+      "Edit(.claude/**)",
+      "Write(.claude/**)",
+      "Bash",
+      "PowerShell",
+      "WebSearch",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:api.github.com)",
+      "WebFetch(domain:raw.githubusercontent.com)"
+    ],
+    "defaultMode": "acceptEdits"
   }
 }
