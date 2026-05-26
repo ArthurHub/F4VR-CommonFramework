@@ -174,6 +174,17 @@ namespace f4cf::common
         }
     }
 
+    /**
+     * Degrees-output variant of getEulerAnglesFromMatrix; converts the radian outputs in place.
+     */
+    void MatrixUtils::getEulerAnglesFromMatrixDegrees(const RE::NiMatrix3& matrix, float* heading, float* roll, float* attitude)
+    {
+        getEulerAnglesFromMatrix(matrix, heading, roll, attitude);
+        *heading = radsToDegrees(*heading);
+        *roll = radsToDegrees(*roll);
+        *attitude = radsToDegrees(*attitude);
+    }
+
     RE::NiMatrix3 MatrixUtils::getMatrixFromEulerAngles(const float heading, const float roll, const float attitude)
     {
         const float sinX = sin(heading);
@@ -265,6 +276,19 @@ namespace f4cf::common
         RE::NiTransform transform;
         transform.translate = RE::NiPoint3(x, y, z);
         transform.rotate = getMatrix(r1, r2, r3, r4, r5, r6, r7, r8, r9);
+        transform.scale = scale;
+        return transform;
+    }
+
+    /**
+     * Build an NiTransform from translation + Euler rotation (in degrees) + optional scale.
+     * Convenience over the 14-arg overload when callers think in heading/roll/attitude degrees.
+     */
+    RE::NiTransform MatrixUtils::getTransform(const float x, const float y, const float z, const float heading, const float roll, const float attitude, const float scale)
+    {
+        RE::NiTransform transform;
+        transform.translate = RE::NiPoint3(x, y, z);
+        transform.rotate = getMatrixFromEulerAnglesDegrees(heading, roll, attitude);
         transform.scale = scale;
         return transform;
     }

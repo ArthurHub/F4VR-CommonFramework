@@ -23,6 +23,7 @@ namespace f4cf::common
         static RE::NiMatrix3 getIdentityMatrix();
         static RE::NiMatrix3 getMatrix(float r1, float r2, float r3, float r4, float r5, float r6, float r7, float r8, float r9);
         static void getEulerAnglesFromMatrix(const RE::NiMatrix3& matrix, float* heading, float* roll, float* attitude);
+        static void getEulerAnglesFromMatrixDegrees(const RE::NiMatrix3& matrix, float* heading, float* roll, float* attitude);
         static RE::NiMatrix3 getMatrixFromEulerAngles(float heading, float roll, float attitude);
         static RE::NiMatrix3 getMatrixFromEulerAnglesDegrees(float heading, float roll, float attitude);
         static RE::NiMatrix3 getMatrixFromRotateVectorVec(const RE::NiPoint3& toVec, const RE::NiPoint3& fromVec);
@@ -30,6 +31,7 @@ namespace f4cf::common
 
         // transform
         static RE::NiTransform getTransform(float x, float y, float z, float r1, float r2, float r3, float r4, float r5, float r6, float r7, float r8, float r9, float scale);
+        static RE::NiTransform getTransform(float x, float y, float z, float heading, float roll, float attitude, float scale = 1.0f);
         static RE::NiTransform getDeltaTransform(const RE::NiTransform& from, const RE::NiTransform& to);
         static RE::NiTransform getTargetTransform(const RE::NiTransform& baseFrom, const RE::NiTransform& baseTo, const RE::NiTransform& targetFrom);
 

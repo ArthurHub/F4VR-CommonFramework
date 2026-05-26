@@ -2,10 +2,27 @@
 
 #include <nlohmann/json.hpp>
 
+#include "common/MatrixUtils.h"
+
 using json = nlohmann::json;
 
 namespace
 {
+    /**
+     * Format an NiTransform as "x,y,z;heading,roll,attitude;scale" (rotation in degrees).
+     */
+    std::string transformToIniString(const RE::NiTransform& value)
+    {
+        float heading, roll, attitude;
+        f4cf::common::MatrixUtils::getEulerAnglesFromMatrix(value.rotate, &heading, &roll, &attitude);
+        return fmt::format("{},{},{};{},{},{};{}",
+            value.translate.x, value.translate.y, value.translate.z,
+            f4cf::common::MatrixUtils::radsToDegrees(heading),
+            f4cf::common::MatrixUtils::radsToDegrees(roll),
+            f4cf::common::MatrixUtils::radsToDegrees(attitude),
+            value.scale);
+    }
+
     /**
      * Load the given json object with offset data into an offset map.
      */
@@ -163,6 +180,7 @@ namespace f4cf
         debugFlowFlag3 = static_cast<float>(ini.GetDoubleValue(INI_SECTION_DEBUG, "fDebugFlowFlag3", 0));
         debugFlowText1 = ini.GetValue(INI_SECTION_DEBUG, "sDebugFlowText1", "");
         debugFlowText2 = ini.GetValue(INI_SECTION_DEBUG, "sDebugFlowText2", "");
+        debugTransform = getTransformValue(ini, INI_SECTION_DEBUG, "tDebugTransform", common::MatrixUtils::getTransform(0, 0, 0, 0, 0, 0));
         _debugDumpDataOnceNames = ini.GetValue(INI_SECTION_DEBUG, "sDebugDumpDataOnceNames", "");
     }
 
@@ -340,6 +358,42 @@ namespace f4cf
         if (rc < 0) {
             logger::warn("Failed to save INI config value with code: {}", rc);
         }
+    }
+
+    /**
+     * Save NiTransform as a "x,y,z;heading,roll,attitude;scale" string (rotation written in degrees).
+     */
+    void ConfigBase::saveIniConfigValue(const char* section, const char* key, const RE::NiTransform& value)
+    {
+        const auto str = transformToIniString(value);
+        saveIniConfigValue(section, key, str.c_str());
+    }
+
+    /**
+     * Parse an NiTransform from "x,y,z;heading,roll,attitude;scale" (rotation in degrees).
+     * Returns defaultValue if the key is missing or the value is malformed.
+     */
+    RE::NiTransform ConfigBase::getTransformValue(const CSimpleIniA& ini, const char* section, const char* key, const RE::NiTransform& defaultValue)
+    {
+        const char* raw = ini.GetValue(section, key, nullptr);
+        if (raw == nullptr) {
+            return defaultValue;
+        }
+
+        float x, y, z, heading, roll, attitude, scale;
+        if (std::sscanf(raw, " %f , %f , %f ; %f , %f , %f ; %f", &x, &y, &z, &heading, &roll, &attitude, &scale) != 7) {
+            logger::warn("Config: malformed transform value for '{}.{}' = '{}' (expected 'x,y,z;heading,roll,attitude;scale' in degrees). Using default.",
+                section, key, raw);
+            return defaultValue;
+        }
+
+        RE::NiTransform result;
+        result.translate.x = x;
+        result.translate.y = y;
+        result.translate.z = z;
+        result.rotate = common::MatrixUtils::getMatrixFromEulerAnglesDegrees(heading, roll, attitude);
+        result.scale = scale;
+        return result;
     }
 
     /**

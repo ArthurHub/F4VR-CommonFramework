@@ -37,6 +37,7 @@ namespace f4cf
         float debugFlowFlag3 = 0;
         std::string debugFlowText1;
         std::string debugFlowText2;
+        RE::NiTransform debugTransform{};
         std::map<std::string, std::string> debugVRUIProperties;
 
     protected:
@@ -59,6 +60,13 @@ namespace f4cf
         void saveIniConfigValue(const char* section, const char* key, int value);
         void saveIniConfigValue(const char* section, const char* key, float value);
         void saveIniConfigValue(const char* section, const char* key, const char* value);
+        // Save an NiTransform as "x,y,z;heading,roll,attitude;scale" (rotation in degrees).
+        // Convention: such keys should be prefixed with 't' (e.g. "tFlashlightOffset").
+        void saveIniConfigValue(const char* section, const char* key, const RE::NiTransform& value);
+
+        // Read an NiTransform from "x,y,z;heading,roll,attitude;scale" (rotation in degrees).
+        // Returns defaultValue if the key is missing or the value is malformed.
+        static RE::NiTransform getTransformValue(const CSimpleIniA& ini, const char* section, const char* key, const RE::NiTransform& defaultValue);
         void updateIniConfigToLatestVersion(int currentVersion, int latestVersion) const;
         static std::unordered_map<std::string, RE::NiTransform> loadEmbeddedOffsets(WORD fromResourceId, WORD toResourceId);
         static void loadOffsetJsonFile(const std::string& file, std::unordered_map<std::string, RE::NiTransform>& offsetsMap);
