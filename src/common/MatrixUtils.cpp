@@ -155,22 +155,28 @@ namespace f4cf::common
         return result;
     }
 
+    /**
+     * Decompose a rotation matrix into Euler angles (radians). This is the exact inverse of
+     * getMatrixFromEulerAngles (heading=X, roll=Y, attitude=Z): for any input angles with
+     * roll in [-90, 90], getEulerAnglesFromMatrix(getMatrixFromEulerAngles(h, r, a)) == (h, r, a).
+     *
+     * The builder stores sin(roll) in entry[0][2], so roll is recovered with asin and the other
+     * two angles from the surrounding terms. When roll = +/-90 (cos(roll) == 0) heading and
+     * attitude are coupled (gimbal lock); heading is pinned to 0 and the rotation folds into
+     * attitude. Outside the canonical roll range the returned triple differs from the original
+     * but encodes the same rotation.
+     */
     void MatrixUtils::getEulerAnglesFromMatrix(const RE::NiMatrix3& matrix, float* heading, float* roll, float* attitude)
     {
-        if (matrix.entry[2][0] < 1.0) {
-            if (matrix.entry[2][0] > -1.0) {
-                *heading = atan2(-matrix.entry[2][1], matrix.entry[2][2]);
-                *attitude = asin(matrix.entry[2][0]);
-                *roll = atan2(-matrix.entry[1][0], matrix.entry[0][0]);
-            } else {
-                *heading = -atan2(-matrix.entry[0][1], matrix.entry[1][1]);
-                *attitude = -std::numbers::pi_v<float> / 2;
-                *roll = 0.0;
-            }
+        const float sinRoll = std::fmax(-1.0f, std::fmin(1.0f, matrix.entry[0][2]));
+        *roll = asin(sinRoll);
+        if (sinRoll > -1.0f && sinRoll < 1.0f) {
+            *heading = atan2(-matrix.entry[1][2], matrix.entry[2][2]);
+            *attitude = atan2(-matrix.entry[0][1], matrix.entry[0][0]);
         } else {
-            *heading = atan2(matrix.entry[0][1], matrix.entry[1][1]);
-            *attitude = std::numbers::pi_v<float> / 2;
-            *roll = 0.0;
+            // gimbal lock: heading and attitude rotate about the same axis, fold both into attitude
+            *heading = 0.0f;
+            *attitude = atan2(matrix.entry[1][0], matrix.entry[1][1]);
         }
     }
 
