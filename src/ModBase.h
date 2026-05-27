@@ -1,6 +1,7 @@
 #pragma once
 
 #include "ConfigBase.h"
+#include "DebugAdjuster.h"
 
 namespace f4cf
 {
@@ -70,6 +71,7 @@ namespace f4cf
 
         Settings _settings;
         const F4SE::MessagingInterface* _messaging = nullptr;
+        DebugAdjuster _debugAdjuster;
     };
 
     // The ONE global to rule them ALL

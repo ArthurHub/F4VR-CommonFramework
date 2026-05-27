@@ -156,6 +156,8 @@ namespace f4cf
 
                 onFrameUpdate();
 
+                _debugAdjuster.onFrameUpdate(*_settings.config);
+
                 checkDebugDump();
             }
         CPPTRACE_CATCH(const std::exception& ex) {

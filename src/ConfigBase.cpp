@@ -8,19 +8,19 @@ using json = nlohmann::json;
 
 namespace
 {
-    /**
-     * Format an NiTransform as "x,y,z;heading,roll,attitude;scale" (rotation in degrees).
-     */
-    std::string transformToIniString(const RE::NiTransform& value)
+    DebugAdjustTarget parseDebugAdjustTarget(const std::string_view value)
     {
-        float heading, roll, attitude;
-        f4cf::common::MatrixUtils::getEulerAnglesFromMatrix(value.rotate, &heading, &roll, &attitude);
-        return fmt::format("{},{},{};{},{},{};{}",
-            value.translate.x, value.translate.y, value.translate.z,
-            f4cf::common::MatrixUtils::radsToDegrees(heading),
-            f4cf::common::MatrixUtils::radsToDegrees(roll),
-            f4cf::common::MatrixUtils::radsToDegrees(attitude),
-            value.scale);
+        if (value == "transform")
+            return DebugAdjustTarget::Transform;
+        if (value == "flag1")
+            return DebugAdjustTarget::FlowFlag1;
+        if (value == "flag2")
+            return DebugAdjustTarget::FlowFlag2;
+        if (value == "flag3")
+            return DebugAdjustTarget::FlowFlag3;
+        if (value == "flag123")
+            return DebugAdjustTarget::FlowFlag123;
+        return DebugAdjustTarget::None;
     }
 
     /**
@@ -48,9 +48,33 @@ namespace
     }
 }
 
+namespace f4cf::config
+{
+    /**
+     * Write this value to the INI using the setter matching its underlying type, and log it.
+     */
+    void IniValue::applyTo(CSimpleIniA& ini, const char* section, const char* key) const
+    {
+        std::visit([&]<typename T>(const T& v) {
+            if constexpr (std::is_same_v<T, bool>) {
+                ini.SetBoolValue(section, key, v);
+                logger::info("Config: Saving \"{} = {}\"", key, v ? "true" : "false");
+            } else if constexpr (std::is_same_v<T, int>) {
+                ini.SetLongValue(section, key, v);
+                logger::info("Config: Saving \"{} = {}\"", key, v);
+            } else if constexpr (std::is_same_v<T, float>) {
+                ini.SetDoubleValue(section, key, v);
+                logger::info("Config: Saving \"{} = {}\"", key, v);
+            } else if constexpr (std::is_same_v<T, std::string>) {
+                ini.SetValue(section, key, v.c_str());
+                logger::info("Config: Saving \"{} = {}\"", key, v);
+            }
+        }, _value);
+    }
+}
+
 namespace f4cf
 {
-    constexpr auto INI_SECTION_DEBUG = "Debug";
     constexpr auto INI_SECTION_VRUI = "VRUI_DevLayout";
 
     /**
@@ -69,6 +93,15 @@ namespace f4cf
     void ConfigBase::save()
     {
         saveIniConfig();
+    }
+
+    /**
+     * Re-read all values from the on-disk INI file. Skips version migration and watcher setup
+     * so it's safe to call repeatedly at runtime (e.g. from the DebugAdjuster reload action).
+     */
+    void ConfigBase::reload()
+    {
+        loadIniConfigValues();
     }
 
     /**
@@ -181,6 +214,7 @@ namespace f4cf
         debugFlowText1 = ini.GetValue(INI_SECTION_DEBUG, "sDebugFlowText1", "");
         debugFlowText2 = ini.GetValue(INI_SECTION_DEBUG, "sDebugFlowText2", "");
         debugTransform = getTransformValue(ini, INI_SECTION_DEBUG, "tDebugTransform", common::MatrixUtils::getTransform(0, 0, 0, 0, 0, 0));
+        debugAdjustTarget = parseDebugAdjustTarget(ini.GetValue(INI_SECTION_DEBUG, "sDebugAdjustTarget", "none"));
         _debugDumpDataOnceNames = ini.GetValue(INI_SECTION_DEBUG, "sDebugDumpDataOnceNames", "");
     }
 
@@ -280,93 +314,50 @@ namespace f4cf
         }
     }
 
-    /**
-     * Save specific key and bool value into .ini file.
-     */
+    // The single-value overloads are thin wrappers over the batch saveIniConfigValues so there is
+    // exactly one file load/save code path. The IniValue conversion happens implicitly at the call.
     void ConfigBase::saveIniConfigValue(const char* section, const char* key, const bool value)
     {
-        logger::info("Config: Saving \"{} = {}\"", key, value ? "true" : "false");
-        CSimpleIniA ini;
-        SI_Error rc = ini.LoadFile(_iniFilePath.c_str());
-        if (rc < 0) {
-            logger::warn("Failed to save INI config value with code: {}", rc);
-            return;
-        }
-        ini.SetBoolValue(section, key, value);
-        _ignoreNextIniFileChange.store(true);
-        rc = ini.SaveFile(_iniFilePath.c_str());
-        if (rc < 0) {
-            logger::warn("Failed to save INI config value with code: {}", rc);
-        }
+        saveIniConfigValues(section, { { key, value } });
     }
 
-    /**
-     * Save specific key and bool value into .ini file.
-     */
     void ConfigBase::saveIniConfigValue(const char* section, const char* key, const int value)
     {
-        logger::info("Config: Saving \"{} = {}\"", key, value);
-        CSimpleIniA ini;
-        SI_Error rc = ini.LoadFile(_iniFilePath.c_str());
-        if (rc < 0) {
-            logger::warn("Failed to save INI config value with code: {}", rc);
-            return;
-        }
-        ini.SetLongValue(section, key, value);
-        _ignoreNextIniFileChange.store(true);
-        rc = ini.SaveFile(_iniFilePath.c_str());
-        if (rc < 0) {
-            logger::warn("Failed to save INI config value with code: {}", rc);
-        }
+        saveIniConfigValues(section, { { key, value } });
     }
 
-    /**
-     * Save specific key and double value into .ini file.
-     */
     void ConfigBase::saveIniConfigValue(const char* section, const char* key, const float value)
     {
-        logger::info("Config: Saving \"{} = {}\"", key, value);
-        CSimpleIniA ini;
-        SI_Error rc = ini.LoadFile(_iniFilePath.c_str());
-        if (rc < 0) {
-            logger::warn("Failed to save INI config value with code: {}", rc);
-            return;
-        }
-        ini.SetDoubleValue(section, key, value);
-        _ignoreNextIniFileChange.store(true);
-        rc = ini.SaveFile(_iniFilePath.c_str());
-        if (rc < 0) {
-            logger::warn("Failed to save INI config value with code: {}", rc);
-        }
+        saveIniConfigValues(section, { { key, value } });
     }
 
-    /**
-     * Save specific key and string value into .ini file.
-     */
     void ConfigBase::saveIniConfigValue(const char* section, const char* key, const char* value)
     {
-        logger::info("Config: Saving \"{} = {}\"", key, value);
-        CSimpleIniA ini;
-        SI_Error rc = ini.LoadFile(_iniFilePath.c_str());
-        if (rc < 0) {
-            logger::warn("Failed to save INI config value with code: {}", rc);
-            return;
-        }
-        ini.SetValue(section, key, value);
-        _ignoreNextIniFileChange.store(true);
-        rc = ini.SaveFile(_iniFilePath.c_str());
-        if (rc < 0) {
-            logger::warn("Failed to save INI config value with code: {}", rc);
-        }
+        saveIniConfigValues(section, { { key, value } });
     }
 
     /**
-     * Save NiTransform as a "x,y,z;heading,roll,attitude;scale" string (rotation written in degrees).
+     * Save one or more key/value pairs in a single file load/save cycle. The single-value
+     * saveIniConfigValue overloads all route through here, so this is the one place that does
+     * the disk I/O and sets the file-watch ignore flag. Values may be of any type IniValue
+     * supports (bool/int/float/string/NiTransform).
      */
-    void ConfigBase::saveIniConfigValue(const char* section, const char* key, const RE::NiTransform& value)
+    void ConfigBase::saveIniConfigValues(const char* section, std::initializer_list<std::pair<const char*, config::IniValue>> values)
     {
-        const auto str = transformToIniString(value);
-        saveIniConfigValue(section, key, str.c_str());
+        CSimpleIniA ini;
+        SI_Error rc = ini.LoadFile(_iniFilePath.c_str());
+        if (rc < 0) {
+            logger::warn("Failed to save INI config values with code: {}", rc);
+            return;
+        }
+        for (const auto& [key, value] : values) {
+            value.applyTo(ini, section, key);
+        }
+        _ignoreNextIniFileChange.store(true);
+        rc = ini.SaveFile(_iniFilePath.c_str());
+        if (rc < 0) {
+            logger::warn("Failed to save INI config values with code: {}", rc);
+        }
     }
 
     /**

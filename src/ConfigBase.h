@@ -2,6 +2,7 @@
 
 #include <atomic>
 #include <SimpleIni.h>
+#include <variant>
 #include <thomasmonkman-filewatch/FileWatch.hpp>
 
 #include "Common/CommonUtils.h"
@@ -9,6 +10,54 @@
 namespace f4cf
 {
     static const auto BASE_PATH = common::getRelativePathInDocuments(R"(\My Games\Fallout4VR\Mods_Config)");
+
+    namespace config
+    {
+        /**
+         * A typed INI value for batch writes via ConfigBase::saveIniConfigValues.
+         * Constructs implicitly from any supported type, so callers can write {"key", 1.5f}.
+         * NiTransform is serialized as "x,y,z;heading,roll,attitude;scale" (rotation in degrees).
+         */
+        class IniValue
+        {
+        public:
+            IniValue(bool value) :
+                _value(value) {}
+
+            IniValue(int value) :
+                _value(value) {}
+
+            IniValue(float value) :
+                _value(value) {}
+
+            IniValue(const char* value) :
+                _value(std::string(value)) {}
+
+            IniValue(std::string value) :
+                _value(std::move(value)) {}
+
+            /** Write this value to the given INI under section/key, using the type-appropriate setter. */
+            void applyTo(CSimpleIniA& ini, const char* section, const char* key) const;
+
+        private:
+            std::variant<bool, int, float, std::string> _value;
+        };
+    }
+
+    constexpr auto INI_SECTION_DEBUG = "Debug";
+
+    /**
+     * Which debug field the in-game DebugAdjuster is bound to. None disables it.
+     */
+    enum class DebugAdjustTarget : uint8_t
+    {
+        None = 0,
+        Transform,
+        FlowFlag1,
+        FlowFlag2,
+        FlowFlag3,
+        FlowFlag123,
+    };
 
     class ConfigBase
     {
@@ -23,7 +72,18 @@ namespace f4cf
         virtual void load();
         virtual void save();
 
+        /**
+         * Re-read all values from the on-disk INI file (no version migration, no watcher restart).
+         */
+        void reload();
+
         void loadEmbeddedDefaultOnly();
+
+        void saveIniConfigValue(const char* section, const char* key, bool value);
+        void saveIniConfigValue(const char* section, const char* key, int value);
+        void saveIniConfigValue(const char* section, const char* key, float value);
+        void saveIniConfigValue(const char* section, const char* key, const char* value);
+        void saveIniConfigValues(const char* section, std::initializer_list<std::pair<const char*, config::IniValue>> values);
 
         void subscribeForIniChangedEvent(const std::string& key, const std::function<void(const std::string&)>& callback);
         void unsubscribeFromIniChangedEvent(const std::string& key);
@@ -38,6 +98,7 @@ namespace f4cf
         std::string debugFlowText1;
         std::string debugFlowText2;
         RE::NiTransform debugTransform{};
+        DebugAdjustTarget debugAdjustTarget = DebugAdjustTarget::None;
         std::map<std::string, std::string> debugVRUIProperties;
 
     protected:
@@ -56,13 +117,6 @@ namespace f4cf
         bool loadIniFromFile(CSimpleIniA& ini) const;
         void saveIniToFile(const CSimpleIniA& ini);
         void saveIniConfig();
-        void saveIniConfigValue(const char* section, const char* key, bool value);
-        void saveIniConfigValue(const char* section, const char* key, int value);
-        void saveIniConfigValue(const char* section, const char* key, float value);
-        void saveIniConfigValue(const char* section, const char* key, const char* value);
-        // Save an NiTransform as "x,y,z;heading,roll,attitude;scale" (rotation in degrees).
-        // Convention: such keys should be prefixed with 't' (e.g. "tFlashlightOffset").
-        void saveIniConfigValue(const char* section, const char* key, const RE::NiTransform& value);
 
         // Read an NiTransform from "x,y,z;heading,roll,attitude;scale" (rotation in degrees).
         // Returns defaultValue if the key is missing or the value is malformed.
