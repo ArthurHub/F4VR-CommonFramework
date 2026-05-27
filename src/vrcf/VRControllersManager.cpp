@@ -428,11 +428,11 @@ namespace f4cf::vrcf
 
     bool VRControllersManager::ControllerState::justReleased(const vr::EVRButtonId button, const float now, const float debounceCooldown)
     {
-        if (!valid || longPressHandled[button]) {
+        const auto mask = vr::ButtonMaskFromId(button);
+        if ((!valid || longPressHandled[button]) && !(current.ulButtonPressed & mask)) {
             longPressHandled[button] = false;
             return false;
         }
-        const auto mask = vr::ButtonMaskFromId(button);
         const bool wasJustReleased = previous.ulButtonPressed & mask && !(current.ulButtonPressed & mask);
         return wasJustReleased && checkDebounce(lastReleaseTime[button], now, debounceCooldown);
     }
