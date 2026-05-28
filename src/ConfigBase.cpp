@@ -12,6 +12,8 @@ namespace
     {
         if (value == "transform")
             return DebugAdjustTarget::Transform;
+        if (value == "handpose")
+            return DebugAdjustTarget::HandPose;
         if (value == "flag1")
             return DebugAdjustTarget::FlowFlag1;
         if (value == "flag2")
@@ -214,6 +216,7 @@ namespace f4cf
         debugFlowText1 = ini.GetValue(INI_SECTION_DEBUG, "sDebugFlowText1", "");
         debugFlowText2 = ini.GetValue(INI_SECTION_DEBUG, "sDebugFlowText2", "");
         debugTransform = getTransformValue(ini, INI_SECTION_DEBUG, "tDebugTransform", common::MatrixUtils::getTransform(0, 0, 0, 0, 0, 0));
+        debugHandPose = getHandPoseValue(ini, INI_SECTION_DEBUG, "hDebugHandPose", {});
         debugAdjustTarget = parseDebugAdjustTarget(ini.GetValue(INI_SECTION_DEBUG, "sDebugAdjustTarget", "none"));
         _debugDumpDataOnceNames = ini.GetValue(INI_SECTION_DEBUG, "sDebugDumpDataOnceNames", "");
     }
@@ -385,6 +388,43 @@ namespace f4cf
         result.rotate = common::MatrixUtils::getMatrixFromEulerAnglesDegrees(heading, roll, attitude);
         result.scale = scale;
         return result;
+    }
+
+    /**
+     * Parse a 22-float hand pose from the INI value at section/key.
+     * Format is strict: 5 ';'-separated groups of 4 ','-separated floats (thumb, index, middle,
+     * ring, pinky — each prox,mid,dist,splay), followed by 2 trailing ','-separated floats
+     * (palmPitch, palmYaw). Whitespace around separators is allowed.
+     * Returns defaultValue (and logs a warning) if the key is missing or the structure doesn't match.
+     */
+    std::array<float, 22> ConfigBase::getHandPoseValue(const CSimpleIniA& ini, const char* section, const char* key, const std::array<float, 22>& defaultValue)
+    {
+        const char* raw = ini.GetValue(section, key, nullptr);
+        if (raw == nullptr) {
+            return defaultValue;
+        }
+
+        std::array<float, 22> r{};
+        const int parsed = std::sscanf(raw,
+            " %f , %f , %f , %f ;"   // thumb
+            " %f , %f , %f , %f ;"   // index
+            " %f , %f , %f , %f ;"   // middle
+            " %f , %f , %f , %f ;"   // ring
+            " %f , %f , %f , %f ;"   // pinky
+            " %f , %f",              // palmPitch, palmYaw
+            &r[0], &r[1], &r[2], &r[3],
+            &r[4], &r[5], &r[6], &r[7],
+            &r[8], &r[9], &r[10], &r[11],
+            &r[12], &r[13], &r[14], &r[15],
+            &r[16], &r[17], &r[18], &r[19],
+            &r[20], &r[21]);
+        if (parsed != 22) {
+            logger::warn("Config: malformed hand pose value for '{}.{}' = '{}' "
+                         "(expected 'p,m,d,s;p,m,d,s;p,m,d,s;p,m,d,s;p,m,d,s;pp,py'). Using default.",
+                section, key, raw);
+            return defaultValue;
+        }
+        return r;
     }
 
     /**

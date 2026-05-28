@@ -1,8 +1,11 @@
 #include "DebugAdjuster.h"
 
+#include <algorithm>
+
 #include "common/CommonUtils.h"
 #include "common/MatrixUtils.h"
 #include "f4vr/F4VRThumbstickControls.h"
+#include "f4vr/F4VRUtils.h"
 #include "vrcf/VRControllersManager.h"
 
 namespace f4cf
@@ -14,9 +17,19 @@ namespace f4cf
         constexpr float ROTATE_DEGREES_PER_FRAME = 0.5f;
         constexpr float SCALE_PER_FRAME = 0.005f;
         constexpr float FLOW_FLAG_PER_FRAME = 0.03f;
+        constexpr float HAND_POSE_FINGER_PER_FRAME = 0.01f;
+        constexpr float HAND_POSE_PALM_PER_FRAME = 0.25f;
 
         // Saved debug values are rounded to this many decimals to keep the INI readable.
         constexpr int SAVE_PRECISION = 2;
+
+        // Hand pose slot names — index matches the active-slot state used by adjustHandPose.
+        // Slots 0..4 control one finger each (4 floats: prox,mid,dist,splay).
+        // Slot 5 controls the two palm floats (palmPitch, palmYaw).
+        constexpr std::array<const char*, 6> HAND_POSE_SLOT_NAMES = {
+            "thumb", "index", "middle", "ring", "pinky", "palm"
+        };
+        std::size_t s_handPoseSlot = 0;
 
         /**
          * Format a float with SAVE_PRECISION decimals for writing to the INI.
@@ -38,6 +51,23 @@ namespace f4cf
             return fmt::format("{},{},{};{},{},{};{}",
                 toFixed(transform.translate.x), toFixed(transform.translate.y), toFixed(transform.translate.z),
                 toFixed(heading), toFixed(roll), toFixed(attitude), toFixed(transform.scale));
+        }
+
+        /**
+         * Format a 22-float hand pose in the canonical INI layout:
+         * 5 ';'-separated groups of 4 ','-separated floats (thumb...pinky each prox,mid,dist,splay),
+         * then 2 trailing ',' separated palm floats (palmPitch, palmYaw).
+         */
+        std::string handPoseToFixedString(const std::array<float, 22>& v)
+        {
+            return fmt::format(
+                "{},{},{},{};{},{},{},{};{},{},{},{};{},{},{},{};{},{},{},{};{},{}",
+                toFixed(v[0]), toFixed(v[1]), toFixed(v[2]), toFixed(v[3]),
+                toFixed(v[4]), toFixed(v[5]), toFixed(v[6]), toFixed(v[7]),
+                toFixed(v[8]), toFixed(v[9]), toFixed(v[10]), toFixed(v[11]),
+                toFixed(v[12]), toFixed(v[13]), toFixed(v[14]), toFixed(v[15]),
+                toFixed(v[16]), toFixed(v[17]), toFixed(v[18]), toFixed(v[19]),
+                toFixed(v[20]), toFixed(v[21]));
         }
 
         /**
@@ -85,6 +115,9 @@ namespace f4cf
             break; // unreachable, handled by the active guard above
         case DebugAdjustTarget::Transform:
             adjustTransform(config.debugTransform);
+            break;
+        case DebugAdjustTarget::HandPose:
+            adjustHandPose(config.debugHandPose);
             break;
         case DebugAdjustTarget::FlowFlag1:
             adjustFloat(config.debugFlowFlag1);
@@ -136,9 +169,48 @@ namespace f4cf
             transform.scale = std::fmax(0.05f, transform.scale + applyDeadzone(py, SCALE_PER_FRAME));
         } else {
             // translate: primary stick -> XY, secondary Y -> Z
-            transform.translate.x += applyDeadzone(py, TRANSLATE_PER_FRAME);
-            transform.translate.y += applyDeadzone(px, TRANSLATE_PER_FRAME);
-            transform.translate.z += applyDeadzone(sy, TRANSLATE_PER_FRAME);
+            transform.translate.x += std::clamp(applyDeadzone(py, TRANSLATE_PER_FRAME), -360.0f, 360.0f);
+            transform.translate.y += std::clamp(applyDeadzone(px, TRANSLATE_PER_FRAME), -360.0f, 360.0f);
+            transform.translate.z += std::clamp(applyDeadzone(sy, TRANSLATE_PER_FRAME), -360.0f, 360.0f);
+        }
+    }
+
+    /**
+     * Mutates the 22-float hand pose using a slot-based scheme. Only one slot is active at a time:
+     * slots 0..4 = fingers (thumb,index,middle,ring,pinky), each editing 4 contiguous floats
+     * (prox,mid,dist,splay) mapped to the 4 stick axes; slot 5 = palm, editing the trailing 2
+     * floats (palmPitch, palmYaw) on the primary stick. Offhand-A short-release advances the slot
+     * with wraparound, fires a small haptic, and surfaces an in-game notification naming the new
+     * slot.
+     */
+    void DebugAdjuster::adjustHandPose(std::array<float, 22>& pose)
+    {
+        if (vrcf::VRControllers.isReleasedShort(vrcf::Hand::Offhand, vr::k_EButton_A)) {
+            s_handPoseSlot = (s_handPoseSlot + 1) % HAND_POSE_SLOT_NAMES.size();
+            f4vr::showNotification(fmt::format("Adjusting hand pose: {}", HAND_POSE_SLOT_NAMES[s_handPoseSlot]));
+            vrcf::VRControllers.triggerHaptic(vrcf::Hand::Offhand, 0.05f, 0.4f);
+        }
+
+        const auto [px, py] = vrcf::VRControllers.getThumbstickValue(vrcf::Hand::Primary);
+        const auto [sx, sy] = vrcf::VRControllers.getThumbstickValue(vrcf::Hand::Offhand);
+        if (!anyStickInput(px, py, sx, sy)) {
+            return;
+        }
+
+        if (s_handPoseSlot < 5) {
+            // finger slot: 4 contiguous floats (prox, mid, dist, splay) at base index slot*4
+            const std::size_t base = s_handPoseSlot * 4;
+            if (vrcf::VRControllers.isPressHeldDown(vrcf::Hand::Offhand, vr::k_EButton_Grip)) {
+                pose[base + 3] = std::clamp(pose[base + 3] + applyDeadzone(py, HAND_POSE_FINGER_PER_FRAME), -0.8f, 2.0f);
+            } else {
+                pose[base + 0] = std::clamp(pose[base + 0] + applyDeadzone(py, HAND_POSE_FINGER_PER_FRAME), -0.8f, 2.0f);
+                pose[base + 1] = std::clamp(pose[base + 1] + applyDeadzone(px, HAND_POSE_FINGER_PER_FRAME), -0.8f, 2.0f);
+                pose[base + 2] = std::clamp(pose[base + 2] + applyDeadzone(sy, HAND_POSE_FINGER_PER_FRAME), -0.8f, 2.0f);
+            }
+        } else {
+            // palm slot: trailing 2 floats (palmPitch, palmYaw) on the primary stick
+            pose[20] = std::clamp(pose[20] + applyDeadzone(py, HAND_POSE_PALM_PER_FRAME), -10.0f, 15.0f);
+            pose[21] = std::clamp(pose[21] + applyDeadzone(px, HAND_POSE_PALM_PER_FRAME), -10.0f, 15.0f);
         }
     }
 
@@ -184,6 +256,10 @@ namespace f4cf
         case DebugAdjustTarget::Transform:
             mutableConfig.saveIniConfigValue(INI_SECTION_DEBUG, "tDebugTransform", transformToFixedString(config.debugTransform).c_str());
             logger::info("DebugAdjuster: saved tDebugTransform to INI");
+            break;
+        case DebugAdjustTarget::HandPose:
+            mutableConfig.saveIniConfigValue(INI_SECTION_DEBUG, "hDebugHandPose", handPoseToFixedString(config.debugHandPose).c_str());
+            logger::info("DebugAdjuster: saved hDebugHandPose to INI");
             break;
         case DebugAdjustTarget::FlowFlag1:
             mutableConfig.saveIniConfigValue(INI_SECTION_DEBUG, "fDebugFlowFlag1", toFixed(config.debugFlowFlag1).c_str());

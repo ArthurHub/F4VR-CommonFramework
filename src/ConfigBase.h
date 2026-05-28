@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <atomic>
 #include <SimpleIni.h>
 #include <variant>
@@ -53,6 +54,7 @@ namespace f4cf
     {
         None = 0,
         Transform,
+        HandPose,
         FlowFlag1,
         FlowFlag2,
         FlowFlag3,
@@ -98,6 +100,10 @@ namespace f4cf
         std::string debugFlowText1;
         std::string debugFlowText2;
         RE::NiTransform debugTransform{};
+        // General usage debug 22-float pose for tuning at runtime via live-reload.
+        // Layout matches FRIK API HandPoseData (5 fingers x {prox,mid,dist,splay}, then palmPitch, palmYaw).
+        // Consumers can convert via frik::api::FRIKApi::HandPoseData::fromFloats(debugHandPose).
+        std::array<float, 22> debugHandPose{};
         DebugAdjustTarget debugAdjustTarget = DebugAdjustTarget::None;
         std::map<std::string, std::string> debugVRUIProperties;
 
@@ -121,6 +127,12 @@ namespace f4cf
         // Read an NiTransform from "x,y,z;heading,roll,attitude;scale" (rotation in degrees).
         // Returns defaultValue if the key is missing or the value is malformed.
         static RE::NiTransform getTransformValue(const CSimpleIniA& ini, const char* section, const char* key, const RE::NiTransform& defaultValue);
+
+        // Read a 22-float hand pose from "p,m,d,s;p,m,d,s;p,m,d,s;p,m,d,s;p,m,d,s;pp,py" — exactly 5
+        // ';'-separated groups of 4 ','-separated floats (thumb,index,middle,ring,pinky), then 2 trailing
+        // ','-separated floats (palmPitch,palmYaw). Returns defaultValue if the key is missing or the
+        // value does not match this exact structure.
+        static std::array<float, 22> getHandPoseValue(const CSimpleIniA& ini, const char* section, const char* key, const std::array<float, 22>& defaultValue);
         void updateIniConfigToLatestVersion(int currentVersion, int latestVersion) const;
         static std::unordered_map<std::string, RE::NiTransform> loadEmbeddedOffsets(WORD fromResourceId, WORD toResourceId);
         static void loadOffsetJsonFile(const std::string& file, std::unordered_map<std::string, RE::NiTransform>& offsetsMap);

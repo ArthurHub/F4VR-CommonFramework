@@ -14,6 +14,12 @@ namespace f4cf
      *   - Offhand-A held:    scale (primary stick Y)
      *   - Otherwise:         translate (primary X=Y-axis, Y=X-axis, secondary Y=Z-axis)
      *
+     * Input map (when target == HandPose): one finger (or the palm) is active at a time.
+     *   - Active finger (4 axes): primary X = prox, primary Y = mid, secondary X = dist, secondary Y = splay
+     *   - Active palm   (2 axes): primary X = palmPitch, primary Y = palmYaw
+     *   - Offhand-A short-release: advance to the next slot (thumb -> index -> middle -> ring ->
+     *     pinky -> palm -> thumb...), fires a haptic and an in-game notification with the new slot.
+     *
      * Input map (when target == FlowFlag1/2/3): primary stick Y adjusts the value.
      *
      * Input map (when target == FlowFlag123): primary X = flag1, primary Y = flag2,
@@ -28,6 +34,7 @@ namespace f4cf
 
     private:
         static void adjustTransform(RE::NiTransform& transform);
+        static void adjustHandPose(std::array<float, 22>& pose);
         static void adjustFloat(float& value);
         static void adjustFloat3(float& flag1, float& flag2, float& flag3);
         static void saveCurrent(const ConfigBase& config);
