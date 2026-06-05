@@ -1,9 +1,9 @@
 // ReSharper disable CppClangTidyBugproneMultiLevelImplicitPointerConversion
 #include "VRControllersSuppressor.h"
 
+#include <Windows.h>
 #include <intrin.h>
 #include <ranges>
-#include <Windows.h>
 
 #include <utility>
 
@@ -54,8 +54,7 @@ namespace f4cf::vrcf
         {
             static const HMODULE module = [] {
                 HMODULE m = nullptr;
-                GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
-                    reinterpret_cast<LPCSTR>(&patchVtableSlot), &m);
+                GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT, reinterpret_cast<LPCSTR>(&patchVtableSlot), &m);
                 return m;
             }();
             return module;
@@ -95,10 +94,8 @@ namespace f4cf::vrcf
         void* origState = reinterpret_cast<void*>(_origGetControllerState);
         void* origStateWithPose = reinterpret_cast<void*>(_origGetControllerStateWithPose);
 
-        const bool ok1 = patchVtableSlot(&vtable[VTABLE_INDEX_GET_CONTROLLER_STATE],
-            reinterpret_cast<void*>(&hookedGetControllerState), origState);
-        const bool ok2 = patchVtableSlot(&vtable[VTABLE_INDEX_GET_CONTROLLER_STATE_WITH_POSE],
-            reinterpret_cast<void*>(&hookedGetControllerStateWithPose), origStateWithPose);
+        const bool ok1 = patchVtableSlot(&vtable[VTABLE_INDEX_GET_CONTROLLER_STATE], reinterpret_cast<void*>(&hookedGetControllerState), origState);
+        const bool ok2 = patchVtableSlot(&vtable[VTABLE_INDEX_GET_CONTROLLER_STATE_WITH_POSE], reinterpret_cast<void*>(&hookedGetControllerStateWithPose), origStateWithPose);
 
         if (!ok1 || !ok2) {
             logger::warn("VRControllersSuppressor: failed to patch IVRSystem vtable, will retry");
@@ -125,8 +122,7 @@ namespace f4cf::vrcf
         if (!system) {
             return;
         }
-        _leftIndex.store(system->GetTrackedDeviceIndexForControllerRole(vr::TrackedControllerRole_LeftHand),
-            std::memory_order_relaxed);
+        _leftIndex.store(system->GetTrackedDeviceIndexForControllerRole(vr::TrackedControllerRole_LeftHand), std::memory_order_relaxed);
 
         if (!_installed.load(std::memory_order_acquire)) {
             initialize();
@@ -196,9 +192,12 @@ namespace f4cf::vrcf
     void VRControllersSuppressor::logState(const std::string_view key, const char* const action) const
     {
         logger::debug("VRControllersSuppress: {} '{}' -> L(btn=0x{:X} ax=0x{:X}) R(btn=0x{:X} ax=0x{:X}); {} owner(s)",
-            action, key,
-            _left.buttons.load(std::memory_order_relaxed), static_cast<unsigned>(_left.axes.load(std::memory_order_relaxed)),
-            _right.buttons.load(std::memory_order_relaxed), static_cast<unsigned>(_right.axes.load(std::memory_order_relaxed)),
+            action,
+            key,
+            _left.buttons.load(std::memory_order_relaxed),
+            static_cast<unsigned>(_left.axes.load(std::memory_order_relaxed)),
+            _right.buttons.load(std::memory_order_relaxed),
+            static_cast<unsigned>(_right.axes.load(std::memory_order_relaxed)),
             _owners.size());
     }
 
@@ -471,8 +470,7 @@ namespace f4cf::vrcf
      * vtable trampoline for slot 34: runs the original poll, then masks the result for foreign
      * callers (game / other mods). Runs on the OpenVR polling thread.
      */
-    bool VRControllersSuppressor::hookedGetControllerState(vr::IVRSystem* system, const vr::TrackedDeviceIndex_t index,
-        vr::VRControllerState_t* state, const uint32_t stateSize)
+    bool VRControllersSuppressor::hookedGetControllerState(vr::IVRSystem* system, const vr::TrackedDeviceIndex_t index, vr::VRControllerState_t* state, const uint32_t stateSize)
     {
         const void* retAddr = _ReturnAddress();
         const bool ok = _origGetControllerState(system, index, state, stateSize);
@@ -486,8 +484,8 @@ namespace f4cf::vrcf
      * vtable trampoline for slot 35: runs the original poll, then masks the result for foreign
      * callers (game / other mods). Runs on the OpenVR polling thread.
      */
-    bool VRControllersSuppressor::hookedGetControllerStateWithPose(vr::IVRSystem* system, const vr::ETrackingUniverseOrigin origin,
-        const vr::TrackedDeviceIndex_t index, vr::VRControllerState_t* state, const uint32_t stateSize, vr::TrackedDevicePose_t* pose)
+    bool VRControllersSuppressor::hookedGetControllerStateWithPose(vr::IVRSystem* system, const vr::ETrackingUniverseOrigin origin, const vr::TrackedDeviceIndex_t index,
+        vr::VRControllerState_t* state, const uint32_t stateSize, vr::TrackedDevicePose_t* pose)
     {
         const void* retAddr = _ReturnAddress();
         const bool ok = _origGetControllerStateWithPose(system, origin, index, state, stateSize, pose);

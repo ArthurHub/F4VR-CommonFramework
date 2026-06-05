@@ -46,7 +46,10 @@ namespace f4cf::vrcf
         // Install the IVRSystem vtable hook. Idempotent -- installs once, safe to call repeatedly.
         // vr::VRSystem() must be live; returns false to retry next frame.
         bool initialize();
-        bool isInitialized() const { return _installed.load(std::memory_order_acquire); }
+        bool isInitialized() const
+        {
+            return _installed.load(std::memory_order_acquire);
+        }
 
         // Driven each frame by the framework: retries install while not yet installed and refreshes
         // the logical-hand -> physical-controller mapping. Mirrors VRControllersManager::update.
@@ -113,7 +116,10 @@ namespace f4cf::vrcf
         struct StringHash
         {
             using is_transparent = void;
-            std::size_t operator()(const std::string_view sv) const noexcept { return std::hash<std::string_view>{}(sv); }
+            std::size_t operator()(const std::string_view sv) const noexcept
+            {
+                return std::hash<std::string_view>{}(sv);
+            }
         };
 
         // Maps a logical hand to its physical side using the cached left-handed flag.
@@ -143,14 +149,13 @@ namespace f4cf::vrcf
 
         // Hook trampolines installed into the vtable (OpenVR thread). MSVC x64 passes `this` in RCX,
         // which maps to the leading IVRSystem* -- matching the native virtual's calling convention.
-        static bool hookedGetControllerState(vr::IVRSystem* system, vr::TrackedDeviceIndex_t index,
-            vr::VRControllerState_t* state, uint32_t stateSize);
-        static bool hookedGetControllerStateWithPose(vr::IVRSystem* system, vr::ETrackingUniverseOrigin origin,
-            vr::TrackedDeviceIndex_t index, vr::VRControllerState_t* state, uint32_t stateSize, vr::TrackedDevicePose_t* pose);
+        static bool hookedGetControllerState(vr::IVRSystem* system, vr::TrackedDeviceIndex_t index, vr::VRControllerState_t* state, uint32_t stateSize);
+        static bool hookedGetControllerStateWithPose(vr::IVRSystem* system, vr::ETrackingUniverseOrigin origin, vr::TrackedDeviceIndex_t index, vr::VRControllerState_t* state,
+            uint32_t stateSize, vr::TrackedDevicePose_t* pose);
 
         using GetControllerState_t = bool (*)(vr::IVRSystem*, vr::TrackedDeviceIndex_t, vr::VRControllerState_t*, uint32_t);
-        using GetControllerStateWithPose_t =
-        bool (*)(vr::IVRSystem*, vr::ETrackingUniverseOrigin, vr::TrackedDeviceIndex_t, vr::VRControllerState_t*, uint32_t, vr::TrackedDevicePose_t*);
+        using GetControllerStateWithPose_t = bool (*)(vr::IVRSystem*, vr::ETrackingUniverseOrigin, vr::TrackedDeviceIndex_t, vr::VRControllerState_t*, uint32_t,
+            vr::TrackedDevicePose_t*);
 
         static inline GetControllerState_t _origGetControllerState = nullptr;
         static inline GetControllerStateWithPose_t _origGetControllerStateWithPose = nullptr;
