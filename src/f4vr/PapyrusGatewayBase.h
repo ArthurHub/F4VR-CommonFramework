@@ -19,8 +19,8 @@ namespace f4cf::f4vr
     class PapyrusGatewayBase
     {
     public:
-        explicit PapyrusGatewayBase(std::string registerScriptClassName) :
-            _registerScriptClassName(std::move(registerScriptClassName))
+        explicit PapyrusGatewayBase(std::string registerScriptClassName)
+            : _registerScriptClassName(std::move(registerScriptClassName))
         {
             if (_instance && _instance != this) {
                 throw std::exception("Papyrus Gateway is already initialized, only single instance can be used!");
@@ -33,7 +33,10 @@ namespace f4cf::f4vr
             vm->RegisterFunction(new F4SEVR::NativeFunction1("RegisterPapyrusGatewayScript", _instance->_registerScriptClassName.c_str(), onRegisterGatewayScript, vm));
         }
 
-        virtual ~PapyrusGatewayBase() { _instance = nullptr; }
+        virtual ~PapyrusGatewayBase()
+        {
+            _instance = nullptr;
+        }
 
     protected:
         /**

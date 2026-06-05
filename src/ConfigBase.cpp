@@ -57,21 +57,23 @@ namespace f4cf::config
      */
     void IniValue::applyTo(CSimpleIniA& ini, const char* section, const char* key) const
     {
-        std::visit([&]<typename T>(const T& v) {
-            if constexpr (std::is_same_v<T, bool>) {
-                ini.SetBoolValue(section, key, v);
-                logger::info("Config: Saving \"{} = {}\"", key, v ? "true" : "false");
-            } else if constexpr (std::is_same_v<T, int>) {
-                ini.SetLongValue(section, key, v);
-                logger::info("Config: Saving \"{} = {}\"", key, v);
-            } else if constexpr (std::is_same_v<T, float>) {
-                ini.SetDoubleValue(section, key, v);
-                logger::info("Config: Saving \"{} = {}\"", key, v);
-            } else if constexpr (std::is_same_v<T, std::string>) {
-                ini.SetValue(section, key, v.c_str());
-                logger::info("Config: Saving \"{} = {}\"", key, v);
-            }
-        }, _value);
+        std::visit(
+            [&]<typename T>(const T& v) {
+                if constexpr (std::is_same_v<T, bool>) {
+                    ini.SetBoolValue(section, key, v);
+                    logger::info("Config: Saving \"{} = {}\"", key, v ? "true" : "false");
+                } else if constexpr (std::is_same_v<T, int>) {
+                    ini.SetLongValue(section, key, v);
+                    logger::info("Config: Saving \"{} = {}\"", key, v);
+                } else if constexpr (std::is_same_v<T, float>) {
+                    ini.SetDoubleValue(section, key, v);
+                    logger::info("Config: Saving \"{} = {}\"", key, v);
+                } else if constexpr (std::is_same_v<T, std::string>) {
+                    ini.SetValue(section, key, v.c_str());
+                    logger::info("Config: Saving \"{} = {}\"", key, v);
+                }
+            },
+            _value);
     }
 }
 
@@ -263,7 +265,7 @@ namespace f4cf
         if (debugVRUIProperties.empty()) {
             ini.Delete(INI_SECTION_VRUI, nullptr);
         } else {
-            for (const auto& [entry,value] : debugVRUIProperties) {
+            for (const auto& [entry, value] : debugVRUIProperties) {
                 ini.SetValue(INI_SECTION_VRUI, entry.c_str(), value.c_str());
             }
         }
@@ -376,8 +378,7 @@ namespace f4cf
 
         float x, y, z, heading, roll, attitude, scale;
         if (std::sscanf(raw, " %f , %f , %f ; %f , %f , %f ; %f", &x, &y, &z, &heading, &roll, &attitude, &scale) != 7) {
-            logger::warn("Config: malformed transform value for '{}.{}' = '{}' (expected 'x,y,z;heading,roll,attitude;scale' in degrees). Using default.",
-                section, key, raw);
+            logger::warn("Config: malformed transform value for '{}.{}' = '{}' (expected 'x,y,z;heading,roll,attitude;scale' in degrees). Using default.", section, key, raw);
             return defaultValue;
         }
 
@@ -406,22 +407,41 @@ namespace f4cf
 
         std::array<float, 22> r{};
         const int parsed = std::sscanf(raw,
-            " %f , %f , %f , %f ;"   // thumb
-            " %f , %f , %f , %f ;"   // index
-            " %f , %f , %f , %f ;"   // middle
-            " %f , %f , %f , %f ;"   // ring
-            " %f , %f , %f , %f ;"   // pinky
-            " %f , %f",              // palmPitch, palmYaw
-            &r[0], &r[1], &r[2], &r[3],
-            &r[4], &r[5], &r[6], &r[7],
-            &r[8], &r[9], &r[10], &r[11],
-            &r[12], &r[13], &r[14], &r[15],
-            &r[16], &r[17], &r[18], &r[19],
-            &r[20], &r[21]);
+            " %f , %f , %f , %f ;" // thumb
+            " %f , %f , %f , %f ;" // index
+            " %f , %f , %f , %f ;" // middle
+            " %f , %f , %f , %f ;" // ring
+            " %f , %f , %f , %f ;" // pinky
+            " %f , %f", // palmPitch, palmYaw
+            &r[0],
+            &r[1],
+            &r[2],
+            &r[3],
+            &r[4],
+            &r[5],
+            &r[6],
+            &r[7],
+            &r[8],
+            &r[9],
+            &r[10],
+            &r[11],
+            &r[12],
+            &r[13],
+            &r[14],
+            &r[15],
+            &r[16],
+            &r[17],
+            &r[18],
+            &r[19],
+            &r[20],
+            &r[21]);
         if (parsed != 22) {
-            logger::warn("Config: malformed hand pose value for '{}.{}' = '{}' "
-                         "(expected 'p,m,d,s;p,m,d,s;p,m,d,s;p,m,d,s;p,m,d,s;pp,py'). Using default.",
-                section, key, raw);
+            logger::warn(
+                "Config: malformed hand pose value for '{}.{}' = '{}' "
+                "(expected 'p,m,d,s;p,m,d,s;p,m,d,s;p,m,d,s;p,m,d,s;pp,py'). Using default.",
+                section,
+                key,
+                raw);
             return defaultValue;
         }
         return r;
@@ -607,47 +627,46 @@ namespace f4cf
         // use thread as otherwise there is a deadlock
         std::thread([this]() {
             logger::info("Start file watch in INI config '{}'", _iniFilePath.c_str());
-            _iniConfigFileWatch = std::make_unique<filewatch::FileWatch<std::string>>(
-                _iniFilePath, [this](const std::string&, const filewatch::Event changeType) {
-                    if (changeType != filewatch::Event::modified) {
-                        return;
-                    }
+            _iniConfigFileWatch = std::make_unique<filewatch::FileWatch<std::string>>(_iniFilePath, [this](const std::string&, const filewatch::Event changeType) {
+                if (changeType != filewatch::Event::modified) {
+                    return;
+                }
 
-                    constexpr auto delay = std::chrono::milliseconds(200);
+                constexpr auto delay = std::chrono::milliseconds(200);
 
-                    // ignore duplicate modified events, use atomic to make sure only 1 thread gets through
-                    auto prevWriteTime = _lastIniFileWriteTime.load();
-                    std::error_code ec;
-                    const auto writeTime = fs::last_write_time(_iniFilePath, ec);
-                    if (ec || !_lastIniFileWriteTime.compare_exchange_strong(prevWriteTime, writeTime) || writeTime - prevWriteTime < delay) {
-                        logger::debug("Ignore INI config change duplicate (write: {}) (err:{})", writeTime.time_since_epoch().count(), ec.value());
-                        return;
-                    }
+                // ignore duplicate modified events, use atomic to make sure only 1 thread gets through
+                auto prevWriteTime = _lastIniFileWriteTime.load();
+                std::error_code ec;
+                const auto writeTime = fs::last_write_time(_iniFilePath, ec);
+                if (ec || !_lastIniFileWriteTime.compare_exchange_strong(prevWriteTime, writeTime) || writeTime - prevWriteTime < delay) {
+                    logger::debug("Ignore INI config change duplicate (write: {}) (err:{})", writeTime.time_since_epoch().count(), ec.value());
+                    return;
+                }
 
-                    // ignore file modified if we who modified it
-                    bool expected = true;
-                    if (_ignoreNextIniFileChange.compare_exchange_strong(expected, false)) {
-                        logger::debug("Ignoring INI config change by ignore flag");
-                        return;
-                    }
+                // ignore file modified if we who modified it
+                bool expected = true;
+                if (_ignoreNextIniFileChange.compare_exchange_strong(expected, false)) {
+                    logger::debug("Ignoring INI config change by ignore flag");
+                    return;
+                }
 
-                    // wait until delay time is passed since the LAST file write time to prevent file lock issues and rapid modifications
-                    auto now = fs::file_time_type::clock::now();
-                    auto lastEventTime = _lastIniFileWriteTime.load();
-                    while (now - lastEventTime < delay) {
-                        std::this_thread::sleep_for(max(std::chrono::milliseconds(0), delay - (now - lastEventTime)));
-                        now = fs::file_time_type::clock::now();
-                        lastEventTime = _lastIniFileWriteTime.load();
-                    }
+                // wait until delay time is passed since the LAST file write time to prevent file lock issues and rapid modifications
+                auto now = fs::file_time_type::clock::now();
+                auto lastEventTime = _lastIniFileWriteTime.load();
+                while (now - lastEventTime < delay) {
+                    std::this_thread::sleep_for(max(std::chrono::milliseconds(0), delay - (now - lastEventTime)));
+                    now = fs::file_time_type::clock::now();
+                    lastEventTime = _lastIniFileWriteTime.load();
+                }
 
-                    logger::info("INI config change detected ({}), reload...", common::toDateTimeString(writeTime));
-                    loadIniConfigValues();
+                logger::info("INI config change detected ({}), reload...", common::toDateTimeString(writeTime));
+                loadIniConfigValues();
 
-                    for (const auto& [key, subscriber] : _onIniConfigChangedSubscribers) {
-                        logger::info("Notify INI config change subscriber '{}'", key.c_str());
-                        subscriber(key);
-                    }
-                });
+                for (const auto& [key, subscriber] : _onIniConfigChangedSubscribers) {
+                    logger::info("Notify INI config change subscriber '{}'", key.c_str());
+                    subscriber(key);
+                }
+            });
         }).detach();
     }
 

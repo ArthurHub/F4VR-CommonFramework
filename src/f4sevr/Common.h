@@ -10,7 +10,7 @@ namespace F4SEVR
 #define MEMBER_FN_PREFIX(className) typedef className _MEMBER_FN_BASE_TYPE
 
 #define DEFINE_MEMBER_FN_LONG(className, functionName, retnType, address, ...) \
-    typedef retnType (className::* _##functionName##_type)(__VA_ARGS__);       \
+    typedef retnType (className::*_##functionName##_type)(__VA_ARGS__);        \
                                                                                \
     inline _##functionName##_type* _##functionName##_GetPtr(void)              \
     {                                                                          \
@@ -21,25 +21,41 @@ namespace F4SEVR
 
 #define DEFINE_MEMBER_FN(functionName, retnType, address, ...) DEFINE_MEMBER_FN_LONG(_MEMBER_FN_BASE_TYPE, functionName, retnType, address, __VA_ARGS__)
 
-#define DEFINE_STATIC_HEAP(staticAllocate, staticFree)                                                  \
-    static void* operator new(std::size_t size) { return staticAllocate(size); }                        \
-    static void* operator new(std::size_t size, const std::nothrow_t&) { return staticAllocate(size); } \
-    static void* operator new(std::size_t, void* ptr) { return ptr; }                              \
-    static void operator delete(void* ptr) { staticFree(ptr); }                                         \
-    static void operator delete(void* ptr, const std::nothrow_t&) { staticFree(ptr); }                  \
-    static void operator delete(void*, void*) {}
+#define DEFINE_STATIC_HEAP(staticAllocate, staticFree)                 \
+    static void* operator new(std::size_t size)                        \
+    {                                                                  \
+        return staticAllocate(size);                                   \
+    }                                                                  \
+    static void* operator new(std::size_t size, const std::nothrow_t&) \
+    {                                                                  \
+        return staticAllocate(size);                                   \
+    }                                                                  \
+    static void* operator new(std::size_t, void* ptr)                  \
+    {                                                                  \
+        return ptr;                                                    \
+    }                                                                  \
+    static void operator delete(void* ptr)                             \
+    {                                                                  \
+        staticFree(ptr);                                               \
+    }                                                                  \
+    static void operator delete(void* ptr, const std::nothrow_t&)      \
+    {                                                                  \
+        staticFree(ptr);                                               \
+    }                                                                  \
+    static void operator delete(void*, void*)                          \
+    {}
 
 #define FORCE_INLINE __forceinline
 
-#define DEFINE_MEMBER_FN_0(fnName, retnType, addr)                             \
-    FORCE_INLINE retnType fnName()                                             \
-    {                                                                          \
-        struct empty_struct                                                    \
-        {};                                                                    \
-        typedef retnType (empty_struct::* _##fnName##_type)();                 \
-        const static uintptr_t address = addr + REL::Module::get().base();     \
-        _##fnName##_type fn = *(_##fnName##_type*)&address;                    \
-        return (reinterpret_cast<empty_struct*>(this)->*fn)();                 \
+#define DEFINE_MEMBER_FN_0(fnName, retnType, addr)                         \
+    FORCE_INLINE retnType fnName()                                         \
+    {                                                                      \
+        struct empty_struct                                                \
+        {};                                                                \
+        typedef retnType (empty_struct::*_##fnName##_type)();              \
+        const static uintptr_t address = addr + REL::Module::get().base(); \
+        _##fnName##_type fn = *(_##fnName##_type*)&address;                \
+        return (reinterpret_cast<empty_struct*>(this)->*fn)();             \
     }
 
 #define CALL_MEMBER_FN(obj, fn) ((*(obj)).*(*((obj)->_##fn##_GetPtr())))
@@ -104,13 +120,25 @@ namespace F4SEVR
                 m_pObject->DecRef();
         }
 
-        operator bool() const { return m_pObject != nullptr; }
+        operator bool() const
+        {
+            return m_pObject != nullptr;
+        }
 
-        operator T*() const { return m_pObject; }
+        operator T*() const
+        {
+            return m_pObject;
+        }
 
-        T& operator*() const { return *m_pObject; }
+        T& operator*() const
+        {
+            return *m_pObject;
+        }
 
-        T* operator->() const { return m_pObject; }
+        T* operator->() const
+        {
+            return m_pObject;
+        }
 
         NiPointer<T>& operator=(const NiPointer& rhs)
         {
@@ -140,13 +168,25 @@ namespace F4SEVR
             return *this;
         }
 
-        bool operator==(T* pObject) const { return m_pObject == pObject; }
+        bool operator==(T* pObject) const
+        {
+            return m_pObject == pObject;
+        }
 
-        bool operator!=(T* pObject) const { return m_pObject != pObject; }
+        bool operator!=(T* pObject) const
+        {
+            return m_pObject != pObject;
+        }
 
-        bool operator==(const NiPointer& ptr) const { return m_pObject == ptr.m_pObject; }
+        bool operator==(const NiPointer& ptr) const
+        {
+            return m_pObject == ptr.m_pObject;
+        }
 
-        bool operator!=(const NiPointer& ptr) const { return m_pObject != ptr.m_pObject; }
+        bool operator!=(const NiPointer& ptr) const
+        {
+            return m_pObject != ptr.m_pObject;
+        }
     };
 
     // 80808
@@ -240,14 +280,32 @@ namespace F4SEVR
                 return res;
             }
 
-            bool operator==(const Ref& lhs) const { return data == lhs.data; }
-            bool operator<(const Ref& lhs) const { return data < lhs.data; }
+            bool operator==(const Ref& lhs) const
+            {
+                return data == lhs.data;
+            }
+            bool operator<(const Ref& lhs) const
+            {
+                return data < lhs.data;
+            }
 
-            const char* c_str() const { return operator const char*(); }
-            operator const char*() const { return data ? data->Get<char>() : nullptr; }
+            const char* c_str() const
+            {
+                return operator const char*();
+            }
+            operator const char*() const
+            {
+                return data ? data->Get<char>() : nullptr;
+            }
 
-            const wchar_t* wc_str() { return operator const wchar_t*(); }
-            operator const wchar_t*() { return data ? data->Get<wchar_t>() : nullptr; }
+            const wchar_t* wc_str()
+            {
+                return operator const wchar_t*();
+            }
+            operator const wchar_t*()
+            {
+                return data ? data->Get<wchar_t>() : nullptr;
+            }
         };
 
         // 10
@@ -276,10 +334,18 @@ namespace F4SEVR
         UInt32 count; // 10
         UInt32 pad14; // 14
 
-        tArray() :
-            entries(NULL), capacity(0), count(0), pad0C(0), pad14(0) {}
+        tArray()
+            : entries(NULL),
+              capacity(0),
+              count(0),
+              pad0C(0),
+              pad14(0)
+        {}
 
-        T& operator[](UInt64 index) { return entries[index]; }
+        T& operator[](UInt64 index)
+        {
+            return entries[index];
+        }
 
         void Clear()
         {
@@ -296,7 +362,7 @@ namespace F4SEVR
                 return false;
 
             for (UInt32 i = 0; i < numEntries; i++)
-                new(&entries[i]) T;
+                new (&entries[i]) T;
 
             capacity = numEntries;
             count = numEntries;
@@ -324,7 +390,7 @@ namespace F4SEVR
             if (numEntries > capacity) {
                 // Fill in new remaining entries
                 for (UInt32 i = capacity; i < numEntries; i++)
-                    new(&entries[i]) T;
+                    new (&entries[i]) T;
             }
             Heap_Free(entries); // Free the old block
             entries = newBlock; // Assign the new block
@@ -432,7 +498,7 @@ namespace F4SEVR
                     Heap_Free(oldArray); // Free the old block
 
                 for (UInt32 i = oldSize; i < newSize; i++) // Allocate the rest of the free blocks
-                    new(&entries[i]) T;
+                    new (&entries[i]) T;
 
                 return true;
             } catch (...) {
@@ -474,11 +540,18 @@ namespace F4SEVR
             Item item;
             _Entry* next;
 
-            _Entry() :
-                next(NULL) {}
+            _Entry()
+                : next(NULL)
+            {}
 
-            bool IsFree() const { return next == NULL; }
-            void SetFree() { next = NULL; }
+            bool IsFree() const
+            {
+                return next == NULL;
+            }
+            void SetFree()
+            {
+                next = NULL;
+            }
 
             void Dump(void)
             {
@@ -499,9 +572,15 @@ namespace F4SEVR
         UInt64 unk_018; // 020
         _Entry* m_entries; // 028
 
-        _Entry* GetEntry(UInt32 hash) const { return (_Entry*)(((uintptr_t)m_entries) + sizeof(_Entry) * (hash & (m_size - 1))); }
+        _Entry* GetEntry(UInt32 hash) const
+        {
+            return (_Entry*)(((uintptr_t)m_entries) + sizeof(_Entry) * (hash & (m_size - 1)));
+        }
 
-        _Entry* GetEntryAt(UInt32 index) const { return (_Entry*)(((uintptr_t)m_entries) + sizeof(_Entry) * index); }
+        _Entry* GetEntryAt(UInt32 index) const
+        {
+            return (_Entry*)(((uintptr_t)m_entries) + sizeof(_Entry) * index);
+        }
 
         _Entry* NextFreeEntry(void)
         {
@@ -666,8 +745,13 @@ namespace F4SEVR
         }
 
     public:
-        tHashSet() :
-            m_size(0), m_freeCount(0), m_freeOffset(0), m_entries(NULL), m_eolPtr(&sentinel) {}
+        tHashSet()
+            : m_size(0),
+              m_freeCount(0),
+              m_freeOffset(0),
+              m_entries(NULL),
+              m_eolPtr(&sentinel)
+        {}
 
         ~tHashSet()
         {
@@ -675,9 +759,18 @@ namespace F4SEVR
                 Heap_Free(m_entries);
         }
 
-        UInt32 Size() const { return m_size; }
-        UInt32 FreeCount() const { return m_freeCount; }
-        UInt32 FillCount() const { return m_size - m_freeCount; }
+        UInt32 Size() const
+        {
+            return m_size;
+        }
+        UInt32 FreeCount() const
+        {
+            return m_freeCount;
+        }
+        UInt32 FillCount() const
+        {
+            return m_size - m_freeCount;
+        }
 
         Item* Find(Key* key) const
         {
@@ -821,8 +914,10 @@ namespace F4SEVR
         volatile SInt32 lockValue; // 04
 
     public:
-        BSReadWriteLock() :
-            threadID(0), lockValue(0) {}
+        BSReadWriteLock()
+            : threadID(0),
+              lockValue(0)
+        {}
 
         //void LockForRead();
         //void LockForWrite();

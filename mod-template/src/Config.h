@@ -1,7 +1,7 @@
 #pragma once
 
-#include "Resources.h"
 #include "ConfigBase.h"
+#include "Resources.h"
 #include "common/CommonUtils.h"
 
 namespace my_mod
@@ -12,8 +12,9 @@ namespace my_mod
     class Config : public ConfigBase
     {
     public:
-        explicit Config() :
-            ConfigBase(Version::PROJECT, INI_PATH, IDR_CONFIG_INI) {}
+        explicit Config()
+            : ConfigBase(Version::PROJECT, INI_PATH, IDR_CONFIG_INI)
+        {}
 
         // Mod configs
         float myConfigValue = 0.0f;

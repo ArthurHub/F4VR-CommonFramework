@@ -1,10 +1,10 @@
 #pragma once
 
+#include <SimpleIni.h>
 #include <array>
 #include <atomic>
-#include <SimpleIni.h>
-#include <variant>
 #include <thomasmonkman-filewatch/FileWatch.hpp>
+#include <variant>
 
 #include "Common/CommonUtils.h"
 
@@ -22,20 +22,25 @@ namespace f4cf
         class IniValue
         {
         public:
-            IniValue(bool value) :
-                _value(value) {}
+            IniValue(bool value)
+                : _value(value)
+            {}
 
-            IniValue(int value) :
-                _value(value) {}
+            IniValue(int value)
+                : _value(value)
+            {}
 
-            IniValue(float value) :
-                _value(value) {}
+            IniValue(float value)
+                : _value(value)
+            {}
 
-            IniValue(const char* value) :
-                _value(std::string(value)) {}
+            IniValue(const char* value)
+                : _value(std::string(value))
+            {}
 
-            IniValue(std::string value) :
-                _value(std::move(value)) {}
+            IniValue(std::string value)
+                : _value(std::move(value))
+            {}
 
             /** Write this value to the given INI under section/key, using the type-appropriate setter. */
             void applyTo(CSimpleIniA& ini, const char* section, const char* key) const;
@@ -64,10 +69,11 @@ namespace f4cf
     class ConfigBase
     {
     public:
-        ConfigBase(const std::string_view& module, const std::string_view& iniFilePath, const WORD iniDefaultConfigEmbeddedResourceId) :
-            _module(std::string(module)),
-            _iniFilePath(iniFilePath),
-            _iniDefaultConfigEmbeddedResourceId(iniDefaultConfigEmbeddedResourceId) {}
+        ConfigBase(const std::string_view& module, const std::string_view& iniFilePath, const WORD iniDefaultConfigEmbeddedResourceId)
+            : _module(std::string(module)),
+              _iniFilePath(iniFilePath),
+              _iniDefaultConfigEmbeddedResourceId(iniDefaultConfigEmbeddedResourceId)
+        {}
 
         virtual ~ConfigBase() = default;
 
@@ -112,7 +118,8 @@ namespace f4cf
         virtual void loadIniConfigInternal(const CSimpleIniA& ini) = 0;
 
         // Override to save your config values
-        virtual void saveIniConfigInternal(CSimpleIniA&) {}
+        virtual void saveIniConfigInternal(CSimpleIniA&)
+        {}
 
         void loadIniConfig();
         int loadEmbeddedResourceIniConfigVersion() const;
@@ -143,7 +150,8 @@ namespace f4cf
          * Custom code to migrate the INI config to the latest version.
          * Can be used is special handling is required for the specific config.
          */
-        virtual void updateIniConfigToLatestVersionCustom(int /*currentVersion*/, int /*latestVersion*/, const CSimpleIniA& /*oldIni*/, CSimpleIniA& /*newIni*/) const {}
+        virtual void updateIniConfigToLatestVersionCustom(int /*currentVersion*/, int /*latestVersion*/, const CSimpleIniA& /*oldIni*/, CSimpleIniA& /*newIni*/) const
+        {}
 
         void startIniConfigFileWatch();
 

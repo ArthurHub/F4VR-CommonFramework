@@ -8,13 +8,9 @@ namespace my_mod
     class MyMod : public ModBase
     {
     public:
-        MyMod() :
-            ModBase(Settings(
-                Version::PROJECT,
-                Version::NAME,
-                &g_config,
-                32,
-                true)) {}
+        MyMod()
+            : ModBase(Settings(Version::PROJECT, Version::NAME, &g_config, 32, true))
+        {}
 
     protected:
         virtual void onModLoaded(const F4SE::LoadInterface* f4SE) override;
@@ -23,7 +19,6 @@ namespace my_mod
         virtual void onFrameUpdate() override;
 
     private:
-
     };
 
     // The ONE global to rule them ALL

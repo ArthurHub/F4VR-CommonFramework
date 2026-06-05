@@ -5,8 +5,8 @@
 
 namespace f4cf::vrui
 {
-    UIElement::UIElement(std::string name) :
-        _name(std::move(name))
+    UIElement::UIElement(std::string name)
+        : _name(std::move(name))
     {
         _transform.translate = RE::NiPoint3(0, 0, 0);
         _transform.rotate = common::MatrixUtils::getIdentityMatrix();
@@ -22,8 +22,7 @@ namespace f4cf::vrui
             _transform.translate.y,
             _transform.translate.z,
             _size.width,
-            _size.height
-            );
+            _size.height);
     }
 
     void UIElement::setPosition(const float x, const float y, const float z)
@@ -115,8 +114,7 @@ namespace f4cf::vrui
     void UIElement::attachToNode(RE::NiNode* attachNode)
     {
         if (_attachNode) {
-            throw std::runtime_error(
-                "Attempt to attach already attached widget: " + std::string(attachNode->name.c_str()));
+            throw std::runtime_error("Attempt to attach already attached widget: " + std::string(attachNode->name.c_str()));
         }
         _attachNode.reset(attachNode);
     }
@@ -175,7 +173,12 @@ namespace f4cf::vrui
     void UIElement::writeDevLayoutProperties(const std::string& namePrefix, std::map<std::string, std::string>& propertiesMap) const
     {
         propertiesMap[namePrefix + _name] = std::format("Pos:({:.2f},{:.2f},{:.2f}), Scale:({:.2f}), Size:({:.2f},{:.2f})",
-            getPosition().x, getPosition().y, getPosition().z, getScale(), getSize().width, getSize().height);
+            getPosition().x,
+            getPosition().y,
+            getPosition().z,
+            getScale(),
+            getSize().width,
+            getSize().height);
     }
 
     /**

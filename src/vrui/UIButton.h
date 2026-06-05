@@ -14,7 +14,10 @@ namespace f4cf::vrui
         void setOnPressHandler(std::function<void(UIWidget*)> handler);
 
     protected:
-        virtual bool isPressable() const override { return _visible && _onPressEventHandler != nullptr; }
+        virtual bool isPressable() const override
+        {
+            return _visible && _onPressEventHandler != nullptr;
+        }
         virtual void onPressEventFired(UIElement* element, UIFrameUpdateContext* context) override;
 
         std::function<void(UIButton*)> _onPressEventHandler;

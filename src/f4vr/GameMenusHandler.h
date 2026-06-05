@@ -61,16 +61,12 @@ namespace f4cf::f4vr
 
         bool isGameStopped()
         {
-            return std::ranges::any_of(GAME_STOPPING_MENUS, [this](const std::string& menuName) {
-                return _gameMenuState[menuName] == true;
-            });
+            return std::ranges::any_of(GAME_STOPPING_MENUS, [this](const std::string& menuName) { return _gameMenuState[menuName] == true; });
         }
 
         bool isGameStoppedNoDialogue()
         {
-            return std::ranges::any_of(GAME_STOPPING_MENUS_NO_DIALOGUE, [this](const std::string& menuName) {
-                return _gameMenuState[menuName] == true;
-            });
+            return std::ranges::any_of(GAME_STOPPING_MENUS_NO_DIALOGUE, [this](const std::string& menuName) { return _gameMenuState[menuName] == true; });
         }
 
         void debugDumpAllMenus() const
@@ -118,9 +114,7 @@ namespace f4cf::f4vr
         // each menu and whatever it is open (true) or closed (false)
         std::unordered_map<std::string, bool> _gameMenuState;
 
-        inline static std::vector<std::string> GAME_STOPPING_MENUS_NO_DIALOGUE
-        {
-            "BarterMenu",
+        inline static std::vector<std::string> GAME_STOPPING_MENUS_NO_DIALOGUE{ "BarterMenu",
             "Book Menu",
             "Console",
             "Native UI Menu",
@@ -152,11 +146,9 @@ namespace f4cf::f4vr
             "StatsMenuPerks",
             "Training Menu",
             "Tutorial Menu",
-            "TweenMenu"
-        };
+            "TweenMenu" };
 
-        inline static std::vector<std::string> GAME_STOPPING_MENUS{
-            "BarterMenu",
+        inline static std::vector<std::string> GAME_STOPPING_MENUS{ "BarterMenu",
             "Book Menu",
             "Console",
             "Native UI Menu",
@@ -189,8 +181,7 @@ namespace f4cf::f4vr
             "StatsMenuPerks",
             "Training Menu",
             "Tutorial Menu",
-            "TweenMenu"
-        };
+            "TweenMenu" };
 
         inline static std::vector<std::string> GAME_MENUS{
             "BarterMenu",

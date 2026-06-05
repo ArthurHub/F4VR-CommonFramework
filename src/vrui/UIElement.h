@@ -1,7 +1,7 @@
 #pragma once
 
-#include "UIModAdapter.h"
 #include "../common/Quaternion.h"
+#include "UIModAdapter.h"
 
 namespace f4cf::vrui
 {
@@ -10,8 +10,10 @@ namespace f4cf::vrui
         float width;
         float height;
 
-        UISize(const float width, const float height) :
-            width(width), height(height) {}
+        UISize(const float width, const float height)
+            : width(width),
+              height(height)
+        {}
     };
 
     class UIElement
@@ -45,7 +47,8 @@ namespace f4cf::vrui
         void setParent(UIElement* parent);
 
         // Internal:
-        virtual void onLayoutUpdate(UIFrameUpdateContext*) {}
+        virtual void onLayoutUpdate(UIFrameUpdateContext*)
+        {}
 
         // Internal: Handle UI interaction code on each frame of the game.
         virtual void onFrameUpdate(UIFrameUpdateContext* context) = 0;
@@ -56,7 +59,8 @@ namespace f4cf::vrui
 
     protected:
         virtual RE::NiTransform calculateTransform() const;
-        virtual void onPressEventFired(UIElement*, UIFrameUpdateContext*) {}
+        virtual void onPressEventFired(UIElement*, UIFrameUpdateContext*)
+        {}
         void onPressEventFiredPropagate(UIElement* element, UIFrameUpdateContext* context);
         virtual void onStateChanged(UIElement* element);
 

@@ -11,7 +11,10 @@ namespace f4cf::vrui
         virtual std::string toString() const override;
 
         // is the button is currently toggled ON or OFF
-        bool isToggleOn() const { return _isToggleOn; }
+        bool isToggleOn() const
+        {
+            return _isToggleOn;
+        }
 
         void setToggleState(const bool isToggleOn);
 

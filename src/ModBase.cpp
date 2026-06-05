@@ -3,8 +3,8 @@
 #include <cpptrace/from_current.hpp>
 #include <fmt/chrono.h>
 
-#include "f4vr/DebugDump.h"
 #include "MainLoopHook.h"
+#include "f4vr/DebugDump.h"
 
 #include "f4vr/PlayerNodes.h"
 #include "vrcf/VRControllersManager.h"
@@ -14,46 +14,49 @@ using namespace common;
 
 namespace f4cf
 {
-    ModBase::Settings::Settings(const std::string_view& name, const std::string_view& version, ConfigBase* config) :
-        name(name),
-        f4seName(name),
-        version(version),
-        config(config),
-        logFileName(name) {}
+    ModBase::Settings::Settings(const std::string_view& name, const std::string_view& version, ConfigBase* config)
+        : name(name),
+          f4seName(name),
+          version(version),
+          config(config),
+          logFileName(name)
+    {}
 
-    ModBase::Settings::Settings(const std::string_view& name, const std::string_view& version, ConfigBase* config, const int trampolineAllocationSize,
-        const bool setupMainGameLoop) :
-        name(name),
-        f4seName(name),
-        version(version),
-        config(config),
-        logFileName(name),
-        trampolineAllocationSize(trampolineAllocationSize),
-        setupMainGameLoop(setupMainGameLoop) {}
+    ModBase::Settings::Settings(const std::string_view& name, const std::string_view& version, ConfigBase* config, const int trampolineAllocationSize, const bool setupMainGameLoop)
+        : name(name),
+          f4seName(name),
+          version(version),
+          config(config),
+          logFileName(name),
+          trampolineAllocationSize(trampolineAllocationSize),
+          setupMainGameLoop(setupMainGameLoop)
+    {}
 
     ModBase::Settings::Settings(const std::string_view& name, const std::string_view& version, ConfigBase* config, const std::string_view& logFileName,
-        const int trampolineAllocationSize, const bool setupMainGameLoop) :
-        name(name),
-        f4seName(name),
-        version(version),
-        config(config),
-        logFileName(logFileName),
-        trampolineAllocationSize(trampolineAllocationSize),
-        setupMainGameLoop(setupMainGameLoop) {}
+        const int trampolineAllocationSize, const bool setupMainGameLoop)
+        : name(name),
+          f4seName(name),
+          version(version),
+          config(config),
+          logFileName(logFileName),
+          trampolineAllocationSize(trampolineAllocationSize),
+          setupMainGameLoop(setupMainGameLoop)
+    {}
 
     ModBase::Settings::Settings(const std::string_view& name, const std::string_view& f4seName, const std::string_view& version, ConfigBase* config,
-        const std::string_view& logFileName, const int trampolineAllocationSize, const bool setupMainGameLoop, const bool setupMainGameLoopLate) :
-        name(name),
-        f4seName(f4seName),
-        version(version),
-        config(config),
-        logFileName(logFileName),
-        trampolineAllocationSize(trampolineAllocationSize),
-        setupMainGameLoop(setupMainGameLoop),
-        setupMainGameLoopLate(setupMainGameLoopLate) {}
+        const std::string_view& logFileName, const int trampolineAllocationSize, const bool setupMainGameLoop, const bool setupMainGameLoopLate)
+        : name(name),
+          f4seName(f4seName),
+          version(version),
+          config(config),
+          logFileName(logFileName),
+          trampolineAllocationSize(trampolineAllocationSize),
+          setupMainGameLoop(setupMainGameLoop),
+          setupMainGameLoopLate(setupMainGameLoopLate)
+    {}
 
-    ModBase::ModBase(Settings settings) :
-        _settings(std::move(settings))
+    ModBase::ModBase(Settings settings)
+        : _settings(std::move(settings))
     {
         if (g_mod) {
             throw std::runtime_error("mod already initialized for " + g_mod->_settings.name);
@@ -78,27 +81,28 @@ namespace f4cf
     {
         bool success = false;
         CPPTRACE_TRY
-            {
-                logger::init(_settings.logFileName);
-                logPluginGameStart();
+        {
+            logger::init(_settings.logFileName);
+            logPluginGameStart();
 
-                info->infoVersion = F4SE::PluginInfo::kVersion;
-                info->name = _settings.f4seName.c_str();
-                std::string tmp = _settings.version;
-                std::erase(tmp, '.');
-                info->version = std::stoi(tmp);
+            info->infoVersion = F4SE::PluginInfo::kVersion;
+            info->name = _settings.f4seName.c_str();
+            std::string tmp = _settings.version;
+            std::erase(tmp, '.');
+            info->version = std::stoi(tmp);
 
-                if (skse->IsEditor()) {
-                    logger::critical("Loaded in editor, marking as incompatible");
-                    // ReSharper disable once CppUnreachableCode
-                } else if (skse->RuntimeVersion() < (REL::Module::IsF4() ? F4SE::RUNTIME_LATEST : F4SE::RUNTIME_LATEST_VR)) {
-                    logger::critical("Unsupported runtime version {}", skse->RuntimeVersion().string());
-                } else {
-                    logger::info("F4SE Plugin Query v{} compatible: {} v{}", skse->F4SEVersion().string(), info->name, info->version);
-                    success = true;
-                }
+            if (skse->IsEditor()) {
+                logger::critical("Loaded in editor, marking as incompatible");
+                // ReSharper disable once CppUnreachableCode
+            } else if (skse->RuntimeVersion() < (REL::Module::IsF4() ? F4SE::RUNTIME_LATEST : F4SE::RUNTIME_LATEST_VR)) {
+                logger::critical("Unsupported runtime version {}", skse->RuntimeVersion().string());
+            } else {
+                logger::info("F4SE Plugin Query v{} compatible: {} v{}", skse->F4SEVersion().string(), info->name, info->version);
+                success = true;
             }
-        CPPTRACE_CATCH(const std::exception& ex) {
+        }
+        CPPTRACE_CATCH(const std::exception& ex)
+        {
             const auto stacktrace = cpptrace::from_current_exception().to_string();
             logger::error("Unhandled exception: {}\n{}", ex.what(), stacktrace);
         }
@@ -113,31 +117,32 @@ namespace f4cf
     {
         bool success = false;
         CPPTRACE_TRY
-            {
-                logger::info("Init CommonLibF4 F4SE...");
-                F4SE::Init(f4se, false);
+        {
+            logger::info("Init CommonLibF4 F4SE...");
+            F4SE::Init(f4se, false);
 
-                logger::info("Init config...");
-                _settings.config->load();
+            logger::info("Init config...");
+            _settings.config->load();
 
-                logger::info("Register F4SE messages...");
-                _messaging = F4SE::GetMessagingInterface();
-                _messaging->RegisterListener(onF4VRSEMessage);
+            logger::info("Register F4SE messages...");
+            _messaging = F4SE::GetMessagingInterface();
+            _messaging->RegisterListener(onF4VRSEMessage);
 
-                // allocate enough space for patches and hooks
-                F4SE::AllocTrampoline(_settings.trampolineAllocationSize);
+            // allocate enough space for patches and hooks
+            F4SE::AllocTrampoline(_settings.trampolineAllocationSize);
 
-                logger::info("Load Mod...");
-                onModLoaded(f4se);
+            logger::info("Load Mod...");
+            onModLoaded(f4se);
 
-                if (_settings.setupMainGameLoop && !_settings.setupMainGameLoopLate) {
-                    main_hook::hook();
-                }
-
-                logger::info("Load successful");
-                success = true;
+            if (_settings.setupMainGameLoop && !_settings.setupMainGameLoopLate) {
+                main_hook::hook();
             }
-        CPPTRACE_CATCH(const std::exception& ex) {
+
+            logger::info("Load successful");
+            success = true;
+        }
+        CPPTRACE_CATCH(const std::exception& ex)
+        {
             const auto stacktrace = cpptrace::from_current_exception().to_string();
             logger::error("Unhandled exception: {}\n{}", ex.what(), stacktrace);
         }
@@ -151,16 +156,17 @@ namespace f4cf
     void ModBase::onFrameUpdateSafe()
     {
         CPPTRACE_TRY
-            {
-                vrcf::VRControllers.update(f4vr::isLeftHandedMode());
+        {
+            vrcf::VRControllers.update(f4vr::isLeftHandedMode());
 
-                onFrameUpdate();
+            onFrameUpdate();
 
-                _debugAdjuster.onFrameUpdate(*_settings.config);
+            _debugAdjuster.onFrameUpdate(*_settings.config);
 
-                checkDebugDump();
-            }
-        CPPTRACE_CATCH(const std::exception& ex) {
+            checkDebugDump();
+        }
+        CPPTRACE_CATCH(const std::exception& ex)
+        {
             const auto stacktrace = cpptrace::from_current_exception().to_string();
             logger::critical("Error in onFrameUpdate: {}\n{}", ex.what(), stacktrace);
             throw;
@@ -173,7 +179,12 @@ namespace f4cf
         const auto runtimeVer = REL::Module::get().version();
         const auto dateTime = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
         logger::info("Starting '{}' v{} ; {} v{} ; {:%Y-%m-%d %H:%M:%S%Ez} ; BaseAddress: 0x{:X}",
-            _settings.name, _settings.version, game, runtimeVer.string(), fmt::localtime(dateTime), REL::Module::get().base());
+            _settings.name,
+            _settings.version,
+            game,
+            runtimeVer.string(),
+            fmt::localtime(dateTime),
+            REL::Module::get().base());
     }
 
     /**
@@ -205,16 +216,17 @@ namespace f4cf
     void ModBase::onGameLoadedInner()
     {
         CPPTRACE_TRY
-            {
-                vrui::initUIManager();
+        {
+            vrui::initUIManager();
 
-                if (_settings.setupMainGameLoop && _settings.setupMainGameLoopLate) {
-                    main_hook::hook();
-                }
-
-                onGameLoaded();
+            if (_settings.setupMainGameLoop && _settings.setupMainGameLoopLate) {
+                main_hook::hook();
             }
-        CPPTRACE_CATCH(const std::exception& ex) {
+
+            onGameLoaded();
+        }
+        CPPTRACE_CATCH(const std::exception& ex)
+        {
             const auto stacktrace = cpptrace::from_current_exception().to_string();
             logger::critical("Error in onGameLoaded: {}\n{}", ex.what(), stacktrace);
             throw;
@@ -228,19 +240,20 @@ namespace f4cf
     void ModBase::onGameSessionLoadedInner()
     {
         CPPTRACE_TRY
-            {
-                if (_settings.setupMainGameLoop) {
-                    main_hook::validate();
-                }
-
-                vrcf::VRControllers.reset();
-
-                logger::info("Reload config...");
-                _settings.config->load();
-
-                onGameSessionLoaded();
+        {
+            if (_settings.setupMainGameLoop) {
+                main_hook::validate();
             }
-        CPPTRACE_CATCH(const std::exception& ex) {
+
+            vrcf::VRControllers.reset();
+
+            logger::info("Reload config...");
+            _settings.config->load();
+
+            onGameSessionLoaded();
+        }
+        CPPTRACE_CATCH(const std::exception& ex)
+        {
             const auto stacktrace = cpptrace::from_current_exception().to_string();
             logger::critical("Error in onGameSessionLoaded: {}\n{}", ex.what(), stacktrace);
             throw;

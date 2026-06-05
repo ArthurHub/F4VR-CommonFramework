@@ -21,17 +21,17 @@ namespace F4SEVR
         UInt64 unk38; // 38
         struct MemberData
         {
-            unsigned unk00 : 3; // This == 3 is usually always checked before accessing properties
-            unsigned unk03 : 5;
-            unsigned numMembers : 10; // Variables + Properties
-            unsigned unk19 : 14;
+            unsigned unk00: 3; // This == 3 is usually always checked before accessing properties
+            unsigned unk03: 5;
+            unsigned numMembers: 10; // Variables + Properties
+            unsigned unk19: 14;
         } memberData;
 
         struct PropertyData
         {
-            unsigned numVariables : 10; // Sometimes this is 0 and member != numProperties
-            unsigned numProperties : 10; // Excludes variables
-            unsigned unk21 : 12;
+            unsigned numVariables: 10; // Sometimes this is 0 and member != numProperties
+            unsigned numProperties: 10; // Excludes variables
+            unsigned unk21: 12;
         } propertyData;
 
         UInt32 numFunc; // 48
@@ -92,9 +92,18 @@ namespace F4SEVR
             BSFixedString name; // 00
             UInt32 index; // 08
 
-            bool operator==(const MemberItem& rhs) const { return name == rhs.name; }
-            bool operator==(const BSFixedString a_name) const { return name == a_name; }
-            operator UInt64() const { return (UInt64)name.data->Get<char>(); }
+            bool operator==(const MemberItem& rhs) const
+            {
+                return name == rhs.name;
+            }
+            bool operator==(const BSFixedString a_name) const
+            {
+                return name == a_name;
+            }
+            operator UInt64() const
+            {
+                return (UInt64)name.data->Get<char>();
+            }
 
             static inline UInt32 GetHash(BSFixedString* key)
             {
@@ -181,7 +190,10 @@ namespace F4SEVR
             UInt32 unk1C; // 1C
             char m_value[0]; // 20
 
-            VMValue* GetStruct() { return (VMValue*)&m_value[0]; }
+            VMValue* GetStruct()
+            {
+                return (VMValue*)&m_value[0];
+            }
         };
 
         union // Can be number or IComplexType or IComplexType | 1 (array)
@@ -202,8 +214,14 @@ namespace F4SEVR
             VMValue* var;
             VMIdentifier* id;
             StringCache::Entry* str;
-            BSFixedString* GetStr(void) { return (BSFixedString*)(&str); }
-            BSFixedString* GetStr(void) const { return (BSFixedString*)(&str); }
+            BSFixedString* GetStr(void)
+            {
+                return (BSFixedString*)(&str);
+            }
+            BSFixedString* GetStr(void) const
+            {
+                return (BSFixedString*)(&str);
+            }
         } data;
 
         void SetNone(void);

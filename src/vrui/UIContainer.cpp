@@ -7,10 +7,10 @@
 
 namespace f4cf::vrui
 {
-    UIContainer::UIContainer(const std::string& name, const UIContainerLayout layout, const float padding, const float scale) :
-        UIElement(name),
-        _layout(layout),
-        _padding(padding)
+    UIContainer::UIContainer(const std::string& name, const UIContainerLayout layout, const float padding, const float scale)
+        : UIElement(name),
+          _layout(layout),
+          _padding(padding)
     {
         setScale(scale);
     }
@@ -29,8 +29,7 @@ namespace f4cf::vrui
             calculatedSize.width,
             calculatedSize.height,
             _childElements.size(),
-            static_cast<int>(_layout)
-            );
+            static_cast<int>(_layout));
     }
 
     /**
@@ -48,9 +47,7 @@ namespace f4cf::vrui
      */
     bool UIContainer::isHorizontalLayout() const
     {
-        return _layout == UIContainerLayout::HorizontalCenter ||
-            _layout == UIContainerLayout::HorizontalRight ||
-            _layout == UIContainerLayout::HorizontalLeft;
+        return _layout == UIContainerLayout::HorizontalCenter || _layout == UIContainerLayout::HorizontalRight || _layout == UIContainerLayout::HorizontalLeft;
     }
 
     float UIContainer::getPadding() const
@@ -306,7 +303,12 @@ namespace f4cf::vrui
     {
         const auto key = namePrefix + _name;
         propertiesMap[key] = std::format("Pos:({:.2f},{:.2f},{:.2f}), Scale:({:.2f}), Padding:({:.2f}), Layout:({})",
-            getPosition().x, getPosition().y, getPosition().z, getScale(), getPadding(), static_cast<int>(getLayout()));
+            getPosition().x,
+            getPosition().y,
+            getPosition().z,
+            getScale(),
+            getPadding(),
+            static_cast<int>(getLayout()));
 
         for (const auto& childElm : _childElements) {
             childElm->writeDevLayoutProperties(key + ".", propertiesMap);
@@ -327,7 +329,8 @@ namespace f4cf::vrui
         try {
             float x, y, z, scale, padding;
             int layout;
-            if (std::sscanf(propertiesMap.at(key).c_str(), "Pos:(%f,%f,%f), Scale:(%f), Padding:(%f), Layout:(%d)", &x, &y, &z, &scale, &padding, &layout) == 6) { // NOLINT(cert-err34-c)
+            if (std::sscanf(propertiesMap.at(key).c_str(), "Pos:(%f,%f,%f), Scale:(%f), Padding:(%f), Layout:(%d)", &x, &y, &z, &scale, &padding, &layout) ==
+                6) { // NOLINT(cert-err34-c)
                 setPosition(x, y, z);
                 setScale(scale);
                 setPadding(padding);

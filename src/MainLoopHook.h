@@ -2,7 +2,6 @@
 
 #include "ModBase.h"
 
-
 namespace f4cf::main_hook
 {
     namespace internal

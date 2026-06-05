@@ -8,8 +8,8 @@ using namespace common;
 
 namespace f4cf::vrui
 {
-    UIDebugWidget::UIDebugWidget(const bool followInteractPos) :
-        UIWidget(UIUtils::getDebugSphereNifName())
+    UIDebugWidget::UIDebugWidget(const bool followInteractPos)
+        : UIWidget(UIUtils::getDebugSphereNifName())
     {
         _followInteractionPosition = followInteractPos;
     }
@@ -23,8 +23,7 @@ namespace f4cf::vrui
             _transform.translate.y,
             _transform.translate.z,
             _size.width,
-            _size.height
-            );
+            _size.height);
     }
 
     void UIDebugWidget::onFrameUpdate(UIFrameUpdateContext* adapter)

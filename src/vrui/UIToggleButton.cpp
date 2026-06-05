@@ -5,8 +5,8 @@
 
 namespace f4cf::vrui
 {
-    UIToggleButton::UIToggleButton(const std::string& nifPath) :
-        UIWidget(nifPath)
+    UIToggleButton::UIToggleButton(const std::string& nifPath)
+        : UIWidget(nifPath)
     {
         auto [frameNode, widthToHeightRatio] = UIUtils::getUINodeFromNifFile(UIUtils::getToggleButtonFrameNifName());
         _toggleFrameNode.reset(frameNode);
@@ -23,8 +23,7 @@ namespace f4cf::vrui
             _transform.translate.y,
             _transform.translate.z,
             _size.width,
-            _size.height
-            );
+            _size.height);
     }
 
     void UIToggleButton::setToggleState(const bool isToggleOn)

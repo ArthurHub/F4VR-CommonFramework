@@ -38,7 +38,10 @@ namespace f4cf::vrcf
         k_EButton_Max = 64
     };
 
-    inline uint64_t ButtonMaskFromId(const VRButtonId id) { return 1ull << id; }
+    inline uint64_t ButtonMaskFromId(const VRButtonId id)
+    {
+        return 1ull << id;
+    }
 
     // TODO: remove this after migrating all code from getControllerState_DEPRECATED
     enum class TrackerType : std::uint8_t

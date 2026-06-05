@@ -20,8 +20,12 @@ namespace f4cf::common
             z = 0.0;
         }
 
-        Quaternion(const float x, const float y, const float z, const float w) :
-            w(w), x(x), y(y), z(z) {}
+        Quaternion(const float x, const float y, const float z, const float w)
+            : w(w),
+              x(x),
+              y(y),
+              z(z)
+        {}
 
         Quaternion(const float real, const RE::NiPoint3 v)
         {

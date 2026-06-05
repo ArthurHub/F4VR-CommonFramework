@@ -11,16 +11,19 @@ namespace
     void printNode(const RE::NiAVObject* node, const std::string& padding)
     {
         const auto niNode = node->IsNode();
-        const auto scale = std::fabs(node->local.scale - node->world.scale) < 0.001f
-            ? std::format("{:.2f}", node->local.scale)
-            : std::format("{:.2f}/{:.2f}", node->local.scale, node->world.scale);
+        const auto scale = std::fabs(node->local.scale - node->world.scale) < 0.001f ? std::format("{:.2f}", node->local.scale)
+                                                                                     : std::format("{:.2f}/{:.2f}", node->local.scale, node->world.scale);
         logger::infoRaw("{}{} : children({}), hidden({}), Local:({:.2f}, {:.2f}, {:.2f}), World:({:.2f}, {:.2f}, {:.2f}), Scale:({})",
             padding,
             node->name.c_str(),
             niNode ? niNode->children.size() : 0,
             node->flags.flags & 0x1,
-            node->local.translate.x, node->local.translate.y, node->local.translate.z,
-            node->world.translate.x, node->world.translate.y, node->world.translate.z,
+            node->local.translate.x,
+            node->local.translate.y,
+            node->local.translate.z,
+            node->world.translate.x,
+            node->world.translate.y,
+            node->world.translate.z,
             scale);
     }
 
@@ -49,10 +52,23 @@ namespace
     void printNodeTransform(const RE::NiAVObject* node, std::string padding)
     {
         const auto niNode = node->IsNode();
-        logger::info("{}{} : children({}), hidden({}), Pos:({:.2f}, {:.2f}, {:.2f}), Rot:[[{:.2f}, {:.2f}, {:.2f}][{:.2f}, {:.2f}, {:.2f}][{:.2f}, {:.2f}, {:.2f}]]", padding,
-            node->name.c_str(), niNode ? niNode->children.size() : 0, node->flags.flags & 0x1, node->local.translate.x, node->local.translate.y,
-            node->local.translate.z, node->local.rotate.entry[0][0], node->local.rotate.entry[1][0], node->local.rotate.entry[2][0], node->local.rotate.entry[0][1],
-            node->local.rotate.entry[1][1], node->local.rotate.entry[2][1], node->local.rotate.entry[0][2], node->local.rotate.entry[1][2], node->local.rotate.entry[2][2]);
+        logger::info("{}{} : children({}), hidden({}), Pos:({:.2f}, {:.2f}, {:.2f}), Rot:[[{:.2f}, {:.2f}, {:.2f}][{:.2f}, {:.2f}, {:.2f}][{:.2f}, {:.2f}, {:.2f}]]",
+            padding,
+            node->name.c_str(),
+            niNode ? niNode->children.size() : 0,
+            node->flags.flags & 0x1,
+            node->local.translate.x,
+            node->local.translate.y,
+            node->local.translate.z,
+            node->local.rotate.entry[0][0],
+            node->local.rotate.entry[1][0],
+            node->local.rotate.entry[2][0],
+            node->local.rotate.entry[0][1],
+            node->local.rotate.entry[1][1],
+            node->local.rotate.entry[2][1],
+            node->local.rotate.entry[0][2],
+            node->local.rotate.entry[1][2],
+            node->local.rotate.entry[2][2]);
     }
 
     void printNodesTransformChildren(RE::NiAVObject* node, std::string padding)
@@ -137,13 +153,35 @@ namespace f4cf::f4vr
     {
         const auto frm = "Transform '" + name + "' Pos:({:.2f}, {:.2f}, {:.2f}), Rot:[[{:.2f}, {:.2f}, {:.2f}][{:.2f}, {:.2f}, {:.2f}][{:.2f}, {:.2f}, {:.2f}]], Scale:({:.2f})";
         if (sample) {
-            logger::sample(fmt::runtime(frm), transform.translate.x, transform.translate.y, transform.translate.z, transform.rotate.entry[0][0], transform.rotate.entry[1][0],
-                transform.rotate.entry[2][0], transform.rotate.entry[0][1], transform.rotate.entry[1][1], transform.rotate.entry[2][1], transform.rotate.entry[0][2],
-                transform.rotate.entry[1][2], transform.rotate.entry[2][2], transform.scale);
+            logger::sample(fmt::runtime(frm),
+                transform.translate.x,
+                transform.translate.y,
+                transform.translate.z,
+                transform.rotate.entry[0][0],
+                transform.rotate.entry[1][0],
+                transform.rotate.entry[2][0],
+                transform.rotate.entry[0][1],
+                transform.rotate.entry[1][1],
+                transform.rotate.entry[2][1],
+                transform.rotate.entry[0][2],
+                transform.rotate.entry[1][2],
+                transform.rotate.entry[2][2],
+                transform.scale);
         } else {
-            logger::info(fmt::runtime(frm), transform.translate.x, transform.translate.y, transform.translate.z, transform.rotate.entry[0][0], transform.rotate.entry[1][0],
-                transform.rotate.entry[2][0], transform.rotate.entry[0][1], transform.rotate.entry[1][1], transform.rotate.entry[2][1], transform.rotate.entry[0][2],
-                transform.rotate.entry[1][2], transform.rotate.entry[2][2], transform.scale);
+            logger::info(fmt::runtime(frm),
+                transform.translate.x,
+                transform.translate.y,
+                transform.translate.z,
+                transform.rotate.entry[0][0],
+                transform.rotate.entry[1][0],
+                transform.rotate.entry[2][0],
+                transform.rotate.entry[0][1],
+                transform.rotate.entry[1][1],
+                transform.rotate.entry[2][1],
+                transform.rotate.entry[0][2],
+                transform.rotate.entry[1][2],
+                transform.rotate.entry[2][2],
+                transform.scale);
         }
     }
 

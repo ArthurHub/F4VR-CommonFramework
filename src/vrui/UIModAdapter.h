@@ -26,18 +26,28 @@ namespace f4cf::vrui
     class UIFrameUpdateContext : public UIModAdapter
     {
     public:
-        explicit UIFrameUpdateContext(UIModAdapter* adapter) :
-            _adapter(adapter) {}
+        explicit UIFrameUpdateContext(UIModAdapter* adapter)
+            : _adapter(adapter)
+        {}
 
-        const std::optional<bool>& isAnyPressableCloseToInteraction() const { return _isAnyPressableCloseToInteraction; }
+        const std::optional<bool>& isAnyPressableCloseToInteraction() const
+        {
+            return _isAnyPressableCloseToInteraction;
+        }
 
         void markAnyPressableCloseToInteraction(const bool isPressableClose)
         {
             _isAnyPressableCloseToInteraction = _isAnyPressableCloseToInteraction.value_or(false) || isPressableClose;
         }
 
-        virtual RE::NiPoint3 getInteractionBoneWorldPosition() override { return _adapter->getInteractionBoneWorldPosition(); }
-        virtual void setInteractionHandPointing(const bool primaryHand, const bool toPoint) override { _adapter->setInteractionHandPointing(primaryHand, toPoint); }
+        virtual RE::NiPoint3 getInteractionBoneWorldPosition() override
+        {
+            return _adapter->getInteractionBoneWorldPosition();
+        }
+        virtual void setInteractionHandPointing(const bool primaryHand, const bool toPoint) override
+        {
+            _adapter->setInteractionHandPointing(primaryHand, toPoint);
+        }
 
     private:
         UIModAdapter* _adapter;

@@ -45,8 +45,8 @@ namespace f4cf::vrui
     };
 
     template <class StateT>
-    UIMultiStateToggleButton<StateT>::UIMultiStateToggleButton(const std::map<StateT, std::string>& nifPathPerState, const float scale) :
-        UIWidget("", nullptr)
+    UIMultiStateToggleButton<StateT>::UIMultiStateToggleButton(const std::map<StateT, std::string>& nifPathPerState, const float scale)
+        : UIWidget("", nullptr)
     {
         bool first = true;
 
@@ -86,8 +86,7 @@ namespace f4cf::vrui
     }
 
     template <class StateT>
-    void UIMultiStateToggleButton<StateT>::setOnStateChangedHandler(
-        std::function<void(UIMultiStateToggleButton<StateT>*, StateT)> handler)
+    void UIMultiStateToggleButton<StateT>::setOnStateChangedHandler(std::function<void(UIMultiStateToggleButton<StateT>*, StateT)> handler)
     {
         _onStateChangeEventHandler = std::move(handler);
     }

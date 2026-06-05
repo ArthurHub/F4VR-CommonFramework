@@ -6,8 +6,9 @@
 
 namespace f4cf::vrui
 {
-    UIToggleGroupContainer::UIToggleGroupContainer(const std::string& name, const UIContainerLayout layout, const float padding) :
-        UIContainer(name, layout, padding) {}
+    UIToggleGroupContainer::UIToggleGroupContainer(const std::string& name, const UIContainerLayout layout, const float padding)
+        : UIContainer(name, layout, padding)
+    {}
 
     std::string UIToggleGroupContainer::toString() const
     {
@@ -23,8 +24,7 @@ namespace f4cf::vrui
             calculatedSize.width,
             calculatedSize.height,
             _childElements.size(),
-            static_cast<int>(_layout)
-            );
+            static_cast<int>(_layout));
     }
 
     /**

@@ -57,7 +57,10 @@ namespace f4cf::vrui
         void layoutVerticalCenter() const;
         void layoutVerticalUp() const;
         void layoutVerticalDown() const;
-        float calcPadding() const { return _padding * calcScale(); }
+        float calcPadding() const
+        {
+            return _padding * calcScale();
+        }
         virtual void writeDevLayoutProperties(const std::string& namePrefix, std::map<std::string, std::string>& propertiesMap) const override;
         virtual void readDevLayoutProperties(const std::string& namePrefix, const std::map<std::string, std::string>& propertiesMap) override;
 

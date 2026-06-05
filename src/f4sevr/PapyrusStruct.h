@@ -1,9 +1,8 @@
 #pragma once
 
 #include "PapyrusInterfaces.h"
-#include "PapyrusValue.h"
 #include "PapyrusVM.h"
-
+#include "PapyrusValue.h"
 
 // Forward declarations
 namespace F4SEVR
@@ -17,9 +16,11 @@ namespace F4SEVR
     class VMStruct
     {
     public:
-        VMStruct() :
-            m_none(false), m_struct(nullptr) {};
-        ~VMStruct() {}
+        VMStruct()
+            : m_none(false),
+              m_struct(nullptr){};
+        ~VMStruct()
+        {}
 
         enum
         {
@@ -27,8 +28,14 @@ namespace F4SEVR
         };
 
         // Will make the VM return None instead of a structure with nothing defined
-        void SetNone(bool bNone) { m_none = bNone; }
-        bool IsNone() const { return m_none; }
+        void SetNone(bool bNone)
+        {
+            m_none = bNone;
+        }
+        bool IsNone() const
+        {
+            return m_none;
+        }
 
         template <typename T>
         bool Get(BSFixedString name, T* value)
@@ -109,7 +116,10 @@ namespace F4SEVR
 #if _DEBUG
                         else {
                             logger::warn("Failed to pack {} argument ({}) struct member type mismatch got ({}) expected ({}).",
-                                structName.c_str(), item->name.c_str(), m_data[item->name].type, memberType);
+                                structName.c_str(),
+                                item->name.c_str(),
+                                m_data[item->name].type,
+                                memberType);
                         }
 #endif
 
@@ -164,14 +174,20 @@ namespace F4SEVR
     struct IsStructType
     {
         static const bool value = false;
-        static inline const char* name() { return nullptr; };
+        static inline const char* name()
+        {
+            return nullptr;
+        };
     };
 
     template <const char* NAME>
     struct IsStructType<VMStruct<NAME>>
     {
         static const bool value = true;
-        static inline const char* name() { return NAME; };
+        static inline const char* name()
+        {
+            return NAME;
+        };
     };
 
 #define DECLARE_STRUCT_STRING(structName) #structName

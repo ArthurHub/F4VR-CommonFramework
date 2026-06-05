@@ -4,29 +4,29 @@
 // ReSharper disable CppClangTidyBugproneMacroParentheses
 
 #include <chrono>
-#include <unordered_map>
 #include <spdlog/pattern_formatter.h>
 #include <spdlog/sinks/rotating_file_sink.h>
+#include <unordered_map>
 
 namespace fs = std::filesystem;
 
 #pragma once
 
-#define MAKE_SOURCE_LOGGER(log_func, log_level)                                                                                                       \
-                                                                                                                                                      \
-    template <class... Args>                                                                                                                          \
-    struct [[maybe_unused]] log_func                                                                                                                  \
-    {                                                                                                                                                 \
-        log_func() = delete;                                                                                                                          \
-                                                                                                                                                      \
-        explicit log_func(spdlog::format_string_t<Args...> fmt, Args&&... args, const std::source_location& loc = std::source_location::current())    \
-        {                                                                                                                                             \
-            spdlog::source_loc sourceLoc{ loc.file_name(), static_cast<int>(loc.line()), loc.function_name() };                                       \
-            internal::_logger->log(sourceLoc, spdlog::level::log_level, fmt, std::forward<Args>(args)...);                                                       \
-        }                                                                                                                                             \
-    };                                                                                                                                                \
-                                                                                                                                                      \
-    template <class... Args>                                                                                                                          \
+#define MAKE_SOURCE_LOGGER(log_func, log_level)                                                                                                    \
+                                                                                                                                                   \
+    template <class... Args>                                                                                                                       \
+    struct [[maybe_unused]] log_func                                                                                                               \
+    {                                                                                                                                              \
+        log_func() = delete;                                                                                                                       \
+                                                                                                                                                   \
+        explicit log_func(spdlog::format_string_t<Args...> fmt, Args&&... args, const std::source_location& loc = std::source_location::current()) \
+        {                                                                                                                                          \
+            spdlog::source_loc sourceLoc{ loc.file_name(), static_cast<int>(loc.line()), loc.function_name() };                                    \
+            internal::_logger->log(sourceLoc, spdlog::level::log_level, fmt, std::forward<Args>(args)...);                                         \
+        }                                                                                                                                          \
+    };                                                                                                                                             \
+                                                                                                                                                   \
+    template <class... Args>                                                                                                                       \
     log_func(spdlog::format_string_t<Args...>, Args&&...) -> log_func<Args...>;
 
 namespace f4cf::logger::internal

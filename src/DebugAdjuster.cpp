@@ -26,9 +26,7 @@ namespace f4cf
         // Hand pose slot names — index matches the active-slot state used by adjustHandPose.
         // Slots 0..4 control one finger each (4 floats: prox,mid,dist,splay).
         // Slot 5 controls the two palm floats (palmPitch, palmYaw).
-        constexpr std::array<const char*, 6> HAND_POSE_SLOT_NAMES = {
-            "thumb", "index", "middle", "ring", "pinky", "palm"
-        };
+        constexpr std::array<const char*, 6> HAND_POSE_SLOT_NAMES = { "thumb", "index", "middle", "ring", "pinky", "palm" };
         std::size_t s_handPoseSlot = 0;
 
         /**
@@ -49,8 +47,13 @@ namespace f4cf
             float heading, roll, attitude;
             common::MatrixUtils::getEulerAnglesFromMatrixDegrees(transform.rotate, &heading, &roll, &attitude);
             return fmt::format("{},{},{};{},{},{};{}",
-                toFixed(transform.translate.x), toFixed(transform.translate.y), toFixed(transform.translate.z),
-                toFixed(heading), toFixed(roll), toFixed(attitude), toFixed(transform.scale));
+                toFixed(transform.translate.x),
+                toFixed(transform.translate.y),
+                toFixed(transform.translate.z),
+                toFixed(heading),
+                toFixed(roll),
+                toFixed(attitude),
+                toFixed(transform.scale));
         }
 
         /**
@@ -60,14 +63,29 @@ namespace f4cf
          */
         std::string handPoseToFixedString(const std::array<float, 22>& v)
         {
-            return fmt::format(
-                "{},{},{},{};{},{},{},{};{},{},{},{};{},{},{},{};{},{},{},{};{},{}",
-                toFixed(v[0]), toFixed(v[1]), toFixed(v[2]), toFixed(v[3]),
-                toFixed(v[4]), toFixed(v[5]), toFixed(v[6]), toFixed(v[7]),
-                toFixed(v[8]), toFixed(v[9]), toFixed(v[10]), toFixed(v[11]),
-                toFixed(v[12]), toFixed(v[13]), toFixed(v[14]), toFixed(v[15]),
-                toFixed(v[16]), toFixed(v[17]), toFixed(v[18]), toFixed(v[19]),
-                toFixed(v[20]), toFixed(v[21]));
+            return fmt::format("{},{},{},{};{},{},{},{};{},{},{},{};{},{},{},{};{},{},{},{};{},{}",
+                toFixed(v[0]),
+                toFixed(v[1]),
+                toFixed(v[2]),
+                toFixed(v[3]),
+                toFixed(v[4]),
+                toFixed(v[5]),
+                toFixed(v[6]),
+                toFixed(v[7]),
+                toFixed(v[8]),
+                toFixed(v[9]),
+                toFixed(v[10]),
+                toFixed(v[11]),
+                toFixed(v[12]),
+                toFixed(v[13]),
+                toFixed(v[14]),
+                toFixed(v[15]),
+                toFixed(v[16]),
+                toFixed(v[17]),
+                toFixed(v[18]),
+                toFixed(v[19]),
+                toFixed(v[20]),
+                toFixed(v[21]));
         }
 
         /**
@@ -88,8 +106,7 @@ namespace f4cf
          */
         bool anyStickInput(const float px, const float py, const float sx, const float sy)
         {
-            return applyDeadzone(px, 0.5f) != 0.0f || applyDeadzone(py, 0.5f) != 0.0f
-                || applyDeadzone(sx, 0.5f) != 0.0f || applyDeadzone(sy, 0.5f) != 0.0f;
+            return applyDeadzone(px, 0.5f) != 0.0f || applyDeadzone(py, 0.5f) != 0.0f || applyDeadzone(sx, 0.5f) != 0.0f || applyDeadzone(sy, 0.5f) != 0.0f;
         }
     }
 
@@ -159,8 +176,7 @@ namespace f4cf
 
         if (vrcf::VRControllers.isPressHeldDown(vrcf::Hand::Offhand, vr::k_EButton_Grip)) {
             // rotate: primary Y -> pitch (heading), primary X -> yaw (attitude), secondary X -> roll
-            const auto delta = common::MatrixUtils::getMatrixFromEulerAnglesDegrees(
-                -applyDeadzone(py, ROTATE_DEGREES_PER_FRAME),
+            const auto delta = common::MatrixUtils::getMatrixFromEulerAnglesDegrees(-applyDeadzone(py, ROTATE_DEGREES_PER_FRAME),
                 applyDeadzone(sx, ROTATE_DEGREES_PER_FRAME),
                 applyDeadzone(px, ROTATE_DEGREES_PER_FRAME));
             transform.rotate = delta * transform.rotate;
@@ -274,11 +290,12 @@ namespace f4cf
             logger::info("DebugAdjuster: saved fDebugFlowFlag3 to INI");
             break;
         case DebugAdjustTarget::FlowFlag123:
-            mutableConfig.saveIniConfigValues(INI_SECTION_DEBUG, {
-                { "fDebugFlowFlag1", toFixed(config.debugFlowFlag1) },
-                { "fDebugFlowFlag2", toFixed(config.debugFlowFlag2) },
-                { "fDebugFlowFlag3", toFixed(config.debugFlowFlag3) },
-            });
+            mutableConfig.saveIniConfigValues(INI_SECTION_DEBUG,
+                {
+                    { "fDebugFlowFlag1", toFixed(config.debugFlowFlag1) },
+                    { "fDebugFlowFlag2", toFixed(config.debugFlowFlag2) },
+                    { "fDebugFlowFlag3", toFixed(config.debugFlowFlag3) },
+                });
             logger::info("DebugAdjuster: saved fDebugFlowFlag1/2/3 to INI");
             break;
         case DebugAdjustTarget::None:

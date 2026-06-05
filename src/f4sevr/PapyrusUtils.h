@@ -9,8 +9,8 @@ namespace F4SEVR
     typedef void (*_SendCustomEvent)(VirtualMachine* vm, UInt64 unk1, VMIdentifier* sender, const BSFixedString* eventName, VMValue* args);
     inline REL::Relocation<_SendCustomEvent> SendCustomEvent_Internal(REL::Offset(0x0145E5B0));
 
-    typedef void (*CallGlobalFunctionNoWaitType)(VirtualMachine* vm, std::uint64_t unk1, std::uint64_t unk2, const BSFixedString* className,
-        const BSFixedString* eventName, VMValue* args);
+    typedef void (
+        *CallGlobalFunctionNoWaitType)(VirtualMachine* vm, std::uint64_t unk1, std::uint64_t unk2, const BSFixedString* className, const BSFixedString* eventName, VMValue* args);
     inline REL::Relocation<CallGlobalFunctionNoWaitType> CallGlobalFunctionNoWait_Internal(REL::Offset(0x014D6BD0));
 
     typedef void (*CallFunctionNoWaitType)(VirtualMachine* vm, std::uint64_t unk1, VMIdentifier* vmIdentifier, const BSFixedString* eventName, VMValue* args);

@@ -468,8 +468,7 @@ namespace f4cf::vrcf
         return isPressed;
     }
 
-    std::optional<Direction> VRControllersManager::ControllerState::
-    getAxisPressedAndClear(const uint32_t axisIndex, const float now, const float threshold, const float cooldown)
+    std::optional<Direction> VRControllersManager::ControllerState::getAxisPressedAndClear(const uint32_t axisIndex, const float now, const float threshold, const float cooldown)
     {
         if (!valid || now - axisLastPassedPressCheck[axisIndex] < cooldown) {
             return std::nullopt;

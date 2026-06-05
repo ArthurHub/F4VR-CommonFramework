@@ -15,9 +15,10 @@ namespace f4cf::vrui
         setScale(scale);
     }
 
-    UIWidget::UIWidget(const std::string& name, RE::NiNode* node) :
-        UIElement(name),
-        _node(node) {}
+    UIWidget::UIWidget(const std::string& name, RE::NiNode* node)
+        : UIElement(name),
+          _node(node)
+    {}
 
     std::string UIWidget::toString() const
     {
@@ -29,8 +30,7 @@ namespace f4cf::vrui
             _transform.translate.y,
             _transform.translate.z,
             _size.width,
-            _size.height
-            );
+            _size.height);
     }
 
     /**
@@ -154,9 +154,7 @@ namespace f4cf::vrui
      */
     void UIWidget::updatePressableCloseToInteraction(UIFrameUpdateContext* context, const float distance, const float yOnlyDistance)
     {
-        _wasPressableCloseToInteraction = _wasPressableCloseToInteraction
-            ? yOnlyDistance > -12 && distance < 20
-            : yOnlyDistance > -3 && distance < 15;
+        _wasPressableCloseToInteraction = _wasPressableCloseToInteraction ? yOnlyDistance > -12 && distance < 20 : yOnlyDistance > -3 && distance < 15;
         context->markAnyPressableCloseToInteraction(_wasPressableCloseToInteraction);
     }
 

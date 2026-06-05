@@ -43,11 +43,7 @@ namespace f4cf::common
 
     RE::NiPoint3 MatrixUtils::vec3Cross(const RE::NiPoint3& v1, const RE::NiPoint3& v2)
     {
-        return RE::NiPoint3(
-            v1.y * v2.z - v1.z * v2.y,
-            v1.z * v2.x - v1.x * v2.z,
-            v1.x * v2.y - v1.y * v2.x
-            );
+        return RE::NiPoint3(v1.y * v2.z - v1.z * v2.y, v1.z * v2.x - v1.x * v2.z, v1.x * v2.y - v1.y * v2.x);
     }
 
     // the determinant is proportional to the sin of the angle between two vectors.   In 3d case find the sin of the angle between v1 and v2
@@ -276,8 +272,7 @@ namespace f4cf::common
     }
 
     RE::NiTransform MatrixUtils::getTransform(const float x, const float y, const float z, const float r1, const float r2, const float r3, const float r4, const float r5,
-        const float r6,
-        const float r7, const float r8, const float r9, const float scale)
+        const float r6, const float r7, const float r8, const float r9, const float scale)
     {
         RE::NiTransform transform;
         transform.translate = RE::NiPoint3(x, y, z);

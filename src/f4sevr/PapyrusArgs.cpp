@@ -531,9 +531,15 @@ namespace F4SEVR
         return result;
     }
 
-    TESObjectREFR* VMRefOrInventoryObj::GetObjectReference() { return m_refData.refr; }
+    TESObjectREFR* VMRefOrInventoryObj::GetObjectReference()
+    {
+        return m_refData.refr;
+    }
 
-    TESObjectREFR* VMRefOrInventoryObj::GetOwner() { return m_refData.owner; }
+    TESObjectREFR* VMRefOrInventoryObj::GetOwner()
+    {
+        return m_refData.owner;
+    }
 
     bool VMRefOrInventoryObj::GetExtraData(TESForm**, RE::ExtraDataList**)
     {

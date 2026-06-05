@@ -108,10 +108,9 @@ namespace f4cf::f4vr
             logger::trace("List operation failed on message box list:('{}'), message box not found", messageHolderPath);
             return false;
         }
-        return findAndWorkOnScaleformElement(&messageHolder, "List_mc", [root,op, messageHolderPath](GFx::Value& list) {
-                invokeOperationOnListElement(root, &list, op, messageHolderPath);
-            }
-            );
+        return findAndWorkOnScaleformElement(&messageHolder, "List_mc", [root, op, messageHolderPath](GFx::Value& list) {
+            invokeOperationOnListElement(root, &list, op, messageHolderPath);
+        });
     }
 
     /**

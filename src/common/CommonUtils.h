@@ -1,9 +1,9 @@
 #pragma once
 
+#include <Windows.h>
 #include <optional>
 #include <string_view>
 #include <vector>
-#include <Windows.h>
 
 namespace f4cf::common
 {

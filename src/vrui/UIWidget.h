@@ -13,7 +13,10 @@ namespace f4cf::vrui
         virtual std::string toString() const override;
 
     protected:
-        virtual bool isPressable() const { return false; }
+        virtual bool isPressable() const
+        {
+            return false;
+        }
         virtual void attachToNode(RE::NiNode* attachNode) override;
         virtual void detachFromAttachedNode(bool releaseSafe) override;
         virtual void onFrameUpdate(UIFrameUpdateContext* adapter) override;

@@ -53,7 +53,10 @@ namespace f4cf::f4vr
     /**
      * @return true if the player has any weapon in the hand (including fists).
      */
-    bool IsWeaponDrawn() { return getPlayer()->GetWeaponMagicDrawn(); }
+    bool IsWeaponDrawn()
+    {
+        return getPlayer()->GetWeaponMagicDrawn();
+    }
 
     /**
      * @return true if the equipped weapon is a melee weapon type.
@@ -77,8 +80,8 @@ namespace f4cf::f4vr
      */
     bool isUnarmedWeaponEquipped()
     {
-        return CombatUtilities_IsActorUsingMelee(getPlayer())
-            && GetEquippedWeapon(RE::BSScript::Internal::VirtualMachine::GetSingleton(), 0, RE::PlayerCharacter::GetSingleton(), 0) == nullptr;
+        return CombatUtilities_IsActorUsingMelee(getPlayer()) &&
+            GetEquippedWeapon(RE::BSScript::Internal::VirtualMachine::GetSingleton(), 0, RE::PlayerCharacter::GetSingleton(), 0) == nullptr;
     }
 
     /**
@@ -110,9 +113,15 @@ namespace f4cf::f4vr
         return false;
     }
 
-    bool isJumpingOrInAir() { return IsInAir(getPlayer()); }
+    bool isJumpingOrInAir()
+    {
+        return IsInAir(getPlayer());
+    }
 
-    bool isPlayerSneaking() { return IsSneaking(getPlayer()); }
+    bool isPlayerSneaking()
+    {
+        return IsSneaking(getPlayer());
+    }
 
     // Thanks Shizof and SmoothMovementVR for below code
     bool isInPowerArmor()
@@ -132,17 +141,26 @@ namespace f4cf::f4vr
     /**
      * Is the player is current in an "internal cell" as inside a building, cave, etc.
      */
-    bool isInInternalCell() { return RE::PlayerCharacter::GetSingleton()->parentCell->IsInterior(); }
+    bool isInInternalCell()
+    {
+        return RE::PlayerCharacter::GetSingleton()->parentCell->IsInterior();
+    }
 
     /**
      * Is the player swimming either on the surface or underwater.
      */
-    bool isSwimming(const RE::PlayerCharacter* player) { return player && static_cast<int>(player->DoGetCharacterState()) == 5; }
+    bool isSwimming(const RE::PlayerCharacter* player)
+    {
+        return player && static_cast<int>(player->DoGetCharacterState()) == 5;
+    }
 
     /**
      * Is the player is currently underwater as detected by underwater timer being non-zero.
      */
-    bool isUnderwater(const RE::PlayerCharacter* player) { return player && player->underWaterTimer > 0; }
+    bool isUnderwater(const RE::PlayerCharacter* player)
+    {
+        return player && player->underWaterTimer > 0;
+    }
 
     /**
      * Check if movement from current position to target position is safe (no collisions).
@@ -424,7 +442,10 @@ namespace f4cf::f4vr
     }
 
     // TODO: this feels an overkill on how much it is called
-    void updateDownFromRoot() { updateDown(getRootNode(), true); }
+    void updateDownFromRoot()
+    {
+        updateDown(getRootNode(), true);
+    }
 
     void updateDown(RE::NiAVObject* node, const bool updateSelf, const char* ignoreNode)
     {

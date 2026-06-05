@@ -108,9 +108,18 @@ namespace F4SEVR
             BSFixedString name; // 00
             IComplexType* typeInfo; // 08
 
-            bool operator==(const ComplexTypeInfoItem& rhs) const { return name == rhs.name; }
-            bool operator==(const BSFixedString a_name) const { return name == a_name; }
-            operator UInt64() const { return (UInt64)name.data->Get<char>(); }
+            bool operator==(const ComplexTypeInfoItem& rhs) const
+            {
+                return name == rhs.name;
+            }
+            bool operator==(const BSFixedString a_name) const
+            {
+                return name == a_name;
+            }
+            operator UInt64() const
+            {
+                return (UInt64)name.data->Get<char>();
+            }
 
             static inline UInt32 GetHash(BSFixedString* key)
             {
@@ -132,8 +141,14 @@ namespace F4SEVR
             UInt32 typeId; // 00
             BSFixedString name; // 08
 
-            bool operator==(const FormTypeName& rhs) const { return typeId == rhs.typeId; }
-            operator UInt32() const { return typeId; }
+            bool operator==(const FormTypeName& rhs) const
+            {
+                return typeId == rhs.typeId;
+            }
+            operator UInt32() const
+            {
+                return typeId;
+            }
 
             static inline UInt32 GetHash(UInt32* key)
             {
@@ -155,8 +170,14 @@ namespace F4SEVR
             UInt32 stackId;
             void* data;
 
-            bool operator==(const StackTableItem& rhs) const { return stackId == rhs.stackId; }
-            operator UInt32() const { return stackId; }
+            bool operator==(const StackTableItem& rhs) const
+            {
+                return stackId == rhs.stackId;
+            }
+            operator UInt32() const
+            {
+                return stackId;
+            }
 
             static inline UInt32 GetHash(UInt32* pStackId)
             {
@@ -187,12 +208,16 @@ namespace F4SEVR
             class IScriptVisitor
             {
             public:
-                virtual ~IScriptVisitor() {}
+                virtual ~IScriptVisitor()
+                {}
 
                 virtual bool Visit(VMIdentifier* obj) = 0;
             };
 
-            inline VMIdentifier* GetScriptObject(VMIdentifier* aIdentifier) { return reinterpret_cast<VMIdentifier*>(reinterpret_cast<uintptr_t>(aIdentifier) & ~1LL); }
+            inline VMIdentifier* GetScriptObject(VMIdentifier* aIdentifier)
+            {
+                return reinterpret_cast<VMIdentifier*>(reinterpret_cast<uintptr_t>(aIdentifier) & ~1LL);
+            }
 
             void ForEachScript(IScriptVisitor* visitor)
             {
@@ -206,8 +231,14 @@ namespace F4SEVR
                 }
             }
 
-            bool operator==(const IdentifierItem& rhs) const { return handle == rhs.handle; }
-            operator UInt64() const { return handle; }
+            bool operator==(const IdentifierItem& rhs) const
+            {
+                return handle == rhs.handle;
+            }
+            operator UInt64() const
+            {
+                return handle;
+            }
 
             static inline UInt64 GetHash(UInt64* pHandle)
             {

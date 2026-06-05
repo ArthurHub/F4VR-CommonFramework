@@ -7,7 +7,8 @@ namespace f4cf::f4vr
     /**
      * All the possible values for bones in the skeleton.
      */
-    struct SkellyBones {
+    struct SkellyBones
+    {
         inline static constexpr std::string_view COM = "COM";
         inline static constexpr std::string_view Pelvis = "Pelvis";
 

@@ -34,10 +34,7 @@ namespace
 
     bool isPathSafeAscii(const unsigned char c)
     {
-        return (c >= '0' && c <= '9') ||
-            (c >= 'A' && c <= 'Z') ||
-            (c >= 'a' && c <= 'z') ||
-            c == '_' || c == '-' || c == '.' || c == ' ';
+        return (c >= '0' && c <= '9') || (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || c == '_' || c == '-' || c == '.' || c == ' ';
     }
 
     char charToHexDigit(const unsigned char v)
@@ -63,25 +60,19 @@ namespace f4cf::common
 
     std::string str_tolower(std::string s)
     {
-        std::ranges::transform(s, s.begin(),
-            [](const unsigned char c) { return std::tolower(c); }
-            );
+        std::ranges::transform(s, s.begin(), [](const unsigned char c) { return std::tolower(c); });
         return s;
     }
 
     std::string ltrim(std::string s)
     {
-        s.erase(s.begin(), std::ranges::find_if(s, [](const unsigned char ch) {
-            return !std::isspace(ch);
-        }));
+        s.erase(s.begin(), std::ranges::find_if(s, [](const unsigned char ch) { return !std::isspace(ch); }));
         return s;
     }
 
     std::string rtrim(std::string s)
     {
-        s.erase(std::find_if(s.rbegin(), s.rend(), [](const unsigned char ch) {
-            return !std::isspace(ch);
-        }).base(), s.end());
+        s.erase(std::find_if(s.rbegin(), s.rend(), [](const unsigned char ch) { return !std::isspace(ch); }).base(), s.end());
         return s;
     }
 
@@ -92,9 +83,7 @@ namespace f4cf::common
 
     bool hasNonWhitespaceText(const std::string_view s)
     {
-        return std::ranges::any_of(s, [](const unsigned char ch) {
-            return !std::isspace(ch);
-        });
+        return std::ranges::any_of(s, [](const unsigned char ch) { return !std::isspace(ch); });
     }
 
     /**
@@ -289,9 +278,7 @@ namespace f4cf::common
     uint64_t nowMillis()
     {
         const auto now = std::chrono::system_clock::now();
-        return std::chrono::duration_cast<std::chrono::milliseconds>(
-            now.time_since_epoch()
-            ).count();
+        return std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count();
     }
 
     /**
@@ -300,9 +287,7 @@ namespace f4cf::common
     uint64_t nowNanosec()
     {
         const auto now = std::chrono::system_clock::now();
-        return std::chrono::duration_cast<std::chrono::nanoseconds>(
-            now.time_since_epoch()
-            ).count();
+        return std::chrono::duration_cast<std::chrono::nanoseconds>(now.time_since_epoch()).count();
     }
 
     /**
@@ -398,7 +383,8 @@ namespace f4cf::common
     RE::NiMatrix3 getMatrixFromDebugFlowFlags()
     {
         const auto config = g_mod->getConfig();
-        return MatrixUtils::getMatrixFromEulerAngles(MatrixUtils::degreesToRads(config->debugFlowFlag1), MatrixUtils::degreesToRads(config->debugFlowFlag2),
+        return MatrixUtils::getMatrixFromEulerAngles(MatrixUtils::degreesToRads(config->debugFlowFlag1),
+            MatrixUtils::degreesToRads(config->debugFlowFlag2),
             MatrixUtils::degreesToRads(config->debugFlowFlag3));
     }
 }

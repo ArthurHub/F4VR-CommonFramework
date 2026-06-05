@@ -8,6 +8,7 @@ repos:
       - id: clang-format
         types_or: [c++, c]
         args: [--style=file]
+        exclude: ^external/
 
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.4.0

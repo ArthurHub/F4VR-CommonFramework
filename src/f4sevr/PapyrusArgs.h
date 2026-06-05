@@ -41,18 +41,22 @@ namespace F4SEVR
     class VMArray
     {
     public:
-        VMArray() :
-            m_arr(nullptr), m_none(false) {}
+        VMArray()
+            : m_arr(nullptr),
+              m_none(false)
+        {}
 
-        ~VMArray() {}
+        ~VMArray()
+        {}
 
         enum
         {
             kTypeID = 0
         };
 
-        VMArray(std::vector<T>& vec) :
-            m_arr(nullptr), m_none(false)
+        VMArray(std::vector<T>& vec)
+            : m_arr(nullptr),
+              m_none(false)
         {
             for (auto& v : vec) {
                 Push(&v);
@@ -69,8 +73,14 @@ namespace F4SEVR
             return *this;
         }
 
-        UInt32 Length() const { return static_cast<UInt32>(m_data.size()); }
-        void Get(T* dst, const UInt32 idx) { UnpackValue(dst, &m_data[idx]); }
+        UInt32 Length() const
+        {
+            return static_cast<UInt32>(m_data.size());
+        }
+        void Get(T* dst, const UInt32 idx)
+        {
+            UnpackValue(dst, &m_data[idx]);
+        }
 
         void Set(T* src, const UInt32 idx, bool bReference = true)
         {
@@ -156,8 +166,14 @@ namespace F4SEVR
         }
 
         // Will make the VM return None instead of a zero sized array
-        void SetNone(bool bNone) { m_none = bNone; }
-        bool IsNone() const { return m_none; }
+        void SetNone(bool bNone)
+        {
+            m_none = bNone;
+        }
+        bool IsNone() const
+        {
+            return m_none;
+        }
 
     protected:
         VMValue::ArrayData* m_arr; // Original reference
@@ -168,10 +184,12 @@ namespace F4SEVR
     class VMVariable
     {
     public:
-        VMVariable() :
-            m_var(nullptr) {}
+        VMVariable()
+            : m_var(nullptr)
+        {}
 
-        ~VMVariable() {}
+        ~VMVariable()
+        {}
 
         template <typename T>
         void Set(T* src, bool bReference = true)
@@ -220,10 +238,16 @@ namespace F4SEVR
             m_value = *m_var;
         }
 
-        bool IsNone() { return m_value.GetTypeEnum() == 0; }
+        bool IsNone()
+        {
+            return m_value.GetTypeEnum() == 0;
+        }
 
         // Provides direct access to the VM data, advanced use only
-        VMValue& GetValue() { return m_value; }
+        VMValue& GetValue()
+        {
+            return m_value;
+        }
 
     protected:
         VMValue* m_var; // Original reference
@@ -293,9 +317,15 @@ namespace F4SEVR
             return BSFixedString("ScriptObject");
         }
 
-        void PackObject(VMValue* dst) { *dst = m_value; }
+        void PackObject(VMValue* dst)
+        {
+            *dst = m_value;
+        }
 
-        void UnpackObject(VMValue* value) { m_value = *value; }
+        void UnpackObject(VMValue* value)
+        {
+            m_value = *value;
+        }
 
     protected:
         VMValue m_value;
@@ -313,7 +343,10 @@ namespace F4SEVR
         TESObjectREFR* GetOwner();
         bool GetExtraData(TESForm** baseForm, RE::ExtraDataList** extraData);
 
-        void PackObject(VMValue* dst) { *dst = m_value; }
+        void PackObject(VMValue* dst)
+        {
+            *dst = m_value;
+        }
 
         void UnpackObject(VMValue* value)
         {

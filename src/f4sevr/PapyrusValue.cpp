@@ -90,15 +90,30 @@ namespace F4SEVR
         }
     }
 
-    bool VMValue::IsIntegralType() const { return type.value >= kType_String && type.value <= kType_Variable; }
+    bool VMValue::IsIntegralType() const
+    {
+        return type.value >= kType_String && type.value <= kType_Variable;
+    }
 
-    bool VMValue::IsIntegralArrayType() const { return type.value >= kType_IntegralStart && type.value <= kType_IntegralEnd; }
+    bool VMValue::IsIntegralArrayType() const
+    {
+        return type.value >= kType_IntegralStart && type.value <= kType_IntegralEnd;
+    }
 
-    bool VMValue::IsComplexArrayType() const { return (IsComplexType() && (type.value & 0x01LL)); }
+    bool VMValue::IsComplexArrayType() const
+    {
+        return (IsComplexType() && (type.value & 0x01LL));
+    }
 
-    bool VMValue::IsArrayType() const { return IsIntegralArrayType() || IsComplexArrayType(); }
+    bool VMValue::IsArrayType() const
+    {
+        return IsIntegralArrayType() || IsComplexArrayType();
+    }
 
-    bool VMValue::IsComplexType() const { return type.value >= kType_ArrayEnd; }
+    bool VMValue::IsComplexType() const
+    {
+        return type.value >= kType_ArrayEnd;
+    }
 
     bool VMValue::IsIdentifier()
     {
@@ -106,9 +121,15 @@ namespace F4SEVR
         return typeInfo ? typeInfo->GetType() == kType_Identifier : false;
     }
 
-    IComplexType* VMValue::GetComplexType() { return IsComplexType() ? reinterpret_cast<IComplexType*>(type.value & ~0x01LL) : nullptr; }
+    IComplexType* VMValue::GetComplexType()
+    {
+        return IsComplexType() ? reinterpret_cast<IComplexType*>(type.value & ~0x01LL) : nullptr;
+    }
 
-    IComplexType* VMValue::GetComplexType() const { return IsComplexType() ? reinterpret_cast<IComplexType*>(type.value & ~0x01LL) : nullptr; }
+    IComplexType* VMValue::GetComplexType() const
+    {
+        return IsComplexType() ? reinterpret_cast<IComplexType*>(type.value & ~0x01LL) : nullptr;
+    }
 
     UInt8 VMValue::GetTypeEnum() const // Returns the sanitized number
     {
@@ -163,7 +184,10 @@ namespace F4SEVR
         return lockValue;
     }
 
-    void VMIdentifier::Unlock(SInt32 oldLock) { m_lock = oldLock; }
+    void VMIdentifier::Unlock(SInt32 oldLock)
+    {
+        m_lock = oldLock;
+    }
 
     // try to increment the lock
     void VMIdentifier::IncrementLock(void)
