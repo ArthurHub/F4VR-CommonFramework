@@ -8,6 +8,7 @@
 
 #include "f4vr/PlayerNodes.h"
 #include "vrcf/VRControllersManager.h"
+#include "vrcf/VRControllersSuppressor.h"
 #include "vrui/UIManager.h"
 
 using namespace common;
@@ -157,7 +158,9 @@ namespace f4cf
     {
         CPPTRACE_TRY
         {
-            vrcf::VRControllers.update(f4vr::isLeftHandedMode());
+            const bool leftHanded = f4vr::isLeftHandedMode();
+            vrcf::VRControllers.update(leftHanded);
+            vrcf::VRControllersSuppress.update(leftHanded);
 
             onFrameUpdate();
 
@@ -246,6 +249,7 @@ namespace f4cf
             }
 
             vrcf::VRControllers.reset();
+            vrcf::VRControllersSuppress.reset();
 
             logger::info("Reload config...");
             _settings.config->load();

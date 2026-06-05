@@ -4,9 +4,9 @@
 
 #include "common/CommonUtils.h"
 #include "common/MatrixUtils.h"
-#include "f4vr/F4VRThumbstickControls.h"
 #include "f4vr/F4VRUtils.h"
 #include "vrcf/VRControllersManager.h"
+#include "vrcf/VRControllersSuppressor.h"
 
 namespace f4cf
 {
@@ -113,16 +113,15 @@ namespace f4cf
     /**
      * Per-frame entry point. Disabled cheaply when target == None; otherwise dispatches to the
      * matching adjust routine and handles the save/reload Primary-A bindings with haptic feedback.
-     * While active, the player's movement thumbstick is disabled so adjusting doesn't move/turn
-     * the player; it is restored as soon as the target returns to None. Note this does not block
-     * the Primary-A button from the game (e.g. Pip-Boy/VATS) - that needs an OpenVR input hook.
+     * While active, the player's controllers are disabled using VRControllersSuppress so the player
+     * can't move or do anything while adjusting.
      */
     void DebugAdjuster::onFrameUpdate(ConfigBase& config)
     {
         const bool active = config.debugAdjustTarget != DebugAdjustTarget::None;
 
-        // Idempotent and self-restoring: re-enabled the moment the adjuster is turned off.
-        f4vr::F4VRThumbstickControls::setControlsThumbstickEnableState(!active);
+        // Idempotent and self-restoring: re-enabled / released the moment the adjuster is turned off.
+        vrcf::VRControllersSuppress.setAllSuppressed("DebugAdjuster", active);
         if (!active) {
             return;
         }
