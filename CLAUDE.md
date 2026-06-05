@@ -30,6 +30,8 @@ clang-format enforces style (`.clang-format`): LLVM-based, 180-column limit, 4-s
 
 Run formatter: `clang-format -i <file>` or format-on-save in your editor.
 
+After cloning, run `pre-commit install` once to enforce clang-format on every commit (`.pre-commit-config.yaml`); the hook lives in `.git/hooks/` and is not version-controlled.
+
 ## Architecture
 
 ### Namespaces
