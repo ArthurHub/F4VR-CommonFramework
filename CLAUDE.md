@@ -34,10 +34,14 @@ After cloning, run `pre-commit install` once to enforce clang-format on every co
 
 ## Architecture
 
+> Per-subsystem usage docs are canonical in [`src/README.md`](src/README.md) and each subfolder's
+> README (code-adjacent, with examples). The sections below are a terse map for orientation — defer
+> to those READMEs for the full API surface, and update them (not just this file) when behavior changes.
+
 ### Namespaces
 - `f4cf::` — framework root (ModBase, Logger, ConfigBase)
 - `f4cf::f4vr` — Fallout 4 VR game utilities (node/skeleton manipulation, animations, debug dumps)
-- `f4cf::f4sevr` — F4SE interop (Papyrus native functions, form lookups, game events)
+- `F4SEVR` (in `src/f4sevr/`) — ported F4SE VR SDK: Papyrus VM interop + native-function registration (note: this folder is `namespace F4SEVR`, not `f4cf::f4sevr`)
 - `f4cf::vrcf` — VR controller framework (OpenVR button/trigger input)
 - `f4cf::vrui` — VR UI system (widget/button/container hierarchy)
 - `f4cf::common` — math (quaternions, matrices) and shared utilities
@@ -74,41 +78,20 @@ sDebugDumpDataOnceNames =  # Comma-separated: ui_tree, skelly, fp_skelly, geomet
 spdlog-based. Use macros: `log_trace`, `log_debug`, `log_info`, `log_warn`, `log_error`. The framework checks log level before formatting to avoid string construction overhead. Logger is initialized in `ModBase::onF4SELoad`.
 
 ### VR UI (`src/vrui/`)
-Full widget hierarchy:
-
-| Class | Description |
-|-------|-------------|
-| `UIElement` | Base renderable (position/rotation/scale, visibility) |
-| `UIWidget` | 2D panel with collision detection and event callbacks |
-| `UIButton` | Clickable with hover/pressed states |
-| `UIToggleButton` | On/off toggle |
-| `UIMultiStateToggleButton` | N-way cycle toggle |
-| `UIContainer` | Parent for multiple elements |
-| `UIToggleGroupContainer` | Radio button group (mutually exclusive) |
-| `UIManager` | Singleton: scene graph, input dispatch, render state |
-
-Call `UIManager.update()` each frame in `onFrameUpdate()` to drive input and rendering.
+Widget hierarchy: `UIElement` → `UIWidget` → `UIButton` → `UIToggleButton`/`UIMultiStateToggleButton`; plus `UIContainer`/`UIToggleGroupContainer`; `UIManager` is the scene-graph singleton (global `g_uiManager`). Implement a `UIModAdapter`, attach elements via `g_uiManager`, and call `g_uiManager->onFrameUpdate(adapter)` each frame to drive input and rendering. Full hierarchy, assets, and example: [`src/vrui/README.md`](src/vrui/README.md).
 
 ### VR Controller Framework (`src/vrcf/`)
-Wraps OpenVR. `VRControllersManager` tracks left/right controller state (buttons, triggers, grip). OpenVR is optional — falls back to vendored headers in `external/openvr/` if not found via vcpkg.
+Wraps OpenVR (vendored headers in `external/openvr/` as fallback when not found via vcpkg). Two globals, both driven each frame by `ModBase`: `VRControllers` (`VRControllersManager` — debounced button/trigger/thumbstick reads, heading, haptics) and `VRControllersSuppress` (`VRControllersSuppressor` — owner-keyed input suppression that hides buttons/axes from the game while our own DLL still reads raw input). Full API, button map, and example: [`src/vrcf/README.md`](src/vrcf/README.md).
 
-Key calls: `VRControllers.getThumbstickValue(Hand::Primary/Offhand)` returns `NiPoint2 {x, y}`. `getControllerRelativeHeading(hand)` returns yaw for wand-directional movement.
+Suppression constraints that cause bugs if missed:
+- Call `suppress`/`release`/`reset` from the **main thread** only — the vtable hook (slots 34/35) runs on the OpenVR thread and reads just an atomic mask.
+- **Never** call F4SE/CommonLibF4VR from the hook.
+- Owner-keyed: each call takes a `std::string_view key`; a key only undoes its own suppression, and the effective mask is the union of all owners.
 
-Button-press helpers (all take `Hand` or raw `vr::ETrackedControllerRole`): `isPressed` (just-pressed, debounced), `isPressHeldDown` (held this frame, optional min duration), `isReleased`/`isReleasedShort` (just-released, optional max hold), `isLongPressed` (held past a threshold), and `isDoublePressed(hand, button, maxIntervalSeconds = 0.4f)` (fires once on the second of two press-downs within the interval).
-
-`VRControllersSuppressor` (global `VRControllersSuppress`) hides physical controller buttons/axes from the game by hooking `IVRSystem::GetControllerState[WithPose]` (vtable slots 34/35). `ModBase` installs the hook lazily and drives it each frame via `VRControllersSuppress.update(isLeftHanded)`. Suppression is **owner-keyed**: every call takes a `std::string_view key`, e.g. `VRControllersSuppress.suppress("MyMod", Hand::Primary, button)` / `release("MyMod", ...)`. A key only undoes its own suppression and the effective mask is the union of all owners, so independent subsystems never fight over a button. Convenience: `suppressAll`/`setAllSuppressed`/`setAllAxesSuppressed` (per-hand and both-hands overloads), `isSuppressed(hand, button)` (aggregate) vs `isSuppressedBy(key, ...)`, `release(key)` to drop one owner, and `reset()` to wipe everyone (used by `ModBase` on save reload). Suppression is persistent until released. A caller-module check keeps the game (and other mods) blinded while our own DLL still reads raw hardware input. Only the aggregated per-hand mask is atomic and read by the hook; all owner bookkeeping is main-thread only, so **call suppress/release from the main thread**. Never call F4SE/CommonLibF4VR from the hook. Analog-backed buttons (trigger/grip/thumbstick-click) auto-suppress their backing `rAxis` too. Design: `knowledge-base/commonframework_vr_input_suppression.md` in the reference library.
+Design deep-dive: `knowledge-base/commonframework_vr_input_suppression.md` in the reference library.
 
 ### F4VR Utilities (`src/f4vr/`)
-| Class/Utility | Description |
-|---------------|-------------|
-| `F4VRSkelly` | Complete skeleton bone enumeration (100+ bones, finger pose scalars) |
-| `PlayerNodes` | VR-specific head/hand/body reference nodes (43 `NiNode*` at `PlayerCharacter + 0x6E0`) |
-| `F4VRThumbstickControls` | Thumbstick input + gesture recognition |
-| `ScaleformUtils` | Scaleform GFx menu manipulation, HUD access |
-| `GameMenusHandler` | Menu state callbacks, pause detection |
-| `F4VROffsets` | All reverse-engineered RVAs (see reference library `F4VR-CommonFramework_RE_REFERENCE.md`) |
-
-PlayerNodes full layout (all 43 nodes) is in `Analysis/gold/F4VR-CommonFramework_RE_REFERENCE.md` in the reference library.
+Game-state helpers: node search/visibility/transform updates, player/weapon/menu state, `getPlayerNodes()` (43 VR reference nodes at `PlayerCharacter + 0x6E0`), `SkellyBones` (100+ bone names + finger poses), Scaleform/HUD (`ScaleformUtils`), `GameMenusHandler`, `F4VRThumbstickControls`, and `F4VROffsets` (all RVAs). Full file list and snippets: [`src/f4vr/README.md`](src/f4vr/README.md). RVA authority + full PlayerNodes layout: `Analysis/gold/F4VR-CommonFramework_RE_REFERENCE.md` in the reference library.
 
 ### FRIK Inter-Mod Integration
 Mods that want a button in FRIK's config menu:
