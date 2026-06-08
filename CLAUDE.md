@@ -75,7 +75,7 @@ sDebugDumpDataOnceNames =  # Comma-separated: ui_tree, skelly, fp_skelly, geomet
 ```
 
 ### Logging (`src/Logger.h`)
-spdlog-based. Use macros: `log_trace`, `log_debug`, `log_info`, `log_warn`, `log_error`. The framework checks log level before formatting to avoid string construction overhead. Logger is initialized in `ModBase::onF4SELoad`.
+spdlog-based, in the `f4cf::logger` namespace (PCH does `using namespace f4cf;`, so call them unqualified as `logger::info(...)`). Levels: `logger::trace` / `debug` / `info` / `warn` / `error` / `critical`; plus `logger::sample(ms, fmt, ...)` for rate-limited logs and `logger::infoRaw` for unformatted lines. Guard expensive work with `logger::isDebugEnabled()` etc. Logger is initialized during `onF4SEPluginLoad`.
 
 ### VR UI (`src/vrui/`)
 Widget hierarchy: `UIElement` → `UIWidget` → `UIButton` → `UIToggleButton`/`UIMultiStateToggleButton`; plus `UIContainer`/`UIToggleGroupContainer`; `UIManager` is the scene-graph singleton (global `g_uiManager`). Implement a `UIModAdapter`, attach elements via `g_uiManager`, and call `g_uiManager->onFrameUpdate(adapter)` each frame to drive input and rendering. Full hierarchy, assets, and example: [`src/vrui/README.md`](src/vrui/README.md).

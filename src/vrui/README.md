@@ -46,7 +46,7 @@ initUIManager();   // creates g_uiManager
 
 // build a button from a packaged mesh and wire its handler:
 auto button = std::make_shared<UIButton>("data/vrui/ui_btn_1x1.nif");
-button->setOnPressHandler([](UIButton*) { log_info("pressed!"); });
+button->setOnPressHandler([](UIButton*) { logger::info("pressed!"); });
 
 // place it on top of the primary wand:
 g_uiManager->attachPresetToPrimaryWandTop(button, RE::NiPoint3{ 0, 0, 0 });
