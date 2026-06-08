@@ -118,6 +118,10 @@ namespace f4cf::vrcf
         bool isLongPressed(Hand hand, vr::EVRButtonId button, float durationSeconds = 0.6f, bool clear = true);
         bool isLongPressed(vr::ETrackedControllerRole hand, vr::EVRButtonId button, float durationSeconds = 0.6f, bool clear = true);
 
+        bool isDoublePressed(Hand hand, vr::EVRButtonId button, float maxIntervalSeconds = 0.4f);
+        bool isDoublePressed(Hand hand, int button, float maxIntervalSeconds = 0.4f);
+        bool isDoublePressed(vr::ETrackedControllerRole hand, vr::EVRButtonId button, float maxIntervalSeconds = 0.4f);
+
         vr::VRControllerAxis_t getAxisValue(Hand primaryHand, Axis axis) const;
         vr::VRControllerAxis_t getAxisValue(vr::ETrackedControllerRole hand, Axis axis) const;
         bool isAxisPressed(Hand primaryHand, Axis axis, Direction direction, float threshold = 0.85f, float cooldown = 0.15f);
@@ -154,6 +158,7 @@ namespace f4cf::vrcf
             std::unordered_map<vr::EVRButtonId, float> pressStartTimesForRelease;
             std::unordered_map<vr::EVRButtonId, float> lastPressTime;
             std::unordered_map<vr::EVRButtonId, float> lastReleaseTime;
+            std::unordered_map<vr::EVRButtonId, float> lastPressDownTime; // Track time of last press-down for double press detection
             std::unordered_map<vr::EVRButtonId, bool> longPressHandled; // Track if long press was handled
             float axisLastPassedPressCheck[5] = { 0, 0, 0, 0, 0 };
             float hapticEndTime = 0;
@@ -165,6 +170,7 @@ namespace f4cf::vrcf
             bool isTouching(vr::EVRButtonId button) const;
             bool justPressed(vr::EVRButtonId button, float now, float debounceCooldown);
             bool justReleased(vr::EVRButtonId button, float now, float debounceCooldown);
+            bool justDoublePressed(vr::EVRButtonId button, float now, float maxInterval);
             static bool checkDebounce(float& lastTime, float now, float cooldown);
             vr::VRControllerAxis_t getAxis(uint32_t axisIndex) const;
             bool isAxisPressedAndClear(uint32_t axisIndex, Direction direction, float now, float threshold, float cooldown);

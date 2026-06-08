@@ -177,6 +177,26 @@ namespace f4cf::vrcf
     }
 
     /**
+     * Returns true if the button was double pressed: pressed twice with less than <maxIntervalSeconds> between the two press-downs.
+     * This will return true for ONE frame only, on the second press of the pair.
+     * Regular primary is right hand, but if left hand mode is on then primary is left hand.
+     */
+    bool VRControllersManager::isDoublePressed(const Hand hand, const vr::EVRButtonId button, const float maxIntervalSeconds)
+    {
+        return isDoublePressed(getHand(hand), button, maxIntervalSeconds);
+    }
+
+    bool VRControllersManager::isDoublePressed(const Hand hand, const int button, const float maxIntervalSeconds)
+    {
+        return isDoublePressed(getHand(hand), static_cast<vr::EVRButtonId>(button), maxIntervalSeconds);
+    }
+
+    bool VRControllersManager::isDoublePressed(const vr::ETrackedControllerRole hand, const vr::EVRButtonId button, const float maxIntervalSeconds)
+    {
+        return get(hand).justDoublePressed(button, _currentTime, maxIntervalSeconds);
+    }
+
+    /**
      * Retrieves analog axis value for the specified controller.
      * Regular primary is right hand, but if left hand mode is on then primary is left hand.
      */
@@ -399,6 +419,7 @@ namespace f4cf::vrcf
         pressStartTimesForRelease.clear();
         lastPressTime.clear();
         lastReleaseTime.clear();
+        lastPressDownTime.clear();
         longPressHandled.clear();
         for (auto& t : axisLastPassedPressCheck)
             t = 0.0f;
@@ -435,6 +456,28 @@ namespace f4cf::vrcf
         }
         const bool wasJustReleased = previous.ulButtonPressed & mask && !(current.ulButtonPressed & mask);
         return wasJustReleased && checkDebounce(lastReleaseTime[button], now, debounceCooldown);
+    }
+
+    bool VRControllersManager::ControllerState::justDoublePressed(const vr::EVRButtonId button, const float now, const float maxInterval)
+    {
+        if (!valid) {
+            return false;
+        }
+        const auto mask = vr::ButtonMaskFromId(button);
+        const bool wasJustPressed = !(previous.ulButtonPressed & mask) && current.ulButtonPressed & mask;
+        if (!wasJustPressed) {
+            return false;
+        }
+        // Second press-down within the interval since the first -> double press.
+        // Clear the stored time so a third quick press starts a new sequence rather than re-firing.
+        const auto it = lastPressDownTime.find(button);
+        if (it != lastPressDownTime.end() && now - it->second <= maxInterval) {
+            lastPressDownTime.erase(it);
+            return true;
+        }
+        // First press (or too slow to pair) -> record it as the start of a potential double press.
+        lastPressDownTime[button] = now;
+        return false;
     }
 
     bool VRControllersManager::ControllerState::checkDebounce(float& lastTime, const float now, const float cooldown)
