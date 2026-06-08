@@ -36,23 +36,109 @@ for visualizing interaction points.
 
 ## Quick start
 
+A small wand-mounted config panel — a toggle and two buttons in a row — modeled on the
+[Immersive Flashlight](https://github.com/ArthurHub/F4VR-ImmersiveFlashlight) config menu. Three
+parts: a `UIModAdapter`, building the panel, then driving and closing it.
+
+> `g_uiManager` is created **for you** by the framework before `onGameLoaded()` runs — never call
+> `initUIManager()` yourself. Build your UI in/after `onGameLoaded()`.
+
+### 1. Implement a `UIModAdapter`
+
+The adapter tells the UI where the "finger" is and how to make the hand point. The interaction bone
+typically comes from [FRIK](https://github.com/rollingrock/Fallout-4-VR-Body) (full-body IK), which
+exposes finger tracking and posing:
+
 ```cpp
-#include "vrui/UIManager.h"
-#include "vrui/UIButton.h"
-using namespace f4cf::vrui;
+class MyUIAdapter : public vrui::UIModAdapter
+{
+public:
+    RE::NiPoint3 getInteractionBoneWorldPosition() override
+    {
+        return FRIKApi::inst->getIndexFingerTipPosition(FRIKApi::Hand::Offhand);
+    }
 
-// once, at init:
-initUIManager();   // creates g_uiManager
+    void setInteractionHandPointing(bool primaryHand, bool toPoint) override
+    {
+        const auto hand = primaryHand ? FRIKApi::Hand::Primary : FRIKApi::Hand::Offhand;
+        if (toPoint) {
+            FRIKApi::inst->setHandPoseCustomFingerPositions("MyMod_UI", hand, 0, 1, 0, 0, 0);
+        } else {
+            FRIKApi::inst->clearHandPose("MyMod_UI", hand);
+        }
+    }
+};
+```
 
-// build a button from a packaged mesh and wire its handler:
-auto button = std::make_shared<UIButton>("data/vrui/ui_btn_1x1.nif");
-button->setOnPressHandler([](UIButton*) { logger::info("pressed!"); });
+### 2. Build a panel
 
-// place it on top of the primary wand:
-g_uiManager->attachPresetToPrimaryWandTop(button, RE::NiPoint3{ 0, 0, 0 });
+Each button/toggle is a `.nif` mesh; a `UIContainer` lays its children out automatically (rows or
+columns), so you don't position each element by hand. Keep the elements you'll query or update as
+`shared_ptr` members; the rest can be local.
 
-// every frame (onFrameUpdate), with your UIModAdapter:
-g_uiManager->onFrameUpdate(&myAdapter);
+```cpp
+void MyMod::openPanel()
+{
+    using namespace vrui;
+
+    _modeTgl = std::make_shared<UIToggleButton>("MyMod\\ui_btn_mode_1x1.nif");
+    _modeTgl->setOnToggleHandler([this](UIToggleButton*, bool on) { setMode(on); });
+
+    auto saveBtn = std::make_shared<UIButton>("MyMod\\ui_btn_save_1x1.nif");
+    saveBtn->setOnPressHandler([this](UIWidget*) { save(); });
+
+    auto exitBtn = std::make_shared<UIButton>("MyMod\\ui_btn_exit_1x1.nif");
+    exitBtn->setOnPressHandler([this](UIWidget*) { closePanel(); });
+
+    // Lay the three out centered in a row, 0.3 padding between them.
+    auto row = std::make_shared<UIContainer>("Row", UIContainerLayout::HorizontalCenter, 0.3f);
+    row->addElement(_modeTgl);
+    row->addElement(saveBtn);
+    row->addElement(exitBtn);
+
+    // Root container stacks rows bottom-to-top at 0.4 scale.
+    _panel = std::make_shared<UIContainer>("Panel", UIContainerLayout::VerticalUp, 0.4f);
+    _panel->addElement(row);
+
+    // Attach above the primary wand (offset {0,0,0}).
+    g_uiManager->attachPresetToPrimaryWandTop(_panel, { 0, 0, 0 });
+}
+```
+
+For mutually-exclusive options (radio buttons), add `UIToggleButton`s to a
+[`UIToggleGroupContainer`](UIToggleGroupContainer.h) instead of a plain `UIContainer`.
+
+### 3. Drive it each frame, then tear it down
+
+```cpp
+void MyMod::onFrameUpdate()
+{
+    MyUIAdapter adapter;
+    vrui::g_uiManager->onFrameUpdate(&adapter);   // hit-tests, fires handlers, renders
+
+    // per-frame UI logic, e.g. react to current state:
+    if (_panel) {
+        _statusMsg->setVisibility(_modeTgl->isToggleOn());
+    }
+}
+
+void MyMod::closePanel()
+{
+    if (!_panel) {
+        return;
+    }
+    g_uiManager->detachElement(_panel, /*releaseSafe*/ true);  // released next frame
+    _panel.reset();        // drop the shared_ptr members you kept
+    _modeTgl.reset();
+}
+```
+
+Members held on the mod (or a dedicated UI class):
+
+```cpp
+std::shared_ptr<vrui::UIContainer>    _panel;
+std::shared_ptr<vrui::UIToggleButton> _modeTgl;
+std::shared_ptr<vrui::UIWidget>       _statusMsg;
 ```
 
 ## Assets
@@ -64,6 +150,9 @@ message panels `ui_msg_NxM.nif` (up to 6×2). Re-skin by editing DDS textures un
 
 ## Notes
 
+- `g_uiManager` is created by the framework before `onGameLoaded()`; mods never call `initUIManager()`.
+- Containers lay children out automatically by their `UIContainerLayout` (horizontal/vertical,
+  centered or directional) — prefer that over positioning each element manually.
 - Coordinates on `UIElement::setPosition(x, y, z)` are **relative to the parent**: x = right(+)/left(−),
   y = forward(+)/back(−), z = up(+)/down(−).
 - Detaching mid-frame can be unsafe; `UIManager::detachElement(element, releaseSafe=true)` defers the
