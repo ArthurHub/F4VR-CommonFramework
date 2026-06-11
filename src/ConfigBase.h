@@ -8,6 +8,11 @@
 
 #include "Common/CommonUtils.h"
 
+namespace f4cf::vrcf
+{
+    struct InputBinding;
+}
+
 namespace f4cf
 {
     static const auto BASE_PATH = common::getRelativePathInDocuments(R"(\My Games\Fallout4VR\Mods_Config)");
@@ -140,6 +145,12 @@ namespace f4cf
         // ','-separated floats (palmPitch,palmYaw). Returns defaultValue if the key is missing or the
         // value does not match this exact structure.
         static std::array<float, 22> getHandPoseValue(const CSimpleIniA& ini, const char* section, const char* key, const std::array<float, 22>& defaultValue);
+
+        // Read a controller input binding from a config string, e.g. "offhand longpress grip 0.6 +trigger".
+        // See vrcf::parseInputBinding (vrcf/InputBindingParser.h) for the full grammar and aliases.
+        // Returns defaultValue (and logs a warning) if the key is missing or the value is malformed.
+        static vrcf::InputBinding getInputBindingValue(const CSimpleIniA& ini, const char* section, const char* key, const vrcf::InputBinding& defaultValue);
+
         void updateIniConfigToLatestVersion(int currentVersion, int latestVersion) const;
         static std::unordered_map<std::string, RE::NiTransform> loadEmbeddedOffsets(WORD fromResourceId, WORD toResourceId);
         static void loadOffsetJsonFile(const std::string& file, std::unordered_map<std::string, RE::NiTransform>& offsetsMap);

@@ -3,6 +3,7 @@
 #include <nlohmann/json.hpp>
 
 #include "common/MatrixUtils.h"
+#include "vrcf/InputBindingParser.h"
 
 using json = nlohmann::json;
 
@@ -445,6 +446,26 @@ namespace f4cf
             return defaultValue;
         }
         return r;
+    }
+
+    /**
+     * Parse a controller input binding from the INI value at section/key.
+     * Delegates to vrcf::parseInputBinding (see vrcf/InputBindingParser.h for the grammar).
+     * Returns defaultValue (and logs a warning) if the key is missing or the value is malformed.
+     */
+    vrcf::InputBinding ConfigBase::getInputBindingValue(const CSimpleIniA& ini, const char* section, const char* key, const vrcf::InputBinding& defaultValue)
+    {
+        const char* raw = ini.GetValue(section, key, nullptr);
+        if (raw == nullptr) {
+            return defaultValue;
+        }
+
+        const auto parsed = vrcf::parseInputBinding(raw);
+        if (!parsed) {
+            logger::warn("Config: malformed input binding for '{}.{}' = '{}'. Using default.", section, key, raw);
+            return defaultValue;
+        }
+        return *parsed;
     }
 
     /**

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <optional>
 #include <unordered_map>
 
 #include "../../external/openvr/openvr.h"
@@ -84,6 +85,59 @@ namespace f4cf::vrcf
     };
 
     /**
+     * How a button (or axis) must be activated for an InputBinding to be considered "triggered".
+     * Each value maps to one of the VRControllersManager check methods; see check().
+     */
+    enum class ActivationType : std::uint8_t
+    {
+        Touch, // isTouching - button is currently touched (capacitive), not necessarily pressed
+        Press, // isPressed - button edge-pressed this frame (debounced)
+        HoldDown, // isPressHeldDown - button held down, every frame; uses `duration` as the minimum hold
+        Release, // isReleased - button edge-released this frame; uses `duration` as the maximum hold to still count
+        LongPress, // isLongPressed - button held longer than `duration`
+        DoublePress, // isDoublePressed - two presses within `duration`
+        AxisDirection, // isAxisPressed - `axis` pushed past `threshold` in `direction`
+    };
+
+    /**
+     * Optional modifier button that must be held down for a binding to trigger (a chord).
+     * `hand` is optional: when unset the modifier is checked on the binding's own hand; set it to
+     * require the modifier on a specific hand (e.g. binding on the primary hand, modifier on the offhand).
+     */
+    struct InputModifier
+    {
+        vr::EVRButtonId button = vr::k_EButton_Grip;
+        std::optional<Hand> hand;
+    };
+
+    /**
+     * A fully-described, config-loadable controller input binding.
+     * Bundles the hand, the button/axis, and how it must be activated so a single VRControllersManager::check()
+     * call can evaluate any binding loaded from config. The meaning of the timing/sensitivity fields depends on
+     * `type` (see ActivationType). For button types `button` is used; for AxisDirection `axis` + `direction` are used.
+     */
+    struct InputBinding
+    {
+        Hand hand = Hand::Primary;
+        ActivationType type = ActivationType::Press;
+
+        // Used by all button activation types (everything except AxisDirection).
+        vr::EVRButtonId button = vr::k_EButton_SteamVR_Trigger;
+
+        // Used by AxisDirection only.
+        Axis axis = Axis::Thumbstick;
+        Direction direction = Direction::Up;
+
+        // Optional modifier button that must be held down for the binding to trigger (see InputModifier).
+        std::optional<InputModifier> modifier;
+
+        // Timing / sensitivity - meaning depends on `type` (see ActivationType). 0 means "use the per-type default".
+        float duration = 0.0f;
+        float threshold = 0.85f; // AxisDirection only
+        float cooldown = 0.15f; // AxisDirection only
+    };
+
+    /**
      * Manages VR controller input states and button interaction logic
      */
     class VRControllersManager
@@ -96,6 +150,8 @@ namespace f4cf::vrcf
         void setDebounceCooldown(float seconds);
 
         vr::VRControllerState_t getControllerState_DEPRECATED(TrackerType a_tracker) const;
+
+        bool check(const InputBinding& binding);
 
         bool isTouching(Hand hand, vr::EVRButtonId button) const;
         bool isTouching(Hand hand, int button) const;

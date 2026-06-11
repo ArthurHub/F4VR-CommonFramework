@@ -1,5 +1,3 @@
-#pragma once
-
 #include "VRControllersManager.h"
 
 #include <numbers>
@@ -55,6 +53,42 @@ namespace f4cf::vrcf
     vr::VRControllerState_t VRControllersManager::getControllerState_DEPRECATED(const TrackerType a_tracker) const
     {
         return a_tracker == TrackerType::Left ? _left.current : _right.current;
+    }
+
+    /**
+     * Evaluate a config-loaded InputBinding against the current controller state.
+     * Dispatches to the matching check method based on binding.type. If the binding has a modifier,
+     * it must be held down (on its own hand, or the binding's hand if unspecified) for the binding to
+     * trigger. A `duration` of 0 falls back to a sensible per-type default. Returns true when the
+     * binding's activation condition is met.
+     */
+    bool VRControllersManager::check(const InputBinding& binding)
+    {
+        if (binding.modifier) {
+            const Hand modifierHand = binding.modifier->hand.value_or(binding.hand);
+            if (!isPressHeldDown(modifierHand, binding.modifier->button)) {
+                return false;
+            }
+        }
+
+        switch (binding.type) {
+        case ActivationType::Touch:
+            return isTouching(binding.hand, binding.button);
+        case ActivationType::Press:
+            return isPressed(binding.hand, binding.button);
+        case ActivationType::HoldDown:
+            return isPressHeldDown(binding.hand, binding.button, binding.duration);
+        case ActivationType::Release:
+            return isReleased(binding.hand, binding.button, binding.duration > 0.0f ? binding.duration : 99.0f);
+        case ActivationType::LongPress:
+            return isLongPressed(binding.hand, binding.button, binding.duration > 0.0f ? binding.duration : 0.6f);
+        case ActivationType::DoublePress:
+            return isDoublePressed(binding.hand, binding.button, binding.duration > 0.0f ? binding.duration : 0.4f);
+        case ActivationType::AxisDirection:
+            return isAxisPressed(binding.hand, binding.axis, binding.direction, binding.threshold, binding.cooldown);
+        default:
+            return false;
+        }
     }
 
     /**

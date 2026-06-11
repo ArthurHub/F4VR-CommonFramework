@@ -47,8 +47,13 @@ What it provides:
 ### Prerequisites
 
 - `VCPKG_ROOT` environment variable pointing to a [vcpkg](https://github.com/microsoft/vcpkg) installation
-- Visual Studio 2022 (v143) or 2026 (v145), x64 only
+  - `git clone https://github.com/microsoft/vcpkg.git`
+  - run `bootstrap-vcpkg.bat`. Example: `C:\github\vcpkg\bootstrap-vcpkg.bat`
+  - Set environment variable `VCPKG_ROOT`. Example: `setx VCPKG_ROOT "C:\github\vcpkg"`
+- Visual Studio 2022 (v143) or 2026 (v145), x64 only with C++ Desktop Development
+  - `winget install -e --id Microsoft.VisualStudio.Community --source winget --override "--passive --wait --add Microsoft.VisualStudio.Workload.NativeDesktop --includeRecommended --norestart"`
 - CMake 4.2+
+  - `winget install -e --id Kitware.CMake --source winget`
 
 ### Add to your mod
 

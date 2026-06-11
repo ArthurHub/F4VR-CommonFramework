@@ -55,6 +55,54 @@ Press-state helpers (all debounced):
 Thumbstick/axis gestures: `isThumbstickPressed(hand, Direction)` and `getThumbstickPressedDirection`
 turn analog deflection into discrete up/down/left/right events with a threshold + cooldown.
 
+## Config-driven bindings
+
+When the *key binding itself* should be configurable (any hand, any button, any kind of press), don't
+hard-code a specific `isPressed`/`isLongPressed`/… call. Describe the binding as data with
+[`InputBinding`](VRControllersManager.h) and evaluate it with a single `VRControllers.check(binding)`.
+
+```cpp
+#include "vrcf/VRControllersManager.h"
+using namespace f4cf::vrcf;
+
+InputBinding openMenu;
+openMenu.hand = Hand::Offhand;
+openMenu.type = ActivationType::LongPress;   // Press / HoldDown / Release / DoublePress / Touch / AxisDirection
+openMenu.button = vr::k_EButton_Grip;
+openMenu.duration = 0.6f;                     // meaning depends on `type`; 0 = per-type default
+openMenu.modifier = InputModifier{ vr::k_EButton_SteamVR_Trigger };       // optional chord on the same hand
+// openMenu.modifier = InputModifier{ vr::k_EButton_Grip, Hand::Offhand }; // ...or pin it to a specific hand
+
+// In onFrameUpdate():
+if (VRControllers.check(openMenu)) { /* binding triggered */ }
+```
+
+`check()` dispatches by `type` to the matching read method above; for `AxisDirection` it uses the
+`axis` + `direction` + `threshold` + `cooldown` fields instead of `button`. The optional `modifier`
+must be held down for the binding to fire — on the binding's own hand by default, or on the
+`InputModifier::hand` you specify.
+
+To load bindings from INI, [`InputBindingParser.h`](InputBindingParser.h) parses a forgiving,
+case-insensitive line into an `InputBinding` (token helpers `parseHand` / `parseActivationType` /
+`parseButton` / `parseAxis` / `parseDirection` are also exposed). If your config derives from
+`ConfigBase`, prefer its `getInputBindingValue(ini, section, key, default)` helper — it reads the key,
+falls back to your default, and logs a warning on a malformed value (same pattern as
+`getTransformValue` / `getHandPoseValue`):
+
+```cpp
+// In your Config's loadIniConfigInternal(const CSimpleIniA& ini):
+openMenuBinding = getInputBindingValue(ini, "Controls", "sOpenMenu",
+    InputBinding{ Hand::Offhand, ActivationType::LongPress, vr::k_EButton_Grip });
+
+// Or parse a string directly anywhere else:
+#include "vrcf/InputBindingParser.h"
+auto chord = parseInputBinding("primary press trigger +offhand:grip"); // -> std::optional<InputBinding>
+```
+
+Format: `"<hand> <type> <button> [duration] [+[hand:]modifier]"`. Examples: `"primary press trigger"`,
+`"left double a"`, `"primary thumbstick up"`, `"right axis trigger up 0.7"`,
+`"offhand longpress grip 0.6 +trigger"`. See the header doc comment for the full grammar and aliases.
+
 ## Suppressing input
 
 `VRControllersSuppressor` hooks `IVRSystem::GetControllerState[WithPose]` (vtable slots 34/35). The
