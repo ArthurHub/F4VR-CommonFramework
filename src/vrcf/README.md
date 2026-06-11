@@ -47,7 +47,7 @@ Press-state helpers (all debounced):
 |--------|-----------|
 | `isPressed` | the frame the button goes down |
 | `isPressHeldDown(…, minHold)` | held this frame (optionally past a minimum duration) |
-| `isReleased(…, maxHold)` / `isReleasedShort` | the frame it goes up (optionally only if held briefly) |
+| `isReleased(…, maxHold)` / `isTap` | the frame it goes up (`isTap` = only if held briefly, < 0.3s) |
 | `isLongPressed(…, duration)` | held past a threshold (fires once) |
 | `isDoublePressed(…, maxInterval)` | second of two presses within the interval |
 | `isTouching` | capacitive touch without a press |
@@ -67,7 +67,7 @@ using namespace f4cf::vrcf;
 
 InputBinding openMenu;
 openMenu.hand = Hand::Offhand;
-openMenu.type = ActivationType::LongPress;   // Press / HoldDown / Release / DoublePress / Touch / AxisDirection
+openMenu.type = ActivationType::LongPress;   // Press / Tap / HoldDown / Release / DoublePress / Touch / AxisDirection
 openMenu.button = vr::k_EButton_Grip;
 openMenu.duration = 0.6f;                     // meaning depends on `type`; 0 = per-type default
 openMenu.modifier = InputModifier{ vr::k_EButton_SteamVR_Trigger };       // optional chord on the same hand

@@ -80,6 +80,8 @@ namespace f4cf::vrcf
             return isPressHeldDown(binding.hand, binding.button, binding.duration);
         case ActivationType::Release:
             return isReleased(binding.hand, binding.button, binding.duration > 0.0f ? binding.duration : 99.0f);
+        case ActivationType::Tap:
+            return isTap(binding.hand, binding.button);
         case ActivationType::LongPress:
             return isLongPressed(binding.hand, binding.button, binding.duration > 0.0f ? binding.duration : 0.6f);
         case ActivationType::DoublePress:
@@ -168,16 +170,16 @@ namespace f4cf::vrcf
     }
 
     /**
-     * Returns true if the specified button was just released and was held for less than 0.3 seconds.
+     * Returns true on a tap: the button was just released after being held for less than 0.3 seconds.
      * This will return true for ONE frame only when the button is first released.
      * Regular primary is right hand, but if left hand mode is on then primary is left hand.
      */
-    bool VRControllersManager::isReleasedShort(const Hand hand, const vr::EVRButtonId button)
+    bool VRControllersManager::isTap(const Hand hand, const vr::EVRButtonId button)
     {
         return isReleased(getHand(hand), button, 0.3f);
     }
 
-    bool VRControllersManager::isReleasedShort(const Hand hand, const int button)
+    bool VRControllersManager::isTap(const Hand hand, const int button)
     {
         return isReleased(getHand(hand), static_cast<vr::EVRButtonId>(button), 0.3f);
     }

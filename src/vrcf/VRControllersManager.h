@@ -93,7 +93,8 @@ namespace f4cf::vrcf
         Touch, // isTouching - button is currently touched (capacitive), not necessarily pressed
         Press, // isPressed - button edge-pressed this frame (debounced)
         HoldDown, // isPressHeldDown - button held down, every frame; uses `duration` as the minimum hold
-        Release, // isReleased - button edge-released this frame; uses `duration` as the maximum hold to still count
+        Release, // isReleased - button edge-released this frame; uses `duration` as the maximum hold to still count (0 = any)
+        Tap, // isTap - quick press-and-release (held < 0.3s); the "Tap" gesture
         LongPress, // isLongPressed - button held longer than `duration`
         DoublePress, // isDoublePressed - two presses within `duration`
         AxisDirection, // isAxisPressed - `axis` pushed past `threshold` in `direction`
@@ -167,8 +168,8 @@ namespace f4cf::vrcf
 
         bool isReleased(Hand hand, vr::EVRButtonId button, float maxHoldDurationSeconds = 99);
         bool isReleased(Hand hand, int button, float maxHoldDurationSeconds = 99);
-        bool isReleasedShort(Hand hand, vr::EVRButtonId button);
-        bool isReleasedShort(Hand hand, int button);
+        bool isTap(Hand hand, vr::EVRButtonId button);
+        bool isTap(Hand hand, int button);
         bool isReleased(vr::ETrackedControllerRole hand, vr::EVRButtonId button, float maxHoldDurationSeconds = 99);
 
         bool isLongPressed(Hand hand, vr::EVRButtonId button, float durationSeconds = 0.6f, bool clear = true);

@@ -94,7 +94,10 @@ namespace f4cf::vrcf
         if (t == "release" || t == "released") {
             return ActivationType::Release;
         }
-        if (t == "long" || t == "longpress") {
+        if (t == "tap") {
+            return ActivationType::Tap;
+        }
+        if (t == "longpress") {
             return ActivationType::LongPress;
         }
         if (t == "double" || t == "doublepress") {

@@ -149,9 +149,9 @@ namespace f4cf
             break;
         }
 
-        // long-press is checked before short-release because isLongPressed clears state when fired;
+        // long-press is checked before tap because isLongPressed clears state when fired;
         // otherwise both would trigger on the same release.
-        if (vrcf::VRControllers.isReleasedShort(vrcf::Hand::Primary, vr::k_EButton_A)) {
+        if (vrcf::VRControllers.isTap(vrcf::Hand::Primary, vr::k_EButton_A)) {
             saveCurrent(config);
             vrcf::VRControllers.triggerHaptic(vrcf::Hand::Primary, 0.1f, 0.4f);
         } else if (vrcf::VRControllers.isLongPressed(vrcf::Hand::Primary, vr::k_EButton_A)) {
@@ -200,7 +200,7 @@ namespace f4cf
      */
     void DebugAdjuster::adjustHandPose(std::array<float, 22>& pose)
     {
-        if (vrcf::VRControllers.isReleasedShort(vrcf::Hand::Offhand, vr::k_EButton_A)) {
+        if (vrcf::VRControllers.isTap(vrcf::Hand::Offhand, vr::k_EButton_A)) {
             s_handPoseSlot = (s_handPoseSlot + 1) % HAND_POSE_SLOT_NAMES.size();
             f4vr::showNotification(fmt::format("Adjusting hand pose: {}", HAND_POSE_SLOT_NAMES[s_handPoseSlot]));
             vrcf::VRControllers.triggerHaptic(vrcf::Hand::Offhand, 0.05f, 0.4f);

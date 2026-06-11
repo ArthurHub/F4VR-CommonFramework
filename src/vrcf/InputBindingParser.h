@@ -23,8 +23,8 @@ namespace f4cf::vrcf
      *
      * Recognized tokens (with aliases):
      *   hand       : primary | offhand | right | left
-     *   type       : touch | press(ed)/click | hold(down)/held | release(d) | long(press)
-     *                | double(press) | axis/thumbstick/stick (AxisDirection)
+     *   type       : touch | press(ed)/click | tap | hold(down)/held | release(d)
+     *                | longpress | double(press) | axis/thumbstick/stick (AxisDirection)
      *   button     : system | menu/applicationmenu/b | grip | a | trigger | thumbstick/touchpad/joystick
      *   axis       : thumbstick/touchpad | trigger | grip
      *   direction  : up | down | left | right
