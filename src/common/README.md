@@ -14,6 +14,7 @@ utilities, and time helpers. Everything here is usable from any other subsystem.
 | [`Quaternion.h`](Quaternion.h) | `Quaternion` class — normalize, conjugate, slerp, angle-axis, vector-to-vector, matrix conversion, and operators. Header-only. |
 | [`MatrixUtils.h`](MatrixUtils.h) | `MatrixUtils` — vector math (`vec3Norm`/`vec3Dot`/`vec3Cross`), Euler↔matrix conversion, `NiTransform` builders, relocation/delta/target transforms. |
 | [`CommonUtils.h`](CommonUtils.h) | Free functions: float compare, string trim/lower, embedded-resource extraction, filesystem helpers, time (`nowMillis`/`nowNanosec`), and the `Documents\My Games` path resolver. |
+| [`PerfMonitor.h`](PerfMonitor.h) | `PerfMonitor` — low-overhead runtime profiler for a hot-path function/scope. Collects count/avg/p95/p99/min/max/busy% and logs a summary every N seconds (default 30, configurable per instance). Gated on debug logging: zero work when debug is off. Single-threaded; use the RAII `scope()` timer. |
 
 ## Quick reference
 
@@ -37,6 +38,17 @@ node->local.rotate = q.getMatrix();
 
 // Resolve a path under the user's Documents folder
 const auto cfgDir = getRelativePathInDocuments(R"(\My Games\Fallout4VR\Mods_Config)");
+
+// Profile a hot function: one static monitor + an RAII scope timer.
+// Collects/logs only when the logger is at debug level (iLogLevel <= 1); otherwise scope() is a no-op.
+// Logs e.g. "[Perf] onFrameUpdate: n=897 (90/s) avg=0.412ms p95=0.900ms p99=1.800ms min=0.180ms max=3.900ms busy=3.7% over 10.0s"
+void onFrameUpdate()
+{
+    static common::PerfMonitor perf("onFrameUpdate");       // default 30s window
+    static common::PerfMonitor perfFast("onFrameUpdate", 5s); // per-instance interval
+    const auto timer = perf.scope();
+    // ... work being measured ...
+}
 ```
 
 ## Notes

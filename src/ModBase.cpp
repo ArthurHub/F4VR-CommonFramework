@@ -4,6 +4,7 @@
 #include <fmt/chrono.h>
 
 #include "MainLoopHook.h"
+#include "common/PerfMonitor.h"
 #include "f4vr/DebugDump.h"
 
 #include "f4vr/PlayerNodes.h"
@@ -156,6 +157,9 @@ namespace f4cf
      */
     void ModBase::onFrameUpdateSafe()
     {
+        static common::PerfMonitor perf("onFrameUpdateSafe");
+        const auto perfTimer = perf.scope();
+
         CPPTRACE_TRY
         {
             const bool leftHanded = f4vr::isLeftHandedMode();
