@@ -5,6 +5,7 @@
 #include "common/CommonUtils.h"
 #include "common/MatrixUtils.h"
 #include "f4vr/F4VRUtils.h"
+#include "vrcf/VRControllersHaptic.h"
 #include "vrcf/VRControllersManager.h"
 #include "vrcf/VRControllersSuppressor.h"
 
@@ -153,10 +154,10 @@ namespace f4cf
         // otherwise both would trigger on the same release.
         if (vrcf::VRControllers.isTap(vrcf::Hand::Primary, vr::k_EButton_A)) {
             saveCurrent(config);
-            vrcf::VRControllers.triggerHaptic(vrcf::Hand::Primary, 0.1f, 0.4f);
+            vrcf::VRHaptics.trigger(vrcf::Hand::Primary, vrcf::HapticPattern::Success);
         } else if (vrcf::VRControllers.isLongPressed(vrcf::Hand::Primary, vr::k_EButton_A)) {
             reloadFromIni(config);
-            vrcf::VRControllers.triggerHaptic(vrcf::Hand::Primary, 0.25f, 0.6f);
+            vrcf::VRHaptics.trigger(vrcf::Hand::Primary, vrcf::HapticPattern::Warning);
         }
     }
 
@@ -203,7 +204,7 @@ namespace f4cf
         if (vrcf::VRControllers.isTap(vrcf::Hand::Offhand, vr::k_EButton_A)) {
             s_handPoseSlot = (s_handPoseSlot + 1) % HAND_POSE_SLOT_NAMES.size();
             f4vr::showNotification(fmt::format("Adjusting hand pose: {}", HAND_POSE_SLOT_NAMES[s_handPoseSlot]));
-            vrcf::VRControllers.triggerHaptic(vrcf::Hand::Offhand, 0.05f, 0.4f);
+            vrcf::VRHaptics.trigger(vrcf::Hand::Offhand, vrcf::HapticPattern::Tick);
         }
 
         const auto [px, py] = vrcf::VRControllers.getThumbstickValue(vrcf::Hand::Primary);

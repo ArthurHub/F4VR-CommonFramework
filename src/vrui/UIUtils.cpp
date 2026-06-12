@@ -2,7 +2,7 @@
 
 #include "ModBase.h"
 #include "f4vr/PlayerNodes.h"
-#include "vrcf/VRControllersManager.h"
+#include "vrcf/VRControllersHaptic.h"
 
 namespace
 {
@@ -81,7 +81,7 @@ namespace f4cf::vrui
      */
     void UIUtils::triggerInteractionHeptic()
     {
-        vrcf::VRControllers.triggerHaptic(vrcf::Hand::Offhand);
+        vrcf::VRHaptics.trigger(vrcf::Hand::Offhand, vrcf::HapticPattern::Click);
     }
 
     /**
