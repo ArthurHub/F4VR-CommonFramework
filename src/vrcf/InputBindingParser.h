@@ -20,6 +20,7 @@ namespace f4cf::vrcf
      *   <hand> <type> <button> [duration] [+modifier]            for button activation types
      *   <hand> axis <axis> <direction> [threshold] [+modifier]   for an explicit axis
      *   <hand> thumbstick <direction> [threshold] [+modifier]    shorthand: axis defaults to Thumbstick
+     *   none | off | disabled | (empty)                          disables the binding (never triggers)
      *
      * Recognized tokens (with aliases):
      *   hand       : primary | offhand | right | left
@@ -37,6 +38,7 @@ namespace f4cf::vrcf
      *   "left double a"                    -> double-press A on the left controller
      *   "primary thumbstick up"            -> push the thumbstick up
      *   "right axis trigger up 0.7"        -> trigger axis up past 0.7
+     *   "none"                             -> disabled binding (never triggers)
      */
     std::optional<Hand> parseHand(std::string_view text);
     std::optional<ActivationType> parseActivationType(std::string_view text);
@@ -45,8 +47,9 @@ namespace f4cf::vrcf
     std::optional<Direction> parseDirection(std::string_view text);
 
     /**
-     * Parse a full binding line. Returns std::nullopt if the hand, type, or the required
-     * button/axis/direction tokens cannot be resolved.
+     * Parse a full binding line. A blank line or "none"/"off"/"disabled" yields a disabled binding
+     * (ActivationType::Disabled, which never triggers). Returns std::nullopt if the hand, type, or the
+     * required button/axis/direction tokens cannot be resolved.
      */
     std::optional<InputBinding> parseInputBinding(std::string_view text);
 }

@@ -168,6 +168,14 @@ namespace f4cf::vrcf
 
     std::optional<InputBinding> parseInputBinding(const std::string_view text)
     {
+        // A blank value or an explicit off keyword disables the binding: it parses successfully but never triggers.
+        const std::string whole = normalize(text);
+        if (whole.empty() || whole == "none" || whole == "off" || whole == "disabled") {
+            InputBinding binding;
+            binding.type = ActivationType::Disabled;
+            return binding;
+        }
+
         std::vector<std::string> tokens = tokenize(text);
         if (tokens.size() < 2) {
             return std::nullopt;

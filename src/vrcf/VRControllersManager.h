@@ -90,6 +90,7 @@ namespace f4cf::vrcf
      */
     enum class ActivationType : std::uint8_t
     {
+        Disabled, // never triggers - the binding is turned off (config "none" / "off" / "disabled" / empty value)
         Touch, // isTouching - button is currently touched (capacitive), not necessarily pressed
         Press, // isPressed - button edge-pressed this frame (debounced)
         HoldDown, // isPressHeldDown - button held down, every frame; uses `duration` as the minimum hold

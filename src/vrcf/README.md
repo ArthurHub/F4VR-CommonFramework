@@ -66,7 +66,7 @@ using namespace f4cf::vrcf;
 
 InputBinding openMenu;
 openMenu.hand = Hand::Offhand;
-openMenu.type = ActivationType::LongPress;   // Press / Tap / HoldDown / Release / DoublePress / Touch / AxisDirection
+openMenu.type = ActivationType::LongPress;   // Press / Tap / HoldDown / Release / DoublePress / Touch / AxisDirection / Disabled
 openMenu.button = vr::k_EButton_Grip;
 openMenu.duration = 0.6f;                     // meaning depends on `type`; 0 = per-type default
 openMenu.modifier = InputModifier{ vr::k_EButton_SteamVR_Trigger };       // optional chord on the same hand
@@ -101,6 +101,11 @@ auto chord = parseInputBinding("primary press trigger +offhand:grip"); // -> std
 Format: `"<hand> <type> <button> [duration] [+[hand:]modifier]"`. Examples: `"primary press trigger"`,
 `"left double a"`, `"primary thumbstick up"`, `"right axis trigger up 0.7"`,
 `"offhand longpress grip 0.6 +trigger"`. See the header doc comment for the full grammar and aliases.
+
+To **disable** a binding, set its value to `none`, `off`, `disabled`, or leave it empty — it parses to a
+`Disabled` binding whose `check()` always returns `false`, so the input never fires (no warning is logged).
+Note the difference from a *missing* key: an absent key falls back to the code default, while a present-but-empty
+value is an explicit "off". Example: `sOpenMenu = none`.
 
 ## Haptic feedback
 

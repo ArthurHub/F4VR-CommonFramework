@@ -61,8 +61,8 @@ namespace f4cf::vrcf
      * Evaluate a config-loaded InputBinding against the current controller state.
      * Dispatches to the matching check method based on binding.type. If the binding has a modifier,
      * it must be held down (on its own hand, or the binding's hand if unspecified) for the binding to
-     * trigger. A `duration` of 0 falls back to a sensible per-type default. Returns true when the
-     * binding's activation condition is met.
+     * trigger. A `duration` of 0 falls back to a sensible per-type default. A Disabled binding always
+     * returns false. Returns true when the binding's activation condition is met.
      */
     bool VRControllersManager::check(const InputBinding& binding)
     {
@@ -74,6 +74,8 @@ namespace f4cf::vrcf
         }
 
         switch (binding.type) {
+        case ActivationType::Disabled:
+            return false;
         case ActivationType::Touch:
             return isTouching(binding.hand, binding.button);
         case ActivationType::Press:
