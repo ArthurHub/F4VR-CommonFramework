@@ -30,8 +30,11 @@ namespace f4cf::vrcf
         Stop, // hold then ramp down - continuous operation ended
         RampUp, // long smooth low-to-high ramp - charging / filling
         RampDown, // long smooth high-to-low ramp - draining / powering off
-        Heartbeat, // two lub-dub beats - alive/active indicator
+        Heartbeat1, // one lub-dub beat - alive/active indicator
+        Heartbeat2, // two lub-dub beats - alive/active indicator
+        Heartbeat3, // three lub-dub beats - alive/active indicator
         Buzz, // short constant rumble - generic feedback
+        MidBuzz, // mid constant rumble - moderate emphasis
         LongBuzz, // long constant rumble - heavy emphasis
     };
 

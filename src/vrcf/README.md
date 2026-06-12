@@ -135,7 +135,8 @@ VRHaptics.isPlaying(Hand::Primary);
 
 Patterns: `Tick` / `Click` / `DoubleClick` / `TripleClick` (taps), `Success` / `Warning` / `Error` /
 `Notification` (outcome signals), `Start` / `Stop` / `RampUp` / `RampDown` (continuous-operation
-shaping), `Heartbeat`, `Buzz` / `LongBuzz`. See [`VRControllersHaptic.h`](VRControllersHaptic.h) for
+shaping), `Heartbeat1` / `Heartbeat2` / `Heartbeat3`, `Buzz` / `MidBuzz` / `LongBuzz`. See
+[`VRControllersHaptic.h`](VRControllersHaptic.h) for
 the intended use of each; `VRControllersHaptic::getPattern(p)` exposes a pattern's keyframes if you
 want to tweak one.
 

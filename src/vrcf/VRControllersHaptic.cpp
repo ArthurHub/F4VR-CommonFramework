@@ -29,18 +29,30 @@ namespace
     // exactly one pulse, and silent gaps should be >= ~50ms to be clearly felt as separation.
 
     constexpr HapticSegment PATTERN_TICK[] = { { 0.02f, 0.25f, 0.25f } };
-    constexpr HapticSegment PATTERN_CLICK[] = { { 0.03f, 0.5f, 0.5f } };
-    constexpr HapticSegment PATTERN_DOUBLE_CLICK[] = { { 0.03f, 0.5f, 0.5f }, { 0.08f, 0.0f, 0.0f }, { 0.03f, 0.5f, 0.5f } };
-    constexpr HapticSegment PATTERN_TRIPLE_CLICK[] = { { 0.03f, 0.5f, 0.5f }, { 0.08f, 0.0f, 0.0f }, { 0.03f, 0.5f, 0.5f }, { 0.08f, 0.0f, 0.0f }, { 0.03f, 0.5f, 0.5f } };
-    constexpr HapticSegment PATTERN_SUCCESS[] = { { 0.04f, 0.4f, 0.4f }, { 0.08f, 0.0f, 0.0f }, { 0.09f, 0.85f, 0.85f } };
-    constexpr HapticSegment PATTERN_WARNING[] = { { 0.09f, 0.85f, 0.85f }, { 0.09f, 0.0f, 0.0f }, { 0.06f, 0.4f, 0.4f } };
+    constexpr HapticSegment PATTERN_CLICK[] = { { 0.03f, 0.7f, 0.7f } };
+    constexpr HapticSegment PATTERN_DOUBLE_CLICK[] = { { 0.03f, 0.5f, 0.5f }, { 0.05f, 0.0f, 0.0f }, { 0.03f, 0.5f, 0.5f } };
+    constexpr HapticSegment PATTERN_TRIPLE_CLICK[] = { { 0.03f, 0.5f, 0.5f }, { 0.05f, 0.0f, 0.0f }, { 0.03f, 0.5f, 0.5f }, { 0.08f, 0.0f, 0.0f }, { 0.03f, 0.5f, 0.5f } };
+    constexpr HapticSegment PATTERN_SUCCESS[] = { { 0.05f, 0.3f, 0.3f }, { 0.05f, 0.0f, 0.0f }, { 0.08f, 0.8f, 0.8f } };
+    constexpr HapticSegment PATTERN_WARNING[] = { { 0.06f, 0.9f, 0.9f }, { 0.05f, 0.0f, 0.0f }, { 0.2f, 0.3f, 0.3f } };
     constexpr HapticSegment PATTERN_ERROR[] = { { 0.05f, 0.6f, 0.6f }, { 0.06f, 0.0f, 0.0f }, { 0.05f, 0.6f, 0.6f }, { 0.06f, 0.0f, 0.0f }, { 0.16f, 1.0f, 1.0f } };
-    constexpr HapticSegment PATTERN_NOTIFICATION[] = { { 0.12f, 0.7f, 0.7f }, { 0.09f, 0.0f, 0.0f }, { 0.03f, 0.4f, 0.4f }, { 0.07f, 0.0f, 0.0f }, { 0.03f, 0.4f, 0.4f } };
-    constexpr HapticSegment PATTERN_START[] = { { 0.25f, 0.1f, 0.8f }, { 0.1f, 0.8f, 0.8f } };
-    constexpr HapticSegment PATTERN_STOP[] = { { 0.1f, 0.8f, 0.8f }, { 0.25f, 0.8f, 0.05f } };
-    constexpr HapticSegment PATTERN_RAMP_UP[] = { { 0.5f, 0.05f, 1.0f } };
-    constexpr HapticSegment PATTERN_RAMP_DOWN[] = { { 0.5f, 1.0f, 0.05f } };
-    constexpr HapticSegment PATTERN_HEARTBEAT[] = { { 0.08f, 0.8f, 0.8f },
+    constexpr HapticSegment PATTERN_NOTIFICATION[] = { { 0.1f, 0.7f, 0.7f }, { 0.12f, 0.0f, 0.0f }, { 0.03f, 0.4f, 0.4f }, { 0.12f, 0.0f, 0.0f }, { 0.03f, 0.3f, 0.3f } };
+    constexpr HapticSegment PATTERN_START[] = { { 0.5f, 0.0f, 1.0f }, { 0.1f, 1.0f, 1.0f } };
+    constexpr HapticSegment PATTERN_STOP[] = { { 0.1f, 1.0f, 0.8f }, { 0.5f, 0.8f, 0.0f } };
+    constexpr HapticSegment PATTERN_RAMP_UP[] = { { 0.6f, 0.0f, 1.0f } };
+    constexpr HapticSegment PATTERN_RAMP_DOWN[] = { { 0.6f, 1.0f, 0.0f } };
+    constexpr HapticSegment PATTERN_HEARTBEAT_1[] = { { 0.08f, 0.8f, 0.8f }, { 0.1f, 0.0f, 0.0f }, { 0.06f, 0.45f, 0.45f } };
+    constexpr HapticSegment PATTERN_HEARTBEAT_2[] = { { 0.08f, 0.8f, 0.8f },
+        { 0.1f, 0.0f, 0.0f },
+        { 0.06f, 0.45f, 0.45f },
+        { 0.4f, 0.0f, 0.0f },
+        { 0.08f, 0.8f, 0.8f },
+        { 0.1f, 0.0f, 0.0f },
+        { 0.06f, 0.45f, 0.45f } };
+    constexpr HapticSegment PATTERN_HEARTBEAT_3[] = { { 0.08f, 0.8f, 0.8f },
+        { 0.1f, 0.0f, 0.0f },
+        { 0.06f, 0.45f, 0.45f },
+        { 0.4f, 0.0f, 0.0f },
+        { 0.08f, 0.8f, 0.8f },
         { 0.1f, 0.0f, 0.0f },
         { 0.06f, 0.45f, 0.45f },
         { 0.4f, 0.0f, 0.0f },
@@ -48,6 +60,7 @@ namespace
         { 0.1f, 0.0f, 0.0f },
         { 0.06f, 0.45f, 0.45f } };
     constexpr HapticSegment PATTERN_BUZZ[] = { { 0.25f, 0.5f, 0.5f } };
+    constexpr HapticSegment PATTERN_MID_BUZZ[] = { { 0.5f, 0.5f, 0.5f } };
     constexpr HapticSegment PATTERN_LONG_BUZZ[] = { { 0.7f, 0.6f, 0.6f } };
 }
 
@@ -184,10 +197,16 @@ namespace f4cf::vrcf
             return PATTERN_RAMP_UP;
         case HapticPattern::RampDown:
             return PATTERN_RAMP_DOWN;
-        case HapticPattern::Heartbeat:
-            return PATTERN_HEARTBEAT;
+        case HapticPattern::Heartbeat1:
+            return PATTERN_HEARTBEAT_1;
+        case HapticPattern::Heartbeat2:
+            return PATTERN_HEARTBEAT_2;
+        case HapticPattern::Heartbeat3:
+            return PATTERN_HEARTBEAT_3;
         case HapticPattern::Buzz:
             return PATTERN_BUZZ;
+        case HapticPattern::MidBuzz:
+            return PATTERN_MID_BUZZ;
         case HapticPattern::LongBuzz:
             return PATTERN_LONG_BUZZ;
         default:
