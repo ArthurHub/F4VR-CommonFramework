@@ -25,6 +25,10 @@ namespace f4cf
      * Input map (when target == FlowFlag123): primary X = flag1, primary Y = flag2,
      * secondary Y = flag3 — all three editable at once.
      *
+     * Input map (when target == HapticTest): Primary-A tap parses a HapticSegment sequence from
+     * sDebugFlowText1 and plays it on the primary controller (dev-only haptic-pattern tester). This
+     * target owns Primary-A, so the shared save/reload bindings are skipped while it is active.
+     *
      * Owned and driven by ModBase; ModBase calls `onFrameUpdate` each frame with its own config.
      */
     class DebugAdjuster
@@ -37,6 +41,7 @@ namespace f4cf
         static void adjustHandPose(std::array<float, 22>& pose);
         static void adjustFloat(float& value);
         static void adjustFloat3(float& flag1, float& flag2, float& flag3);
+        static void adjustHapticTest(const ConfigBase& config);
         static void saveCurrent(const ConfigBase& config);
         static void reloadFromIni(ConfigBase& config);
     };

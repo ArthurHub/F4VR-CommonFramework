@@ -69,6 +69,7 @@ namespace f4cf
         FlowFlag2,
         FlowFlag3,
         FlowFlag123,
+        HapticTest,
     };
 
     class ConfigBase

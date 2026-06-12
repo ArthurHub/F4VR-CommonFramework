@@ -1,6 +1,7 @@
 #include "DebugAdjuster.h"
 
 #include <algorithm>
+#include <vector>
 
 #include "common/CommonUtils.h"
 #include "common/MatrixUtils.h"
@@ -109,6 +110,34 @@ namespace f4cf
         {
             return applyDeadzone(px, 0.5f) != 0.0f || applyDeadzone(py, 0.5f) != 0.0f || applyDeadzone(sx, 0.5f) != 0.0f || applyDeadzone(sy, 0.5f) != 0.0f;
         }
+
+        /**
+         * Parse a HapticSegment sequence from a debug text field (dev-only haptic-pattern testing).
+         * Format: ';'-separated segments, each "duration,startIntensity,endIntensity" (seconds and
+         * 0..1 intensities), e.g. "0.4,0.1,1.0; 0.1,0,0; 0.05,1,1". Whitespace around separators is
+         * allowed. Non-empty segments that don't parse are skipped with a warning; the function
+         * returns whatever parsed cleanly.
+         */
+        std::vector<vrcf::HapticSegment> parseHapticSegments(const std::string& text)
+        {
+            std::vector<vrcf::HapticSegment> segments;
+            std::size_t pos = 0;
+            while (pos <= text.size()) {
+                const std::size_t sep = text.find(';', pos);
+                const std::string token = text.substr(pos, sep == std::string::npos ? std::string::npos : sep - pos);
+                vrcf::HapticSegment seg{};
+                if (std::sscanf(token.c_str(), " %f , %f , %f", &seg.duration, &seg.startIntensity, &seg.endIntensity) == 3) {
+                    segments.push_back(seg);
+                } else if (token.find_first_not_of(" \t") != std::string::npos) {
+                    logger::warn("DebugAdjuster: malformed haptic segment '{}' (expected 'duration,startIntensity,endIntensity')", token);
+                }
+                if (sep == std::string::npos) {
+                    break;
+                }
+                pos = sep + 1;
+            }
+            return segments;
+        }
     }
 
     /**
@@ -148,6 +177,10 @@ namespace f4cf
         case DebugAdjustTarget::FlowFlag123:
             adjustFloat3(config.debugFlowFlag1, config.debugFlowFlag2, config.debugFlowFlag3);
             break;
+        case DebugAdjustTarget::HapticTest:
+            // Owns Primary-A as the play trigger, so it bypasses the shared save/reload bindings below.
+            adjustHapticTest(config);
+            return;
         }
 
         // long-press is checked before tap because isLongPressed clears state when fired;
@@ -257,6 +290,26 @@ namespace f4cf
         flag1 += applyDeadzone(py, FLOW_FLAG_PER_FRAME);
         flag2 += applyDeadzone(px, FLOW_FLAG_PER_FRAME);
         flag3 += applyDeadzone(sy, FLOW_FLAG_PER_FRAME);
+    }
+
+    /**
+     * Dev-only haptic-pattern tester. On Primary-A tap, parses a HapticSegment sequence from the
+     * config's debugFlowText1 (sDebugFlowText1) and plays it on the primary controller. Combined
+     * with INI hot-reload this lets the user iterate on custom patterns: edit sDebugFlowText1, let
+     * it reload, tap A to feel the result, repeat. No-op (with a warning) when nothing parses.
+     */
+    void DebugAdjuster::adjustHapticTest(const ConfigBase& config)
+    {
+        if (!vrcf::VRControllers.isTap(vrcf::Hand::Primary, vr::k_EButton_A)) {
+            return;
+        }
+        const auto segments = parseHapticSegments(config.debugFlowText1);
+        if (segments.empty()) {
+            logger::warn("DebugAdjuster: no valid haptic segments in sDebugFlowText1='{}'", config.debugFlowText1);
+            return;
+        }
+        logger::info("DebugAdjuster: playing {} haptic segment(s) from sDebugFlowText1", segments.size());
+        vrcf::VRHaptics.trigger(vrcf::Hand::Primary, segments);
     }
 
     /**

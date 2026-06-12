@@ -23,6 +23,8 @@ namespace
             return DebugAdjustTarget::FlowFlag3;
         if (value == "flag123")
             return DebugAdjustTarget::FlowFlag123;
+        if (value == "haptictest")
+            return DebugAdjustTarget::HapticTest;
         return DebugAdjustTarget::None;
     }
 
