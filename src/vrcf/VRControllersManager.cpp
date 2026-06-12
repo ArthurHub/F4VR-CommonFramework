@@ -2,6 +2,8 @@
 
 #include <numbers>
 
+#include "VRControllersHaptic.h"
+
 #include "../../external/openvr/openvr.h"
 
 namespace f4cf::vrcf
@@ -365,15 +367,16 @@ namespace f4cf::vrcf
      * Trigger a haptic pulse on the specified controller for specific duration and intensity.
      * Regular primary is right hand, but if left hand mode is on then primary is left hand.
      * Duration in seconds and intensity between 0.0 and 1.0.
+     * Convenience forwarder to VRHaptics, which owns all haptics logic (see VRControllersHaptic.h).
      */
     void VRControllersManager::triggerHaptic(const Hand primaryHand, const float durationSeconds, const float intensity)
     {
-        return triggerHaptic(getHand(primaryHand), durationSeconds, intensity);
+        VRHaptics.trigger(primaryHand, durationSeconds, intensity);
     }
 
     void VRControllersManager::triggerHaptic(const vr::ETrackedControllerRole hand, const float durationSeconds, const float intensity)
     {
-        get(hand).startHaptic(_currentTime + durationSeconds, intensity);
+        VRHaptics.trigger(hand, durationSeconds, intensity);
     }
 
     /**
@@ -437,11 +440,6 @@ namespace f4cf::vrcf
                 pressStartTimesForRelease.erase(button);
             }
         }
-
-        // handle haptic
-        if (now < hapticEndTime) {
-            vr::VRSystem()->TriggerHapticPulse(index, 0, static_cast<uint16_t>(hapticIntensity * 3000));
-        }
     }
 
     void VRControllersManager::ControllerState::reset()
@@ -459,8 +457,6 @@ namespace f4cf::vrcf
         longPressHandled.clear();
         for (auto& t : axisLastPassedPressCheck)
             t = 0.0f;
-        hapticEndTime = 0.0f;
-        hapticIntensity = 0.0f;
     }
 
     bool VRControllersManager::ControllerState::isPressed(const vr::EVRButtonId button) const
@@ -600,28 +596,6 @@ namespace f4cf::vrcf
             return 0.0f;
         }
         return now - it->second;
-    }
-
-    void VRControllersManager::ControllerState::startHaptic(const float endTime, const float intensity)
-    {
-        if (!vr::VRSystem()) {
-            return;
-        }
-        hapticEndTime = endTime;
-        hapticIntensity = intensity;
-        if (valid) {
-            triggerHapticPulse();
-        }
-    }
-
-    /**
-     * OpenVR "TriggerHapticPulse" API is incorrect.
-     * The <usDurationMicroSec> argument is actually "intensity" with values somewhere between 0 and 3999. (I didn't feel any change above 3000)
-     * The only way to actually handle duration is to repeat the pulse every frame until the duration is over.
-     */
-    void VRControllersManager::ControllerState::triggerHapticPulse() const
-    {
-        vr::VRSystem()->TriggerHapticPulse(index, 0, static_cast<unsigned short>(std::clamp(static_cast<int>(hapticIntensity * 3000), 0, 3000)));
     }
 
     /**

@@ -157,7 +157,7 @@ flags for runtime toggling, debug-dump triggers, and batch config saves).
 | [`common/`](common/README.md)        | `f4cf::common` | Math (quaternions, matrices, transforms) and engine-agnostic utilities (strings, files, resources, time).        |
 | [`f4vr/`](f4vr/README.md)            | `f4cf::f4vr`   | Fallout 4 VR game-state utilities: nodes, skeleton, player nodes, menus, Scaleform, thumbstick.                  |
 | [`f4sevr/`](f4sevr/README.md)        | `F4SEVR`       | Ported F4SE VR SDK: Papyrus VM interop, native-function registration, VM value/arg marshalling.                  |
-| [`vrcf/`](vrcf/README.md)            | `f4cf::vrcf`   | VR Controller Framework. OpenVR button/trigger/thumbstick state + input suppression.                             |
+| [`vrcf/`](vrcf/README.md)            | `f4cf::vrcf`   | VR Controller Framework. OpenVR button/trigger/thumbstick state, input suppression, haptic feedback.             |
 | [`vrui/`](vrui/README.md)            | `f4cf::vrui`   | VR UI widget system: panels, buttons, toggles, containers, scene graph, input dispatch.                          |
 | [`PCH.h`](PCH.h)                     | —              | Precompiled header, included implicitly in every translation unit.                                               |
 | [`MainLoopHook.h`](MainLoopHook.h)   | `f4cf`         | Trampoline into the game main loop that drives `ModBase::onFrameUpdate`.                                         |
@@ -174,6 +174,7 @@ flags for runtime toggling, debug-dump triggers, and batch config saves).
         └── onFrameUpdate()  ◄── MainLoopHook (game frame)
               ├── vrcf::VRControllers ........... read controller input
               ├── vrcf::VRControllersSuppress ... hide input from the game
+              ├── vrcf::VRHaptics ............... haptic feedback patterns
               ├── vrui::UIManager ............... drive + render the VR UI
               └── f4vr::* / common::* ........... game state + math helpers
 ```
@@ -184,8 +185,8 @@ flags for runtime toggling, debug-dump triggers, and batch config saves).
   `f4cf::vrcf`, `f4cf::vrui`). The exception is [`f4sevr/`](f4sevr/README.md), which hosts the
   ported F4SE VR SDK under `namespace F4SEVR`.
 - **Globals.** A handful of subsystems expose a single global instance by design:
-  `f4cf::g_mod`, `f4cf::vrcf::VRControllers`, `f4cf::vrcf::VRControllersSuppress`, and
-  `f4cf::vrui::g_uiManager`.
+  `f4cf::g_mod`, `f4cf::vrcf::VRControllers`, `f4cf::vrcf::VRControllersSuppress`,
+  `f4cf::vrcf::VRHaptics`, and `f4cf::vrui::g_uiManager`.
 - **Style.** clang-format (LLVM-based, 180 cols, 4-space indent, CRLF, braces on new lines). See the
   repo [CLAUDE.md](../CLAUDE.md) and [.clang-format](../.clang-format).
 

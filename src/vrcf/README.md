@@ -12,10 +12,11 @@ vendored headers in [`external/openvr/`](../../external/openvr/).
 
 | Class | Global | Purpose |
 |-------|--------|---------|
-| [`VRControllersManager`](VRControllersManager.h) | `VRControllers` | Per-frame snapshot of both controllers: buttons, triggers, grip, thumbsticks, heading, haptics. |
+| [`VRControllersManager`](VRControllersManager.h) | `VRControllers` | Per-frame snapshot of both controllers: buttons, triggers, grip, thumbsticks, heading. |
 | [`VRControllersSuppressor`](VRControllersSuppressor.h) | `VRControllersSuppress` | Hides physical buttons/axes from the game (and other mods) while your DLL still reads the raw press. |
+| [`VRControllersHaptic`](VRControllersHaptic.h) | `VRHaptics` | Haptic feedback: sustained buzzes, a library of named patterns (double-click, ramps, heartbeat, ...), custom sequences. |
 
-Both are driven for you by `ModBase` each frame — you only call the read/suppress methods.
+All three are driven for you by `ModBase` each frame — you only call the read/suppress/trigger methods.
 
 ## Hands & buttons
 
@@ -37,8 +38,6 @@ if (VRControllers.isDoublePressed(Hand::Primary, vr::k_EButton_A)) { /* two taps
 
 NiPoint2-like axis = VRControllers.getThumbstickValue(Hand::Primary);   // .x / .y in [-1, 1]
 float yaw = VRControllers.getControllerRelativeHeading(Hand::Primary);  // wand-directional movement
-
-VRControllers.triggerHaptic(Hand::Primary, 0.1f /*sec*/, 0.3f /*intensity*/);
 ```
 
 Press-state helpers (all debounced):
@@ -102,6 +101,48 @@ auto chord = parseInputBinding("primary press trigger +offhand:grip"); // -> std
 Format: `"<hand> <type> <button> [duration] [+[hand:]modifier]"`. Examples: `"primary press trigger"`,
 `"left double a"`, `"primary thumbstick up"`, `"right axis trigger up 0.7"`,
 `"offhand longpress grip 0.6 +trigger"`. See the header doc comment for the full grammar and aliases.
+
+## Haptic feedback
+
+`VRHaptics` plays haptic feedback on either controller — from a simple buzz to shaped patterns so
+different operations get a distinct feel. The pattern library is loosely modeled on the Apple Watch
+haptic vocabulary.
+
+```cpp
+#include "vrcf/VRControllersHaptic.h"
+using namespace f4cf::vrcf;
+
+// Simple: constant intensity (0..1) sustained for a duration.
+VRHaptics.trigger(Hand::Primary, 0.1f /*sec*/, 0.3f /*intensity*/);
+
+// Named pattern from the library; optional scale softens/strengthens the whole pattern.
+VRHaptics.trigger(Hand::Primary, HapticPattern::Success);
+VRHaptics.trigger(Hand::Offhand, HapticPattern::Tick, 0.6f);
+
+// Custom pattern: keyframed segments { duration sec, start intensity, end intensity }.
+// Intensity is lerped across each segment; zero-intensity segments are silent gaps.
+constexpr HapticSegment chargeUp[] = { { 0.4f, 0.1f, 1.0f }, { 0.1f, 0.0f, 0.0f }, { 0.05f, 1.0f, 1.0f } };
+VRHaptics.trigger(Hand::Primary, chargeUp);
+
+VRHaptics.stop(Hand::Primary);   // cut playback; stopAll() for both hands
+VRHaptics.isPlaying(Hand::Primary);
+```
+
+Patterns: `Tick` / `Click` / `DoubleClick` / `TripleClick` (taps), `Success` / `Warning` / `Error` /
+`Notification` (outcome signals), `Start` / `Stop` / `RampUp` / `RampDown` (continuous-operation
+shaping), `Heartbeat`, `Buzz` / `LongBuzz`. See [`VRControllersHaptic.h`](VRControllersHaptic.h) for
+the intended use of each; `VRControllersHaptic::getPattern(p)` exposes a pattern's keyframes if you
+want to tweak one.
+
+A new trigger on a hand replaces whatever was playing on it. Main thread only.
+`VRControllers.triggerHaptic(...)` still works and forwards to `VRHaptics.trigger(...)`.
+
+> Why patterns need a per-frame engine: the only haptic API the game's legacy `IVRSystem` exposes is
+> `TriggerHapticPulse(device, axis, microseconds)` — a one-shot pulse capped at ~4ms with a 5ms
+> re-trigger lockout. The microseconds argument is effectively *intensity* (duty cycle within a
+> frame), not duration. `VRHaptics` synthesizes duration, ramps, and multi-tap patterns by re-firing
+> a pulse every frame at the pattern's current intensity, scaled to the measured frame delta so an
+> intensity feels the same at 70, 90, or 120fps.
 
 ## Suppressing input
 

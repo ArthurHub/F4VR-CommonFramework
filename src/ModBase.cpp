@@ -8,6 +8,7 @@
 #include "f4vr/DebugDump.h"
 
 #include "f4vr/PlayerNodes.h"
+#include "vrcf/VRControllersHaptic.h"
 #include "vrcf/VRControllersManager.h"
 #include "vrcf/VRControllersSuppressor.h"
 #include "vrui/UIManager.h"
@@ -165,6 +166,7 @@ namespace f4cf
             const bool leftHanded = f4vr::isLeftHandedMode();
             vrcf::VRControllers.update(leftHanded);
             vrcf::VRControllersSuppress.update(leftHanded);
+            vrcf::VRHaptics.update(leftHanded);
 
             onFrameUpdate();
 
@@ -254,6 +256,7 @@ namespace f4cf
 
             vrcf::VRControllers.reset();
             vrcf::VRControllersSuppress.reset();
+            vrcf::VRHaptics.reset();
 
             logger::info("Reload config...");
             _settings.config->load();

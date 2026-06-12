@@ -198,8 +198,10 @@ namespace f4cf::vrcf
         float getControllerRelativeHeading(Hand primaryHand) const;
         float getControllerRelativeHeading(vr::ETrackedControllerRole hand) const;
 
-        void triggerHaptic(Hand primaryHand, float durationSeconds = 0.1f, float intensity = 0.3f);
-        void triggerHaptic(vr::ETrackedControllerRole hand, float durationSeconds = 0.2f, float intensity = 0.3f);
+        // Convenience forwarders to VRHaptics (see VRControllersHaptic.h); prefer VRHaptics directly
+        // for the pattern library (HapticPattern) and playback control.
+        static void triggerHaptic(Hand primaryHand, float durationSeconds = 0.1f, float intensity = 0.3f);
+        static void triggerHaptic(vr::ETrackedControllerRole hand, float durationSeconds = 0.2f, float intensity = 0.3f);
         static float getHMDHeading();
 
     private:
@@ -218,8 +220,6 @@ namespace f4cf::vrcf
             std::unordered_map<vr::EVRButtonId, float> lastPressDownTime; // Track time of last press-down for double press detection
             std::unordered_map<vr::EVRButtonId, bool> longPressHandled; // Track if long press was handled
             float axisLastPassedPressCheck[5] = { 0, 0, 0, 0, 0 };
-            float hapticEndTime = 0;
-            float hapticIntensity = 0;
 
             void update(vr::TrackedDeviceIndex_t newIndex, float now);
             void reset();
@@ -236,8 +236,6 @@ namespace f4cf::vrcf
             float getHeldDuration(vr::EVRButtonId button, float now) const;
             void clearHeldDuration(vr::EVRButtonId button);
             float getHeldDurationForRelease(vr::EVRButtonId button, float now) const;
-            void startHaptic(float endTime, float intensity);
-            void triggerHapticPulse() const;
             float getHeading() const;
         };
 
