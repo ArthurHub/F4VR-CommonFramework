@@ -4,3 +4,6 @@
 
 # Default JSON outputs
 *.nif.json
+
+# Python bytecode cache
+__pycache__/
