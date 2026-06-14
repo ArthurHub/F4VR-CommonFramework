@@ -31,8 +31,8 @@ Only dependency: Pillow (``pip install Pillow``). The NIF read/write is pure-Pyt
 does not need the PyNifly runtime that nif_to_json.py uses.
 
 Usage:
-    python vrui_atlas.py pack   sprites_folder --texture-subpath MyMod --name ui_common
-    python vrui_atlas.py unpack folder\\ui_common.DDS
+    python vrui_atlas.py pack   sprites_folder --texture-subpath MyMod --name ui-common
+    python vrui_atlas.py unpack folder\\ui-common.DDS
     python vrui_atlas.py pack   --help
 
 pack writes the atlas + nifs into the input folder by default; unpack finds the nifs
@@ -640,7 +640,7 @@ def cmd_pack(args: argparse.Namespace) -> int:
     Image = _import_pillow()
 
     first = args.input[0]
-    atlas_name = args.name or (first.name if first.is_dir() else "ui_common")
+    atlas_name = args.name or (first.name if first.is_dir() else "ui-common")
     out_dir: Path = args.output or (first if first.is_dir() else first.parent)
 
     # Mirror the in-game Data layout under --output so the tree drops straight into a mod's

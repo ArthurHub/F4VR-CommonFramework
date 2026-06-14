@@ -39,16 +39,16 @@ Put each button/label in a folder as its own image (**PNG recommended** — see 
 below), then:
 
 ```
-python vrui_atlas.py pack sprites_folder --texture-subpath MyMod --name ui_common
+python vrui_atlas.py pack sprites_folder --texture-subpath MyMod --name ui-common
 ```
 
 This writes a **deployable game-folder tree** (under `-o`/`--output`, or the input folder by
 default):
 
-- `Textures\MyMod\ui_common.DDS` — the bin-packed atlas (BC3/DXT5).
-- `Meshes\MyMod\ui_common\<sprite>.nif` — one button mesh per image, with the correct UV
+- `Textures\MyMod\ui-common.DDS` — the bin-packed atlas (BC3/DXT5).
+- `Meshes\MyMod\ui-common\<sprite>.nif` — one button mesh per image, with the correct UV
   rectangle, aspect ratio (`W/H` in the root name + quad width), and texture path
-  `Textures\MyMod\ui_common.DDS`.
+  `Textures\MyMod\ui-common.DDS`.
 
 Pass `--manifest` to also write a `<name>.atlas.json` describing the packing (atlas size,
 per-sprite pixel rect, ratio). It's informational only — `unpack` doesn't need it.
@@ -82,7 +82,7 @@ the source, not a long fraction — and the quad is built to that same rounded r
 The reverse, in one argument:
 
 ```
-python vrui_atlas.py unpack folder\ui_common.DDS
+python vrui_atlas.py unpack folder\ui-common.DDS
 ```
 
 Finds the nifs in `pack`'s `Meshes\<subpath>\<name>\` folder (when the DDS is under a

@@ -155,14 +155,14 @@ Hand-building a combined texture and a NIF per button is tedious — the
 label as its own PNG in a folder (the file name becomes the NIF name you reference in code), then:
 
 ```
-python nif-tools/vrui_atlas.py pack my_buttons --texture-subpath MyMod --name ui_common
+python nif-tools/vrui_atlas.py pack my_buttons --texture-subpath MyMod --name ui-common
 ```
 
 `--texture-subpath` (required) is the subfolder under `Textures\`, usually your mod's name. It
-bin-packs the images into a single `ui_common.DDS` and writes a ready-to-use `<image>.nif` per
+bin-packs the images into a single `ui-common.DDS` and writes a ready-to-use `<image>.nif` per
 sprite — each with the correct UV rectangle, `W/H` aspect, and the texture path
-`Textures\MyMod\ui_common.DDS` baked in. The output is a deployable tree —
-`Textures\MyMod\ui_common.DDS` and `Meshes\MyMod\ui_common\<image>.nif` — so point `--output`
+`Textures\MyMod\ui-common.DDS` baked in. The output is a deployable tree —
+`Textures\MyMod\ui-common.DDS` and `Meshes\MyMod\ui-common\<image>.nif` — so point `--output`
 at your mod's data folder and load the nifs via `UIButton`/`UIWidget` as shown above. Requires
 `pip install Pillow`; full options (and the reverse, `unpack`) are in the
 [nif-tools README](../../nif-tools/README.md).

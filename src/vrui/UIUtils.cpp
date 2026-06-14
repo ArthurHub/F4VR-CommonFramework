@@ -33,12 +33,12 @@ namespace f4cf::vrui
 
     std::string UIUtils::getEmptyButtonFrameNifName()
     {
-        return g_mod->getName() + "\\UI_Common\\btn_empty.nif";
+        return g_mod->getName() + "\\ui-common\\btn-empty.nif";
     }
 
     std::string UIUtils::getToggleButtonFrameNifName()
     {
-        return g_mod->getName() + "\\UI_Common\\btn_border.nif";
+        return g_mod->getName() + "\\ui-common\\btn-border.nif";
     }
 
     /**
