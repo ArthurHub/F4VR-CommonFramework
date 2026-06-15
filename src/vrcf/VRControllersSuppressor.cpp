@@ -2,15 +2,37 @@
 #include "VRControllersSuppressor.h"
 
 #include <Windows.h>
-#include <intrin.h>
 #include <ranges>
 
 #include <utility>
 
-#pragma intrinsic(_ReturnAddress)
-
 namespace f4cf::vrcf
 {
+    namespace
+    {
+        // Per-thread "this is our own read" depth. Non-zero while a SelfControllerReadScope is alive on
+        // the calling thread; the hook then returns raw state instead of suppressing. A counter (not a
+        // bool) so nested scopes compose. Lives on the reading thread, never touched by the OpenVR
+        // polling thread that serves the game's own reads.
+        thread_local int t_selfReadDepth = 0;
+
+        // True when the current thread is inside one or more SelfControllerReadScope guards.
+        bool isSelfControllerRead()
+        {
+            return t_selfReadDepth > 0;
+        }
+    }
+
+    SelfControllerReadScope::SelfControllerReadScope()
+    {
+        ++t_selfReadDepth;
+    }
+
+    SelfControllerReadScope::~SelfControllerReadScope()
+    {
+        --t_selfReadDepth;
+    }
+
     namespace
     {
         // IVRSystem vtable indices for the controller-state polls. Verified against ROCK
@@ -44,32 +66,6 @@ namespace f4cf::vrcf
             FlushInstructionCache(GetCurrentProcess(), slot, sizeof(void*));
             VirtualProtect(slot, sizeof(void*), oldProtect, &oldProtect);
             return true;
-        }
-
-        /**
-         * Handle of the module this code is compiled into (the consumer mod's DLL, which statically
-         * links the framework). Resolved once from the address of our own code.
-         */
-        HMODULE ownModule()
-        {
-            static const HMODULE module = [] {
-                HMODULE m = nullptr;
-                GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT, reinterpret_cast<LPCSTR>(&patchVtableSlot), &m);
-                return m;
-            }();
-            return module;
-        }
-
-        /**
-         * True unless the return address lies inside our own module. The game and every other mod
-         * get the filtered state; only our own reads (e.g. VRControllersManager, the consumer mod)
-         * pass through unfiltered. If the module can't be resolved, treat the caller as foreign.
-         */
-        bool isForeignCaller(const void* retAddr)
-        {
-            HMODULE m = nullptr;
-            GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT, static_cast<LPCSTR>(retAddr), &m);
-            return m != ownModule();
         }
     }
 
@@ -226,20 +222,22 @@ namespace f4cf::vrcf
         const bool left = isLeftHand(hand);
         const uint64_t bit = 1ull << button;
         const int axis = backingAxisIndex(button);
-        editOwner(key, suppressed, [&](OwnerMask& owner) {
-            SideMask& side = left ? owner.left : owner.right;
-            if (suppressed) {
-                side.buttons |= bit;
-                if (axis >= 0) {
-                    side.axes |= static_cast<uint8_t>(1u << axis);
+        editOwner(key,
+            suppressed,
+            [&](OwnerMask& owner) {
+                SideMask& side = left ? owner.left : owner.right;
+                if (suppressed) {
+                    side.buttons |= bit;
+                    if (axis >= 0) {
+                        side.axes |= static_cast<uint8_t>(1u << axis);
+                    }
+                } else {
+                    side.buttons &= ~bit;
+                    if (axis >= 0) {
+                        side.axes &= static_cast<uint8_t>(~(1u << axis));
+                    }
                 }
-            } else {
-                side.buttons &= ~bit;
-                if (axis >= 0) {
-                    side.axes &= static_cast<uint8_t>(~(1u << axis));
-                }
-            }
-        });
+            });
     }
 
     /**
@@ -291,14 +289,16 @@ namespace f4cf::vrcf
         }
         const bool left = isLeftHand(hand);
         const uint8_t bit = static_cast<uint8_t>(1u << axisIndex);
-        editOwner(key, suppressed, [&](OwnerMask& owner) {
-            SideMask& side = left ? owner.left : owner.right;
-            if (suppressed) {
-                side.axes |= bit;
-            } else {
-                side.axes &= static_cast<uint8_t>(~bit);
-            }
-        });
+        editOwner(key,
+            suppressed,
+            [&](OwnerMask& owner) {
+                SideMask& side = left ? owner.left : owner.right;
+                if (suppressed) {
+                    side.axes |= bit;
+                } else {
+                    side.axes &= static_cast<uint8_t>(~bit);
+                }
+            });
     }
 
     /**
@@ -323,14 +323,16 @@ namespace f4cf::vrcf
     void VRControllersSuppressor::setAllAxesSuppressed(const std::string_view key, const Hand hand, const bool suppressed)
     {
         const bool left = isLeftHand(hand);
-        editOwner(key, suppressed, [&](OwnerMask& owner) {
-            SideMask& side = left ? owner.left : owner.right;
-            if (suppressed) {
-                side.axes |= ALL_AXES_MASK;
-            } else {
-                side.axes &= static_cast<uint8_t>(~ALL_AXES_MASK);
-            }
-        });
+        editOwner(key,
+            suppressed,
+            [&](OwnerMask& owner) {
+                SideMask& side = left ? owner.left : owner.right;
+                if (suppressed) {
+                    side.axes |= ALL_AXES_MASK;
+                } else {
+                    side.axes &= static_cast<uint8_t>(~ALL_AXES_MASK);
+                }
+            });
     }
 
     /**
@@ -356,16 +358,18 @@ namespace f4cf::vrcf
     void VRControllersSuppressor::setAllSuppressed(const std::string_view key, const Hand hand, const bool suppressed)
     {
         const bool left = isLeftHand(hand);
-        editOwner(key, suppressed, [&](OwnerMask& owner) {
-            SideMask& side = left ? owner.left : owner.right;
-            if (suppressed) {
-                side.buttons = ~0ull;
-                side.axes = ALL_AXES_MASK;
-            } else {
-                side.buttons = 0;
-                side.axes = 0;
-            }
-        });
+        editOwner(key,
+            suppressed,
+            [&](OwnerMask& owner) {
+                SideMask& side = left ? owner.left : owner.right;
+                if (suppressed) {
+                    side.buttons = ~0ull;
+                    side.axes = ALL_AXES_MASK;
+                } else {
+                    side.buttons = 0;
+                    side.axes = 0;
+                }
+            });
     }
 
     /**
@@ -440,13 +444,13 @@ namespace f4cf::vrcf
     }
 
     /**
-     * Clears the suppressed button/axis bits from a foreign state read (game or any other mod).
-     * No-op for our own reads (foreignCaller == false) so we keep seeing raw hardware input.
-     * OpenVR thread.
+     * Clears the suppressed button/axis bits from a state read meant for the game or another mod.
+     * No-op for our own reads (shouldSuppress == false, i.e. inside a SelfControllerReadScope) so we
+     * keep seeing raw hardware input. OpenVR / polling thread.
      */
-    void VRControllersSuppressor::applyTo(const vr::TrackedDeviceIndex_t idx, vr::VRControllerState_t* state, const bool foreignCaller) const
+    void VRControllersSuppressor::applyTo(const vr::TrackedDeviceIndex_t idx, vr::VRControllerState_t* state, const bool shouldSuppress) const
     {
-        if (!foreignCaller || !state) {
+        if (!shouldSuppress || !state) {
             return;
         }
 
@@ -468,30 +472,28 @@ namespace f4cf::vrcf
     }
 
     /**
-     * vtable trampoline for slot 34: runs the original poll, then masks the result for foreign
-     * callers (game / other mods). Runs on the OpenVR polling thread.
+     * vtable trampoline for slot 34: runs the original poll, then masks the result unless this is one
+     * of our own reads (thread marked by SelfControllerReadScope). Runs on the calling thread.
      */
     bool VRControllersSuppressor::hookedGetControllerState(vr::IVRSystem* system, const vr::TrackedDeviceIndex_t index, vr::VRControllerState_t* state, const uint32_t stateSize)
     {
-        const void* retAddr = _ReturnAddress();
         const bool ok = _origGetControllerState(system, index, state, stateSize);
         if (ok) {
-            VRControllersSuppress.applyTo(index, state, isForeignCaller(retAddr));
+            VRControllersSuppress.applyTo(index, state, !isSelfControllerRead());
         }
         return ok;
     }
 
     /**
-     * vtable trampoline for slot 35: runs the original poll, then masks the result for foreign
-     * callers (game / other mods). Runs on the OpenVR polling thread.
+     * vtable trampoline for slot 35: runs the original poll, then masks the result unless this is one
+     * of our own reads (thread marked by SelfControllerReadScope). Runs on the calling thread.
      */
     bool VRControllersSuppressor::hookedGetControllerStateWithPose(vr::IVRSystem* system, const vr::ETrackingUniverseOrigin origin, const vr::TrackedDeviceIndex_t index,
         vr::VRControllerState_t* state, const uint32_t stateSize, vr::TrackedDevicePose_t* pose)
     {
-        const void* retAddr = _ReturnAddress();
         const bool ok = _origGetControllerStateWithPose(system, origin, index, state, stateSize, pose);
         if (ok) {
-            VRControllersSuppress.applyTo(index, state, isForeignCaller(retAddr));
+            VRControllersSuppress.applyTo(index, state, !isSelfControllerRead());
         }
         return ok;
     }

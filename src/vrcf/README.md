@@ -153,8 +153,12 @@ A new trigger on a hand replaces whatever was playing on it. Main thread only.
 ## Suppressing input
 
 `VRControllersSuppressor` hooks `IVRSystem::GetControllerState[WithPose]` (vtable slots 34/35). The
-game and other mods see the filtered state; your DLL keeps reading the real hardware via a
-caller-module check — so you can detect a press and decide, per frame, whether to swallow it.
+game and other mods see the filtered state; your DLL keeps reading the real hardware because
+`VRControllersManager` wraps its own poll in a `SelfControllerReadScope` (a thread-local marker the
+hook recognizes) — so you can detect a press and decide, per frame, whether to swallow it. The marker
+is used instead of a return-address/caller-module check because that breaks when another mod hooks the
+same vtable slots outside yours: every call then reaches your hook through the other mod's trampoline,
+so the return address always points at *it*, not you.
 
 It is **owner-keyed**: every call carries a `std::string_view key`. A key only undoes its own
 suppression, and the effective mask is the *union* of all owners, so independent subsystems never

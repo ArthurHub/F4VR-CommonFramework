@@ -14,31 +14,38 @@
 namespace f4cf::vrcf
 {
     /**
+     * RAII marker tagging controller-state polls on the current thread as OUR OWN reads, so the
+     * VRControllersSuppressor hook returns raw (unsuppressed) state for them. Wrap every IVRSystem
+     * GetControllerState / GetControllerStateWithPose call we make in one. Cheap (a thread-local
+     * depth counter); nesting is safe.
+     */
+    class SelfControllerReadScope
+    {
+    public:
+        SelfControllerReadScope();
+        ~SelfControllerReadScope();
+        SelfControllerReadScope(const SelfControllerReadScope&) = delete;
+        SelfControllerReadScope(SelfControllerReadScope&&) = delete;
+        SelfControllerReadScope& operator=(const SelfControllerReadScope&) = delete;
+        SelfControllerReadScope& operator=(SelfControllerReadScope&&) = delete;
+    };
+
+    /**
      * Suppresses VR controller button/axis input from reaching the game.
      *
-     * Hooks IVRSystem::GetControllerState (vtable slot 34) and GetControllerStateWithPose
-     * (slot 35) on the live IVRSystem object. Because the game, this framework, and all other
-     * mods share that single vtable, the hook sees every poll. A per-hand atomic mask of
-     * suppressed buttons/axes is cleared from the state every reader sees EXCEPT our own module
-     * (the DLL this code is compiled into): the game and any other mod get the filtered state,
-     * while our own reads (e.g. VRControllersManager) get raw hardware state via a caller-module
-     * check. The net effect: we keep seeing the real press and decide whether to suppress;
-     * everyone else is blinded.
+     * Hooks IVRSystem::GetControllerState (vtable slot 34) and GetControllerStateWithPose (slot 35)
+     * on the live IVRSystem object, so it sees every poll through that shared vtable. A per-hand
+     * atomic mask of suppressed buttons/axes is cleared from every read EXCEPT our own:
+     * VRControllersManager wraps its poll in a SelfControllerReadScope and the hook passes those
+     * through unfiltered, so we keep seeing the real press while the game and other mods are blinded.
      *
-     * Owner-keyed: every suppress/release is attributed to a string `key`. A key only ever undoes
-     * its own suppression, and the effective game-facing mask is the union of all active owners, so
-     * independent subsystems never fight over the same button. Suppression is persistent: it stays
-     * set until that key releases it (or reset() wipes everyone, e.g. on a save reload).
+     * Owner-keyed: every suppress/release is attributed to a string `key`. A key only undoes its own
+     * suppression, and the game-facing mask is the union of all owners, so independent subsystems
+     * never fight over a button. Suppression persists until that key releases it (or reset() wipes all).
      *
-     * Threading: the hook runs on the OpenVR polling thread, NOT the main game thread. Only the
-     * aggregated per-hand mask is std::atomic -- the hook reads it lock-free and does nothing else.
-     * All owner bookkeeping lives in a plain map mutated only by suppress/release, so those MUST be
-     * called from the main thread; each change recomputes the union and republishes the atomics.
-     * Never call F4SE / CommonLibF4VR from the hook -- decide on the main thread and flip a key.
-     *
-     * Scope: this owns its own suppression mask and does not arbitrate with foreign hooks -- if
-     * another mod also patches the vtable, whoever is outermost wins (and treats the inner hook's
-     * reads as foreign, i.e. suppressed).
+     * Threading: the hook runs on the OpenVR polling thread. Only the per-hand mask is atomic (read
+     * lock-free by the hook); all owner bookkeeping lives in a plain map, so suppress/release/reset
+     * MUST be called from the main thread. Never call F4SE / CommonLibF4VR from the hook.
      */
     class VRControllersSuppressor
     {
@@ -144,8 +151,9 @@ namespace f4cf::vrcf
         // is at most one line per suppression transition -- never per frame. Main thread only.
         void logState(std::string_view key, const char* action) const;
 
-        // Applies the suppression masks to a foreign (non-self) state read. Called on the OpenVR thread.
-        void applyTo(vr::TrackedDeviceIndex_t idx, vr::VRControllerState_t* state, bool foreignCaller) const;
+        // Applies the suppression masks to a state read when shouldSuppress is true (i.e. not one of
+        // our own SelfControllerReadScope reads). Called on the OpenVR / polling thread.
+        void applyTo(vr::TrackedDeviceIndex_t idx, vr::VRControllerState_t* state, bool shouldSuppress) const;
 
         // Hook trampolines installed into the vtable (OpenVR thread). MSVC x64 passes `this` in RCX,
         // which maps to the leading IVRSystem* -- matching the native virtual's calling convention.

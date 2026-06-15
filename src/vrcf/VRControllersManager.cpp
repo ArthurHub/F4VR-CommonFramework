@@ -3,6 +3,7 @@
 #include <numbers>
 
 #include "VRControllersHaptic.h"
+#include "VRControllersSuppressor.h"
 
 #include "../../external/openvr/openvr.h"
 
@@ -421,7 +422,12 @@ namespace f4cf::vrcf
         }
 
         previous = current;
-        valid = vr::VRSystem()->GetControllerStateWithPose(vr::TrackingUniverseStanding, newIndex, &current, sizeof(current), &pose);
+        {
+            // Mark this as our own read so VRControllersSuppressor returns raw (unsuppressed) state,
+            // even when another mod hooks the same IVRSystem vtable slot outside ours.
+            const SelfControllerReadScope selfRead;
+            valid = vr::VRSystem()->GetControllerStateWithPose(vr::TrackingUniverseStanding, newIndex, &current, sizeof(current), &pose);
+        }
         if (!valid) {
             return;
         }
