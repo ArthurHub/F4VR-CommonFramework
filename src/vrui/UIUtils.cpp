@@ -7,20 +7,22 @@
 namespace
 {
     /**
-     * Extract the float value from the nif node name in this format: "VRUI (W/H:4.5)"
+     * Extract the element size (in framework units) from the nif root-node name, which the
+     * atlas packer writes as "VRUI (W:2 H:2.1)" (100px = 1 unit). Returns UISize(-1, -1) when
+     * the name carries no size.
      */
-    float extractWidthToHeightValueFronName(const std::string& nifName)
+    f4cf::vrui::UISize extractElementSizeFromName(const std::string& nifName)
     {
-        const auto pos = nifName.find(':');
-        if (pos == std::string::npos)
-            return -1.0f;
+        const auto wPos = nifName.find("W:");
+        const auto hPos = nifName.find("H:");
+        if (wPos == std::string::npos || hPos == std::string::npos)
+            return { -1.0f, -1.0f };
 
-        const auto end = nifName.find(')', pos);
-        if (end == std::string::npos)
-            return -1.0f;
-
-        const auto num = nifName.substr(pos + 1, end - pos - 1);
-        return std::stof(num);
+        try {
+            return { std::stof(nifName.substr(wPos + 2)), std::stof(nifName.substr(hPos + 2)) };
+        } catch (...) {
+            return { -1.0f, -1.0f };
+        }
     }
 }
 
@@ -39,17 +41,6 @@ namespace f4cf::vrui
     std::string UIUtils::getToggleButtonFrameNifName()
     {
         return g_mod->getName() + "\\ui-common\\btn-border.nif";
-    }
-
-    /**
-     * Get the size of a UI element based on its width-to-height ratio.
-     * The way VR UI nifs are defined is that the height is always 2.0f units and the width is
-     * the only one that changes if the shape is not square.
-     * The reason height is 2.0f and not 1.0f is to easily make the center of the UI element at (0,0,0)
-     */
-    UISize UIUtils::getElementSize(const float widthToHeightRatio)
-    {
-        return UISize(2.0f * widthToHeightRatio, 2.0f);
     }
 
     /**
@@ -101,19 +92,21 @@ namespace f4cf::vrui
     }
 
     /**
-     * Get a RE::NiNode that can be used in game UI for the given .nif file.
-     * Why is just loading not enough?
+     * Get a RE::NiNode that can be used in game UI for the given .nif file, together with the
+     * element's size (in framework units) read from the nif root-node name. The quad geometry
+     * is centred on the origin, so this size is symmetric about the element's centre.
      */
-    std::tuple<RE::NiNode*, float> UIUtils::getUINodeFromNifFile(const std::string& path)
+    std::tuple<RE::NiNode*, UISize> UIUtils::getUINodeFromNifFile(const std::string& path)
     {
         auto& normPath = path._Starts_with("Data") ? path : "Data/Meshes/" + path;
         const auto nifNode = f4vr::getClonedNiNodeForNifFile(normPath);
-        const float widthHeightRatio = extractWidthToHeightValueFronName(nifNode->name.c_str());
-        if (widthHeightRatio < 0) {
-            logger::warn("UI node nif doesn't contain width-to-height ratio data! (Nif: {})", path.c_str());
+        UISize size = extractElementSizeFromName(nifNode->name.c_str());
+        if (size.width < 0 || size.height < 0) {
+            logger::warn("UI node nif doesn't contain size data! (Nif: {})", path.c_str());
+            size = UISize(2.0f, 2.0f); // sane fallback so layout and bounds stay usable
         }
         nifNode->name = RE::BSFixedString(std::filesystem::path(path).stem().string());
-        return { nifNode, widthHeightRatio };
+        return { nifNode, size };
     }
 
     /**

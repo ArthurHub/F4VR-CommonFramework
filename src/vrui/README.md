@@ -160,7 +160,7 @@ python nif-tools/vrui_atlas.py pack my_buttons --texture-subpath MyMod --name ui
 
 `--texture-subpath` (required) is the subfolder under `Textures\`, usually your mod's name. It
 bin-packs the images into a single `ui-common.DDS` and writes a ready-to-use `<image>.nif` per
-sprite — each with the correct UV rectangle, `W/H` aspect, and the texture path
+sprite — each with the correct UV rectangle, size (`W:<w> H:<h>` in the root name), and the texture path
 `Textures\MyMod\ui-common.DDS` baked in. The output is a deployable tree —
 `Textures\MyMod\ui-common.DDS` and `Meshes\MyMod\ui-common\<image>.nif` — so point `--output`
 at your mod's data folder and load the nifs via `UIButton`/`UIWidget` as shown above. Requires

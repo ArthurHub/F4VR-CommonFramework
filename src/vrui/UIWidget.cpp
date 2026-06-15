@@ -8,9 +8,9 @@ namespace f4cf::vrui
 {
     UIWidget::UIWidget(const std::string& nifPath, const float scale)
     {
-        auto [node, widthToHeightRatio] = UIUtils::getUINodeFromNifFile(nifPath);
+        auto [node, size] = UIUtils::getUINodeFromNifFile(nifPath);
         _node.reset(node);
-        _size = UIUtils::getElementSize(widthToHeightRatio);
+        _size = size;
         _name = node->name;
         setScale(scale);
     }

@@ -51,14 +51,14 @@ namespace f4cf::vrui
         bool first = true;
 
         for (const auto& [state, nifPath] : nifPathPerState) {
-            auto [node, widthToHeightRatio] = UIUtils::getUINodeFromNifFile(nifPath);
+            auto [node, size] = UIUtils::getUINodeFromNifFile(nifPath);
 
             _stateToNodeMap[state].reset(node);
 
             if (first) {
                 first = false;
                 _name = node->name;
-                _size = UIUtils::getElementSize(widthToHeightRatio);
+                _size = size;
                 _node.reset(node);
             }
         }

@@ -8,7 +8,7 @@ namespace f4cf::vrui
     UIToggleButton::UIToggleButton(const std::string& nifPath)
         : UIWidget(nifPath)
     {
-        auto [frameNode, widthToHeightRatio] = UIUtils::getUINodeFromNifFile(UIUtils::getToggleButtonFrameNifName());
+        const auto frameNode = std::get<0>(UIUtils::getUINodeFromNifFile(UIUtils::getToggleButtonFrameNifName()));
         _toggleFrameNode.reset(frameNode);
     }
 

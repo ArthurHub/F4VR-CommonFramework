@@ -16,9 +16,8 @@ A VRUI button renders from two files:
 
 - a **`.nif` mesh** — a single quad with a `BSEffectShaderProperty` pointing at a shared
   atlas texture, a UV rectangle selecting this button's region, and a root node named
-  `VRUI (W/H:<ratio>)`. The framework reads the width/height ratio from that name (see
-  [`src/vrui/UIUtils.cpp`](../src/vrui/UIUtils.cpp)); height is always 2 units, width is
-  `2 × ratio`.
+  `VRUI (W:<w> H:<h>)` carrying the element's size in framework units. The framework reads
+  that size from the name at runtime (see [`src/vrui/UIUtils.cpp`](../src/vrui/UIUtils.cpp)).
 - a **`.DDS` atlas** — one texture holding every button/label image.
 
 Authoring those by hand (one combined DDS, one hand-tuned NIF per region) is tedious.
@@ -47,7 +46,7 @@ default):
 
 - `Textures\MyMod\ui-common.DDS` — the bin-packed atlas (BC3/DXT5).
 - `Meshes\MyMod\ui-common\<sprite>.nif` — one button mesh per image, with the correct UV
-  rectangle, aspect ratio (`W/H` in the root name + quad width), and texture path
+  rectangle, size (`W:<w> H:<h>` in the root name + quad geometry), and texture path
   `Textures\MyMod\ui-common.DDS`.
 
 Pass `--manifest` to also write a `<name>.atlas.json` describing the packing (atlas size,
@@ -74,8 +73,14 @@ Options (all have sensible defaults):
 | `--manifest` | off | Also write a `<name>.atlas.json` describing the packing. |
 | `--template` | embedded | Override the button template NIF (advanced). |
 
-The aspect ratio is rounded to ~3 digits (e.g. a 194×195 image → `W/H:0.995`) — close to
-the source, not a long fraction — and the quad is built to that same rounded ratio.
+### Size: pixels → units
+
+Each quad's **size follows the sprite's pixel size**, at **100 px = 1 unit** (so a 200×200
+sprite → a 2×2-unit quad). That width and height — rounded to 3 digits — are baked into both
+the quad geometry and the `VRUI (W:<w> H:<h>)` root-node name, with the quad centred on the
+origin; the framework reads the size from the name at runtime. A sprite drawn larger — e.g. a
+toggle border meant to sit *around* its button (210 px vs 200 px → 2.1 vs 2.0 units) — yields
+a larger quad concentric with the rest.
 
 ### Unpack: atlas → images
 
@@ -118,7 +123,7 @@ sources, or use `--format RGBA` for a lossless atlas.
 ### How it works
 
 `pack` clones an embedded 676-byte FO4 button template and patches only the per-button
-fields — UV rectangle, width verts, bounding sphere, the `W/H` root name, and the texture
+fields — UV rectangle, vertex positions, bounding sphere, the `W:<w> H:<h>` root name, and the texture
 path. Every other byte (notably the `BSEffectShaderProperty` and `NiAlphaProperty`
 settings) is preserved exactly, which is why the buttons render identically to
 hand-authored ones. `unpack` validates that exact single-quad signature before trusting

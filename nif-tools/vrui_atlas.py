@@ -5,8 +5,8 @@ A VRUI button is rendered in-game from two files:
 
   * a .nif mesh  -- a single quad with a ``BSEffectShaderProperty`` that points at a
     shared atlas texture, a UV rectangle selecting this button's region of the atlas,
-    and a root node named ``VRUI (W/H:<ratio>)`` (the framework reads the width/height
-    ratio from that name -- see src/vrui/UIUtils.cpp).
+    and a root node named ``VRUI (W:<w> H:<h>)`` carrying the element's size in framework
+    units (the framework reads that size from the name at runtime -- see src/vrui/UIUtils.cpp).
   * a .DDS atlas -- one big texture holding every button/label image.
 
 Authoring those by hand (one combined DDS, one hand-tuned NIF per region) is tedious.
@@ -22,8 +22,8 @@ This tool automates both directions:
 
 The NIFs produced/consumed are the exact FO4 single-quad VRUI button format (4 verts,
 half-precision, BSEffectShaderProperty + NiAlphaProperty). pack clones an embedded
-template and patches only the UV rectangle, the width verts, the bounding sphere, the
-root-node W/H name, and the texture path -- so the effect shader and alpha settings are
+template and patches only the UV rectangle, the vertex positions, the bounding sphere, the
+root-node size name, and the texture path -- so the effect shader and alpha settings are
 preserved byte-for-byte. unpack validates that signature before trusting the byte
 offsets, and errors clearly on anything else.
 
@@ -96,6 +96,11 @@ _EXPECT_DATASIZE = 92
 
 _HEADER_VERSION = 0x14020007     # 20.2.0.7
 _HEADER_BSVERSION = 130          # FO4
+
+# Framework unit scale: this many source pixels map to one VRUI unit, so a 200px sprite
+# becomes a 2-unit quad. The framework reads the resulting size from the node name (see
+# src/vrui/UIUtils.cpp).
+PIXELS_PER_UNIT = 100
 
 
 # --------------------------------------------------------------------------------------
@@ -292,7 +297,7 @@ class NifDialect:
                 "VRUI button meshes are a single 4-vertex quad"
             )
 
-    # -- root node name (the "VRUI (W/H:<ratio>)" string) -------------------------------
+    # -- root node name (the "VRUI (W:<w> H:<h>)" string) -------------------------------
 
     def _root_name_index(self) -> int:
         # block 0 is the root NiNode; its first uint32 is nameID -> index into string table.
@@ -336,7 +341,7 @@ class NifDialect:
         patched = blk[:off] + struct.pack("<I", len(new)) + new + blk[off + 4 + length:]
         self.blocks[idx] = bytearray(patched)
 
-    # -- geometry: UV rectangle, width verts, bounding sphere ---------------------------
+    # -- geometry: UV rectangle, vertex positions, bounding sphere -----------------------
 
     def get_uvs(self) -> list[tuple[float, float]]:
         blk = self._tri_block
@@ -357,11 +362,15 @@ class NifDialect:
             out.append((y, z))
         return out
 
-    def set_button_geometry(self, u_min: float, u_max: float, v_min: float, v_max: float, ratio: float) -> None:
-        """Patch the quad: UV rectangle + width (Y = +/-ratio) + bounding sphere.
+    def set_button_geometry(self, u_min: float, u_max: float, v_min: float, v_max: float,
+                            half_w: float, half_h: float) -> None:
+        """Patch the quad: UV rectangle + vertex positions + bounding sphere.
 
         v_min is the top of the region (smaller V), v_max the bottom, matching NIF UVs
-        where V grows downward. Z (height) stays +/-1; Y (width) becomes +/-ratio.
+        where V grows downward. The quad is centred at the origin and spans +/-half_w on
+        the width axis (Y) and +/-half_h on the height axis (Z), so a sprite drawn larger --
+        e.g. a toggle border meant to sit around its button -- yields a larger quad
+        concentric with the smaller ones.
         """
         blk = self._tri_block
         # Vertex order in the template: v0=(left,bottom) v1=(right,bottom) v2=(right,top) v3=(left,top)
@@ -374,12 +383,13 @@ class NifDialect:
         for i, (u, v) in enumerate(corner_uv):
             base = _BST_VERTBUF_OFF + _VERT_STRIDE * i
             struct.pack_into("<2e", blk, base + _VERT_UV_OFF, u, v)
-            # Width axis: left corners (v0, v3) -> -ratio, right corners (v1, v2) -> +ratio.
-            y = ratio if i in (1, 2) else -ratio
-            struct.pack_into("<e", blk, base + _VERT_POS_Y_OFF, y)
+            # Width axis (Y): right corners (v1, v2) -> +half_w, left (v0, v3) -> -half_w.
+            struct.pack_into("<e", blk, base + _VERT_POS_Y_OFF, half_w if i in (1, 2) else -half_w)
+            # Height axis (Z): top corners (v2, v3) -> +half_h, bottom (v0, v1) -> -half_h.
+            struct.pack_into("<e", blk, base + _VERT_POS_Z_OFF, half_h if i in (2, 3) else -half_h)
         # Bounding sphere centred at origin; radius reaches the farthest corner.
         struct.pack_into("<3f", blk, _BST_BSPHERE_CENTER_OFF, 0.0, 0.0, 0.0)
-        struct.pack_into("<f", blk, _BST_BSPHERE_RADIUS_OFF, math.sqrt(ratio * ratio + 1.0))
+        struct.pack_into("<f", blk, _BST_BSPHERE_RADIUS_OFF, math.sqrt(half_w * half_w + half_h * half_h))
 
 
 # --------------------------------------------------------------------------------------
@@ -681,10 +691,13 @@ def cmd_pack(args: argparse.Namespace) -> int:
     manifest_sprites = []
 
     for p in placements:
-        # Round the aspect ratio to a clean value and use that same value for both the
-        # node name and the quad width, so the rendered mesh matches what the framework
-        # reads from the name (close to the source aspect, not a long fraction).
-        ratio = _clean_ratio(p.w, p.h)
+        # Real element size in framework units, baked into both the node name (which the
+        # framework reads at runtime) and the quad geometry: PIXELS_PER_UNIT px -> 1 unit, so
+        # a 200px sprite is a 2-unit quad. The quad is centred on the origin, so a sprite
+        # drawn larger (e.g. a toggle border meant to frame its button) yields a larger quad
+        # concentric with the rest.
+        w_units = round(p.w / PIXELS_PER_UNIT, 3)
+        h_units = round(p.h / PIXELS_PER_UNIT, 3)
         u_min = p.x / atlas_w
         u_max = (p.x + p.w) / atlas_w
         v_min = p.y / atlas_h            # top of the region
@@ -692,9 +705,9 @@ def cmd_pack(args: argparse.Namespace) -> int:
 
         nif = NifDialect.parse(template_bytes)
         nif.validate_vrui_button()
-        nif.set_root_name(f"VRUI (W/H:{_fmt_ratio(ratio)})")
+        nif.set_root_name(f"VRUI (W:{_fmt_num(w_units)} H:{_fmt_num(h_units)})")
         nif.set_source_texture(texture_path)
-        nif.set_button_geometry(u_min, u_max, v_min, v_max, ratio)
+        nif.set_button_geometry(u_min, u_max, v_min, v_max, w_units / 2, h_units / 2)
 
         nif_file = meshes_dir / f"{p.key}.nif"
         nif_file.write_bytes(nif.serialize())
@@ -704,7 +717,7 @@ def cmd_pack(args: argparse.Namespace) -> int:
                 "name": p.key,
                 "nif": nif_file.relative_to(out_dir).as_posix(),
                 "rect": [p.x, p.y, p.w, p.h],
-                "ratio": ratio,
+                "size": [w_units, h_units],
             })
 
     print(f"packed {len(placements)} sprites into {atlas_w}x{atlas_h} {args.format.upper()} atlas")
@@ -740,16 +753,11 @@ def _normalize_subpath(subpath: str) -> str:
     return sub
 
 
-def _clean_ratio(w: int, h: int) -> float:
-    """Width/height rounded to 3 decimals -- a short, close-enough value (e.g. 0.995, 1.333)."""
-    return round(w / h, 3)
-
-
-def _fmt_ratio(ratio: float) -> str:
-    """Format a W/H ratio compactly: integers stay integer, else trimmed decimals."""
-    if ratio == int(ratio):
-        return str(int(ratio))
-    return f"{ratio:.3f}".rstrip("0").rstrip(".")
+def _fmt_num(value: float) -> str:
+    """Format a unit value compactly: integers stay integer, else trimmed decimals."""
+    if value == int(value):
+        return str(int(value))
+    return f"{value:.3f}".rstrip("0").rstrip(".")
 
 
 def _load_template(template: Path | None) -> bytes:
