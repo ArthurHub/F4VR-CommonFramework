@@ -222,22 +222,20 @@ namespace f4cf::vrcf
         const bool left = isLeftHand(hand);
         const uint64_t bit = 1ull << button;
         const int axis = backingAxisIndex(button);
-        editOwner(key,
-            suppressed,
-            [&](OwnerMask& owner) {
-                SideMask& side = left ? owner.left : owner.right;
-                if (suppressed) {
-                    side.buttons |= bit;
-                    if (axis >= 0) {
-                        side.axes |= static_cast<uint8_t>(1u << axis);
-                    }
-                } else {
-                    side.buttons &= ~bit;
-                    if (axis >= 0) {
-                        side.axes &= static_cast<uint8_t>(~(1u << axis));
-                    }
+        editOwner(key, suppressed, [&](OwnerMask& owner) {
+            SideMask& side = left ? owner.left : owner.right;
+            if (suppressed) {
+                side.buttons |= bit;
+                if (axis >= 0) {
+                    side.axes |= static_cast<uint8_t>(1u << axis);
                 }
-            });
+            } else {
+                side.buttons &= ~bit;
+                if (axis >= 0) {
+                    side.axes &= static_cast<uint8_t>(~(1u << axis));
+                }
+            }
+        });
     }
 
     /**
@@ -289,16 +287,14 @@ namespace f4cf::vrcf
         }
         const bool left = isLeftHand(hand);
         const uint8_t bit = static_cast<uint8_t>(1u << axisIndex);
-        editOwner(key,
-            suppressed,
-            [&](OwnerMask& owner) {
-                SideMask& side = left ? owner.left : owner.right;
-                if (suppressed) {
-                    side.axes |= bit;
-                } else {
-                    side.axes &= static_cast<uint8_t>(~bit);
-                }
-            });
+        editOwner(key, suppressed, [&](OwnerMask& owner) {
+            SideMask& side = left ? owner.left : owner.right;
+            if (suppressed) {
+                side.axes |= bit;
+            } else {
+                side.axes &= static_cast<uint8_t>(~bit);
+            }
+        });
     }
 
     /**
@@ -323,16 +319,14 @@ namespace f4cf::vrcf
     void VRControllersSuppressor::setAllAxesSuppressed(const std::string_view key, const Hand hand, const bool suppressed)
     {
         const bool left = isLeftHand(hand);
-        editOwner(key,
-            suppressed,
-            [&](OwnerMask& owner) {
-                SideMask& side = left ? owner.left : owner.right;
-                if (suppressed) {
-                    side.axes |= ALL_AXES_MASK;
-                } else {
-                    side.axes &= static_cast<uint8_t>(~ALL_AXES_MASK);
-                }
-            });
+        editOwner(key, suppressed, [&](OwnerMask& owner) {
+            SideMask& side = left ? owner.left : owner.right;
+            if (suppressed) {
+                side.axes |= ALL_AXES_MASK;
+            } else {
+                side.axes &= static_cast<uint8_t>(~ALL_AXES_MASK);
+            }
+        });
     }
 
     /**
@@ -358,18 +352,16 @@ namespace f4cf::vrcf
     void VRControllersSuppressor::setAllSuppressed(const std::string_view key, const Hand hand, const bool suppressed)
     {
         const bool left = isLeftHand(hand);
-        editOwner(key,
-            suppressed,
-            [&](OwnerMask& owner) {
-                SideMask& side = left ? owner.left : owner.right;
-                if (suppressed) {
-                    side.buttons = ~0ull;
-                    side.axes = ALL_AXES_MASK;
-                } else {
-                    side.buttons = 0;
-                    side.axes = 0;
-                }
-            });
+        editOwner(key, suppressed, [&](OwnerMask& owner) {
+            SideMask& side = left ? owner.left : owner.right;
+            if (suppressed) {
+                side.buttons = ~0ull;
+                side.axes = ALL_AXES_MASK;
+            } else {
+                side.buttons = 0;
+                side.axes = 0;
+            }
+        });
     }
 
     /**
