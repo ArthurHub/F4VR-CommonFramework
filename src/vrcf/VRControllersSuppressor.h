@@ -66,10 +66,10 @@ namespace f4cf::vrcf
         bool isSuppressed(Hand hand, vr::EVRButtonId button) const;
         bool isSuppressedBy(std::string_view key, Hand hand, vr::EVRButtonId button) const;
 
-        // Analog axis suppression (zeroes rAxis[axisIndex].x/.y for the game). axisIndex 0..4.
-        void suppressAxis(std::string_view key, Hand hand, int axisIndex);
-        void releaseAxis(std::string_view key, Hand hand, int axisIndex);
-        void setAxisSuppressed(std::string_view key, Hand hand, int axisIndex, bool suppressed);
+        // Analog axis suppression (zeroes the given rAxis .x/.y for the game).
+        void suppressAxis(std::string_view key, Hand hand, Axis axis);
+        void releaseAxis(std::string_view key, Hand hand, Axis axis);
+        void setAxisSuppressed(std::string_view key, Hand hand, Axis axis, bool suppressed);
 
         // Suppress every analog axis on a hand in one call (all k_unControllerStateAxisCount axes).
         void suppressAllAxes(std::string_view key, Hand hand);

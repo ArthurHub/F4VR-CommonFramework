@@ -265,27 +265,28 @@ namespace f4cf::vrcf
     }
 
     /**
-     * Suppresses one analog axis (index 0..4) on the given hand for `key`.
+     * Suppresses one analog axis on the given hand for `key`.
      */
-    void VRControllersSuppressor::suppressAxis(const std::string_view key, const Hand hand, const int axisIndex)
+    void VRControllersSuppressor::suppressAxis(const std::string_view key, const Hand hand, const Axis axis)
     {
-        setAxisSuppressed(key, hand, axisIndex, true);
+        setAxisSuppressed(key, hand, axis, true);
     }
 
     /**
      * Stops `key` suppressing one analog axis on the given hand.
      */
-    void VRControllersSuppressor::releaseAxis(const std::string_view key, const Hand hand, const int axisIndex)
+    void VRControllersSuppressor::releaseAxis(const std::string_view key, const Hand hand, const Axis axis)
     {
-        setAxisSuppressed(key, hand, axisIndex, false);
+        setAxisSuppressed(key, hand, axis, false);
     }
 
     /**
-     * Sets or clears `key`'s suppression for one analog axis; out-of-range indices (not 0..4) are ignored.
+     * Sets or clears `key`'s suppression for one analog axis; out-of-range axes are ignored.
      */
-    void VRControllersSuppressor::setAxisSuppressed(const std::string_view key, const Hand hand, const int axisIndex, const bool suppressed)
+    void VRControllersSuppressor::setAxisSuppressed(const std::string_view key, const Hand hand, const Axis axis, const bool suppressed)
     {
-        if (axisIndex < 0 || std::cmp_greater_equal(axisIndex, vr::k_unControllerStateAxisCount)) {
+        const auto axisIndex = static_cast<int>(axis);
+        if (std::cmp_greater_equal(axisIndex, vr::k_unControllerStateAxisCount)) {
             return;
         }
         const bool left = isLeftHand(hand);
