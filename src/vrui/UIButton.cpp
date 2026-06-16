@@ -14,9 +14,10 @@ namespace f4cf::vrui
 
     std::string UIButton::toString() const
     {
-        return std::format("UIButton({}): {}{}, Pos({:.2f}, {:.2f}, {:.2f}), Size({:.2f}, {:.2f})",
+        return std::format("UIButton({}): {}{}{}, Pos({:.2f}, {:.2f}, {:.2f}), Size({:.2f}, {:.2f})",
             _name,
             _visible ? "V" : "H",
+            _disabled ? "D" : ".",
             isPressable() ? "P" : ".",
             _transform.translate.x,
             _transform.translate.y,

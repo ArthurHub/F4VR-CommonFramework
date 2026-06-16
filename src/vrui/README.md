@@ -13,10 +13,10 @@ A 3D, in-world UI toolkit: panels and buttons rendered as `.nif` meshes attached
 | Class | Extends | Description |
 |-------|---------|-------------|
 | [`UIElement`](UIElement.h) | — | Base node: position/scale/visibility, parent/child transform, frame-update hook. |
-| [`UIWidget`](UIWidget.h) | `UIElement` | A 2D panel built from a `.nif` mesh, with collision detection. |
+| [`UIWidget`](UIWidget.h) | `UIElement` | A 2D panel built from a `.nif` mesh, with collision detection. Supports a disabled state (`setDisabled(...)`) that blocks pressing and renders a "disabled" overlay on top. |
 | [`UIButton`](UIButton.h) | `UIWidget` | Pressable widget; `setOnPressHandler(...)` callback, hover/pressed states. |
-| [`UIToggleButton`](UIToggleButton.h) | `UIButton` | On/off toggle. |
-| [`UIMultiStateToggleButton`](UIMultiStateToggleButton.h) | `UIButton` | N-way cycle toggle. |
+| [`UIToggleButton`](UIToggleButton.h) | `UIWidget` | On/off toggle. |
+| [`UIMultiStateToggleButton`](UIMultiStateToggleButton.h) | `UIWidget` | N-way cycle toggle. |
 | [`UIContainer`](UIContainer.h) | `UIElement` | Groups multiple elements under one transform. |
 | [`UIToggleGroupContainer`](UIToggleGroupContainer.h) | `UIContainer` | Radio-button group (mutually exclusive). |
 | [`UIManager`](UIManager.h) | — | Singleton scene graph: attach/detach, wand/HMD presets, input dispatch, render. |

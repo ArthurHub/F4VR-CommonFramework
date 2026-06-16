@@ -14,9 +14,10 @@ namespace f4cf::vrui
 
     std::string UIToggleButton::toString() const
     {
-        return std::format("UIToggleButton({}): {}{}{}, Pos({:.2f}, {:.2f}, {:.2f}), Size({:.2f}, {:.2f})",
+        return std::format("UIToggleButton({}): {}{}{}{}, Pos({:.2f}, {:.2f}, {:.2f}), Size({:.2f}, {:.2f})",
             _name,
             _visible ? "V" : "H",
+            _disabled ? "D" : ".",
             isPressable() ? "P" : ".",
             _isToggleOn ? "T" : ".",
             _transform.translate.x,

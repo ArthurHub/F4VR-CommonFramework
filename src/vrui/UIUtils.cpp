@@ -43,6 +43,11 @@ namespace f4cf::vrui
         return "ui-common\\btn-border.nif";
     }
 
+    std::string UIUtils::getDisabledOverlayNifName()
+    {
+        return "ui-common\\btn-disable-overlay.nif";
+    }
+
     /**
      * Get node of the primary hand wand to attach UI to.
      */

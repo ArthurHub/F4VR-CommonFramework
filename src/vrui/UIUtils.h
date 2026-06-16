@@ -9,6 +9,7 @@ namespace f4cf::vrui
         static std::string getDebugSphereNifName();
         static std::string getEmptyButtonFrameNifName();
         static std::string getToggleButtonFrameNifName();
+        static std::string getDisabledOverlayNifName();
 
         static RE::NiNode* getPrimaryWandAttachNode();
         static RE::NiNode* getHMDAttachNode();

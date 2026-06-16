@@ -12,6 +12,13 @@ namespace f4cf::vrui
         explicit UIWidget(const std::string& name, RE::NiNode* node);
         virtual std::string toString() const override;
 
+        // A disabled widget cannot be pressed and renders the "disabled" overlay on top of it.
+        bool isDisabled() const
+        {
+            return _disabled;
+        }
+        void setDisabled(bool disabled);
+
     protected:
         virtual bool isPressable() const
         {
@@ -27,6 +34,10 @@ namespace f4cf::vrui
 
         // UI node to render
         RE::NiPointer<RE::NiNode> _node;
+
+        // Disabled state and the overlay node rendered on top to indicate it (lazily created on first disable)
+        bool _disabled = false;
+        RE::NiPointer<RE::NiNode> _disabledOverlayNode;
 
         // Press handling
         bool _pressEventFired = false;

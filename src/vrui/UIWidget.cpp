@@ -22,9 +22,10 @@ namespace f4cf::vrui
 
     std::string UIWidget::toString() const
     {
-        return std::format("UIWidget({}): {}{}, Pos({:.2f}, {:.2f}, {:.2f}), Size({:.2f}, {:.2f})",
+        return std::format("UIWidget({}): {}{}{}, Pos({:.2f}, {:.2f}, {:.2f}), Size({:.2f}, {:.2f})",
             _name,
             _visible ? "V" : "H",
+            _disabled ? "D" : ".",
             isPressable() ? "P" : ".",
             _transform.translate.x,
             _transform.translate.y,
@@ -34,12 +35,43 @@ namespace f4cf::vrui
     }
 
     /**
+     * Disable or enable the widget. A disabled widget is not pressable and shows the disabled
+     * overlay on top of it. The overlay node is created lazily on the first disable and, once
+     * created, is kept attached and only toggled visible/hidden by the disabled state.
+     */
+    void UIWidget::setDisabled(const bool disabled)
+    {
+        if (_disabled == disabled) {
+            return;
+        }
+        _disabled = disabled;
+
+        if (_disabled) {
+            // snap back any in-progress soft-press so a half-pressed button doesn't stay pushed in
+            _pressYOffset = 0;
+            _pressEventFired = false;
+
+            // lazily create the overlay on first disable, attaching it now if already attached to a node
+            if (!_disabledOverlayNode) {
+                const auto overlayNode = std::get<0>(UIUtils::getUINodeFromNifFile(UIUtils::getDisabledOverlayNifName()));
+                _disabledOverlayNode.reset(overlayNode);
+                if (_attachNode) {
+                    _attachNode->AttachChild(_disabledOverlayNode.get(), true);
+                }
+            }
+        }
+    }
+
+    /**
      * Attach this widget RE::NiNode to the given node.
      */
     void UIWidget::attachToNode(RE::NiNode* attachNode)
     {
         UIElement::attachToNode(attachNode);
         _attachNode->AttachChild(_node.get(), true);
+        if (_disabledOverlayNode) {
+            _attachNode->AttachChild(_disabledOverlayNode.get(), true);
+        }
     }
 
     /**
@@ -52,6 +84,9 @@ namespace f4cf::vrui
         }
         RE::NiPointer<RE::NiAVObject> out;
         _attachNode->DetachChild(_node.get(), out);
+        if (_disabledOverlayNode) {
+            _attachNode->DetachChild(_disabledOverlayNode.get(), out);
+        }
         UIElement::detachFromAttachedNode(releaseSafe);
         out = nullptr;
     }
@@ -68,12 +103,25 @@ namespace f4cf::vrui
         const auto visible = calcVisibility();
         UIUtils::setNodeVisibility(_node.get(), visible, getScale());
         if (!visible) {
+            if (_disabledOverlayNode) {
+                UIUtils::setNodeVisibility(_disabledOverlayNode.get(), false, getScale());
+            }
             return;
         }
 
         handlePressEvent(adapter);
 
         _node->local = calculateTransform();
+
+        // render the disabled overlay on top of the widget, tracking its transform
+        if (_disabledOverlayNode) {
+            UIUtils::setNodeVisibility(_disabledOverlayNode.get(), _disabled, getScale());
+            if (_disabled) {
+                _disabledOverlayNode->local = _node->local;
+                // avoid z-fighting between the two coplanar nodes
+                _disabledOverlayNode->local.translate.y -= 0.1f;
+            }
+        }
     }
 
     /**
@@ -93,7 +141,7 @@ namespace f4cf::vrui
      */
     void UIWidget::handlePressEvent(UIFrameUpdateContext* context)
     {
-        if (!isPressable()) {
+        if (_disabled || !isPressable()) {
             return;
         }
 
