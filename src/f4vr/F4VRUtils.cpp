@@ -1,7 +1,36 @@
 #include "F4VRUtils.h"
 
+#include "ModBase.h"
 #include "PlayerNodes.h"
 #include "f4sevr/PapyrusUtils.h"
+
+namespace
+{
+    /**
+     * Resolve a UI nif path by probing several locations in order and returning the first that
+     * exists on disk: the path as given, then under "Data/Meshes/", then under this mod's own
+     * "Data/Meshes/<ModName>/" folder. The "Data/"-rooted candidates are returned verbatim so the
+     * loader does not re-prefix them. When none exist the path is returned unchanged so the
+     * subsequent load surfaces a clear not-found error.
+     */
+    std::string resolveNifPath(const std::string& path)
+    {
+        // Strip any leading "/" or "\" so the prefixed candidates don't end up with a doubled separator.
+        const auto firstReal = path.find_first_not_of("/\\");
+        const std::string relPath = firstReal == std::string::npos ? path : path.substr(firstReal);
+
+        for (const auto& candidate : {
+                 path,
+                 "Data\\Meshes\\" + relPath,
+                 "Data\\Meshes\\" + g_mod->getName() + "\\" + relPath,
+             }) {
+            if (std::filesystem::exists(candidate)) {
+                return candidate;
+            }
+        }
+        return path;
+    }
+}
 
 namespace f4cf::f4vr
 {
@@ -598,12 +627,12 @@ namespace f4cf::f4vr
     {
         uint64_t flags[2] = { 0x0, 0xed };
         uint64_t mem = 0;
-        auto& normPath = path._Starts_with("Data") ? path : "Data/Meshes/" + path;
-        if (!std::filesystem::exists(normPath)) {
-            throw std::runtime_error("Load nif file failed, file not found: " + normPath);
+        const auto resolvedPath = resolveNifPath(path);
+        if (!std::filesystem::exists(resolvedPath)) {
+            throw std::runtime_error("Load nif file failed, file not found: " + resolvedPath);
         }
 
-        loadNif((uint64_t)normPath.c_str(), (uint64_t)&mem, (uint64_t)&flags);
+        loadNif((uint64_t)resolvedPath.c_str(), (uint64_t)&mem, (uint64_t)&flags);
         return reinterpret_cast<RE::NiNode*>(mem);
     }
 

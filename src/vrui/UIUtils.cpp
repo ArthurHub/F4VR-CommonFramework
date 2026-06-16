@@ -30,17 +30,17 @@ namespace f4cf::vrui
 {
     std::string UIUtils::getDebugSphereNifName()
     {
-        return g_mod->getName() + "\\1x1Sphere.nif";
+        return "1x1Sphere.nif";
     }
 
     std::string UIUtils::getEmptyButtonFrameNifName()
     {
-        return g_mod->getName() + "\\ui-common\\btn-empty.nif";
+        return "ui-common\\btn-empty.nif";
     }
 
     std::string UIUtils::getToggleButtonFrameNifName()
     {
-        return g_mod->getName() + "\\ui-common\\btn-border.nif";
+        return "ui-common\\btn-border.nif";
     }
 
     /**
@@ -98,8 +98,7 @@ namespace f4cf::vrui
      */
     std::tuple<RE::NiNode*, UISize> UIUtils::getUINodeFromNifFile(const std::string& path)
     {
-        auto& normPath = path._Starts_with("Data") ? path : "Data/Meshes/" + path;
-        const auto nifNode = f4vr::getClonedNiNodeForNifFile(normPath);
+        const auto nifNode = f4vr::getClonedNiNodeForNifFile(path);
         UISize size = extractElementSizeFromName(nifNode->name.c_str());
         if (size.width < 0 || size.height < 0) {
             logger::warn("UI node nif doesn't contain size data! (Nif: {})", path.c_str());
