@@ -70,6 +70,8 @@ namespace f4cf
         FlowFlag3,
         FlowFlag123,
         HapticTest,
+        // Tune an arbitrary INI field referenced by debugAdjustField ("Section::Key").
+        Field,
     };
 
     class ConfigBase
@@ -90,6 +92,22 @@ namespace f4cf
          * Re-read all values from the on-disk INI file (no version migration, no watcher restart).
          */
         void reload();
+
+        /**
+         * Re-apply the on-disk INI to all in-memory config members, but with a single key value
+         * overridden in-memory only (the file is not modified). Used by the DebugAdjuster field
+         * mode to push a live working value into the mod's config without writing to disk each frame.
+         */
+        void applyIniConfigWithOverride(const char* section, const char* key, const char* value);
+
+        /**
+         * Read the current on-disk value for an arbitrary section/key, parsed as the named type.
+         * Returns defaultValue if the file can't be read or the value is missing/malformed.
+         * Used by the DebugAdjuster field mode to seed its working value from any INI field.
+         */
+        RE::NiTransform readIniTransformValue(const char* section, const char* key, const RE::NiTransform& defaultValue) const;
+        std::array<float, 22> readIniHandPoseValue(const char* section, const char* key, const std::array<float, 22>& defaultValue) const;
+        float readIniFloatValue(const char* section, const char* key, float defaultValue) const;
 
         void loadEmbeddedDefaultOnly();
 
@@ -117,6 +135,8 @@ namespace f4cf
         // Consumers can convert via frik::api::FRIKApi::HandPoseData::fromFloats(debugHandPose).
         std::array<float, 22> debugHandPose{};
         DebugAdjustTarget debugAdjustTarget = DebugAdjustTarget::None;
+        // For DebugAdjustTarget::Field: the "Section::Key" of the arbitrary INI field being tuned.
+        std::string debugAdjustField;
         std::map<std::string, std::string> debugVRUIProperties;
 
     protected:
@@ -132,6 +152,7 @@ namespace f4cf
         void loadDebugSection(const CSimpleIniA& ini);
         void loadVRUISection(const CSimpleIniA& ini);
         void loadIniConfigValues();
+        void applyIniConfig(const CSimpleIniA& ini);
         void saveVRUIIniSection(CSimpleIniA& ini);
         bool loadIniFromFile(CSimpleIniA& ini) const;
         void saveIniToFile(const CSimpleIniA& ini);

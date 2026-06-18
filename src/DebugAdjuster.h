@@ -29,6 +29,12 @@ namespace f4cf
      * sDebugFlowText1 and plays it on the primary controller (dev-only haptic-pattern tester). This
      * target owns Primary-A, so the shared save/reload bindings are skipped while it is active.
      *
+     * Field mode (when sDebugAdjustTarget is a "Section::Key" reference instead of a fixed keyword,
+     * e.g. "MyMod::tWeaponOffset"): tune any INI field live. The value kind is inferred from the key
+     * prefix (t=transform, h=hand pose, f=float) and the matching input map above applies. The edit
+     * is pushed into the running config in-memory each frame, and Primary-A save/reload write to /
+     * re-seed from that key.
+     *
      * Owned and driven by ModBase; ModBase calls `onFrameUpdate` each frame with its own config.
      */
     class DebugAdjuster
@@ -42,6 +48,8 @@ namespace f4cf
         static void adjustFloat(float& value);
         static void adjustFloat3(float& flag1, float& flag2, float& flag3);
         static void adjustHapticTest(const ConfigBase& config);
+        static void adjustField(ConfigBase& config);
+        static bool loadField(const ConfigBase& config);
         static void saveCurrent(const ConfigBase& config);
         static void reloadFromIni(ConfigBase& config);
     };

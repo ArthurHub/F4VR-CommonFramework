@@ -222,7 +222,16 @@ namespace f4cf
         debugFlowText2 = ini.GetValue(INI_SECTION_DEBUG, "sDebugFlowText2", "");
         debugTransform = getTransformValue(ini, INI_SECTION_DEBUG, "tDebugTransform", common::MatrixUtils::getTransform(0, 0, 0, 0, 0, 0));
         debugHandPose = getHandPoseValue(ini, INI_SECTION_DEBUG, "hDebugHandPose", {});
-        debugAdjustTarget = parseDebugAdjustTarget(ini.GetValue(INI_SECTION_DEBUG, "sDebugAdjustTarget", "none"));
+        // sDebugAdjustTarget is either a fixed keyword (transform/handpose/flag1...) or, when it
+        // contains "::", a "Section::Key" reference to any INI field tuned live via the field mode.
+        const std::string adjustTarget = ini.GetValue(INI_SECTION_DEBUG, "sDebugAdjustTarget", "none");
+        if (adjustTarget.find("::") != std::string::npos) {
+            debugAdjustTarget = DebugAdjustTarget::Field;
+            debugAdjustField = adjustTarget;
+        } else {
+            debugAdjustTarget = parseDebugAdjustTarget(adjustTarget);
+            debugAdjustField.clear();
+        }
         _debugDumpDataOnceNames = ini.GetValue(INI_SECTION_DEBUG, "sDebugDumpDataOnceNames", "");
     }
 
@@ -249,6 +258,16 @@ namespace f4cf
             throw std::runtime_error("Failed to load INI config file! Error: " + std::to_string(rc));
         }
 
+        applyIniConfig(ini);
+    }
+
+    /**
+     * Apply an already-loaded INI to all in-memory config members (debug section, logger, VRUI, and
+     * the inherited mod values). Shared by loadIniConfigValues and applyIniConfigWithOverride so both
+     * the on-disk reload and the in-memory live override run the exact same propagation path.
+     */
+    void ConfigBase::applyIniConfig(const CSimpleIniA& ini)
+    {
         loadDebugSection(ini);
 
         // set log after loading from config
@@ -258,6 +277,21 @@ namespace f4cf
 
         // let inherited class load all its values
         loadIniConfigInternal(ini);
+    }
+
+    /**
+     * Re-apply the on-disk INI to all config members with one key overridden in-memory only. The
+     * file is not modified, so this can run every frame to live-preview a single field without disk
+     * I/O. Used by the DebugAdjuster field mode.
+     */
+    void ConfigBase::applyIniConfigWithOverride(const char* section, const char* key, const char* value)
+    {
+        CSimpleIniA ini;
+        if (!loadIniFromFile(ini)) {
+            return;
+        }
+        ini.SetValue(section, key, value);
+        applyIniConfig(ini);
     }
 
     /**
@@ -468,6 +502,42 @@ namespace f4cf
             return defaultValue;
         }
         return *parsed;
+    }
+
+    /**
+     * Read the on-disk transform value for an arbitrary section/key (DebugAdjuster field mode seed).
+     */
+    RE::NiTransform ConfigBase::readIniTransformValue(const char* section, const char* key, const RE::NiTransform& defaultValue) const
+    {
+        CSimpleIniA ini;
+        if (!loadIniFromFile(ini)) {
+            return defaultValue;
+        }
+        return getTransformValue(ini, section, key, defaultValue);
+    }
+
+    /**
+     * Read the on-disk 22-float hand pose for an arbitrary section/key (DebugAdjuster field mode seed).
+     */
+    std::array<float, 22> ConfigBase::readIniHandPoseValue(const char* section, const char* key, const std::array<float, 22>& defaultValue) const
+    {
+        CSimpleIniA ini;
+        if (!loadIniFromFile(ini)) {
+            return defaultValue;
+        }
+        return getHandPoseValue(ini, section, key, defaultValue);
+    }
+
+    /**
+     * Read the on-disk float value for an arbitrary section/key (DebugAdjuster field mode seed).
+     */
+    float ConfigBase::readIniFloatValue(const char* section, const char* key, const float defaultValue) const
+    {
+        CSimpleIniA ini;
+        if (!loadIniFromFile(ini)) {
+            return defaultValue;
+        }
+        return static_cast<float>(ini.GetDoubleValue(section, key, defaultValue));
     }
 
     /**

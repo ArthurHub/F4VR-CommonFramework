@@ -161,7 +161,7 @@ flags for runtime toggling, debug-dump triggers, and batch config saves).
 | [`vrui/`](vrui/README.md)            | `f4cf::vrui`   | VR UI widget system: panels, buttons, toggles, containers, scene graph, input dispatch.                          |
 | [`PCH.h`](PCH.h)                     | —              | Precompiled header, included implicitly in every translation unit.                                               |
 | [`MainLoopHook.h`](MainLoopHook.h)   | `f4cf`         | Trampoline into the game main loop that drives `ModBase::onFrameUpdate`.                                         |
-| [`DebugAdjuster.h`](DebugAdjuster.h) | `f4cf`         | Live-tune a transform / hand pose / flow flags at runtime via controller input + INI reload.                     |
+| [`DebugAdjuster.h`](DebugAdjuster.h) | `f4cf`         | Live-tune a transform / hand pose / flow flags — or any INI field by `Section::Key` — at runtime via controller input + INI reload. |
 
 ## How the pieces fit together
 

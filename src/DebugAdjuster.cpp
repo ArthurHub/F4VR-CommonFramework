@@ -31,6 +31,39 @@ namespace f4cf
         constexpr std::array<const char*, 6> HAND_POSE_SLOT_NAMES = { "thumb", "index", "middle", "ring", "pinky", "palm" };
         std::size_t s_handPoseSlot = 0;
 
+        // Active "Section::Key" field target state for DebugAdjustTarget::Field. (Re)loaded from the
+        // INI whenever the field string changes; mutated in place each frame. s_fieldType is the
+        // value kind inferred from the key's first letter ('t' transform, 'h' hand pose, 'f' float),
+        // or 0 when nothing valid is loaded. s_fieldRaw mirrors the last-seen debugAdjustField so the
+        // (potentially failing) parse + seed read + logging happens once per change, not every frame.
+        std::string s_fieldRaw;
+        std::string s_fieldSection;
+        std::string s_fieldKey;
+        char s_fieldType = 0;
+        RE::NiTransform s_fieldTransform{};
+        std::array<float, 22> s_fieldPose{};
+        float s_fieldFloat = 0.0f;
+
+        /**
+         * Lowercase a single ASCII letter (used to make the field key-prefix match case-insensitive).
+         */
+        char toLowerAscii(const char c)
+        {
+            return c >= 'A' && c <= 'Z' ? static_cast<char>(c - 'A' + 'a') : c;
+        }
+
+        /**
+         * Trim leading/trailing spaces and tabs.
+         */
+        std::string trim(const std::string& s)
+        {
+            const auto begin = s.find_first_not_of(" \t");
+            if (begin == std::string::npos) {
+                return "";
+            }
+            return s.substr(begin, s.find_last_not_of(" \t") - begin + 1);
+        }
+
         /**
          * Format a float with SAVE_PRECISION decimals for writing to the INI.
          */
@@ -88,6 +121,23 @@ namespace f4cf
                 toFixed(v[19]),
                 toFixed(v[20]),
                 toFixed(v[21]));
+        }
+
+        /**
+         * Serialize the active field's working value to its INI string form (empty when unloaded).
+         */
+        std::string fieldToString()
+        {
+            switch (s_fieldType) {
+            case 't':
+                return transformToFixedString(s_fieldTransform);
+            case 'h':
+                return handPoseToFixedString(s_fieldPose);
+            case 'f':
+                return toFixed(s_fieldFloat);
+            default:
+                return "";
+            }
         }
 
         /**
@@ -153,6 +203,9 @@ namespace f4cf
         // Idempotent and self-restoring: re-enabled / released the moment the adjuster is turned off.
         vrcf::VRControllersSuppress.setAllSuppressed("DebugAdjuster", active);
         if (!active) {
+            // Forget the active field so re-activating re-seeds the working value from disk.
+            s_fieldRaw.clear();
+            s_fieldType = 0;
             return;
         }
 
@@ -181,6 +234,9 @@ namespace f4cf
             // Owns Primary-A as the play trigger, so it bypasses the shared save/reload bindings below.
             adjustHapticTest(config);
             return;
+        case DebugAdjustTarget::Field:
+            adjustField(config);
+            break;
         }
 
         // long-press is checked before tap because isLongPressed clears state when fired;
@@ -313,6 +369,85 @@ namespace f4cf
     }
 
     /**
+     * Resolve config.debugAdjustField ("Section::Key") and, when it changes, seed the working value
+     * from the on-disk INI. The value kind is inferred from the key's first letter (t=transform,
+     * h=hand pose, f=float). Returns true once a supported field is loaded. The parse/seed/log only
+     * runs when the field string changes, so an invalid field doesn't spam the log every frame.
+     */
+    bool DebugAdjuster::loadField(const ConfigBase& config)
+    {
+        if (config.debugAdjustField == s_fieldRaw) {
+            return s_fieldType != 0;
+        }
+        s_fieldRaw = config.debugAdjustField;
+        s_fieldType = 0;
+
+        const auto sep = s_fieldRaw.find("::");
+        const std::string section = sep == std::string::npos ? "" : trim(s_fieldRaw.substr(0, sep));
+        const std::string key = sep == std::string::npos ? "" : trim(s_fieldRaw.substr(sep + 2));
+        if (section.empty() || key.empty()) {
+            logger::warn("DebugAdjuster: field target '{}' must be 'Section::Key'", s_fieldRaw);
+            return false;
+        }
+
+        const char type = toLowerAscii(key[0]);
+        switch (type) {
+        case 't':
+            s_fieldTransform = config.readIniTransformValue(section.c_str(), key.c_str(), common::MatrixUtils::getTransform(0, 0, 0, 0, 0, 0));
+            break;
+        case 'h':
+            s_fieldPose = config.readIniHandPoseValue(section.c_str(), key.c_str(), {});
+            break;
+        case 'f':
+            s_fieldFloat = config.readIniFloatValue(section.c_str(), key.c_str(), 0.0f);
+            break;
+        default:
+            logger::warn("DebugAdjuster: unsupported field '{}' (key must start with t/h/f for transform/hand pose/float)", s_fieldRaw);
+            return false;
+        }
+
+        s_fieldSection = section;
+        s_fieldKey = key;
+        s_fieldType = type;
+        f4vr::showNotification(fmt::format("Adjusting field: {}", s_fieldRaw));
+        logger::info("DebugAdjuster: editing field '{}'", s_fieldRaw);
+        return true;
+    }
+
+    /**
+     * Adjust an arbitrary INI field referenced by config.debugAdjustField using the same input map as
+     * the matching fixed target (transform/hand pose/float). The mutated working value is pushed into
+     * the running config in-memory each frame it changes (no disk write) so the effect is live; the
+     * explicit Primary-A save writes it to that key, and a reload re-seeds it from disk.
+     */
+    void DebugAdjuster::adjustField(ConfigBase& config)
+    {
+        if (!loadField(config)) {
+            return;
+        }
+
+        const std::string before = fieldToString();
+        switch (s_fieldType) {
+        case 't':
+            adjustTransform(s_fieldTransform);
+            break;
+        case 'h':
+            adjustHandPose(s_fieldPose);
+            break;
+        case 'f':
+            adjustFloat(s_fieldFloat);
+            break;
+        default:
+            return;
+        }
+
+        const std::string after = fieldToString();
+        if (after != before) {
+            config.applyIniConfigWithOverride(s_fieldSection.c_str(), s_fieldKey.c_str(), after.c_str());
+        }
+    }
+
+    /**
      * Writes the current in-memory value(s) for the active target back to the INI file.
      * FlowFlag123 saves all three keys; the single-target cases save one key each.
      */
@@ -351,6 +486,12 @@ namespace f4cf
                 });
             logger::info("DebugAdjuster: saved fDebugFlowFlag1/2/3 to INI");
             break;
+        case DebugAdjustTarget::Field:
+            if (s_fieldType != 0) {
+                mutableConfig.saveIniConfigValue(s_fieldSection.c_str(), s_fieldKey.c_str(), fieldToString().c_str());
+                logger::info("DebugAdjuster: saved {}::{} to INI", s_fieldSection, s_fieldKey);
+            }
+            break;
         case DebugAdjustTarget::None:
             break;
         }
@@ -362,6 +503,9 @@ namespace f4cf
     void DebugAdjuster::reloadFromIni(ConfigBase& config)
     {
         config.reload();
+        // Drop the field working value so it re-seeds from disk next frame, discarding unsaved edits.
+        s_fieldRaw.clear();
+        s_fieldType = 0;
         logger::info("DebugAdjuster: reloaded from INI");
     }
 }
