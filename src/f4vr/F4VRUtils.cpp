@@ -30,6 +30,31 @@ namespace
         }
         return path;
     }
+
+    /**
+     * Recursively copy node names from a source tree onto a structurally-identical clone tree.
+     * The game's clone routine does not preserve node names, so we walk both trees in parallel
+     * (the clone keeps the source's child order and count) and copy each name down the hierarchy.
+     */
+    void copyNodeNamesRecursive(RE::NiAVObject* source, RE::NiAVObject* clone)
+    {
+        if (!source || !clone) {
+            return;
+        }
+
+        clone->name = source->name;
+
+        const auto sourceNode = source->IsNode();
+        const auto cloneNode = clone->IsNode();
+        if (!sourceNode || !cloneNode) {
+            return;
+        }
+
+        const auto count = min(sourceNode->children.size(), cloneNode->children.size());
+        for (std::uint16_t i = 0; i < count; ++i) {
+            copyNodeNamesRecursive(sourceNode->children[i].get(), cloneNode->children[i].get());
+        }
+    }
 }
 
 namespace f4cf::f4vr
@@ -651,7 +676,7 @@ namespace f4cf::f4vr
         proc.unk18 = reinterpret_cast<uint64_t*>(cloneAddr1.address());
         proc.unk48 = reinterpret_cast<uint64_t*>(cloneAddr2.address());
         const auto uiNode = cloneNode(nifNode, &proc);
-        uiNode->name = nifNode->name;
+        copyNodeNamesRecursive(nifNode, uiNode);
         return uiNode;
     }
 
