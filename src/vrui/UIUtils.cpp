@@ -30,7 +30,7 @@ namespace f4cf::vrui
 {
     std::string UIUtils::getDebugSphereNifName()
     {
-        return "1x1Sphere.nif";
+        return "debug-sphere.nif";
     }
 
     std::string UIUtils::getEmptyButtonFrameNifName()
