@@ -110,6 +110,8 @@ namespace f4cf::vrcf
     {
         vr::EVRButtonId button = vr::k_EButton_Grip;
         std::optional<Hand> hand;
+
+        bool operator==(const InputModifier&) const = default;
     };
 
     /**
@@ -137,6 +139,19 @@ namespace f4cf::vrcf
         float duration = 0.0f;
         float threshold = 0.85f; // AxisDirection only
         float cooldown = 0.15f; // AxisDirection only
+
+        /**
+         * True when a binding can actually fire (i.e. it is not the "none"/disabled binding).
+         */
+        bool isEnabled() const
+        {
+            return type != ActivationType::Disabled;
+        }
+
+        /**
+         * Value equality across all fields (hand, activation type, button/axis, modifier, and timing).
+         */
+        bool operator==(const InputBinding&) const = default;
     };
 
     /**
@@ -145,6 +160,10 @@ namespace f4cf::vrcf
     class VRControllersManager
     {
     public:
+        static constexpr InputBinding DisabledBinding{
+            .type = ActivationType::Disabled,
+        };
+
         void update(bool isLeftHanded);
 
         void reset();

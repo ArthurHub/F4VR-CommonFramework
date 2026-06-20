@@ -3,6 +3,7 @@
 #include "ModBase.h"
 #include "PlayerNodes.h"
 #include "f4sevr/PapyrusUtils.h"
+#include "vrcf/VRControllersManager.h"
 
 namespace
 {
@@ -78,6 +79,25 @@ namespace f4cf::f4vr
     {
         if (RE::UIMessageQueue* uiQueue = RE::UIMessageQueue::GetSingleton()) {
             uiQueue->AddMessage("FavoritesMenu", RE::UI_MESSAGE_TYPE::kHide);
+        }
+    }
+
+    /**
+     * Is the given hand is player primary hand.
+     */
+    bool isPrimaryHand(const vrcf::Hand hand)
+    {
+        switch (hand) {
+        case vrcf::Hand::Primary:
+            return true;
+        case vrcf::Hand::Offhand:
+            return false;
+        case vrcf::Hand::Right:
+            return !f4vr::isLeftHandedMode();
+        case vrcf::Hand::Left:
+            return f4vr::isLeftHandedMode();
+        default:
+            return true;
         }
     }
 

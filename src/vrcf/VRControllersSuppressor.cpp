@@ -214,6 +214,31 @@ namespace f4cf::vrcf
     }
 
     /**
+     * Suppresses the input a binding reads, on the binding's own hand: its backing axis for an
+     * AxisDirection binding, otherwise its button. Mirrors VRControllersManager::check(binding).
+     */
+    void VRControllersSuppressor::suppress(const std::string_view key, const InputBinding& binding)
+    {
+        if (binding.type == ActivationType::AxisDirection) {
+            suppressAxis(key, binding.hand, binding.axis);
+        } else {
+            suppress(key, binding.hand, binding.button);
+        }
+    }
+
+    /**
+     * Stops `key` suppressing the input a binding reads (the counterpart to suppress(key, binding)).
+     */
+    void VRControllersSuppressor::release(const std::string_view key, const InputBinding& binding)
+    {
+        if (binding.type == ActivationType::AxisDirection) {
+            releaseAxis(key, binding.hand, binding.axis);
+        } else {
+            release(key, binding.hand, binding.button);
+        }
+    }
+
+    /**
      * Sets or clears `key`'s suppression for a button. Analog-backed buttons (trigger/grip/thumbstick-
      * click) also toggle their backing axis, because the game re-derives those presses from rAxis.
      */

@@ -18,6 +18,19 @@ namespace f4cf::common
         static RE::NiPoint3 pitchVec(RE::NiPoint3 vec, float angle);
         static RE::NiTransform calculateRelocation(const RE::NiAVObject* fromNode, const RE::NiAVObject* toNode);
         static RE::NiTransform calculateRelocation(const RE::NiAVObject* fromNode, const RE::NiAVObject* toNode, const RE::NiPoint3& offset, const RE::NiMatrix3& rotationOffset);
+        // Local<->world conversion via a node's world transform (the codebase's local->world convention,
+        // shared with calculateRelocation: rotation stored transposed, local offsets scaled by world scale).
+        // Each pair is an exact inverse, letting a point or whole transform be carried off one node and
+        // re-expressed under another (e.g. pinning a node to a world placement regardless of its parent).
+        static RE::NiPoint3 localToWorldPoint(const RE::NiTransform& parentWorld, const RE::NiPoint3& localPoint);
+        static RE::NiPoint3 worldToLocalPoint(const RE::NiTransform& parentWorld, const RE::NiPoint3& worldPoint);
+        static RE::NiTransform localToWorldTransform(const RE::NiTransform& parentWorld, const RE::NiTransform& local);
+        static RE::NiTransform worldToLocalTransform(const RE::NiTransform& parentWorld, const RE::NiTransform& world);
+        // Re-express a transform local to `fromParentWorld` as one local to `toParentWorld`, keeping its world
+        // placement (localToWorld then worldToLocal). includeRotation=false leaves the result rotation identity,
+        // for rotation-invariant uses (e.g. a sphere) where carrying the source orientation through is noise.
+        static RE::NiTransform reparentTransform(const RE::NiTransform& fromParentWorld, const RE::NiTransform& local, const RE::NiTransform& toParentWorld,
+            bool includeRotation = true);
 
         // matrix
         static RE::NiMatrix3 getIdentityMatrix();

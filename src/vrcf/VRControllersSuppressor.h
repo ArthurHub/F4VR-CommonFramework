@@ -70,6 +70,11 @@ namespace f4cf::vrcf
         void release(std::string_view key, Hand hand, vr::EVRButtonId button);
         void setSuppressed(std::string_view key, Hand hand, vr::EVRButtonId button, bool suppressed);
 
+        // Overloads taking a full InputBinding (mirrors VRControllersManager::check): suppresses/releases
+        // the binding's button on its hand, or its backing axis for an AxisDirection binding.
+        void suppress(std::string_view key, const InputBinding& binding);
+        void release(std::string_view key, const InputBinding& binding);
+
         // Aggregate query (suppressed by anyone) and per-owner query.
         bool isSuppressed(Hand hand, vr::EVRButtonId button) const;
         bool isSuppressedBy(std::string_view key, Hand hand, vr::EVRButtonId button) const;

@@ -1,6 +1,11 @@
 #pragma once
 #include "F4VROffsets.h"
 
+namespace f4cf::vrcf
+{
+    enum class Hand : std::uint8_t;
+}
+
 namespace f4cf::f4vr
 {
     static constexpr std::uint32_t KEYWORD_POWER_ARMOR = 0x4D8A1;
@@ -15,6 +20,7 @@ namespace f4cf::f4vr
     void closeFavoriteMenu();
 
     // Weapons/Armor/Player
+    bool isPrimaryHand(const vrcf::Hand hand);
     void setWandsVisibility(bool show, bool leftWand);
     bool IsWeaponDrawn();
     bool isMeleeWeaponEquipped();

@@ -97,6 +97,70 @@ namespace f4cf::common
     }
 
     /**
+     * Convert a point expressed in a node's local space into world space, given that node's world transform.
+     * Uses the codebase's local->world convention (shared with calculateRelocation): rotation is stored
+     * transposed and the local offset is scaled by the node's world scale. Exact inverse of worldToLocalPoint.
+     */
+    RE::NiPoint3 MatrixUtils::localToWorldPoint(const RE::NiTransform& parentWorld, const RE::NiPoint3& localPoint)
+    {
+        return parentWorld.translate + parentWorld.rotate.Transpose() * (localPoint * parentWorld.scale);
+    }
+
+    /**
+     * Convert a world-space point into the local space of a node, given that node's world transform. Exact
+     * inverse of localToWorldPoint (and the same expression calculateRelocation applies to a node's translate).
+     */
+    RE::NiPoint3 MatrixUtils::worldToLocalPoint(const RE::NiTransform& parentWorld, const RE::NiPoint3& worldPoint)
+    {
+        return parentWorld.rotate * ((worldPoint - parentWorld.translate) / parentWorld.scale);
+    }
+
+    /**
+     * Compose a node's local transform with its parent's world transform to produce the node's world
+     * transform, using the codebase's local->world convention (see localToWorldPoint). Exact inverse of
+     * worldToLocalTransform.
+     */
+    RE::NiTransform MatrixUtils::localToWorldTransform(const RE::NiTransform& parentWorld, const RE::NiTransform& local)
+    {
+        RE::NiTransform out;
+        out.translate = localToWorldPoint(parentWorld, local.translate);
+        out.rotate = local.rotate * parentWorld.rotate;
+        out.scale = local.scale * parentWorld.scale;
+        return out;
+    }
+
+    /**
+     * Express a world-space transform as the local transform under `parentWorld` that reproduces it — the
+     * value to assign to a child of that parent. Exact inverse of localToWorldTransform (the transform-level
+     * counterpart of worldToLocalPoint); pins a node to a world placement regardless of which parent it hangs
+     * under.
+     */
+    RE::NiTransform MatrixUtils::worldToLocalTransform(const RE::NiTransform& parentWorld, const RE::NiTransform& world)
+    {
+        RE::NiTransform out;
+        out.translate = worldToLocalPoint(parentWorld, world.translate);
+        out.rotate = world.rotate * parentWorld.rotate.Transpose();
+        out.scale = world.scale / parentWorld.scale;
+        return out;
+    }
+
+    /**
+     * Re-express a transform that is local to `fromParentWorld` as the local transform under `toParentWorld`
+     * that keeps the same world placement: carry it to world space, then back to local under the new parent.
+     * With `includeRotation` false the result keeps identity rotation (so it inherits the new parent's
+     * orientation) — useful for rotation-invariant shapes like a sphere where the source orientation is noise.
+     */
+    RE::NiTransform MatrixUtils::reparentTransform(const RE::NiTransform& fromParentWorld, const RE::NiTransform& local, const RE::NiTransform& toParentWorld,
+        const bool includeRotation)
+    {
+        RE::NiTransform out = worldToLocalTransform(toParentWorld, localToWorldTransform(fromParentWorld, local));
+        if (!includeRotation) {
+            out.rotate = getIdentityMatrix();
+        }
+        return out;
+    }
+
+    /**
      * Calculate a relocation transform from one node to another in the world space to be applied to local space of target node.
      * Example usage:
      * lightNode->local = calculateRelocation(lightNode, handNode);
@@ -107,7 +171,7 @@ namespace f4cf::common
         RE::NiTransform out;
         out.scale = fromNode->local.scale;
         out.rotate = toNode->world.rotate * fromNode->parent->world.rotate.Transpose();
-        out.translate = fromNode->parent->world.rotate * ((toNode->world.translate - fromNode->parent->world.translate) / fromNode->parent->world.scale);
+        out.translate = worldToLocalPoint(fromNode->parent->world, toNode->world.translate);
         return out;
     }
 
@@ -120,10 +184,10 @@ namespace f4cf::common
         out.scale = fromNode->local.scale;
         out.rotate = rotationOffset * toNode->world.rotate * fromNode->parent->world.rotate.Transpose();
 
-        // TODO: better understand this calculation and how to make it work for all toNodes
-        const auto pos = toNode->parent->world.rotate.Transpose() * ((toNode->local.translate + offset) * toNode->parent->world.scale);
-        const auto newToNodePos = toNode->parent->world.translate + pos;
-        out.translate = fromNode->parent->world.rotate * ((newToNodePos - fromNode->parent->world.translate) / fromNode->parent->world.scale);
+        // TODO: better understand this calculation and how to make it work for all toNodes.
+        // Carry toNode's local position (shifted by `offset`) into world space, then express it under fromNode's parent.
+        const RE::NiPoint3 targetWorldPos = localToWorldPoint(toNode->parent->world, toNode->local.translate + offset);
+        out.translate = worldToLocalPoint(fromNode->parent->world, targetWorldPos);
 
         return out;
     }

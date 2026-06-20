@@ -15,6 +15,7 @@ that make it all work.
 | [`F4VRUtils.h`](F4VRUtils.h) | The workhorse: node search (`findNode`/`findAVObject`), visibility, transform updates (`updateDown`/`updateTransforms`), player/weapon state (`IsWeaponDrawn`, `isInPowerArmor`, `isSwimming`…), settings (`isLeftHandedMode`, `getIniSetting`), UI (`showMessagebox`/`showNotification`), and `.nif` loading. |
 | [`F4VROffsets.h`](F4VROffsets.h) | All reverse-engineered RVAs (`REL::Relocation` / offsets) the framework calls into. |
 | [`PlayerNodes.h`](PlayerNodes.h) | `PlayerNodes` struct — the 43 VR reference `NiNode*`s at `PlayerCharacter + 0x6E0` (wands, weapon offsets, Pip-Boy, HMD, scope, etc.). |
+| [`WandActivationSphere.h`](WandActivationSphere.h) | Reusable proximity "activation sphere": a sphere around a node that, while a wand is inside it, suppresses that hand's button (owner-keyed), pulses a one-shot entry haptic, and fires an `onActivated` callback when the bound press lands — with an optional debug visual that always matches the test. Used for near-body grab and near-HMD gestures; the caller mirrors the zone transform for handedness. |
 | [`F4VRSkelly.h`](F4VRSkelly.h) | `SkellyBones` — string names for 100+ skeleton bones and finger-pose scalars. |
 | [`BSFlattenedBoneTree.h`](BSFlattenedBoneTree.h) | Access to the engine's flattened bone tree for fast per-bone transforms. |
 | [`ScaleformUtils.h`](ScaleformUtils.h) | GFx menu/HUD manipulation: read values, toggle visibility, drive list menus, dispatch events. |
