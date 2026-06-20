@@ -61,12 +61,16 @@ namespace f4cf::f4vr
 
         bool isGameStopped()
         {
-            return std::ranges::any_of(GAME_STOPPING_MENUS, [this](const std::string& menuName) { return _gameMenuState[menuName] == true; });
+            return std::ranges::any_of(GAME_STOPPING_MENUS, [this](const std::string& menuName) {
+                return _gameMenuState[menuName] == true;
+            });
         }
 
         bool isGameStoppedNoDialogue()
         {
-            return std::ranges::any_of(GAME_STOPPING_MENUS_NO_DIALOGUE, [this](const std::string& menuName) { return _gameMenuState[menuName] == true; });
+            return std::ranges::any_of(GAME_STOPPING_MENUS_NO_DIALOGUE, [this](const std::string& menuName) {
+                return _gameMenuState[menuName] == true;
+            });
         }
 
         void debugDumpAllMenus() const

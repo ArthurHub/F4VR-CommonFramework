@@ -18,6 +18,7 @@ namespace f4cf::vrui
         {
             return _visible && _onPressEventHandler != nullptr;
         }
+
         virtual void onPressEventFired(UIElement* element, UIFrameUpdateContext* context) override;
 
         std::function<void(UIButton*)> _onPressEventHandler;

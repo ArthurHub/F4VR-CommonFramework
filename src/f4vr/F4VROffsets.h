@@ -17,6 +17,7 @@ namespace f4cf::f4vr
         {
             p = nullptr;
         }
+
         T p;
     };
 

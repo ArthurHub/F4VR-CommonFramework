@@ -284,6 +284,7 @@ namespace F4SEVR
             {
                 return data == lhs.data;
             }
+
             bool operator<(const Ref& lhs) const
             {
                 return data < lhs.data;
@@ -293,6 +294,7 @@ namespace F4SEVR
             {
                 return operator const char*();
             }
+
             operator const char*() const
             {
                 return data ? data->Get<char>() : nullptr;
@@ -302,6 +304,7 @@ namespace F4SEVR
             {
                 return operator const wchar_t*();
             }
+
             operator const wchar_t*()
             {
                 return data ? data->Get<wchar_t>() : nullptr;
@@ -548,6 +551,7 @@ namespace F4SEVR
             {
                 return next == NULL;
             }
+
             void SetFree()
             {
                 next = NULL;
@@ -763,10 +767,12 @@ namespace F4SEVR
         {
             return m_size;
         }
+
         UInt32 FreeCount() const
         {
             return m_freeCount;
         }
+
         UInt32 FillCount() const
         {
             return m_size - m_freeCount;

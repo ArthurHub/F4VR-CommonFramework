@@ -19,6 +19,7 @@ namespace F4SEVR
         VMStruct()
             : m_none(false),
               m_struct(nullptr){};
+
         ~VMStruct()
         {}
 
@@ -32,6 +33,7 @@ namespace F4SEVR
         {
             m_none = bNone;
         }
+
         bool IsNone() const
         {
             return m_none;
@@ -174,6 +176,7 @@ namespace F4SEVR
     struct IsStructType
     {
         static const bool value = false;
+
         static inline const char* name()
         {
             return nullptr;
@@ -184,6 +187,7 @@ namespace F4SEVR
     struct IsStructType<VMStruct<NAME>>
     {
         static const bool value = true;
+
         static inline const char* name()
         {
             return NAME;

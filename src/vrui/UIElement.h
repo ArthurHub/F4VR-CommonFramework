@@ -59,8 +59,10 @@ namespace f4cf::vrui
 
     protected:
         virtual RE::NiTransform calculateTransform() const;
+
         virtual void onPressEventFired(UIElement*, UIFrameUpdateContext*)
         {}
+
         void onPressEventFiredPropagate(UIElement* element, UIFrameUpdateContext* context);
         virtual void onStateChanged(UIElement* element);
 

@@ -112,10 +112,12 @@ namespace F4SEVR
             {
                 return name == rhs.name;
             }
+
             bool operator==(const BSFixedString a_name) const
             {
                 return name == a_name;
             }
+
             operator UInt64() const
             {
                 return (UInt64)name.data->Get<char>();
@@ -145,6 +147,7 @@ namespace F4SEVR
             {
                 return typeId == rhs.typeId;
             }
+
             operator UInt32() const
             {
                 return typeId;
@@ -174,6 +177,7 @@ namespace F4SEVR
             {
                 return stackId == rhs.stackId;
             }
+
             operator UInt32() const
             {
                 return stackId;
@@ -199,6 +203,7 @@ namespace F4SEVR
             UInt64 handle; // 00
             UInt32 count; // 08
             UInt32 pad0C; // 0C
+
             union
             {
                 VMIdentifier* one;
@@ -235,6 +240,7 @@ namespace F4SEVR
             {
                 return handle == rhs.handle;
             }
+
             operator UInt64() const
             {
                 return handle;
@@ -261,6 +267,7 @@ namespace F4SEVR
                         return true;
                     }
                 };
+
                 DumpVisitor visitor;
                 ForEachScript(&visitor);
             }

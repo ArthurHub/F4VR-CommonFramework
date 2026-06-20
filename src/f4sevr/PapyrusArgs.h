@@ -77,6 +77,7 @@ namespace F4SEVR
         {
             return static_cast<UInt32>(m_data.size());
         }
+
         void Get(T* dst, const UInt32 idx)
         {
             UnpackValue(dst, &m_data[idx]);
@@ -170,6 +171,7 @@ namespace F4SEVR
         {
             m_none = bNone;
         }
+
         bool IsNone() const
         {
             return m_none;

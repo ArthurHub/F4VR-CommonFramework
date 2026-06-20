@@ -125,8 +125,9 @@ namespace f4cf::f4vr
         if (!inventory) {
             return false;
         }
-        return std::ranges::any_of(inventory->data,
-            [](const auto& item) { return item.object->formType == RE::ENUM_FORM_ID::kWEAP && item.stackData->flags.any(RE::BGSInventoryItem::Stack::Flag::kSlotMask); });
+        return std::ranges::any_of(inventory->data, [](const auto& item) {
+            return item.object->formType == RE::ENUM_FORM_ID::kWEAP && item.stackData->flags.any(RE::BGSInventoryItem::Stack::Flag::kSlotMask);
+        });
     }
 
     /**
@@ -135,7 +136,7 @@ namespace f4cf::f4vr
     bool isUnarmedWeaponEquipped()
     {
         return CombatUtilities_IsActorUsingMelee(getPlayer()) &&
-            GetEquippedWeapon(RE::BSScript::Internal::VirtualMachine::GetSingleton(), 0, RE::PlayerCharacter::GetSingleton(), 0) == nullptr;
+               GetEquippedWeapon(RE::BSScript::Internal::VirtualMachine::GetSingleton(), 0, RE::PlayerCharacter::GetSingleton(), 0) == nullptr;
     }
 
     /**

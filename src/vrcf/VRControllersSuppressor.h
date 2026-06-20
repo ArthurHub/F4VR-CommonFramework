@@ -53,6 +53,7 @@ namespace f4cf::vrcf
         // Install the IVRSystem vtable hook. Idempotent -- installs once, safe to call repeatedly.
         // vr::VRSystem() must be live; returns false to retry next frame.
         bool initialize();
+
         bool isInitialized() const
         {
             return _installed.load(std::memory_order_acquire);
@@ -123,6 +124,7 @@ namespace f4cf::vrcf
         struct StringHash
         {
             using is_transparent = void;
+
             std::size_t operator()(const std::string_view sv) const noexcept
             {
                 return std::hash<std::string_view>{}(sv);

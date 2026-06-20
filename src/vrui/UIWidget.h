@@ -17,6 +17,7 @@ namespace f4cf::vrui
         {
             return _disabled;
         }
+
         void setDisabled(bool disabled);
 
     protected:
@@ -24,6 +25,7 @@ namespace f4cf::vrui
         {
             return false;
         }
+
         virtual void attachToNode(RE::NiNode* attachNode) override;
         virtual void detachFromAttachedNode(bool releaseSafe) override;
         virtual void onFrameUpdate(UIFrameUpdateContext* adapter) override;

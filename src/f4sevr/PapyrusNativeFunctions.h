@@ -30,6 +30,7 @@ namespace F4SEVR
 
         IFunction()
         {}
+
         virtual ~IFunction()
         {}
 
@@ -67,6 +68,7 @@ namespace F4SEVR
     public:
         NativeFunctionBase()
         {}
+
         virtual ~NativeFunctionBase()
         {}
 
@@ -98,10 +100,12 @@ namespace F4SEVR
         {
             return &m_fnName;
         }
+
         virtual BSFixedString* GetClassName()
         {
             return &m_className;
         }
+
         virtual BSFixedString* GetStr20()
         {
             return &m_unk20;
@@ -127,30 +131,37 @@ namespace F4SEVR
         {
             return m_params.numParams;
         }
+
         virtual bool IsNative()
         {
             return true;
         }
+
         virtual bool IsStatic()
         {
             return m_isStatic;
         }
+
         virtual bool Unk_0A()
         {
             return false;
         }
+
         virtual UInt32 Unk_0B()
         {
             return 0;
         }
+
         virtual UInt32 GetUnk44()
         {
             return m_unk44;
         }
+
         virtual BSFixedString* GetStr48()
         {
             return &m_unk48;
         }
+
         virtual void Unk_0E()
         {}
 
@@ -179,10 +190,12 @@ namespace F4SEVR
         {
             return m_unk41;
         }
+
         virtual void SetUnk41(UInt8 arg)
         {
             m_unk41 = arg;
         }
+
         virtual bool HasCallback() = 0;
         virtual bool Run(VMValue* baseValue, VirtualMachine* vm, UInt32 arg2, VMValue* resultValue, VMState* state) = 0;
 
@@ -227,6 +240,7 @@ namespace F4SEVR
         {
             return m_callback != nullptr;
         }
+
         virtual bool Run(VMValue* baseValue, VirtualMachine* vm, UInt32 arg2, VMValue* resultValue, VMState* state) = 0;
 
         MEMBER_FN_PREFIX(NativeFunction);

@@ -60,19 +60,29 @@ namespace f4cf::common
 
     std::string str_tolower(std::string s)
     {
-        std::ranges::transform(s, s.begin(), [](const unsigned char c) { return std::tolower(c); });
+        std::ranges::transform(s, s.begin(), [](const unsigned char c) {
+            return std::tolower(c);
+        });
         return s;
     }
 
     std::string ltrim(std::string s)
     {
-        s.erase(s.begin(), std::ranges::find_if(s, [](const unsigned char ch) { return !std::isspace(ch); }));
+        s.erase(s.begin(), std::ranges::find_if(s, [](const unsigned char ch) {
+            return !std::isspace(ch);
+        }));
         return s;
     }
 
     std::string rtrim(std::string s)
     {
-        s.erase(std::find_if(s.rbegin(), s.rend(), [](const unsigned char ch) { return !std::isspace(ch); }).base(), s.end());
+        s.erase(std::find_if(s.rbegin(),
+                    s.rend(),
+                    [](const unsigned char ch) {
+                        return !std::isspace(ch);
+                    })
+                    .base(),
+            s.end());
         return s;
     }
 
@@ -83,7 +93,9 @@ namespace f4cf::common
 
     bool hasNonWhitespaceText(const std::string_view s)
     {
-        return std::ranges::any_of(s, [](const unsigned char ch) { return !std::isspace(ch); });
+        return std::ranges::any_of(s, [](const unsigned char ch) {
+            return !std::isspace(ch);
+        });
     }
 
     /**

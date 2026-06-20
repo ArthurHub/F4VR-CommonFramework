@@ -44,6 +44,7 @@ namespace f4cf::vrui
         {
             return _adapter->getInteractionBoneWorldPosition();
         }
+
         virtual void setInteractionHandPointing(const bool primaryHand, const bool toPoint) override
         {
             _adapter->setInteractionHandPointing(primaryHand, toPoint);

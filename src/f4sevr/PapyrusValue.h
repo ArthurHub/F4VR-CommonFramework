@@ -19,6 +19,7 @@ namespace F4SEVR
         UInt64 unk28; // 28
         UInt64 unk30; // 30
         UInt64 unk38; // 38
+
         struct MemberData
         {
             unsigned unk00: 3; // This == 3 is usually always checked before accessing properties
@@ -46,6 +47,7 @@ namespace F4SEVR
                 UInt64 value;
                 IComplexType* id;
             } type; // 08
+
             UInt64 unk10; // 10 - Not sure what this is, maybe a hash?
         };
 
@@ -96,10 +98,12 @@ namespace F4SEVR
             {
                 return name == rhs.name;
             }
+
             bool operator==(const BSFixedString a_name) const
             {
                 return name == a_name;
             }
+
             operator UInt64() const
             {
                 return (UInt64)name.data->Get<char>();
@@ -214,10 +218,12 @@ namespace F4SEVR
             VMValue* var;
             VMIdentifier* id;
             StringCache::Entry* str;
+
             BSFixedString* GetStr(void)
             {
                 return (BSFixedString*)(&str);
             }
+
             BSFixedString* GetStr(void) const
             {
                 return (BSFixedString*)(&str);
