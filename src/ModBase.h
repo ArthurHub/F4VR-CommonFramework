@@ -66,10 +66,10 @@ namespace f4cf
         // Runs on every game frame, main logic goes here.
         virtual void onFrameUpdate() = 0;
 
-        // Dump game data if requested in "sDebugDumpDataOnceNames" flag in INI config.
+        // Dump game data if requested in "sDumpDataOnceNames" flag in INI config.
         virtual void checkDebugDump() const;
 
-        // Bulk-add game items to the player inventory if requested in "sDebugAddItemsOnceNames" flag in INI config.
+        // Bulk-add game items to the player inventory if requested in "sAddItemsOnceNames" flag in INI config.
         virtual void checkDebugAddItems() const;
 
         Settings _settings;

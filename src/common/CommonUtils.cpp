@@ -389,14 +389,14 @@ namespace f4cf::common
     RE::NiPoint3 getPointFromDebugFlowFlags()
     {
         const auto config = g_mod->getConfig();
-        return RE::NiPoint3(config->debugFlowFlag1, config->debugFlowFlag2, config->debugFlowFlag3);
+        return RE::NiPoint3(config->debug.flowFlag1, config->debug.flowFlag2, config->debug.flowFlag3);
     }
 
     RE::NiMatrix3 getMatrixFromDebugFlowFlags()
     {
         const auto config = g_mod->getConfig();
-        return MatrixUtils::getMatrixFromEulerAngles(MatrixUtils::degreesToRads(config->debugFlowFlag1),
-            MatrixUtils::degreesToRads(config->debugFlowFlag2),
-            MatrixUtils::degreesToRads(config->debugFlowFlag3));
+        return MatrixUtils::getMatrixFromEulerAngles(MatrixUtils::degreesToRads(config->debug.flowFlag1),
+            MatrixUtils::degreesToRads(config->debug.flowFlag2),
+            MatrixUtils::degreesToRads(config->debug.flowFlag3));
     }
 }

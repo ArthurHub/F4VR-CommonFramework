@@ -70,7 +70,7 @@ namespace f4cf
         FlowFlag3,
         FlowFlag123,
         HapticTest,
-        // Tune an arbitrary INI field referenced by debugAdjustField ("Section::Key").
+        // Tune an arbitrary INI field referenced by debug.adjustField ("Section::Key").
         Field,
     };
 
@@ -123,26 +123,41 @@ namespace f4cf
         bool checkDebugDumpDataOnceFor(const char* name);
 
         /**
-         * Consume the one-shot "sDebugAddItemsOnceNames" flag: return its current value and immediately
+         * Consume the one-shot "sAddItemsOnceNames" flag: return its current value and immediately
          * clear it (in memory + INI) so the bulk item-add runs exactly once. Empty when nothing is requested.
          */
         std::string consumeDebugAddItemsOnce();
 
-        // Can be used to test things at runtime during development
-        // i.e. check "debugFlowFlag==1" somewhere in code and use config reload to change the value at runtime.
-        float debugFlowFlag1 = 0;
-        float debugFlowFlag2 = 0;
-        float debugFlowFlag3 = 0;
-        std::string debugFlowText1;
-        std::string debugFlowText2;
-        RE::NiTransform debugTransform{};
-        // General usage debug 22-float pose for tuning at runtime via live-reload.
-        // Layout matches FRIK API HandPoseData (5 fingers x {prox,mid,dist,splay}, then palmPitch, palmYaw).
-        // Consumers can convert via frik::api::FRIKApi::HandPoseData::fromFloats(debugHandPose).
-        std::array<float, 22> debugHandPose{};
-        DebugAdjustTarget debugAdjustTarget = DebugAdjustTarget::None;
-        // For DebugAdjustTarget::Field: the "Section::Key" of the arbitrary INI field being tuned.
-        std::string debugAdjustField;
+        /**
+         * Runtime debug/tuning state, backed by the [Debug] INI section and grouped here so the
+         * fields stay together instead of loose on ConfigBase. Field names drop the "Debug" prefix
+         * (the [Debug] section already scopes them): access as e.g. config->debug.flowFlag1.
+         */
+        struct Debug
+        {
+            // Can be used to test things at runtime during development, i.e. check "debug.flowFlag1 == 1"
+            // somewhere in code and use config reload to change the value at runtime.
+            float flowFlag1 = 0;
+            float flowFlag2 = 0;
+            float flowFlag3 = 0;
+            std::string flowText1;
+            std::string flowText2;
+            RE::NiTransform transform{};
+            // General usage debug 22-float pose for tuning at runtime via live-reload.
+            // Layout matches FRIK API HandPoseData (5 fingers x {prox,mid,dist,splay}, then palmPitch, palmYaw).
+            // Consumers can convert via frik::api::FRIKApi::HandPoseData::fromFloats(debug.handPose).
+            std::array<float, 22> handPose{};
+            DebugAdjustTarget adjustTarget = DebugAdjustTarget::None;
+            // For DebugAdjustTarget::Field: the "Section::Key" of the arbitrary INI field being tuned.
+            std::string adjustField;
+            // One-shot name lists consumed via checkDebugDumpDataOnceFor() / consumeDebugAddItemsOnce();
+            // each is cleared (in memory + INI) once consumed so the file-watch reload doesn't re-trigger it.
+            std::string dumpDataOnceNames;
+            std::string addItemsOnceNames;
+        };
+
+        Debug debug;
+
         std::map<std::string, std::string> debugVRUIProperties;
 
     protected:
@@ -214,9 +229,6 @@ namespace f4cf
 
         // the log message pattern to use for the logger
         std::string _logPattern;
-
-        std::string _debugDumpDataOnceNames;
-        std::string _debugAddItemsOnceNames;
 
         // filesystem watch for changes to INI config file to have live reload
         std::unique_ptr<filewatch::FileWatch<std::string>> _iniConfigFileWatch;

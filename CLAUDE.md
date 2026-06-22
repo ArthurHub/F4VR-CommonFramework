@@ -69,10 +69,10 @@ Standard `[Debug]` INI keys provided by the base class:
 ```ini
 iLogLevel = 2              # 0=trace, 1=debug, 2=info
 sLogPattern = %H:%M:%S.%e %l: %v
-fDebugFlowFlag1/2/3 = 0   # Runtime feature toggles, read via g_config.debugFlowFlag1
-sDebugFlowText1/2 =        # Debug text fields
-sDebugDumpDataOnceNames =  # Comma-separated: ui_tree, skelly, fp_skelly, geometry, world, all_nodes
-sDebugAddItemsOnceNames =  # Bulk-add items once: first token = operation (get=obtainable/get-all=everything/print=dry-run of get/print-all=dry-run of get-all), then "category[:filter]" tokens (weapons/throwables/ammo/armor/aid/misc); filter is '|'-sep key=value (name=/keyword= any; armor slot=/class=light|heavy|none; weapon class=melee|gun|unarmed)
+fFlowFlag1/2/3 = 0   # Runtime feature toggles, read via g_config.debug.flowFlag1
+sFlowText1/2 =        # Debug text fields
+sDumpDataOnceNames =  # Comma-separated: ui_tree, skelly, fp_skelly, geometry, world, all_nodes
+sAddItemsOnceNames =  # Bulk-add items once: first token = operation (get=obtainable/get-all=everything/print=dry-run of get/print-all=dry-run of get-all), then "category[:filter]" tokens (weapons/throwables/ammo/armor/aid/misc); filter is '|'-sep key=value (name=/keyword= any; armor slot=/class=light|heavy|none; weapon class=melee|gun|unarmed)
 ```
 
 ### Logging (`src/Logger.h`)

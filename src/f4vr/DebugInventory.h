@@ -9,7 +9,7 @@ namespace f4cf::f4vr
 {
     /**
      * Debug helper to bulk-add game items to the player's inventory by category, for testing.
-     * Wired to the "sDebugAddItemsOnceNames" INI flag the same way DebugDump uses "sDebugDumpDataOnceNames".
+     * Wired to the "sAddItemsOnceNames" INI flag the same way DebugDump uses "sDumpDataOnceNames".
      */
     struct DebugInventory
     {

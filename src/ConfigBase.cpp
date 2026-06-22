@@ -157,31 +157,31 @@ namespace f4cf
      */
     bool ConfigBase::checkDebugDumpDataOnceFor(const char* name)
     {
-        const auto idx = _debugDumpDataOnceNames.find(name);
+        const auto idx = debug.dumpDataOnceNames.find(name);
         if (idx == std::string::npos) {
             return false;
         }
-        _debugDumpDataOnceNames = _debugDumpDataOnceNames.erase(idx, strlen(name));
+        debug.dumpDataOnceNames = debug.dumpDataOnceNames.erase(idx, strlen(name));
         // write to INI for auto-reload not to re-enable it
-        saveIniConfigValue(INI_SECTION_DEBUG, "sDebugDumpDataOnceNames", _debugDumpDataOnceNames.c_str());
+        saveIniConfigValue(INI_SECTION_DEBUG, "sDumpDataOnceNames", debug.dumpDataOnceNames.c_str());
 
         logger::info("---- Debug Dump Data check passed for '{}' ----", name);
         return true;
     }
 
     /**
-     * Consume the one-shot "sDebugAddItemsOnceNames" flag.
+     * Consume the one-shot "sAddItemsOnceNames" flag.
      * Returns the current value and clears it (in memory + INI) so the bulk item-add runs exactly once,
      * and is not re-triggered by the file-watcher reloading the same value.
      */
     std::string ConfigBase::consumeDebugAddItemsOnce()
     {
-        if (_debugAddItemsOnceNames.empty()) {
+        if (debug.addItemsOnceNames.empty()) {
             return {};
         }
-        auto spec = _debugAddItemsOnceNames;
-        _debugAddItemsOnceNames.clear();
-        saveIniConfigValue(INI_SECTION_DEBUG, "sDebugAddItemsOnceNames", "");
+        auto spec = debug.addItemsOnceNames;
+        debug.addItemsOnceNames.clear();
+        saveIniConfigValue(INI_SECTION_DEBUG, "sAddItemsOnceNames", "");
         return spec;
     }
 
@@ -231,25 +231,25 @@ namespace f4cf
         _iniConfigVersion = ini.GetLongValue(INI_SECTION_DEBUG, "iVersion", 0);
         _logLevel = ini.GetLongValue(INI_SECTION_DEBUG, "iLogLevel", 2);
         _logPattern = ini.GetValue(INI_SECTION_DEBUG, "sLogPattern", "%H:%M:%S.%e %L: %v");
-        debugFlowFlag1 = static_cast<float>(ini.GetDoubleValue(INI_SECTION_DEBUG, "fDebugFlowFlag1", 0));
-        debugFlowFlag2 = static_cast<float>(ini.GetDoubleValue(INI_SECTION_DEBUG, "fDebugFlowFlag2", 0));
-        debugFlowFlag3 = static_cast<float>(ini.GetDoubleValue(INI_SECTION_DEBUG, "fDebugFlowFlag3", 0));
-        debugFlowText1 = ini.GetValue(INI_SECTION_DEBUG, "sDebugFlowText1", "");
-        debugFlowText2 = ini.GetValue(INI_SECTION_DEBUG, "sDebugFlowText2", "");
-        debugTransform = getTransformValue(ini, INI_SECTION_DEBUG, "tDebugTransform", common::MatrixUtils::getTransform(0, 0, 0, 0, 0, 0));
-        debugHandPose = getHandPoseValue(ini, INI_SECTION_DEBUG, "hDebugHandPose", {});
-        // sDebugAdjustTarget is either a fixed keyword (transform/handpose/flag1...) or, when it
+        debug.flowFlag1 = static_cast<float>(ini.GetDoubleValue(INI_SECTION_DEBUG, "fFlowFlag1", 0));
+        debug.flowFlag2 = static_cast<float>(ini.GetDoubleValue(INI_SECTION_DEBUG, "fFlowFlag2", 0));
+        debug.flowFlag3 = static_cast<float>(ini.GetDoubleValue(INI_SECTION_DEBUG, "fFlowFlag3", 0));
+        debug.flowText1 = ini.GetValue(INI_SECTION_DEBUG, "sFlowText1", "");
+        debug.flowText2 = ini.GetValue(INI_SECTION_DEBUG, "sFlowText2", "");
+        debug.transform = getTransformValue(ini, INI_SECTION_DEBUG, "tTransform", common::MatrixUtils::getTransform(0, 0, 0, 0, 0, 0));
+        debug.handPose = getHandPoseValue(ini, INI_SECTION_DEBUG, "hHandPose", {});
+        // sAdjustTarget is either a fixed keyword (transform/handpose/flag1...) or, when it
         // contains "::", a "Section::Key" reference to any INI field tuned live via the field mode.
-        const std::string adjustTarget = ini.GetValue(INI_SECTION_DEBUG, "sDebugAdjustTarget", "none");
+        const std::string adjustTarget = ini.GetValue(INI_SECTION_DEBUG, "sAdjustTarget", "none");
         if (adjustTarget.find("::") != std::string::npos) {
-            debugAdjustTarget = DebugAdjustTarget::Field;
-            debugAdjustField = adjustTarget;
+            debug.adjustTarget = DebugAdjustTarget::Field;
+            debug.adjustField = adjustTarget;
         } else {
-            debugAdjustTarget = parseDebugAdjustTarget(adjustTarget);
-            debugAdjustField.clear();
+            debug.adjustTarget = parseDebugAdjustTarget(adjustTarget);
+            debug.adjustField.clear();
         }
-        _debugDumpDataOnceNames = ini.GetValue(INI_SECTION_DEBUG, "sDebugDumpDataOnceNames", "");
-        _debugAddItemsOnceNames = ini.GetValue(INI_SECTION_DEBUG, "sDebugAddItemsOnceNames", "");
+        debug.dumpDataOnceNames = ini.GetValue(INI_SECTION_DEBUG, "sDumpDataOnceNames", "");
+        debug.addItemsOnceNames = ini.GetValue(INI_SECTION_DEBUG, "sAddItemsOnceNames", "");
     }
 
     void ConfigBase::loadVRUISection(const CSimpleIniA& ini)

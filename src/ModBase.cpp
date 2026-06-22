@@ -274,7 +274,7 @@ namespace f4cf
     }
 
     /**
-     * Dump game data if requested in "sDebugDumpDataOnceNames" flag in INI config.
+     * Dump game data if requested in "sDumpDataOnceNames" flag in INI config.
      */
     void ModBase::checkDebugDump() const
     {
@@ -299,7 +299,7 @@ namespace f4cf
     }
 
     /**
-     * Bulk-add game items to the player inventory if requested in "sDebugAddItemsOnceNames" flag in INI config.
+     * Bulk-add game items to the player inventory if requested in "sAddItemsOnceNames" flag in INI config.
      * The flag is consumed (cleared in memory + INI) when read, so the add runs exactly once per request.
      */
     void ModBase::checkDebugAddItems() const

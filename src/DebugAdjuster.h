@@ -6,7 +6,7 @@ namespace f4cf
 {
     /**
      * In-game adjuster for the ConfigBase debug fields. When the active config's
-     * `debugAdjustTarget` is not None, controller input mutates the corresponding
+     * `debug.adjustTarget` is not None, controller input mutates the corresponding
      * value live; Primary-A short-tap saves to INI, Primary-A long-press reloads.
      *
      * Input map (when target == Transform):
@@ -26,10 +26,10 @@ namespace f4cf
      * secondary Y = flag3 — all three editable at once.
      *
      * Input map (when target == HapticTest): Primary-A tap parses a HapticSegment sequence from
-     * sDebugFlowText1 and plays it on the primary controller (dev-only haptic-pattern tester). This
+     * sFlowText1 and plays it on the primary controller (dev-only haptic-pattern tester). This
      * target owns Primary-A, so the shared save/reload bindings are skipped while it is active.
      *
-     * Field mode (when sDebugAdjustTarget is a "Section::Key" reference instead of a fixed keyword,
+     * Field mode (when sAdjustTarget is a "Section::Key" reference instead of a fixed keyword,
      * e.g. "MyMod::tWeaponOffset"): tune any INI field live. The value kind is inferred from the key
      * prefix (t=transform, h=hand pose, f=float) and the matching input map above applies. The edit
      * is pushed into the running config in-memory each frame, and Primary-A save/reload write to /

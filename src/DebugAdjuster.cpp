@@ -34,7 +34,7 @@ namespace f4cf
         // Active "Section::Key" field target state for DebugAdjustTarget::Field. (Re)loaded from the
         // INI whenever the field string changes; mutated in place each frame. s_fieldType is the
         // value kind inferred from the key's first letter ('t' transform, 'h' hand pose, 'f' float),
-        // or 0 when nothing valid is loaded. s_fieldRaw mirrors the last-seen debugAdjustField so the
+        // or 0 when nothing valid is loaded. s_fieldRaw mirrors the last-seen debug.adjustField so the
         // (potentially failing) parse + seed read + logging happens once per change, not every frame.
         std::string s_fieldRaw;
         std::string s_fieldSection;
@@ -198,7 +198,7 @@ namespace f4cf
      */
     void DebugAdjuster::onFrameUpdate(ConfigBase& config)
     {
-        const bool active = config.debugAdjustTarget != DebugAdjustTarget::None;
+        const bool active = config.debug.adjustTarget != DebugAdjustTarget::None;
 
         // Idempotent and self-restoring: re-enabled / released the moment the adjuster is turned off.
         vrcf::VRControllersSuppress.setAllSuppressed("DebugAdjuster", active);
@@ -209,26 +209,26 @@ namespace f4cf
             return;
         }
 
-        switch (config.debugAdjustTarget) {
+        switch (config.debug.adjustTarget) {
         case DebugAdjustTarget::None:
             break; // unreachable, handled by the active guard above
         case DebugAdjustTarget::Transform:
-            adjustTransform(config.debugTransform);
+            adjustTransform(config.debug.transform);
             break;
         case DebugAdjustTarget::HandPose:
-            adjustHandPose(config.debugHandPose);
+            adjustHandPose(config.debug.handPose);
             break;
         case DebugAdjustTarget::FlowFlag1:
-            adjustFloat(config.debugFlowFlag1);
+            adjustFloat(config.debug.flowFlag1);
             break;
         case DebugAdjustTarget::FlowFlag2:
-            adjustFloat(config.debugFlowFlag2);
+            adjustFloat(config.debug.flowFlag2);
             break;
         case DebugAdjustTarget::FlowFlag3:
-            adjustFloat(config.debugFlowFlag3);
+            adjustFloat(config.debug.flowFlag3);
             break;
         case DebugAdjustTarget::FlowFlag123:
-            adjustFloat3(config.debugFlowFlag1, config.debugFlowFlag2, config.debugFlowFlag3);
+            adjustFloat3(config.debug.flowFlag1, config.debug.flowFlag2, config.debug.flowFlag3);
             break;
         case DebugAdjustTarget::HapticTest:
             // Owns Primary-A as the play trigger, so it bypasses the shared save/reload bindings below.
@@ -350,8 +350,8 @@ namespace f4cf
 
     /**
      * Dev-only haptic-pattern tester. On Primary-A tap, parses a HapticSegment sequence from the
-     * config's debugFlowText1 (sDebugFlowText1) and plays it on the primary controller. Combined
-     * with INI hot-reload this lets the user iterate on custom patterns: edit sDebugFlowText1, let
+     * config's debug.flowText1 (sFlowText1) and plays it on the primary controller. Combined
+     * with INI hot-reload this lets the user iterate on custom patterns: edit sFlowText1, let
      * it reload, tap A to feel the result, repeat. No-op (with a warning) when nothing parses.
      */
     void DebugAdjuster::adjustHapticTest(const ConfigBase& config)
@@ -359,27 +359,27 @@ namespace f4cf
         if (!vrcf::VRControllers.isTap(vrcf::Hand::Primary, vr::k_EButton_A)) {
             return;
         }
-        const auto segments = parseHapticSegments(config.debugFlowText1);
+        const auto segments = parseHapticSegments(config.debug.flowText1);
         if (segments.empty()) {
-            logger::warn("DebugAdjuster: no valid haptic segments in sDebugFlowText1='{}'", config.debugFlowText1);
+            logger::warn("DebugAdjuster: no valid haptic segments in sFlowText1='{}'", config.debug.flowText1);
             return;
         }
-        logger::info("DebugAdjuster: playing {} haptic segment(s) from sDebugFlowText1", segments.size());
+        logger::info("DebugAdjuster: playing {} haptic segment(s) from sFlowText1", segments.size());
         vrcf::VRHaptics.trigger(vrcf::Hand::Primary, segments);
     }
 
     /**
-     * Resolve config.debugAdjustField ("Section::Key") and, when it changes, seed the working value
+     * Resolve config.debug.adjustField ("Section::Key") and, when it changes, seed the working value
      * from the on-disk INI. The value kind is inferred from the key's first letter (t=transform,
      * h=hand pose, f=float). Returns true once a supported field is loaded. The parse/seed/log only
      * runs when the field string changes, so an invalid field doesn't spam the log every frame.
      */
     bool DebugAdjuster::loadField(const ConfigBase& config)
     {
-        if (config.debugAdjustField == s_fieldRaw) {
+        if (config.debug.adjustField == s_fieldRaw) {
             return s_fieldType != 0;
         }
-        s_fieldRaw = config.debugAdjustField;
+        s_fieldRaw = config.debug.adjustField;
         s_fieldType = 0;
 
         const auto sep = s_fieldRaw.find("::");
@@ -415,7 +415,7 @@ namespace f4cf
     }
 
     /**
-     * Adjust an arbitrary INI field referenced by config.debugAdjustField using the same input map as
+     * Adjust an arbitrary INI field referenced by config.debug.adjustField using the same input map as
      * the matching fixed target (transform/hand pose/float). The mutated working value is pushed into
      * the running config in-memory each frame it changes (no disk write) so the effect is live; the
      * explicit Primary-A save writes it to that key, and a reload re-seeds it from disk.
@@ -456,35 +456,35 @@ namespace f4cf
         // const_cast is fine: ConfigBase exposes saveIniConfigValue as non-const because it touches
         // file state and watcher flags, but the in-memory config values we're saving are not mutated.
         auto& mutableConfig = const_cast<ConfigBase&>(config);
-        switch (config.debugAdjustTarget) {
+        switch (config.debug.adjustTarget) {
         case DebugAdjustTarget::Transform:
-            mutableConfig.saveIniConfigValue(INI_SECTION_DEBUG, "tDebugTransform", transformToFixedString(config.debugTransform).c_str());
-            logger::info("DebugAdjuster: saved tDebugTransform to INI");
+            mutableConfig.saveIniConfigValue(INI_SECTION_DEBUG, "tTransform", transformToFixedString(config.debug.transform).c_str());
+            logger::info("DebugAdjuster: saved tTransform to INI");
             break;
         case DebugAdjustTarget::HandPose:
-            mutableConfig.saveIniConfigValue(INI_SECTION_DEBUG, "hDebugHandPose", handPoseToFixedString(config.debugHandPose).c_str());
-            logger::info("DebugAdjuster: saved hDebugHandPose to INI");
+            mutableConfig.saveIniConfigValue(INI_SECTION_DEBUG, "hHandPose", handPoseToFixedString(config.debug.handPose).c_str());
+            logger::info("DebugAdjuster: saved hHandPose to INI");
             break;
         case DebugAdjustTarget::FlowFlag1:
-            mutableConfig.saveIniConfigValue(INI_SECTION_DEBUG, "fDebugFlowFlag1", toFixed(config.debugFlowFlag1).c_str());
-            logger::info("DebugAdjuster: saved fDebugFlowFlag1 to INI");
+            mutableConfig.saveIniConfigValue(INI_SECTION_DEBUG, "fFlowFlag1", toFixed(config.debug.flowFlag1).c_str());
+            logger::info("DebugAdjuster: saved fFlowFlag1 to INI");
             break;
         case DebugAdjustTarget::FlowFlag2:
-            mutableConfig.saveIniConfigValue(INI_SECTION_DEBUG, "fDebugFlowFlag2", toFixed(config.debugFlowFlag2).c_str());
-            logger::info("DebugAdjuster: saved fDebugFlowFlag2 to INI");
+            mutableConfig.saveIniConfigValue(INI_SECTION_DEBUG, "fFlowFlag2", toFixed(config.debug.flowFlag2).c_str());
+            logger::info("DebugAdjuster: saved fFlowFlag2 to INI");
             break;
         case DebugAdjustTarget::FlowFlag3:
-            mutableConfig.saveIniConfigValue(INI_SECTION_DEBUG, "fDebugFlowFlag3", toFixed(config.debugFlowFlag3).c_str());
-            logger::info("DebugAdjuster: saved fDebugFlowFlag3 to INI");
+            mutableConfig.saveIniConfigValue(INI_SECTION_DEBUG, "fFlowFlag3", toFixed(config.debug.flowFlag3).c_str());
+            logger::info("DebugAdjuster: saved fFlowFlag3 to INI");
             break;
         case DebugAdjustTarget::FlowFlag123:
             mutableConfig.saveIniConfigValues(INI_SECTION_DEBUG,
                 {
-                    { "fDebugFlowFlag1", toFixed(config.debugFlowFlag1) },
-                    { "fDebugFlowFlag2", toFixed(config.debugFlowFlag2) },
-                    { "fDebugFlowFlag3", toFixed(config.debugFlowFlag3) },
+                    { "fFlowFlag1", toFixed(config.debug.flowFlag1) },
+                    { "fFlowFlag2", toFixed(config.debug.flowFlag2) },
+                    { "fFlowFlag3", toFixed(config.debug.flowFlag3) },
                 });
-            logger::info("DebugAdjuster: saved fDebugFlowFlag1/2/3 to INI");
+            logger::info("DebugAdjuster: saved fFlowFlag1/2/3 to INI");
             break;
         case DebugAdjustTarget::Field:
             if (s_fieldType != 0) {
