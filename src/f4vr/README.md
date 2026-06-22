@@ -24,6 +24,7 @@ that make it all work.
 | [`F4VRThumbstickControls.h`](F4VRThumbstickControls.h) | Enable/disable the player's analog thumbstick by swapping the controls deadzone INI settings. |
 | [`PapyrusGatewayBase.h`](PapyrusGatewayBase.h) | Base class to *call Papyrus from C++* via a registration script handshake (single instance). |
 | [`DebugDump.h`](DebugDump.h) | Diagnostic dumps (UI tree, skeleton, geometry, world, nodes) triggered by `sDebugDumpDataOnceNames`. |
+| [`DebugInventory.h`](DebugInventory.h) | Bulk-add game items to the player inventory by category (weapons/throwables/ammo/armor/aid/misc). Spec starts with an operation (`get` = obtainable / `get-all` = everything / `print` = dry-run of get / `print-all` = dry-run of get-all) then `category[:filter]` tokens, where filter is a `\|`-separated `key=value` set (`name=`/`keyword=` any category, armor `slot=`/`class=`, weapon `class=melee/gun/unarmed`). Also a typed public API (`ItemFilter`, `iterateAllObjectsOfCategory`). Triggered by `sDebugAddItemsOnceNames`. |
 | [`MiscStructs.h`](MiscStructs.h) | Small game structs not modeled by CommonLibF4VR. |
 
 ## Quick reference

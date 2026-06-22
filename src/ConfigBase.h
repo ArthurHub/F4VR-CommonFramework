@@ -122,6 +122,12 @@ namespace f4cf
 
         bool checkDebugDumpDataOnceFor(const char* name);
 
+        /**
+         * Consume the one-shot "sDebugAddItemsOnceNames" flag: return its current value and immediately
+         * clear it (in memory + INI) so the bulk item-add runs exactly once. Empty when nothing is requested.
+         */
+        std::string consumeDebugAddItemsOnce();
+
         // Can be used to test things at runtime during development
         // i.e. check "debugFlowFlag==1" somewhere in code and use config reload to change the value at runtime.
         float debugFlowFlag1 = 0;
@@ -210,6 +216,7 @@ namespace f4cf
         std::string _logPattern;
 
         std::string _debugDumpDataOnceNames;
+        std::string _debugAddItemsOnceNames;
 
         // filesystem watch for changes to INI config file to have live reload
         std::unique_ptr<filewatch::FileWatch<std::string>> _iniConfigFileWatch;

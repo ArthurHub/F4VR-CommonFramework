@@ -170,6 +170,22 @@ namespace f4cf
     }
 
     /**
+     * Consume the one-shot "sDebugAddItemsOnceNames" flag.
+     * Returns the current value and clears it (in memory + INI) so the bulk item-add runs exactly once,
+     * and is not re-triggered by the file-watcher reloading the same value.
+     */
+    std::string ConfigBase::consumeDebugAddItemsOnce()
+    {
+        if (_debugAddItemsOnceNames.empty()) {
+            return {};
+        }
+        auto spec = _debugAddItemsOnceNames;
+        _debugAddItemsOnceNames.clear();
+        saveIniConfigValue(INI_SECTION_DEBUG, "sDebugAddItemsOnceNames", "");
+        return spec;
+    }
+
+    /**
      * Load all INI config values.
      * If INI file doesn't exist it will be created from the default embedded resource.
      * If the found INI version is not the latest it will run update to the latest using embedded resource.
@@ -233,6 +249,7 @@ namespace f4cf
             debugAdjustField.clear();
         }
         _debugDumpDataOnceNames = ini.GetValue(INI_SECTION_DEBUG, "sDebugDumpDataOnceNames", "");
+        _debugAddItemsOnceNames = ini.GetValue(INI_SECTION_DEBUG, "sDebugAddItemsOnceNames", "");
     }
 
     void ConfigBase::loadVRUISection(const CSimpleIniA& ini)

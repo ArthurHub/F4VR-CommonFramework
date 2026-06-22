@@ -6,6 +6,7 @@
 #include "MainLoopHook.h"
 #include "common/PerfMonitor.h"
 #include "f4vr/DebugDump.h"
+#include "f4vr/DebugInventory.h"
 
 #include "f4vr/PlayerNodes.h"
 #include "vrcf/VRControllersHaptic.h"
@@ -173,6 +174,7 @@ namespace f4cf
             _debugAdjuster.onFrameUpdate(*_settings.config);
 
             checkDebugDump();
+            checkDebugAddItems();
         }
         CPPTRACE_CATCH(const std::exception& ex)
         {
@@ -293,6 +295,18 @@ namespace f4cf
         }
         if (_settings.config->checkDebugDumpDataOnceFor("geometry")) {
             f4vr::DebugDump::dumpPlayerGeometry();
+        }
+    }
+
+    /**
+     * Bulk-add game items to the player inventory if requested in "sDebugAddItemsOnceNames" flag in INI config.
+     * The flag is consumed (cleared in memory + INI) when read, so the add runs exactly once per request.
+     */
+    void ModBase::checkDebugAddItems() const
+    {
+        const auto spec = _settings.config->consumeDebugAddItemsOnce();
+        if (!spec.empty()) {
+            f4vr::DebugInventory::iterateObjects(spec);
         }
     }
 }

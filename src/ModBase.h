@@ -69,6 +69,9 @@ namespace f4cf
         // Dump game data if requested in "sDebugDumpDataOnceNames" flag in INI config.
         virtual void checkDebugDump() const;
 
+        // Bulk-add game items to the player inventory if requested in "sDebugAddItemsOnceNames" flag in INI config.
+        virtual void checkDebugAddItems() const;
+
         Settings _settings;
         const F4SE::MessagingInterface* _messaging = nullptr;
         DebugAdjuster _debugAdjuster;
