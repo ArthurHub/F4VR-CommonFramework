@@ -155,14 +155,44 @@ namespace f4cf::f4vr
      */
     bool isUnarmedWeaponEquipped()
     {
-        return CombatUtilities_IsActorUsingMelee(getPlayer()) &&
-               GetEquippedWeapon(RE::BSScript::Internal::VirtualMachine::GetSingleton(), 0, RE::PlayerCharacter::GetSingleton(), 0) == nullptr;
+        return CombatUtilities_IsActorUsingMelee(getPlayer()) && getEquippedWeapon() == nullptr;
     }
 
     /**
      * Get the game name of the equipped weapon.
      */
+    RE::TESObjectWEAP* getEquippedWeapon()
+    {
+        auto pc = getPlayer();
+        auto vm = RE::BSScript::Internal::VirtualMachine::GetSingleton();
+        return pc && vm ? GetEquippedWeapon(vm, 0, pc, 0) : nullptr;
+    }
+
+    /**
+     * Get the game full display name of the equipped weapon.
+     * This name is localized to the current game language and can be different than the internal editor name.
+     */
     std::string getEquippedWeaponName()
+    {
+        const auto weap = getEquippedWeapon();
+        return weap != nullptr ? weap->GetFullName() : std::string{};
+    }
+
+    /**
+     * Get the game internal name used for for editor of the equipped weapon.
+     * This name is always in Engligh!
+     */
+    std::string getEquippedWeaponInternalName()
+    {
+        const auto weap = getEquippedWeapon();
+        return weap != nullptr ? weap->GetFormEditorID() : std::string{};
+    }
+
+    /**
+     * Get the game name of the equipped weapon.
+     * Slower than the other and can return throwable name when no proper weapon is equipped.
+     */
+    std::string getEquippedWeaponNameLegacy()
     {
         const auto* process = getPlayer()->currentProcess;
         const auto* middleHigh = process ? process->middleHigh : nullptr;

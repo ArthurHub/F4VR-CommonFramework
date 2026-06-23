@@ -25,7 +25,10 @@ namespace f4cf::f4vr
     bool IsWeaponDrawn();
     bool isMeleeWeaponEquipped();
     bool isUnarmedWeaponEquipped();
+    RE::TESObjectWEAP* getEquippedWeapon();
     std::string getEquippedWeaponName();
+    std::string getEquippedWeaponInternalName();
+    std::string getEquippedWeaponNameLegacy();
     bool hasKeyword(const RE::TESObjectARMO* armor, std::uint32_t keywordFormId);
     bool isJumpingOrInAir();
     bool isPlayerSneaking();
