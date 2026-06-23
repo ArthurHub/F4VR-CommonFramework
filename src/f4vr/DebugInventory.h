@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <functional>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -51,9 +52,9 @@ namespace f4cf::f4vr
 
         /**
          * Typed item filter for iterateObjects. Every field is an independent constraint, AND-ed
-         * together; an empty string / nullopt means "no constraint on this". name and keyword are matched
-         * case-insensitively on any category; slotMask and itemClass are armor- (and itemClass also weapon-)
-         * specific and ignored for categories they don't apply to.
+         * together; an empty string / nullopt / null predicate means "no constraint on this". name and keyword
+         * are matched case-insensitively on any category; slotMask and itemClass are armor- (and itemClass also
+         * weapon-) specific and ignored for categories they don't apply to.
          */
         struct ItemFilter
         {
@@ -61,6 +62,10 @@ namespace f4cf::f4vr
             std::string keyword; // keyword editor-ID substring (case-insensitive); empty = any
             std::optional<std::uint32_t> slotMask; // armor: OR-matched CK-slot mask (bit = CK slot - 30); nullopt = any
             std::optional<ItemClass> itemClass; // armor weight or weapon type; nullopt = any
+            // Arbitrary extra constraint run against each candidate form (already restricted to the chosen
+            // category, so a caller may static_cast to that category's concrete type); null = no constraint.
+            // Code-only: parseFilter / the string spec never set it, so sAddItemsOnceNames keeps working unchanged.
+            std::function<bool(const RE::TESForm*)> predicate;
         };
 
         static void iterateObjects(std::string_view spec);

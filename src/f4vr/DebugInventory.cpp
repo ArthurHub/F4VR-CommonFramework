@@ -128,14 +128,15 @@ namespace
      * Walk every form of type T (must derive from BGSKeywordForm so name/keyword filtering and the print-mode
      * keyword listing work): named (non-empty display name, which drops the unnamed templates / test forms /
      * leveled-list helpers that flood the form arrays), optionally name-filtered and keyword-filtered, optionally
-     * restricted to leveled-list-reachable FormIDs (`reachable`, nullptr = no restriction), and passing an optional
-     * per-form predicate (slot/class/playable gates). Each match is added to the player's inventory, or, when
-     * `printOnly`, logged instead (with `describe` plus the form's keywords). Returns the match count.
+     * restricted to leveled-list-reachable FormIDs (`reachable`, nullptr = no restriction), passing the optional
+     * caller `predicate` (an arbitrary constraint on the base form, ItemFilter::predicate) and the optional typed
+     * `extraFilter` (the category's own slot/class/playable gates). Each match is added to the player's inventory,
+     * or, when `printOnly`, logged instead (with `describe` plus the form's keywords). Returns the match count.
      */
     template <class T>
     std::size_t addAllForms(RE::PlayerCharacter* player, const std::uint32_t count, const std::string& needleLower, const std::string& keywordLower,
-        const std::unordered_set<RE::TESFormID>* reachable, const bool printOnly, const std::function<bool(const T*)>& extraFilter = {},
-        const std::function<std::string(const T*)>& describe = {})
+        const std::unordered_set<RE::TESFormID>* reachable, const bool printOnly, const std::function<bool(const RE::TESForm*)>& predicate = {},
+        const std::function<bool(const T*)>& extraFilter = {}, const std::function<std::string(const T*)>& describe = {})
     {
         auto* dataHandler = RE::TESDataHandler::GetSingleton();
         if (!dataHandler) {
@@ -151,6 +152,9 @@ namespace
                 continue;
             }
             if (reachable && !reachable->contains(form->formID)) {
+                continue;
+            }
+            if (predicate && !predicate(form)) {
                 continue;
             }
             if (extraFilter && !extraFilter(form)) {
@@ -454,6 +458,9 @@ namespace
         if (filter.itemClass) {
             out += std::format(" class={}", itemClassName(*filter.itemClass));
         }
+        if (filter.predicate) {
+            out += " predicate";
+        }
         return out;
     }
 
@@ -551,6 +558,7 @@ namespace f4cf::f4vr
                 kw,
                 reachable,
                 printOnly,
+                filter.predicate,
                 [weaponClass](const RE::TESObjectWEAP* w) {
                     return isPlayableWeapon(w) && !isThrowableWeapon(w) && (!weaponClass || weaponMatchesClass(w, *weaponClass));
                 },
@@ -564,13 +572,14 @@ namespace f4cf::f4vr
                 kw,
                 reachable,
                 printOnly,
+                filter.predicate,
                 [](const RE::TESObjectWEAP* w) {
                     return isPlayableWeapon(w) && isThrowableWeapon(w);
                 },
                 describeWeapon);
             break;
         case ItemCategory::Ammo:
-            matched = addAllForms<RE::TESAmmo>(player, AMMO_COUNT, name, kw, reachable, printOnly);
+            matched = addAllForms<RE::TESAmmo>(player, AMMO_COUNT, name, kw, reachable, printOnly, filter.predicate);
             break;
         case ItemCategory::Armor: {
             const auto slotMask = filter.slotMask;
@@ -581,6 +590,7 @@ namespace f4cf::f4vr
                 kw,
                 reachable,
                 printOnly,
+                filter.predicate,
                 [slotMask, armorWeight](const RE::TESObjectARMO* a) {
                     if (slotMask && (a->GetSlotMask() & *slotMask) == 0) {
                         return false;
@@ -594,10 +604,10 @@ namespace f4cf::f4vr
             break;
         }
         case ItemCategory::Aid:
-            matched = addAllForms<RE::AlchemyItem>(player, ITEM_COUNT, name, kw, reachable, printOnly);
+            matched = addAllForms<RE::AlchemyItem>(player, ITEM_COUNT, name, kw, reachable, printOnly, filter.predicate);
             break;
         case ItemCategory::Misc:
-            matched = addAllForms<RE::TESObjectMISC>(player, ITEM_COUNT, name, kw, reachable, printOnly);
+            matched = addAllForms<RE::TESObjectMISC>(player, ITEM_COUNT, name, kw, reachable, printOnly, filter.predicate);
             break;
         }
 
