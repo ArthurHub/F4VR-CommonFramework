@@ -127,35 +127,32 @@ namespace f4cf::f4vr
     /**
      * @return true if the player has any weapon in the hand (including fists).
      */
-    bool IsWeaponDrawn()
+    bool isWeaponDrawn()
     {
         return getPlayer()->GetWeaponMagicDrawn();
     }
 
     /**
-     * @return true if the equipped weapon is a melee weapon type.
+     * @return true if the equipped weapon is a melee weapon type, unarmed is NOT melee.
      */
-    bool isMeleeWeaponEquipped()
+    bool isMeleeWeaponDrawn()
     {
-        const auto player = getPlayer();
-        if (!CombatUtilities_IsActorUsingMelee(player)) {
+        if (!isWeaponDrawn()) {
             return false;
         }
-        const auto* inventory = player->inventoryList;
-        if (!inventory) {
+        const auto equippedWeapon = getEquippedWeapon();
+        if (!equippedWeapon) {
             return false;
         }
-        return std::ranges::any_of(inventory->data, [](const auto& item) {
-            return item.object->formType == RE::ENUM_FORM_ID::kWEAP && item.stackData->flags.any(RE::BGSInventoryItem::Stack::Flag::kSlotMask);
-        });
+        return equippedWeapon->IsMeleeWeapon();
     }
 
     /**
-     * @return true if the player is in melee/unarmed stance with no weapon item equipped (pure fists).
+     * @return true if the player is in unarmed stance with no weapon item equipped (pure fists).
      */
-    bool isUnarmedWeaponEquipped()
+    bool isUnarmedWeaponDrawn()
     {
-        return CombatUtilities_IsActorUsingMelee(getPlayer()) && getEquippedWeapon() == nullptr;
+        return isWeaponDrawn() && getEquippedWeapon() == nullptr;
     }
 
     /**
@@ -163,8 +160,8 @@ namespace f4cf::f4vr
      */
     RE::TESObjectWEAP* getEquippedWeapon()
     {
-        auto pc = getPlayer();
-        auto vm = RE::BSScript::Internal::VirtualMachine::GetSingleton();
+        auto* pc = getPlayer();
+        auto* vm = RE::BSScript::Internal::VirtualMachine::GetSingleton();
         return pc && vm ? GetEquippedWeapon(vm, 0, pc, 0) : nullptr;
     }
 

@@ -22,9 +22,9 @@ namespace f4cf::f4vr
     // Weapons/Armor/Player
     bool isPrimaryHand(const vrcf::Hand hand);
     void setWandsVisibility(bool show, bool leftWand);
-    bool IsWeaponDrawn();
-    bool isMeleeWeaponEquipped();
-    bool isUnarmedWeaponEquipped();
+    bool isWeaponDrawn();
+    bool isMeleeWeaponDrawn();
+    bool isUnarmedWeaponDrawn();
     RE::TESObjectWEAP* getEquippedWeapon();
     std::string getEquippedWeaponName();
     std::string getEquippedWeaponInternalName();
