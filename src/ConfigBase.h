@@ -3,7 +3,10 @@
 #include <SimpleIni.h>
 #include <array>
 #include <atomic>
+#include <map>
+#include <mutex>
 #include <thomasmonkman-filewatch/FileWatch.hpp>
+#include <utility>
 #include <variant>
 
 #include "Common/CommonUtils.h"
@@ -47,8 +50,9 @@ namespace f4cf
                 : _value(std::move(value))
             {}
 
-            /** Write this value to the given INI under section/key, using the type-appropriate setter. */
             void applyTo(CSimpleIniA& ini, const char* section, const char* key) const;
+
+            std::string toString() const;
 
         private:
             std::variant<bool, int, float, std::string> _value;
@@ -88,26 +92,23 @@ namespace f4cf
         virtual void load();
         virtual void save();
 
-        /**
-         * Re-read all values from the on-disk INI file (no version migration, no watcher restart).
-         */
         void reload();
 
-        /**
-         * Re-apply the on-disk INI to all in-memory config members, but with a single key value
-         * overridden in-memory only (the file is not modified). Used by the DebugAdjuster field
-         * mode to push a live working value into the mod's config without writing to disk each frame.
-         */
         void applyIniConfigWithOverride(const char* section, const char* key, const char* value);
 
-        /**
-         * Read the current on-disk value for an arbitrary section/key, parsed as the named type.
-         * Returns defaultValue if the file can't be read or the value is missing/malformed.
-         * Used by the DebugAdjuster field mode to seed its working value from any INI field.
-         */
         RE::NiTransform readIniTransformValue(const char* section, const char* key, const RE::NiTransform& defaultValue) const;
         std::array<float, 22> readIniHandPoseValue(const char* section, const char* key, const std::array<float, 22>& defaultValue) const;
         float readIniFloatValue(const char* section, const char* key, float defaultValue) const;
+
+        std::string getConfigValue(const char* section, const char* key, const char* defaultValue = "") const;
+
+        void setConfigOverride(const char* section, const char* key, const config::IniValue& value);
+
+        void clearConfigOverride(const char* section, const char* key);
+
+        void clearAllConfigOverrides();
+
+        bool hasConfigOverride(const char* section, const char* key) const;
 
         void loadEmbeddedDefaultOnly();
 
@@ -122,10 +123,6 @@ namespace f4cf
 
         bool checkDebugDumpDataOnceFor(const char* name);
 
-        /**
-         * Consume the one-shot "sAddItemsOnceNames" flag: return its current value and immediately
-         * clear it (in memory + INI) so the bulk item-add runs exactly once. Empty when nothing is requested.
-         */
         std::string consumeDebugAddItemsOnce();
 
         /**
@@ -174,6 +171,10 @@ namespace f4cf
         void loadVRUISection(const CSimpleIniA& ini);
         void loadIniConfigValues();
         void applyIniConfig(const CSimpleIniA& ini);
+
+        // Stamp all active session overrides onto the given INI (in-memory only) before it is applied
+        // to the typed members. Called on every load path so overrides survive reloads.
+        void applyConfigOverrides(CSimpleIniA& ini) const;
         void saveVRUIIniSection(CSimpleIniA& ini);
         bool loadIniFromFile(CSimpleIniA& ini) const;
         void saveIniToFile(const CSimpleIniA& ini);
@@ -241,5 +242,10 @@ namespace f4cf
 
         // Handle ignoring file watch change event IFF the change was made by us
         std::atomic<bool> _ignoreNextIniFileChange = false;
+
+        // Session-only value overrides keyed by {section, key}, re-applied on every load and never
+        // persisted to disk. Guarded by _overridesMutex as it is read from the file-watch thread.
+        std::map<std::pair<std::string, std::string>, config::IniValue> _overrides;
+        mutable std::mutex _overridesMutex;
     };
 }

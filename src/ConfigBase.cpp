@@ -78,6 +78,27 @@ namespace f4cf::config
             },
             _value);
     }
+
+    /**
+     * Render this value to its INI string form. Kept consistent with applyTo so the result parses back
+     * through CSimpleIniA's GetBoolValue/GetLongValue/GetDoubleValue/GetValue to the same value.
+     */
+    std::string IniValue::toString() const
+    {
+        if (const auto* v = std::get_if<bool>(&_value)) {
+            return *v ? "true" : "false";
+        }
+        if (const auto* v = std::get_if<int>(&_value)) {
+            return std::to_string(*v);
+        }
+        if (const auto* v = std::get_if<float>(&_value)) {
+            return fmt::format("{}", *v);
+        }
+        if (const auto* v = std::get_if<std::string>(&_value)) {
+            return *v;
+        }
+        return {};
+    }
 }
 
 namespace f4cf
@@ -275,6 +296,7 @@ namespace f4cf
             throw std::runtime_error("Failed to load INI config file! Error: " + std::to_string(rc));
         }
 
+        applyConfigOverrides(ini);
         applyIniConfig(ini);
     }
 
@@ -307,8 +329,107 @@ namespace f4cf
         if (!loadIniFromFile(ini)) {
             return;
         }
+        // persistent session overrides first, then the caller's transient one-off override on top
+        applyConfigOverrides(ini);
         ini.SetValue(section, key, value);
         applyIniConfig(ini);
+    }
+
+    /**
+     * Stamp every active session override onto the given INI before it is propagated to the typed
+     * members. Uses SetValue with the string form (no logging, unlike IniValue::applyTo) since this
+     * runs on every reload; the string parses back through the matching getter when the member loads.
+     */
+    void ConfigBase::applyConfigOverrides(CSimpleIniA& ini) const
+    {
+        std::lock_guard lock(_overridesMutex);
+        for (const auto& [sectionKey, value] : _overrides) {
+            ini.SetValue(sectionKey.first.c_str(), sectionKey.second.c_str(), value.toString().c_str());
+        }
+    }
+
+    /**
+     * Get the current effective value for an arbitrary section/key as a string: an active session
+     * override if one is set (see setConfigOverride), otherwise the on-disk INI value, otherwise
+     * defaultValue. Returns the raw string form; the caller parses it to the type it expects.
+     * Note: when the key is absent from the file the caller's defaultValue is returned, which may
+     * differ from the mod's own hard-coded default used when loading the typed member.
+     */
+    std::string ConfigBase::getConfigValue(const char* section, const char* key, const char* defaultValue) const
+    {
+        {
+            std::lock_guard lock(_overridesMutex);
+            const auto it = _overrides.find({ section, key });
+            if (it != _overrides.end()) {
+                return it->second.toString();
+            }
+        }
+
+        CSimpleIniA ini;
+        if (!loadIniFromFile(ini)) {
+            return defaultValue ? defaultValue : std::string{};
+        }
+        return ini.GetValue(section, key, defaultValue ? defaultValue : "");
+    }
+
+    /**
+     * Set an in-memory override for an arbitrary section/key for the rest of this session. The
+     * override is re-applied on every config (re)load, so it survives file-watch reloads and any
+     * other reload, and is never written to disk. Accepts any IniValue type (bool/int/float/string);
+     * a string value is parsed by the type-appropriate getter when the member is loaded, so a string
+     * can override any value. Immediately reloads the config so the typed members reflect it.
+     */
+    void ConfigBase::setConfigOverride(const char* section, const char* key, const config::IniValue& value)
+    {
+        {
+            std::lock_guard lock(_overridesMutex);
+            _overrides.insert_or_assign({ section, key }, value);
+        }
+        logger::info("Config: Set session override \"{}.{} = {}\"", section, key, value.toString());
+        loadIniConfigValues();
+    }
+
+    /**
+     * Remove a previously set session override for section/key and reload so the member reverts to
+     * its on-disk value. No-op if no override is set for that key.
+     */
+    void ConfigBase::clearConfigOverride(const char* section, const char* key)
+    {
+        bool removed;
+        {
+            std::lock_guard lock(_overridesMutex);
+            removed = _overrides.erase({ section, key }) > 0;
+        }
+        if (removed) {
+            logger::info("Config: Cleared session override \"{}.{}\"", section, key);
+            loadIniConfigValues();
+        }
+    }
+
+    /**
+     * Remove all session overrides (if any) and reload so all members revert to disk.
+     */
+    void ConfigBase::clearAllConfigOverrides()
+    {
+        bool hadAny;
+        {
+            std::lock_guard lock(_overridesMutex);
+            hadAny = !_overrides.empty();
+            _overrides.clear();
+        }
+        if (hadAny) {
+            logger::info("Config: Cleared all session overrides");
+            loadIniConfigValues();
+        }
+    }
+
+    /**
+     * Whether a session override is currently set for section/key.
+     */
+    bool ConfigBase::hasConfigOverride(const char* section, const char* key) const
+    {
+        std::lock_guard lock(_overridesMutex);
+        return _overrides.contains({ section, key });
     }
 
     /**
