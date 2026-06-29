@@ -124,17 +124,29 @@ namespace f4cf::f4vr
                 auto* equippedWeapon = getEquippedWeapon();
                 if (_currentWeapon != equippedWeapon) {
                     logger::debug("Drawn weapon changed to {}", equippedWeapon ? equippedWeapon->GetFormEditorID() : "<none>");
+                    clearState();
                     _currentWeapon = equippedWeapon;
                     _currentWeaponNode = weaponNode;
                     _currentWeaponMelee = isMeleeWeaponDrawn();
                     return true;
                 }
             } else if (_currentWeapon) {
-                logger::info("Drawn weapon changed to None");
+                logger::debug("Drawn weapon changed to None");
                 clearState();
+                return true;
             }
 
             return false;
+        }
+
+        /**
+         * Reset the tracked weapon state so the next detectChange() re-detects from scratch and reports a
+         * change. Use after the weapon 3D is rebuilt (e.g. save load, power-armor swap) so a stale node
+         * pointer from a previous scene graph isn't retained.
+         */
+        void invalidate()
+        {
+            clearState();
         }
 
         /**
