@@ -1,7 +1,7 @@
 # F4VR Common Framework
 
 [![standard-readme compliant](https://img.shields.io/badge/readme%20style-standard-brightgreen.svg?style=flat-square)](https://github.com/RichardLitt/standard-readme)
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square)](LICENSE)
+[![License: GPLv3](https://img.shields.io/badge/license-GPLv3-blue.svg?style=flat-square)](LICENSE)
 
 > A static library for building Fallout 4 VR F4SE plugins on top of [CommonLibF4VR](https://github.com/ArthurHub/CommonLibF4VR).
 
@@ -135,4 +135,4 @@ Modding is built on the community — this wouldn't exist without others' public
 
 ## License
 
-[MIT](LICENSE) © 2025 Arthur
+[GPL-3.0-or-later](LICENSE) © 2025 Arthur T

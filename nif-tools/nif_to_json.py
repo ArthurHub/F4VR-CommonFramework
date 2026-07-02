@@ -5,8 +5,8 @@ Uses PyNifly (https://github.com/BadDogSkyrim/PyNifly), which is the Python
 wrapper around the same nifly C++ library used by BodySlide / Outfit Studio.
 Supports Skyrim LE/SE, Fallout 3 / NV / 4 / 76.
 
-PyNifly is GPL-3.0 and is *not* vendored into this MIT-licensed repo. Instead
-the script fetches the latest release on first run and extracts the runtime
+PyNifly's runtime is *not* vendored into this repo (keeps the binary DLL out of
+git). Instead the script fetches the latest release on first run and extracts it
 (NiflyDLL.dll + the `pyn` Python package) into nif-tools/.pynifly/, which is
 gitignored. Re-run with --refresh-runtime to update.
 
