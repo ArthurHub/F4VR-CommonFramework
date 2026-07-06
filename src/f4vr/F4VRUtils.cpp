@@ -308,6 +308,45 @@ namespace f4cf::f4vr
     }
 
     /**
+     * The ProcessLists singleton. Uses the raw VR offset (g_processLists) because the bundled
+     * ProcessLists::GetSingleton() resolves a RelocationID with no entry in the shipped VR address library.
+     */
+    RE::ProcessLists* getProcessLists()
+    {
+        return *g_processLists;
+    }
+
+    /**
+     * Enumerate every loaded actor within `radius` of the world `point` into `outActors`, via the native
+     * ProcessLists::GetActorsWithinRangeOfPoint. Preferred over walking ProcessLists::highActorHandles so the
+     * desktop struct layout is never trusted on the VR runtime. No-op when the ProcessLists singleton is null.
+     */
+    void getActorsWithinRangeOfPoint(const RE::NiPoint3& point, const float radius, RE::BSScrapArray<RE::NiPointer<RE::Actor>>& outActors)
+    {
+        const auto processLists = getProcessLists();
+        if (!processLists) {
+            return;
+        }
+        RE::NiPoint3 p = point; // the native takes a non-const reference
+        ProcessLists_GetActorsWithinRangeOfPoint(processLists, p, radius, outActors);
+    }
+
+    /**
+     * Any BGSProjectile form, to satisfy APIs like CombatUtilities::CalculateProjectileLOS that only use the
+     * projectile for collision-shape defaults. Null when no projectile forms are loaded.
+     */
+    RE::BGSProjectile* getAnyProjectile()
+    {
+        if (const auto dataHandler = RE::TESDataHandler::GetSingleton()) {
+            const auto& projectiles = dataHandler->GetFormArray<RE::BGSProjectile>();
+            if (!projectiles.empty()) {
+                return projectiles.front();
+            }
+        }
+        return nullptr;
+    }
+
+    /**
      * Get the "bLeftHandedMode:VR" setting from the INI file.
      * Direct memory access is A LOT faster than "RE::INIPrefSettingCollection::GetSingleton()->GetSetting("bLeftHandedMode:VR")->GetBinary();"
      */

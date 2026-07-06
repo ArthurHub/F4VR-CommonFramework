@@ -37,6 +37,9 @@ namespace f4cf::f4vr
     bool isSwimming(const RE::PlayerCharacter* player = RE::PlayerCharacter::GetSingleton());
     bool isUnderwater(const RE::PlayerCharacter* player = RE::PlayerCharacter::GetSingleton());
     bool isMovementSafe(RE::PlayerCharacter* player, const RE::NiPoint3& currentPos, const RE::NiPoint3& targetPos);
+    RE::ProcessLists* getProcessLists();
+    void getActorsWithinRangeOfPoint(const RE::NiPoint3& point, float radius, RE::BSScrapArray<RE::NiPointer<RE::Actor>>& outActors);
+    RE::BGSProjectile* getAnyProjectile();
 
     // settings
     bool isLeftHandedMode();

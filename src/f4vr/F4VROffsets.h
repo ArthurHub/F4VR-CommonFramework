@@ -61,6 +61,15 @@ namespace f4cf::f4vr
     using _CombatUtilities_IsActorUsingMagic = bool (*)(RE::Actor* a_actor);
     inline REL::Relocation<_CombatUtilities_IsActorUsingMagic> CombatUtilities_IsActorUsingMagic(REL::Offset(0x1133c30));
 
+    // ProcessLists singleton — raw offset because the bundled ProcessLists::GetSingleton()'s RelocationID
+    // (1569706) has no entry in the shipped VR address-library database and cannot resolve on VR.
+    inline REL::Relocation<RE::ProcessLists**> g_processLists(REL::Offset(0x5930968));
+
+    // ProcessLists::GetActorsWithinRangeOfPoint(NiPoint3&, float, BSScrapArray<NiPointer<Actor>>&) —
+    // enumerates all loaded actors within a radius of a world point. Not exposed by the bundled headers.
+    using _ProcessLists_GetActorsWithinRangeOfPoint = void (*)(RE::ProcessLists*, RE::NiPoint3&, float, RE::BSScrapArray<RE::NiPointer<RE::Actor>>&);
+    inline REL::Relocation<_ProcessLists_GetActorsWithinRangeOfPoint> ProcessLists_GetActorsWithinRangeOfPoint(REL::Offset(0xf8e040));
+
     using _AttackBlockHandler_IsPlayerThrowingWeapon = bool (*)();
     inline REL::Relocation<_AttackBlockHandler_IsPlayerThrowingWeapon> AttackBlockHandler_IsPlayerThrowingWeapon(REL::Offset(0xfcbcd0));
 
