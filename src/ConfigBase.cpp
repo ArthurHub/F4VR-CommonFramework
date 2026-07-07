@@ -271,6 +271,10 @@ namespace f4cf
         }
         debug.dumpDataOnceNames = ini.GetValue(INI_SECTION_DEBUG, "sDumpDataOnceNames", "");
         debug.addItemsOnceNames = ini.GetValue(INI_SECTION_DEBUG, "sAddItemsOnceNames", "");
+        debug.drawEnabled = ini.GetBoolValue(INI_SECTION_DEBUG, "bDebugDrawEnabled", true);
+        debug.drawDisabledChannels = ini.GetValue(INI_SECTION_DEBUG, "sDebugDrawDisabledChannels", "");
+        debug.drawToggleBinding = ini.GetValue(INI_SECTION_DEBUG, "sDebugDrawToggleBinding", "");
+        debug.drawHudPlacement = ini.GetValue(INI_SECTION_DEBUG, "sDebugDrawHudPlacement", "center");
     }
 
     void ConfigBase::loadVRUISection(const CSimpleIniA& ini)

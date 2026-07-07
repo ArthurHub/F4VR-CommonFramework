@@ -151,6 +151,22 @@ namespace f4cf::logger
     }
 
     template <class... Args>
+    void sampleDebug(spdlog::format_string_t<Args...> fmt, Args&&... args)
+    {
+        if (isDebugEnabled()) {
+            internal::sampleImpl(1000, fmt, std::forward<Args>(args)...);
+        }
+    }
+
+    template <class... Args>
+    void sampleDebug(const int time, spdlog::format_string_t<Args...> fmt, Args&&... args)
+    {
+        if (isDebugEnabled()) {
+            internal::sampleImpl(time, fmt, std::forward<Args>(args)...);
+        }
+    }
+
+    template <class... Args>
     void infoRaw(spdlog::format_string_t<Args...> fmt, Args&&... args)
     {
         internal::_rawLogger->log(spdlog::level::info, fmt, std::forward<Args>(args)...);

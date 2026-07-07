@@ -40,6 +40,7 @@ After cloning, run `pre-commit install` once to enforce clang-format on every co
 
 ### Namespaces
 - `f4cf::` — framework root (ModBase, Logger, ConfigBase)
+- `f4cf::debug` — immediate-mode in-world debug draw overlay (D3D11 via OpenVR Submit hook)
 - `f4cf::f4vr` — Fallout 4 VR game utilities (node/skeleton manipulation, animations, debug dumps)
 - `F4SEVR` (in `src/f4sevr/`) — ported F4SE VR SDK: Papyrus VM interop + native-function registration (note: this folder is `namespace F4SEVR`, not `f4cf::f4sevr`)
 - `f4cf::vrcf` — VR controller framework (OpenVR button/trigger input)
@@ -93,6 +94,16 @@ Design deep-dive: `knowledge-base/commonframework_vr_input_suppression.md` in th
 
 ### F4VR Utilities (`src/f4vr/`)
 Game-state helpers: node search/visibility/transform updates, player/weapon/menu state, `getPlayerNodes()` (43 VR reference nodes at `PlayerCharacter + 0x6E0`), `SkellyBones` (100+ bone names + finger poses), Scaleform/HUD (`ScaleformUtils`), `GameMenusHandler`, `F4VRThumbstickControls`, and `F4VROffsets` (all RVAs). Full file list and snippets: [`src/f4vr/README.md`](src/f4vr/README.md). RVA authority + full PlayerNodes layout: `Analysis/gold/F4VR-CommonFramework_RE_REFERENCE.md` in the reference library.
+
+### Debug Draw Overlay (`src/debug/`)
+`f4cf::debug::DebugDraw` (facade `debug::dd()`) — immediate-mode in-world debug drawing: wire
+primitives (line/point/arrow/box/sphere/capsule/cone/axes/grid/polyline/mesh), HUD text,
+world-anchored labels, and a `watch()` value table, drawn on top of the VR view via a D3D11
+renderer injected at the OpenVR `IVRCompositor::Submit` vtable hook. Call each frame to keep a
+shape visible (auto-clears per frame); `sec > 0` persists a one-shot for that long. Zero cost and
+no hooks until the first draw call (lazy install, driven by `ModBase` around `onFrameUpdate`).
+`[Debug]` INI keys: `bDebugDrawEnabled`, `sDebugDrawDisabledChannels`, `sDebugDrawToggleBinding`.
+Usage: [`src/debug/README.md`](src/debug/README.md); design: [`docs/tech/debug-draw-overlay.md`](docs/tech/debug-draw-overlay.md).
 
 ### FRIK Inter-Mod Integration
 Mods that want a button in FRIK's config menu:

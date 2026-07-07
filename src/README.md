@@ -155,6 +155,7 @@ flags for runtime toggling, debug-dump triggers, and batch config saves).
 | [`ConfigBase`](ConfigBase.h)         | `f4cf`         | INI-backed config with hot-reload, embedded-default extraction, and version migration.                           |
 | [`Logger.h`](Logger.h)               | `f4cf::logger` | spdlog wrapper. `logger::trace` / `debug` / `info` / `warn` / `error` functions + rate-limited `logger::sample`. |
 | [`common/`](common/README.md)        | `f4cf::common` | Math (quaternions, matrices, transforms) and engine-agnostic utilities (strings, files, resources, time).        |
+| [`debug/`](debug/README.md)          | `f4cf::debug`  | Immediate-mode in-world debug draw overlay: wire primitives, HUD text/labels, watch table. Zero cost until used. |
 | [`f4vr/`](f4vr/README.md)            | `f4cf::f4vr`   | Fallout 4 VR game-state utilities: nodes, skeleton, player nodes, menus, Scaleform, thumbstick.                  |
 | [`f4sevr/`](f4sevr/README.md)        | `F4SEVR`       | Ported F4SE VR SDK: Papyrus VM interop, native-function registration, VM value/arg marshalling.                  |
 | [`vrcf/`](vrcf/README.md)            | `f4cf::vrcf`   | VR Controller Framework. OpenVR button/trigger/thumbstick state, input suppression, haptic feedback.             |
@@ -176,6 +177,7 @@ flags for runtime toggling, debug-dump triggers, and batch config saves).
               ├── vrcf::VRControllersSuppress ... hide input from the game
               ├── vrcf::VRHaptics ............... haptic feedback patterns
               ├── vrui::UIManager ............... drive + render the VR UI
+              ├── debug::dd() ................... immediate-mode debug draw overlay
               └── f4vr::* / common::* ........... game state + math helpers
 ```
 

@@ -16,6 +16,7 @@ namespace f4cf::common
     std::string rtrim(std::string s);
     std::string trim(const std::string& s);
     bool hasNonWhitespaceText(std::string_view s);
+    std::vector<std::string> splitTrimmed(const std::string& text, char separator);
 
     // Resource related functions
     std::optional<std::string> getEmbeddedResourceAsStringIfExists(WORD resourceId);

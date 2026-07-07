@@ -5,6 +5,7 @@
 
 #include "MainLoopHook.h"
 #include "common/PerfMonitor.h"
+#include "debug/DebugDraw.h"
 #include "f4vr/DebugDump.h"
 #include "f4vr/DebugInventory.h"
 
@@ -159,7 +160,7 @@ namespace f4cf
      */
     void ModBase::onFrameUpdateSafe()
     {
-        static common::PerfMonitor perf("onFrameUpdateSafe");
+        static PerfMonitor perf("onFrameUpdateSafe");
         const auto perfTimer = perf.scope();
 
         CPPTRACE_TRY
@@ -169,9 +170,16 @@ namespace f4cf
             vrcf::VRControllersSuppress.update(leftHanded);
             vrcf::VRHaptics.update(leftHanded);
 
+            // debug-draw frame boundary around the mod update; both calls are a single atomic
+            // read until the mod issues its first draw call ever (the zero-cost-when-unused contract)
+            const auto& debugConfig = _settings.config->debug;
+            debug::DebugDraw::onFrameStart(debugConfig.drawEnabled, debugConfig.drawDisabledChannels, debugConfig.drawToggleBinding, debugConfig.drawHudPlacement);
+
             onFrameUpdate();
 
-            _debugAdjuster.onFrameUpdate(*_settings.config);
+            DebugAdjuster::onFrameUpdate(*_settings.config);
+
+            debug::DebugDraw::onFrameEnd();
 
             checkDebugDump();
             checkDebugAddItems();

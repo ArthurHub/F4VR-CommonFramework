@@ -147,6 +147,16 @@ namespace f4cf
             DebugAdjustTarget adjustTarget = DebugAdjustTarget::None;
             // For DebugAdjustTarget::Field: the "Section::Key" of the arbitrary INI field being tuned.
             std::string adjustField;
+            // f4cf::debug::DebugDraw overlay: master switch (hot-reloadable; runtime setEnabled /
+            // the hotkey below override it until changed again), comma-separated channel names to
+            // skip, a controller binding (vrcf::parseInputBinding grammar) to flip the overlay
+            // in-headset, and where the default watch-table HUD sits in the view (center /
+            // center-left / center-right / center-top / center-top-left / center-top-right). All
+            // inert unless the mod actually issues draw calls.
+            bool drawEnabled = true;
+            std::string drawDisabledChannels;
+            std::string drawToggleBinding;
+            std::string drawHudPlacement = "center";
             // One-shot name lists consumed via checkDebugDumpDataOnceFor() / consumeDebugAddItemsOnce();
             // each is cleared (in memory + INI) once consumed so the file-watch reload doesn't re-trigger it.
             std::string dumpDataOnceNames;

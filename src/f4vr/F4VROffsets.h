@@ -335,6 +335,22 @@ namespace f4cf::f4vr
 
     inline REL::Relocation wandMesh(REL::Offset(0x2d686d8));
 
+    // VR render camera globals block (VR 1.2.72) — holds the per-eye view-projection matrices and the
+    // world->VR-origin posAdjust vectors the engine used to render the current frame. Read by the
+    // debug-draw overlay (f4cf::debug) so drawn geometry projects exactly where the game drew it
+    // (HMD pose already baked in). If overlay geometry reads as garbage after a runtime change this
+    // is the first suspect. Source: ROCK DebugBodyOverlay.cpp:983-1000 via reference library
+    // knowledge-base/debug_draw_overlay.md section 5.3; the sub-offsets are from the same site.
+    inline REL::Relocation<std::uintptr_t*> vrRenderCameraGlobals(REL::Offset(0x6235AC8));
+    // [vrRenderCameraGlobals + 0x25D0] -> camera data block pointer
+    constexpr std::uintptr_t VR_RENDER_CAMERA_DATA_OFFSET = 0x25D0;
+    // [cameraData + 0xD0 / + 0x2E0] -> eye 0 / eye 1 column-major 4x4 view-projection matrix
+    constexpr std::uintptr_t VR_RENDER_CAMERA_EYE0_VIEW_PROJ_OFFSET = 0xD0;
+    constexpr std::uintptr_t VR_RENDER_CAMERA_EYE1_VIEW_PROJ_OFFSET = 0x2E0;
+    // [vrRenderCameraGlobals + 0x2590 / + 0x25C0] -> eye 0 / eye 1 posAdjust float3
+    constexpr std::uintptr_t VR_RENDER_CAMERA_EYE0_POS_ADJUST_OFFSET = 0x2590;
+    constexpr std::uintptr_t VR_RENDER_CAMERA_EYE1_POS_ADJUST_OFFSET = 0x25C0;
+
     // Load a specific texture by file path like "data\Textures\Effects\Gobos\FlashlightGobo01.DDS"
     // call with: unk1=1, unk2=0, unk3=0, unk4=0
     // the texture is cashed by the game so this can be used to load textures that are later used by the game by replacing the caching key (path)

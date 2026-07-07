@@ -1,6 +1,5 @@
 #include "CommonUtils.h"
 
-#include <cctype>
 #include <chrono>
 #include <filesystem>
 #include <fstream>
@@ -96,6 +95,27 @@ namespace f4cf::common
         return std::ranges::any_of(s, [](const unsigned char ch) {
             return !std::isspace(ch);
         });
+    }
+
+    /**
+         * Split a comma-separated list into trimmed, non-empty tokens.
+         */
+    std::vector<std::string> splitTrimmed(const std::string& text, const char separator)
+    {
+        std::vector<std::string> tokens;
+        std::size_t start = 0;
+        while (start <= text.size()) {
+            const std::size_t end = text.find(separator, start);
+            const auto token = trim(text.substr(start, end == std::string::npos ? std::string::npos : end - start));
+            if (!token.empty()) {
+                tokens.push_back(token);
+            }
+            if (end == std::string::npos) {
+                break;
+            }
+            start = end + 1;
+        }
+        return tokens;
     }
 
     /**

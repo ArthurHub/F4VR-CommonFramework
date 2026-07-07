@@ -154,6 +154,10 @@ target_include_directories(${PROJECT_NAME}
 target_link_libraries(${PROJECT_NAME}
   PUBLIC
     CommonLibF4::CommonLibF4
+    # D3D11 + runtime shader compiler for the debug-draw overlay (src/debug); PUBLIC so consumer
+    # DLLs linking this static lib pick them up
+    d3d11
+    d3dcompiler
 )
 
 # cpptrace (via vcpkg)
