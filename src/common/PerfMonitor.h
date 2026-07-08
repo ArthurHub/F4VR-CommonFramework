@@ -78,9 +78,9 @@ namespace f4cf::common
 
         /**
          * @param name        label used in the log line.
-         * @param logInterval how often a summary is emitted (defaults to every 30 seconds).
+         * @param logInterval how often a summary is emitted (defaults to every 60 seconds).
          */
-        explicit PerfMonitor(std::string name, std::chrono::milliseconds logInterval = std::chrono::seconds(30));
+        explicit PerfMonitor(std::string name, std::chrono::milliseconds logInterval = std::chrono::seconds(60));
 
         /**
          * Create an RAII timer that records its scope duration into this monitor on destruction.
