@@ -182,8 +182,8 @@ namespace f4cf::f4vr
      * cloned nif releases the cached clone so the new one is loaded on the next show. `sphereScale` shrinks
      * (or grows) the *visual* relative to the zone — the hit test always uses the unscaled zone.
      */
-    void WandActivationSphere::updateDebug(
-        const RE::NiNode* testNode, RE::NiNode* debugParent, const RE::NiTransform& zone, const bool show, const std::string_view nifName, const float sphereScale)
+    void WandActivationSphere::updateDebug(const RE::NiNode* testNode, RE::NiNode* debugParent, const RE::NiTransform& zone, const bool show, const std::string_view nifName,
+        const float sphereScale)
     {
         // Fast idle path: nothing shown and nothing cached, so there is no nif work to do (avoids resolving
         // the default name every frame while the sphere is hidden — the common case).
