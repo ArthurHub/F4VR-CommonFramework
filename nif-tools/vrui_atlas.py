@@ -20,12 +20,28 @@ This tool automates both directions:
   unpack  Given an atlas .DDS and the .nif files that reference it, crop out the region
           each .nif uses and write it back as a standalone image -- the reverse of pack.
 
-The NIFs produced/consumed are the exact FO4 single-quad VRUI button format (4 verts,
+A sprite can use a hand-authored mesh instead of the generated flat quad: drop a
+``<name>.nif`` beside the images and pack reuses it -- keeping its geometry and root name,
+repointing its texture at the atlas, and remapping its 0..1 UVs into its paired texture's
+atlas region (so e.g. a sphere's grid wraps just its own region, not the whole atlas).
+Meshes and textures are paired by name -- exactly, or up to a ``@`` suffix -- both directions:
+
+  * many textures, one mesh -- debug-sphere.png + debug-sphere@strong.png both reuse
+    debug-sphere.nif, each keeping its own atlas region -> one output nif per texture.
+  * many meshes, one texture -- activation-sphere@cyan.nif + activation-sphere@amber.nif ...
+    all pair with activation-sphere.png, each mesh kept -> one output nif per mesh, all
+    sharing that texture's region.
+
+(``@`` rather than ``#`` because ``#`` starts a comment in the INI files these names appear
+in.) A texture that only feeds ``@`` meshes is still packed into the atlas but emits no quad
+of its own.
+
+Generated button NIFs are the exact FO4 single-quad VRUI button format (4 verts,
 half-precision, BSEffectShaderProperty + NiAlphaProperty). pack clones an embedded
 template and patches only the UV rectangle, the vertex positions, the bounding sphere, the
 root-node size name, and the texture path -- so the effect shader and alpha settings are
-preserved byte-for-byte. unpack validates that signature before trusting the byte
-offsets, and errors clearly on anything else.
+preserved byte-for-byte. unpack validates that signature before trusting the byte offsets
+and skips anything else (so custom-mesh sprites are ignored by unpack).
 
 Only dependency: Pillow (``pip install Pillow``). The NIF read/write is pure-Python; it
 does not need the PyNifly runtime that nif_to_json.py uses.
@@ -265,6 +281,13 @@ class NifDialect:
                 return i
         raise NifFormatError(f"no block of type {type_name!r}")
 
+    def _all_block_indices_of_type(self, type_name: bytes) -> list[int]:
+        try:
+            tidx = self.block_types.index(type_name)
+        except ValueError:
+            return []
+        return [i for i, bi in enumerate(self.block_type_index) if bi == tidx]
+
     @property
     def _tri_block(self) -> bytearray:
         return self.blocks[self._block_index_of_type(b"BSTriShape")]
@@ -390,6 +413,34 @@ class NifDialect:
         # Bounding sphere centred at origin; radius reaches the farthest corner.
         struct.pack_into("<3f", blk, _BST_BSPHERE_CENTER_OFF, 0.0, 0.0, 0.0)
         struct.pack_into("<f", blk, _BST_BSPHERE_RADIUS_OFF, math.sqrt(half_w * half_w + half_h * half_h))
+
+    def remap_all_uvs(self, u_min: float, u_max: float, v_min: float, v_max: float) -> None:
+        """Linearly remap every BSTriShape's per-vertex UVs from 0..1 into an atlas sub-rect.
+
+        Used when a sprite reuses a hand-authored source mesh (e.g. debug-sphere.nif) instead
+        of the generated flat quad: the mesh's own full-texture UVs must be scaled and offset so
+        they sample only this sprite's region of the shared atlas. Vertex positions and the
+        bounding sphere are left untouched -- only the UV channel moves. Only the standard VRUI
+        vertex layout (half-precision, stride 20, UV at offset 8) is supported; anything else
+        raises so a mismatched mesh fails loudly rather than corrupting the vertex buffer.
+        """
+        tri_blocks = self._all_block_indices_of_type(b"BSTriShape")
+        if not tri_blocks:
+            raise NifFormatError("no BSTriShape block to remap UVs on")
+        du, dv = u_max - u_min, v_max - v_min
+        for idx in tri_blocks:
+            blk = self.blocks[idx]
+            vdesc = struct.unpack_from("<Q", blk, _BST_VERTEXDESC_OFF)[0]
+            if vdesc != _BST_VERTEXDESC:
+                raise NifFormatError(
+                    f"custom mesh BSTriShape has vertex format {vdesc:#018x} "
+                    f"(need {_BST_VERTEXDESC:#018x}); UV remap only supports the standard VRUI vertex layout"
+                )
+            nverts = struct.unpack_from("<H", blk, _BST_NUMVERTS_OFF)[0]
+            for i in range(nverts):
+                base = _BST_VERTBUF_OFF + _VERT_STRIDE * i + _VERT_UV_OFF
+                u, v = struct.unpack_from("<2e", blk, base)
+                struct.pack_into("<2e", blk, base, u_min + u * du, v_min + v * dv)
 
 
 # --------------------------------------------------------------------------------------
@@ -646,6 +697,48 @@ def _gather_sprites(inputs: list[Path], exclude_names: set[str] = frozenset()) -
     return unique
 
 
+# Separator between a base name and a variant suffix in sprite/mesh file names. '@' rather
+# than '#' because '#' starts a comment in the INI files these names are referenced from.
+_VARIANT_SEP = "@"
+
+
+def _gather_custom_nifs(inputs: list[Path]) -> dict[str, Path]:
+    """Map stem -> a .nif sitting beside the sprites, used instead of the generated flat quad.
+
+    A .nif here is paired with a texture by name (exactly, or up to a '@' suffix -- see
+    _match_variant): the mesh is kept and given that texture's atlas region. Directories
+    contribute their own .nif files; individual file inputs contribute the .nif files in their
+    parent folder. First occurrence of a stem wins.
+    """
+    nifs: dict[str, Path] = {}
+    seen_dirs: set[Path] = set()
+    for inp in inputs:
+        d = inp if inp.is_dir() else inp.parent
+        rd = d.resolve()
+        if rd in seen_dirs:
+            continue
+        seen_dirs.add(rd)
+        for path in sorted(d.glob("*.nif")):
+            nifs.setdefault(path.stem, path)
+    return nifs
+
+
+def _match_variant(stem: str, names) -> str | None:
+    """Pair `stem` with a base name in `names`: exact match first, else the part before '@'.
+
+    Symmetric, used both directions: a texture stem finds its mesh, and a mesh stem finds its
+    texture. 'debug-sphere@strong' -> 'debug-sphere'; 'activation-sphere@cyan-full' ->
+    'activation-sphere'. Returns None if neither the exact stem nor the pre-'@' base is present.
+    """
+    if stem in names:
+        return stem
+    if _VARIANT_SEP in stem:
+        base = stem.split(_VARIANT_SEP, 1)[0]
+        if base in names:
+            return base
+    return None
+
+
 def cmd_pack(args: argparse.Namespace) -> int:
     Image = _import_pillow()
 
@@ -688,41 +781,95 @@ def cmd_pack(args: argparse.Namespace) -> int:
     _save_dds(atlas, atlas_file, args.format)
 
     template_bytes = _load_template(args.template)
+    # Pair meshes and textures by name (see _match_variant) to decide each output nif. A '.nif'
+    # beside the images replaces the generated flat quad, and pairing works both directions:
+    #   * many textures, one mesh -- 'debug-sphere.png' + 'debug-sphere@strong.png' both reuse
+    #     'debug-sphere.nif', each keeping its own atlas region -> one output nif per texture.
+    #   * many meshes, one texture -- 'activation-sphere@*.nif' all pair with
+    #     'activation-sphere.png', each mesh kept -> one output nif per mesh, all sharing that
+    #     texture's region.
+    # Every image is still packed into the atlas; a texture that only feeds '@' meshes just
+    # contributes its region and emits no quad of its own.
+    custom_nifs = _gather_custom_nifs(args.input)
+    by_stem = {p.key: p for p in placements}
+    image_stems = set(by_stem)
+    nif_variant_bases = {s.split(_VARIANT_SEP, 1)[0] for s in custom_nifs if _VARIANT_SEP in s}
+
+    # output name -> (mesh nif path or None for a flat quad, region stem = packed texture to sample)
+    outputs: dict[str, tuple[Path | None, str]] = {}
+    for stem in image_stems:                        # texture-driven
+        base = _match_variant(stem, custom_nifs)
+        if base is not None:
+            outputs[stem] = (custom_nifs[base], stem)
+        elif stem not in nif_variant_bases:         # a texture that only feeds '@' meshes emits no quad
+            outputs[stem] = (None, stem)
+    for stem, nif_path in custom_nifs.items():      # mesh-driven ("keep the nif")
+        region = _match_variant(stem, image_stems)
+        if region is None:
+            base = stem.split(_VARIANT_SEP, 1)[0]
+            print(f"warning: mesh {nif_path.name} has no matching texture "
+                  f"(need a {stem}.* or {base}.* image); skipped", file=sys.stderr)
+            continue
+        outputs.setdefault(stem, (nif_path, region))
+
+    custom_bytes: dict[Path, bytes] = {}
+    custom_count = 0
     manifest_sprites = []
 
-    for p in placements:
-        # Real element size in framework units, baked into both the node name (which the
-        # framework reads at runtime) and the quad geometry: PIXELS_PER_UNIT px -> 1 unit, so
-        # a 200px sprite is a 2-unit quad. The quad is centred on the origin, so a sprite
-        # drawn larger (e.g. a toggle border meant to frame its button) yields a larger quad
-        # concentric with the rest.
-        w_units = round(p.w / PIXELS_PER_UNIT, 3)
-        h_units = round(p.h / PIXELS_PER_UNIT, 3)
+    for name in sorted(outputs):
+        mesh_path, region_stem = outputs[name]
+        p = by_stem[region_stem]
         u_min = p.x / atlas_w
         u_max = (p.x + p.w) / atlas_w
         v_min = p.y / atlas_h            # top of the region
         v_max = (p.y + p.h) / atlas_h    # bottom of the region
 
-        nif = NifDialect.parse(template_bytes)
-        nif.validate_vrui_button()
-        nif.set_root_name(f"VRUI (W:{_fmt_num(w_units)} H:{_fmt_num(h_units)})")
-        nif.set_source_texture(texture_path)
-        nif.set_button_geometry(u_min, u_max, v_min, v_max, w_units / 2, h_units / 2)
+        if mesh_path is not None:
+            # Reuse the hand-authored mesh: keep its geometry and root name, just repoint the
+            # texture at the atlas and remap its 0..1 UVs into the paired texture's atlas region.
+            data = custom_bytes.setdefault(mesh_path, mesh_path.read_bytes())
+            try:
+                nif = NifDialect.parse(data)
+                nif.set_source_texture(texture_path)
+                nif.remap_all_uvs(u_min, u_max, v_min, v_max)
+            except NifFormatError as exc:
+                raise SystemExit(
+                    f"error: cannot reuse custom mesh {mesh_path} for {name!r}: {exc}")
+            size = None
+            custom_count += 1
+        else:
+            # Real element size in framework units, baked into both the node name (which the
+            # framework reads at runtime) and the quad geometry: PIXELS_PER_UNIT px -> 1 unit,
+            # so a 200px sprite is a 2-unit quad. The quad is centred on the origin, so a sprite
+            # drawn larger (e.g. a toggle border meant to frame its button) yields a larger quad
+            # concentric with the rest.
+            w_units = round(p.w / PIXELS_PER_UNIT, 3)
+            h_units = round(p.h / PIXELS_PER_UNIT, 3)
+            nif = NifDialect.parse(template_bytes)
+            nif.validate_vrui_button()
+            nif.set_root_name(f"VRUI (W:{_fmt_num(w_units)} H:{_fmt_num(h_units)})")
+            nif.set_source_texture(texture_path)
+            nif.set_button_geometry(u_min, u_max, v_min, v_max, w_units / 2, h_units / 2)
+            size = [w_units, h_units]
 
-        nif_file = meshes_dir / f"{p.key}.nif"
+        nif_file = meshes_dir / f"{name}.nif"
         nif_file.write_bytes(nif.serialize())
 
         if args.manifest:
             manifest_sprites.append({
-                "name": p.key,
+                "name": name,
                 "nif": nif_file.relative_to(out_dir).as_posix(),
+                "texture": region_stem,
                 "rect": [p.x, p.y, p.w, p.h],
-                "size": [w_units, h_units],
+                "size": size,
+                "mesh": "custom" if mesh_path is not None else "button",
             })
 
     print(f"packed {len(placements)} sprites into {atlas_w}x{atlas_h} {args.format.upper()} atlas")
     print(f"  texture: {atlas_file}")
-    print(f"  meshes:  {len(placements)} nifs in {meshes_dir}")
+    print(f"  meshes:  {len(outputs)} nifs in {meshes_dir}")
+    if custom_count:
+        print(f"  custom:  {custom_count} nif(s) reused a source mesh (UVs remapped into the atlas)")
     print(f"  texture path in nifs: {texture_path}")
 
     if args.manifest:

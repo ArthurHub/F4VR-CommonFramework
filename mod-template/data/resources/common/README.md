@@ -6,6 +6,13 @@ reuse (`btn-empty` for plain buttons, `btn-border` / `btn-border-2` for toggles)
 config-menu buttons (advanced/misc config, misc options). Re-skin any of them by editing
 the PNG and re-running the pack command below.
 
+`debug-sphere` is not a button but a **custom mesh** — `debug-sphere.nif` (the sphere the
+activation-sphere visuals clone). Its sprites (`debug-sphere.png` and the `#`-suffixed
+`debug-sphere#2.png`) reuse that mesh instead of a flat quad: `pack` keeps the sphere
+geometry, repoints its texture at the atlas, and remaps its UVs into each sprite's region, so
+the two PNGs are just two skins of the one sphere. See the packer's
+[custom mesh override](../../../../nif-tools/README.md#custom-mesh-override).
+
 ## Pack command
 
 Bin-packs every PNG in this folder into a single `ui-common.DDS` atlas plus one
@@ -27,4 +34,4 @@ python external\F4VR-CommonFramework\nif-tools\vrui_atlas.py pack --name ui-comm
 to `Textures\MyMod\`, the nifs to `Meshes\MyMod\ui-common\`. Change `MyMod` to your mod's name and
 point `--output` at your mod's data folder so the `Textures\` and `Meshes\` trees drop
 straight in. Full options and the reverse (`unpack`) are in
-[nif-tools/README.md](../../../../../nif-tools/README.md).
+[nif-tools/README.md](../../../../nif-tools/README.md).

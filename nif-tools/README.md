@@ -73,6 +73,42 @@ Options (all have sensible defaults):
 | `--manifest` | off | Also write a `<name>.atlas.json` describing the packing. |
 | `--template` | embedded | Override the button template NIF (advanced). |
 
+### Custom mesh override
+
+By default every sprite becomes a flat quad. To use a **hand-authored mesh** instead — e.g.
+the sphere the activation-sphere visuals clone — drop that `.nif` beside the images. `pack`
+reuses the mesh: it keeps the geometry and root name untouched, repoints the texture at the
+atlas, and **remaps the mesh's `0..1` UVs into its paired texture's atlas region** (so the
+mesh samples only that region, not the whole atlas). Output nifs still land in
+`Meshes\<subpath>\<name>\`, so the source `.nif` is never overwritten.
+
+Meshes and textures are paired **by name** — an exact stem match, or up to a `@` suffix — and
+pairing works **both directions**:
+
+- **Many textures, one mesh** — several textures reuse one mesh, each keeping its own atlas
+  region → one output nif per texture:
+
+  ```
+  debug-sphere.png        ─► reuses debug-sphere.nif ─► debug-sphere.nif        (region A)
+  debug-sphere@strong.png ─► reuses debug-sphere.nif ─► debug-sphere@strong.nif (region B)
+  ```
+
+- **Many meshes, one texture** — several meshes share one texture, each mesh kept → one output
+  nif per mesh, all sampling the same region:
+
+  ```
+  activation-sphere@cyan.nif  ─┐                         ─► activation-sphere@cyan.nif
+  activation-sphere@amber.nif ─┼─ pair with activation-sphere.png ─► activation-sphere@amber.nif
+  activation-sphere@gold.nif  ─┘  (one shared region)    ─► activation-sphere@gold.nif
+  ```
+
+`@` is used rather than `#` because `#` starts a comment in the INI files these names are
+referenced from. An exact-stem match wins over the `@`-prefix match. A texture that only feeds
+`@` meshes (like `activation-sphere.png` above) is still packed into the atlas but emits no
+quad of its own. The reused mesh must use the standard VRUI vertex layout (half-precision,
+stride 20) — `pack` errors clearly if it doesn't, and warns if a `.nif` has no matching
+texture. `unpack` skips custom-mesh sprites (it only crops the flat-quad format).
+
 ### Size: pixels → units
 
 Each quad's **size follows the sprite's pixel size**, at **100 px = 1 unit** (so a 200×200
@@ -126,8 +162,9 @@ sources, or use `--format RGBA` for a lossless atlas.
 fields — UV rectangle, vertex positions, bounding sphere, the `W:<w> H:<h>` root name, and the texture
 path. Every other byte (notably the `BSEffectShaderProperty` and `NiAlphaProperty`
 settings) is preserved exactly, which is why the buttons render identically to
-hand-authored ones. `unpack` validates that exact single-quad signature before trusting
-the byte offsets and skips anything that doesn't match.
+hand-authored ones. For a [custom mesh override](#custom-mesh-override) it instead reuses the
+supplied `.nif`, touching only its texture path and UVs. `unpack` validates that exact
+single-quad signature before trusting the byte offsets and skips anything that doesn't match.
 
 ---
 
