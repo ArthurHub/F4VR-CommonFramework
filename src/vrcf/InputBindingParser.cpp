@@ -216,6 +216,21 @@ namespace f4cf::vrcf
             break;
         }
 
+        // Pull out an optional suppress flag ("suppress" / "nosuppress") from anywhere on the line, mirroring
+        // the modifier scan above so it never collides with the positional tokens. Absent leaves the default.
+        for (size_t i = 0; i < tokens.size(); ++i) {
+            if (tokens[i] == "suppress") {
+                binding.suppress = true;
+                tokens.erase(tokens.begin() + i);
+                break;
+            }
+            if (tokens[i] == "nosuppress") {
+                binding.suppress = false;
+                tokens.erase(tokens.begin() + i);
+                break;
+            }
+        }
+
         // Re-check after removing modifier tokens: still need at least a hand and an activation type.
         if (tokens.size() < 2) {
             return std::nullopt;

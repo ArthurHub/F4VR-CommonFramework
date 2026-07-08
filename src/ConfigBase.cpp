@@ -3,7 +3,9 @@
 #include <nlohmann/json.hpp>
 
 #include "common/MatrixUtils.h"
+#include "f4vr/WandActivationSphere.h"
 #include "vrcf/InputBindingParser.h"
+#include "vrcf/VRControllersHaptic.h"
 
 using json = nlohmann::json;
 
@@ -644,6 +646,34 @@ namespace f4cf
             return defaultValue;
         }
         return *parsed;
+    }
+
+    /**
+     * Read a whole activation-sphere gesture from one INI section into a f4vr::WandActivationConfig. Each key
+     * falls back to the matching field of `defaults`: the zone (tZone), its optional power-armor variant
+     * (tZonePA — set only when present, so WandActivationConfig::zoneFor falls back to the regular zone), the
+     * two bindings (sPrimaryBinding / sSecondaryBinding — suppress is a token in the binding string, see
+     * InputBindingParser), the entry + per-binding activation haptics (sEntryHaptic / sPrimaryHaptic
+     * / sSecondaryHaptic — "none"/empty = silent; absent keeps the default), and when the sphere
+     * visual is drawn (sShowSphere — never / always / wheninside).
+     */
+    f4vr::WandActivationConfig ConfigBase::loadWandActivationConfig(const CSimpleIniA& ini, const char* section, const f4vr::WandActivationConfig& defaults)
+    {
+        f4vr::WandActivationConfig cfg;
+        cfg.zone = getTransformValue(ini, section, "tZone", defaults.zone);
+        cfg.zonePA = ini.GetValue(section, "tZonePA", nullptr) ? std::optional{ getTransformValue(ini, section, "tZonePA", cfg.zone) } : defaults.zonePA;
+        cfg.primary = getInputBindingValue(ini, section, "sPrimaryBinding", defaults.primary);
+        cfg.secondary = getInputBindingValue(ini, section, "sSecondaryBinding", defaults.secondary);
+
+        const char* rawEntry = ini.GetValue(section, "sEntryHaptic", nullptr);
+        cfg.entryHaptic = rawEntry ? vrcf::parseHapticPattern(rawEntry) : defaults.entryHaptic;
+        const char* rawPrimaryHaptic = ini.GetValue(section, "sPrimaryHaptic", nullptr);
+        cfg.primaryHaptic = rawPrimaryHaptic ? vrcf::parseHapticPattern(rawPrimaryHaptic) : defaults.primaryHaptic;
+        const char* rawSecondaryHaptic = ini.GetValue(section, "sSecondaryHaptic", nullptr);
+        cfg.secondaryHaptic = rawSecondaryHaptic ? vrcf::parseHapticPattern(rawSecondaryHaptic) : defaults.secondaryHaptic;
+
+        cfg.showSphere = f4vr::parseActivationSphereVisibility(ini.GetValue(section, "sShowSphere", ""), defaults.showSphere);
+        return cfg;
     }
 
     /**

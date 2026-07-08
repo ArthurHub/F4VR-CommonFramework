@@ -2,6 +2,10 @@
 
 #include <algorithm>
 #include <chrono>
+#include <string>
+#include <unordered_map>
+
+#include "common/CommonUtils.h"
 
 namespace
 {
@@ -215,6 +219,48 @@ namespace f4cf::vrcf
     }
 
     /**
+     * Case-insensitive name -> HapticPattern lookup for config text. Separators (space / underscore /
+     * hyphen) are stripped so "DoubleClick", "double click", and "double_click" all resolve. "none" / "off"
+     * / empty map to std::nullopt (no haptic); an unknown name also yields nullopt (logged), so a typo
+     * silently disables rather than firing an unexpected pattern.
+     */
+    std::optional<HapticPattern> parseHapticPattern(const std::string_view text)
+    {
+        const std::string key = common::normalizeConfigToken(text);
+
+        if (key.empty() || key == "none" || key == "off") {
+            return std::nullopt;
+        }
+
+        static const std::unordered_map<std::string_view, HapticPattern> table = {
+            { "tick", HapticPattern::Tick },
+            { "click", HapticPattern::Click },
+            { "doubleclick", HapticPattern::DoubleClick },
+            { "tripleclick", HapticPattern::TripleClick },
+            { "success", HapticPattern::Success },
+            { "warning", HapticPattern::Warning },
+            { "error", HapticPattern::Error },
+            { "notification", HapticPattern::Notification },
+            { "start", HapticPattern::Start },
+            { "stop", HapticPattern::Stop },
+            { "rampup", HapticPattern::RampUp },
+            { "rampdown", HapticPattern::RampDown },
+            { "heartbeat1", HapticPattern::Heartbeat1 },
+            { "heartbeat2", HapticPattern::Heartbeat2 },
+            { "heartbeat3", HapticPattern::Heartbeat3 },
+            { "buzz", HapticPattern::Buzz },
+            { "midbuzz", HapticPattern::MidBuzz },
+            { "longbuzz", HapticPattern::LongBuzz },
+        };
+
+        if (const auto it = table.find(key); it != table.end()) {
+            return it->second;
+        }
+        logger::warn("parseHapticPattern: unrecognized haptic '{}' - treating as none", key);
+        return std::nullopt;
+    }
+
+    /**
      * Maps a logical hand to the physical controller role using the cached left-handed flag.
      * Mirrors VRControllersManager::getHand.
      */
@@ -253,7 +299,8 @@ namespace f4cf::vrcf
         playback.segments.assign(pattern.begin(), pattern.end());
         playback.segmentIndex = 0;
         playback.segmentStartTime = getCurrentTimeSeconds();
-        playback.intensityScale = std::max(intensityScale, 0.0f);
+        // Parenthesized to dodge the Windows.h `max` function-macro (pulled in transitively via CommonUtils.h).
+        playback.intensityScale = (std::max)(intensityScale, 0.0f);
         playback.active = !playback.segments.empty();
 
         if (playback.active) {

@@ -65,6 +65,23 @@ namespace f4cf::common
         return s;
     }
 
+    /**
+     * Lowercase a token and drop separators (space, tab, underscore, hyphen) so differently-formatted
+     * config values collapse to one comparable key for case/format-insensitive enum matching.
+     */
+    std::string normalizeConfigToken(const std::string_view text)
+    {
+        std::string key;
+        key.reserve(text.size());
+        for (const char c : text) {
+            if (c == ' ' || c == '\t' || c == '_' || c == '-') {
+                continue;
+            }
+            key.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(c))));
+        }
+        return key;
+    }
+
     std::string ltrim(std::string s)
     {
         s.erase(s.begin(), std::ranges::find_if(s, [](const unsigned char ch) {

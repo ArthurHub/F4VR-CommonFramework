@@ -2,7 +2,9 @@
 #pragma once
 
 #include <cstdint>
+#include <optional>
 #include <span>
+#include <string_view>
 #include <vector>
 
 #include "VRControllersManager.h"
@@ -37,6 +39,9 @@ namespace f4cf::vrcf
         MidBuzz, // mid constant rumble - moderate emphasis
         LongBuzz, // long constant rumble - heavy emphasis
     };
+
+    // Parse a HapticPattern from config (INI) text
+    std::optional<HapticPattern> parseHapticPattern(std::string_view text);
 
     /**
      * One keyframed step of a haptic pattern. Intensity is linearly interpolated from

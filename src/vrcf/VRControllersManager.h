@@ -140,6 +140,10 @@ namespace f4cf::vrcf
         float threshold = 0.85f; // AxisDirection only
         float cooldown = 0.15f; // AxisDirection only
 
+        // When a consumer applies suppression for this binding (e.g. WandActivationSphere while the bound
+        // hand is inside its zone), hide the physical button from the game. Off by default.
+        bool suppress = false;
+
         /**
          * True when a binding can actually fire (i.e. it is not the "none"/disabled binding).
          */

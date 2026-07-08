@@ -1,17 +1,86 @@
 #pragma once
 
+#include <optional>
 #include <span>
+#include <string_view>
 #include <vector>
 
+#include "vrcf/VRControllersHaptic.h"
 #include "vrcf/VRControllersManager.h"
 
 namespace f4cf::f4vr
 {
     /**
+     * When the activation sphere's visual (the framework debug sphere) is drawn.
+     */
+    enum class ActivationSphereVisibility : std::uint8_t
+    {
+        Never = 0, // never draw the sphere
+        Always, // always draw it (tuning / debug)
+        WhenInside, // draw it only while a bound hand is inside the zone (a proximity hint)
+    };
+
+    /**
+     * Parse an ActivationSphereVisibility from config (INI) text, case-insensitively: "never"/"off"/"false"
+     * -> Never; "always"/"on"/"true" -> Always; "wheninside"/"inside"/"proximity"/"active" -> WhenInside.
+     * Empty or unrecognized text returns `fallback` (unrecognized is logged).
+     */
+    ActivationSphereVisibility parseActivationSphereVisibility(std::string_view text, ActivationSphereVisibility fallback);
+
+    /**
+     * Authored, config-loadable description of one activation sphere: its zone (+ optional PA variant), its
+     * two bindings (each carrying its own suppress flag), the entry haptic plus a per-binding activation
+     * haptic, and when the sphere visual is shown. A mod parses one INI section into this
+     * (ConfigBase::loadWandActivationConfig); the per-frame WandActivationSphere::Frame is composed from it
+     * with live gating (real binding vs the disabled binding) and any runtime zone re-anchor on top. The
+     * sphere only uses the zone's translate + scale (it is rotation-invariant). `secondary` defaults to
+     * disabled for single-binding spheres; haptics are std::nullopt = silent.
+     */
+    struct WandActivationConfig
+    {
+        RE::NiTransform zone{};
+        // Optional power-armor variant of the zone; when unset, zoneFor() falls back to `zone`. Lets a sphere
+        // whose anchor moves in power armor (e.g. the chest-stowed body grab) carry both placements in one
+        // bundle instead of a separate parallel field.
+        std::optional<RE::NiTransform> zonePA;
+        vrcf::InputBinding primary{};
+        vrcf::InputBinding secondary = vrcf::VRControllersManager::DisabledBinding;
+        std::optional<vrcf::HapticPattern> entryHaptic = vrcf::HapticPattern::Tick;
+        std::optional<vrcf::HapticPattern> primaryHaptic = vrcf::HapticPattern::DoubleClick;
+        std::optional<vrcf::HapticPattern> secondaryHaptic = vrcf::HapticPattern::DoubleClick;
+        ActivationSphereVisibility showSphere = ActivationSphereVisibility::Never;
+
+        /**
+         * The zone to use for the given power-armor state: the PA variant when one was configured, otherwise
+         * the regular zone.
+         */
+        const RE::NiTransform& zoneFor(const bool inPowerArmor) const
+        {
+            return inPowerArmor && zonePA ? *zonePA : zone;
+        }
+    };
+
+    /**
+     * One binding fed to a sphere for a frame, paired with the haptic to play when it activates (std::nullopt
+     * = silent). Gate the binding off for the frame by passing the disabled binding.
+     */
+    struct ActivationBinding
+    {
+        vrcf::InputBinding binding = vrcf::VRControllersManager::DisabledBinding;
+        std::optional<vrcf::HapticPattern> activateHaptic = vrcf::HapticPattern::DoubleClick;
+    };
+
+    /**
      * Reusable proximity interaction zone: a sphere around a parent node that, when the player's hand
      * enters it, suppresses that hand's button (so it can't also fire its normal action) and pulses a
-     * one-shot entry haptic, plus — only while debugging — renders the framework debug sphere at the zone's
-     * world-space center so it always matches the test.
+     * one-shot entry haptic, plus renders the framework sphere at the zone's world-space center (per
+     * Frame::showSphere) so any visual always matches the test.
+     *
+     * Suppression is opt-in per binding (InputBinding::suppress): a binding inside the zone is hidden from
+     * the game only when its flag is set; either way it still detects, haptics, and can fire. The entry
+     * haptic is per frame (Frame::entryHaptic); the activation haptic is per binding
+     * (ActivationBinding::activateHaptic); std::nullopt = silent. The sphere visual is drawn Never / Always /
+     * only WhenInside a bound hand (Frame::showSphere).
      *
      * Geometry: the center + radius come from a config transform carried off the parent node (the engine's
      * local->world convention, see MatrixUtils::calculateRelocation). The zone is a sphere, so only the
@@ -37,12 +106,17 @@ namespace f4cf::f4vr
             bool enabled = true;
             RE::NiNode* node = nullptr;
             RE::NiTransform zone;
-            std::initializer_list<vrcf::InputBinding> bindings;
-            bool showDebug = false;
-            // Optional known-visible node to render the debug sphere under, for when `node` (the node the
-            // zone is measured from) isn't part of the rendered scene graph — e.g. the raw HMD / wand
-            // tracking nodes. The sphere is relocated to the zone's world-space center/radius regardless, so
-            // it still matches the hit test. Defaults to `node` when null.
+            std::initializer_list<ActivationBinding> bindings;
+            // Entry haptic fired once per zone entry for whichever bound hand is inside (std::nullopt =
+            // silent). The per-binding activation haptic lives on each ActivationBinding.
+            std::optional<vrcf::HapticPattern> entryHaptic = vrcf::HapticPattern::Tick;
+            // When the sphere visual is drawn (Never / Always / WhenInside); WhenInside is resolved after the
+            // proximity test each frame.
+            ActivationSphereVisibility showSphere = ActivationSphereVisibility::Never;
+            // Optional known-visible node to render the sphere under, for when `node` (the node the zone is
+            // measured from) isn't part of the rendered scene graph — e.g. the raw HMD / wand tracking nodes.
+            // The sphere is relocated to the zone's world-space center/radius regardless, so it still matches
+            // the hit test. Defaults to `node` when null.
             RE::NiNode* debugNode = nullptr;
         };
 
@@ -61,37 +135,46 @@ namespace f4cf::f4vr
         template <class OnActivated>
         bool onFrameUpdate(const Frame& frame, OnActivated&& onActivated)
         {
-            updateDebug(frame.node, frame.debugNode ? frame.debugNode : frame.node, frame.zone, frame.enabled && frame.showDebug);
-
             if (!frame.enabled || !frame.node) {
+                updateDebug(frame.node, frame.debugNode ? frame.debugNode : frame.node, frame.zone, false);
                 resetInteraction();
                 return false;
             }
 
-            // Bindings whose wand is inside the zone this frame — the set we want suppressed. Left empty
-            // (allocation-free) on the common idle path; it only allocates once a wand is actually inside.
-            std::vector<vrcf::InputBinding> inside;
+            // Bindings inside the zone this frame that opt into suppression (InputBinding::suppress) — the
+            // set we hide from the game. A binding with suppress=false still detects, haptics, and fires; it
+            // just isn't suppressed (and so isn't reported by isSuppressing). Left empty (allocation-free) on
+            // the common idle path; it only allocates once a suppressing wand is actually inside.
+            std::vector<vrcf::InputBinding> toSuppress;
 
+            bool anyInside = false;
             bool handled = false;
-            for (const auto& binding : frame.bindings) {
-                if (!isInsideZone(frame, binding)) {
+            for (const auto& action : frame.bindings) {
+                if (!isInsideZone(frame, action.binding)) {
                     continue;
                 }
 
-                inside.push_back(binding);
-                triggerHapticOnce(binding.hand);
+                anyInside = true;
+                if (action.binding.suppress) {
+                    toSuppress.push_back(action.binding);
+                }
+                triggerHapticOnce(action.binding.hand, frame.entryHaptic);
 
-                if (!isCoolingDown() && !handled && vrcf::VRControllers.check(binding) && onActivated(binding)) {
-                    triggerActivation(binding.hand);
+                if (!isCoolingDown() && !handled && vrcf::VRControllers.check(action.binding) && onActivated(action.binding)) {
+                    triggerActivation(action.binding.hand, action.activateHaptic);
                     handled = true;
                 }
             }
 
-            applySuppressions(inside);
+            applySuppressions(toSuppress);
 
-            if (inside.empty()) {
+            if (!anyInside) {
                 _hapticFired = false;
             }
+
+            // Resolve the sphere visual after the proximity test so WhenInside can react to it.
+            const bool show = frame.showSphere == ActivationSphereVisibility::Always || (frame.showSphere == ActivationSphereVisibility::WhenInside && anyInside);
+            updateDebug(frame.node, frame.debugNode ? frame.debugNode : frame.node, frame.zone, show);
 
             return handled;
         }
@@ -126,15 +209,12 @@ namespace f4cf::f4vr
         static bool isInsideZone(const Frame& frame, const vrcf::InputBinding& binding);
 
         // --- Input suppression, owner-keyed to this zone (main thread only). ---
-        // Diffs the desired (inside-the-zone) set against what we currently suppress: suppresses the
-        // newly-entered bindings, releases the ones that left, and stores the new set. Suppress/release
-        // are issued only on these edges, matching the suppressor's "act only on real changes" contract.
         void applySuppressions(std::span<const vrcf::InputBinding> desired);
         void resetInteraction();
 
-        // --- One-shot haptics. ---
-        void triggerHapticOnce(vrcf::Hand hand);
-        void triggerActivation(vrcf::Hand hand);
+        // --- One-shot haptics (std::nullopt pattern = silent). ---
+        void triggerHapticOnce(vrcf::Hand hand, std::optional<vrcf::HapticPattern> pattern);
+        void triggerActivation(vrcf::Hand hand, std::optional<vrcf::HapticPattern> pattern);
 
         // --- Debug visual. ---
         void updateDebug(RE::NiNode* testNode, RE::NiNode* debugParent, const RE::NiTransform& zone, bool show);

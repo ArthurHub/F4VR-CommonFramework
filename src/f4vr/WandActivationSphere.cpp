@@ -1,5 +1,7 @@
 #include "WandActivationSphere.h"
 
+#include <string>
+
 #include "common/CommonUtils.h"
 #include "common/MatrixUtils.h"
 #include "f4vr/F4VRUtils.h"
@@ -10,6 +12,30 @@
 
 namespace f4cf::f4vr
 {
+    /**
+     * Case-insensitive name -> ActivationSphereVisibility, tolerating separators. Empty or unknown returns
+     * `fallback` (unknown is logged).
+     */
+    ActivationSphereVisibility parseActivationSphereVisibility(const std::string_view text, const ActivationSphereVisibility fallback)
+    {
+        const std::string key = common::normalizeConfigToken(text);
+
+        if (key.empty()) {
+            return fallback;
+        }
+        if (key == "never" || key == "off" || key == "false" || key == "none") {
+            return ActivationSphereVisibility::Never;
+        }
+        if (key == "always" || key == "on" || key == "true") {
+            return ActivationSphereVisibility::Always;
+        }
+        if (key == "wheninside" || key == "inside" || key == "proximity" || key == "active" || key == "near") {
+            return ActivationSphereVisibility::WhenInside;
+        }
+        logger::warn("parseActivationSphereVisibility: unrecognized value '{}' - using fallback", key);
+        return fallback;
+    }
+
     /**
      * World-space sphere test: derives the zone center (the zone translate carried off `parent` via the
      * engine's local->world convention) and radius (zone scale * parent world scale * the mesh base
@@ -76,22 +102,29 @@ namespace f4cf::f4vr
     }
 
     /**
-     * Fires the entry haptic once per zone entry; re-armed by the caller once no wand remains inside.
+     * Fires the entry haptic once per zone entry (skipped when the pattern is std::nullopt); re-armed by the
+     * caller once no wand remains inside. The latch is set regardless so a silent zone doesn't re-evaluate
+     * each frame.
      */
-    void WandActivationSphere::triggerHapticOnce(const vrcf::Hand hand)
+    void WandActivationSphere::triggerHapticOnce(const vrcf::Hand hand, const std::optional<vrcf::HapticPattern> pattern)
     {
         if (!_hapticFired) {
             _hapticFired = true;
-            vrcf::VRHaptics.trigger(hand, vrcf::HapticPattern::Tick);
+            if (pattern) {
+                vrcf::VRHaptics.trigger(hand, *pattern);
+            }
         }
     }
 
     /**
-     * Plays the success haptic and starts the post-activation cooldown.
+     * Plays the activation haptic (skipped when the pattern is std::nullopt) and starts the post-activation
+     * cooldown.
      */
-    void WandActivationSphere::triggerActivation(const vrcf::Hand hand)
+    void WandActivationSphere::triggerActivation(const vrcf::Hand hand, const std::optional<vrcf::HapticPattern> pattern)
     {
-        vrcf::VRHaptics.trigger(hand, vrcf::HapticPattern::DoubleClick);
+        if (pattern) {
+            vrcf::VRHaptics.trigger(hand, *pattern);
+        }
         _lastActivationTime = common::nowMillis();
     }
 

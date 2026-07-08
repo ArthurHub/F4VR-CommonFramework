@@ -17,10 +17,10 @@ namespace f4cf::vrcf
      *
      * Full-line format (tokens separated by space, comma, or colon):
      *
-     *   <hand> <type> <button> [duration] [+modifier]            for button activation types
-     *   <hand> axis <axis> <direction> [threshold] [+modifier]   for an explicit axis
-     *   <hand> thumbstick <direction> [threshold] [+modifier]    shorthand: axis defaults to Thumbstick
-     *   none | off | disabled | (empty)                          disables the binding (never triggers)
+     *   <hand> <type> <button> [duration] [suppress|nosuppress] [+modifier]            for button activation types
+     *   <hand> axis <axis> <direction> [threshold] [suppress|nosuppress] [+modifier]   for an explicit axis
+     *   <hand> thumbstick <direction> [threshold] [suppress|nosuppress] [+modifier]    shorthand: axis defaults to Thumbstick
+     *   none | off | disabled | (empty)                                               disables the binding (never triggers)
      *
      * Recognized tokens (with aliases):
      *   hand       : primary | offhand | right | left
@@ -29,6 +29,7 @@ namespace f4cf::vrcf
      *   button     : system | menu/applicationmenu/b | grip | a | trigger | thumbstick/touchpad/joystick
      *   axis       : thumbstick/touchpad | trigger | grip
      *   direction  : up | down | left | right
+     *   suppress   : "suppress" | "nosuppress" - opt this binding in/out of consumer-applied input suppression
      *   modifier   : "+button" (held on the binding's own hand) or "+hand:button" (held on a specific hand)
      *
      * Examples:
