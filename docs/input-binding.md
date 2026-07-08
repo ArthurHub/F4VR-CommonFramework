@@ -187,6 +187,8 @@ INI); the keys inside are always these:
 | `sPrimaryHaptic`  | Haptic played when `sPrimaryBinding` fires. `none` = silent.                                                                                             |
 | `sSecondaryHaptic`| Haptic played when `sSecondaryBinding` fires. `none` = silent.                                                                                           |
 | `sShowSphere`             | When the zone's visual is drawn: `never`, `always`, or `wheninside` (only while a bound hand is in it — a proximity hint).                               |
+| `sSphereNif`              | The `.nif` mesh drawn as the zone's visual (a mesh path resolved like any prop nif). Empty uses the framework's default debug sphere. Changing it at runtime releases the old mesh and loads the new one. |
+| `fSphereScale`            | Scale multiplier for the drawn visual **only** — the proximity hit test always uses the full `tZone` scale. `< 1` draws the sphere smaller than the interaction radius (e.g. an "inside the zone" hint with `sShowSphere = wheninside`); `1` matches the zone. |
 
 Any key you leave out keeps the mod's built-in default for that sphere.
 
@@ -228,7 +230,7 @@ parse a string directly with `parseInputBinding(...)`. The `suppress` flag rides
 
 **An activation sphere** is two types:
 
-- `f4cf::f4vr::WandActivationConfig` — the authored bundle (zone + bindings + haptics + visibility).
+- `f4cf::f4vr::WandActivationConfig` — the authored bundle (zone + bindings + haptics + visibility + visual mesh/scale).
   Load one whole INI section with `ConfigBase::loadWandActivationConfig(ini, "SectionName", defaults)`.
 - `f4cf::f4vr::WandActivationSphere` — the runtime zone. Drive it each frame with `onFrameUpdate(frame,
   onActivated)`, composing the per-frame `Frame` from your `WandActivationConfig` (gating a binding off

@@ -171,28 +171,58 @@ namespace f4cf::f4vr
     }
 
     /**
-     * Keeps the optional debug sphere in sync with the zone: detaches it when hidden, lazily clones it on
+     * Keeps the optional sphere visual in sync with the zone: detaches it when hidden, lazily clones it on
      * first show (cached for reuse, collision stripped), (re)attaches it under `debugParent`, and relocates
      * it to the zone's world-space center/radius so the visual and the test always agree — even when
      * `debugParent` differs from `testNode` (the node the zone is measured from). This lets the zone be
      * measured off a raw, non-rendering tracking node (HMD / wand) while the sphere renders under a visible
      * one.
+     *
+     * `nifName` selects the mesh (empty = the framework default debug sphere); a change from the currently
+     * cloned nif releases the cached clone so the new one is loaded on the next show. `sphereScale` shrinks
+     * (or grows) the *visual* relative to the zone — the hit test always uses the unscaled zone.
      */
-    void WandActivationSphere::updateDebug(RE::NiNode* testNode, RE::NiNode* debugParent, const RE::NiTransform& zone, const bool show)
+    void WandActivationSphere::updateDebug(
+        const RE::NiNode* testNode, RE::NiNode* debugParent, const RE::NiTransform& zone, const bool show, const std::string_view nifName, const float sphereScale)
     {
+        // Fast idle path: nothing shown and nothing cached, so there is no nif work to do (avoids resolving
+        // the default name every frame while the sphere is hidden — the common case).
+        if (!_sphereNode && (!show || !testNode || !debugParent)) {
+            return;
+        }
+
+        const std::string desiredNif = nifName.empty() ? vrui::UIUtils::getDebugSphereNifName() : std::string(nifName);
+
+        // Runtime nif swap: the configured mesh changed, so drop the stale clone; it is re-loaded below.
+        if (_sphereNode && _sphereNifName != desiredNif) {
+            detachDebug();
+            _sphereNode.reset();
+        }
+
         if (!show || !testNode || !debugParent) {
             detachDebug();
             return;
         }
 
-        if (!_sphereNode) {
-            _sphereNode.reset(getClonedNiNodeForNifFileSetName(vrui::UIUtils::getDebugSphereNifName(), _sphereKey));
-            if (!_sphereNode) {
-                logger::warn("WandActivationSphere: failed to clone debug sphere NIF '{}'", vrui::UIUtils::getDebugSphereNifName());
-                return;
+        // Lazily (re)load the mesh once per distinct name. _sphereNifName records the last *attempted* name
+        // (set before the load) so a bad/mistyped path — which throws out of the loader — is tried only once,
+        // not re-thrown every shown frame; changing the path to another value retries. A load failure leaves
+        // the visual off while the interaction/haptics keep running.
+        if (!_sphereNode && _sphereNifName != desiredNif) {
+            _sphereNifName = desiredNif;
+            try {
+                _sphereNode.reset(getClonedNiNodeForNifFileSetName(desiredNif, _sphereKey));
+            } catch (const std::exception& ex) {
+                logger::warn("WandActivationSphere: failed to load sphere NIF '{}': {}", desiredNif, ex.what());
             }
-            _sphereNode->collisionObject.reset();
-            logger::info("WandActivationSphere: cloned debug sphere NIF '{}'", _sphereKey);
+            if (_sphereNode) {
+                _sphereNode->collisionObject.reset();
+                logger::info("WandActivationSphere: loaded sphere NIF '{}' ({})", desiredNif, _sphereKey);
+            }
+        }
+
+        if (!_sphereNode) {
+            return;
         }
 
         if (_sphereNode->parent != debugParent) {
@@ -202,8 +232,11 @@ namespace f4cf::f4vr
         // Re-express the zone (local to testNode) as a local transform under debugParent, keeping its world
         // placement, so the sphere renders exactly where the hit test measures even when it hangs under a
         // different node. Rotation is dropped (irrelevant for a sphere); when debugParent == testNode this
-        // round-trips back to the zone's translate/scale.
-        _sphereNode->local = common::MatrixUtils::reparentTransform(testNode->world, zone, debugParent->world, false);
+        // round-trips back to the zone's translate/scale. sphereScale shrinks/grows only the visual radius
+        // (the zone center is unchanged), so the drawn sphere can sit inside the unscaled interaction zone.
+        RE::NiTransform visualZone = zone;
+        visualZone.scale *= sphereScale;
+        _sphereNode->local = common::MatrixUtils::reparentTransform(testNode->world, visualZone, debugParent->world, false);
     }
 
     /**

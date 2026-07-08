@@ -6,11 +6,18 @@ reuse (`btn-empty` for plain buttons, `btn-border` / `btn-border-2` for toggles)
 config-menu buttons (advanced/misc config, misc options). Re-skin any of them by editing
 the PNG and re-running the pack command below.
 
-`debug-sphere` is not a button but a **custom mesh** — `debug-sphere.nif` (the sphere the
-activation-sphere visuals clone). Its sprites (`debug-sphere.png` and the `#`-suffixed
-`debug-sphere#2.png`) reuse that mesh instead of a flat quad: `pack` keeps the sphere
-geometry, repoints its texture at the atlas, and remaps its UVs into each sprite's region, so
-the two PNGs are just two skins of the one sphere. See the packer's
+`debug-sphere` and `activation-sphere` are not buttons but **custom meshes** (the spheres the
+activation-sphere visuals clone). `pack` pairs meshes and textures by name — exact, or up to a
+`@` suffix — and reuses the mesh instead of a flat quad, keeping its geometry, repointing its
+texture at the atlas, and remapping its UVs into the paired texture's region. The two folders
+show both directions:
+
+- **One mesh, many textures** — `debug-sphere.nif` reused by `debug-sphere.png` and
+  `debug-sphere@strong.png`, so those two PNGs are two skins of the one sphere.
+- **One texture, many meshes** — the `activation-sphere@<color>-<strength>.nif` meshes all
+  share `activation-sphere.png`; each mesh is kept and emits its own output nif.
+
+(`@` rather than `#` since `#` is an INI comment.) See the packer's
 [custom mesh override](../../../../nif-tools/README.md#custom-mesh-override).
 
 ## Pack command

@@ -2,6 +2,7 @@
 
 #include <optional>
 #include <span>
+#include <string>
 #include <string_view>
 #include <vector>
 
@@ -11,7 +12,8 @@
 namespace f4cf::f4vr
 {
     /**
-     * When the activation sphere's visual (the framework debug sphere) is drawn.
+     * When the activation sphere's visual (the sphere mesh — Frame::sphereNif or the framework default) is
+     * drawn.
      */
     enum class ActivationSphereVisibility : std::uint8_t
     {
@@ -49,6 +51,8 @@ namespace f4cf::f4vr
         std::optional<vrcf::HapticPattern> primaryHaptic = vrcf::HapticPattern::DoubleClick;
         std::optional<vrcf::HapticPattern> secondaryHaptic = vrcf::HapticPattern::DoubleClick;
         ActivationSphereVisibility showSphere = ActivationSphereVisibility::Never;
+        std::string sphereNif;
+        float sphereScale = 1.0f;
 
         /**
          * The zone to use for the given power-armor state: the PA variant when one was configured, otherwise
@@ -73,8 +77,9 @@ namespace f4cf::f4vr
     /**
      * Reusable proximity interaction zone: a sphere around a parent node that, when the player's hand
      * enters it, suppresses that hand's button (so it can't also fire its normal action) and pulses a
-     * one-shot entry haptic, plus renders the framework sphere at the zone's world-space center (per
-     * Frame::showSphere) so any visual always matches the test.
+     * one-shot entry haptic, plus renders a sphere mesh at the zone's world-space center (per
+     * Frame::showSphere, using Frame::sphereNif or the framework default) so any visual always matches the
+     * test.
      *
      * Suppression is opt-in per binding (InputBinding::suppress): a binding inside the zone is hidden from
      * the game only when its flag is set; either way it still detects, haptics, and can fire. The entry
@@ -118,6 +123,14 @@ namespace f4cf::f4vr
             // The sphere is relocated to the zone's world-space center/radius regardless, so it still matches
             // the hit test. Defaults to `node` when null.
             RE::NiNode* debugNode = nullptr;
+            // The .nif cloned as the sphere visual. Empty = the framework's default debug sphere
+            // (vrui::UIUtils::getDebugSphereNifName()). A different value swaps the mesh; changing it between
+            // frames releases the previous clone and loads the new one on the next show.
+            std::string_view sphereNif = {};
+            // Scale multiplier applied to the zone scale for the visual sphere only — the proximity hit test
+            // always uses the full zone scale. < 1 draws the sphere smaller than the interaction radius (a
+            // "hand is inside" indicator that sits within the real zone); 1 = the visual matches the zone.
+            float sphereScale = 1.0f;
         };
 
         explicit WandActivationSphere(const char* key, const std::uint64_t cooldownMs = 400)
@@ -136,7 +149,7 @@ namespace f4cf::f4vr
         bool onFrameUpdate(const Frame& frame, OnActivated&& onActivated)
         {
             if (!frame.enabled || !frame.node) {
-                updateDebug(frame.node, frame.debugNode ? frame.debugNode : frame.node, frame.zone, false);
+                updateDebug(frame.node, frame.debugNode ? frame.debugNode : frame.node, frame.zone, false, frame.sphereNif, frame.sphereScale);
                 resetInteraction();
                 return false;
             }
@@ -174,7 +187,7 @@ namespace f4cf::f4vr
 
             // Resolve the sphere visual after the proximity test so WhenInside can react to it.
             const bool show = frame.showSphere == ActivationSphereVisibility::Always || (frame.showSphere == ActivationSphereVisibility::WhenInside && anyInside);
-            updateDebug(frame.node, frame.debugNode ? frame.debugNode : frame.node, frame.zone, show);
+            updateDebug(frame.node, frame.debugNode ? frame.debugNode : frame.node, frame.zone, show, frame.sphereNif, frame.sphereScale);
 
             return handled;
         }
@@ -217,7 +230,7 @@ namespace f4cf::f4vr
         void triggerActivation(vrcf::Hand hand, std::optional<vrcf::HapticPattern> pattern);
 
         // --- Debug visual. ---
-        void updateDebug(RE::NiNode* testNode, RE::NiNode* debugParent, const RE::NiTransform& zone, bool show);
+        void updateDebug(const RE::NiNode* testNode, RE::NiNode* debugParent, const RE::NiTransform& zone, bool show, std::string_view nifName, float sphereScale);
 
         bool isCoolingDown() const;
         static bool containsSuppression(std::span<const vrcf::InputBinding> bindings, const vrcf::InputBinding& binding);
@@ -227,6 +240,7 @@ namespace f4cf::f4vr
         std::uint64_t _cooldownMs;
         std::uint64_t _lastActivationTime = 0;
         RE::NiPointer<RE::NiNode> _sphereNode; // debug visual only; null until the debug flag is first enabled
+        std::string _sphereNifName; // the .nif last loaded into _sphereNode (or last attempted); detects a runtime swap
         std::vector<vrcf::InputBinding> _suppressedBindings; // bindings currently suppressed under _sphereKey
         bool _hapticFired = false;
 

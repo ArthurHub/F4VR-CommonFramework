@@ -654,8 +654,10 @@ namespace f4cf
      * (tZonePA — set only when present, so WandActivationConfig::zoneFor falls back to the regular zone), the
      * two bindings (sPrimaryBinding / sSecondaryBinding — suppress is a token in the binding string, see
      * InputBindingParser), the entry + per-binding activation haptics (sEntryHaptic / sPrimaryHaptic
-     * / sSecondaryHaptic — "none"/empty = silent; absent keeps the default), and when the sphere
-     * visual is drawn (sShowSphere — never / always / wheninside).
+     * / sSecondaryHaptic — "none"/empty = silent; absent keeps the default), when the sphere
+     * visual is drawn (sShowSphere — never / always / wheninside), the sphere visual's mesh
+     * (sSphereNif — empty/absent keeps the default, which the sphere resolves to the framework debug sphere),
+     * and its visual-only scale multiplier (fSphereScale — < 1 draws it smaller than the interaction zone).
      */
     f4vr::WandActivationConfig ConfigBase::loadWandActivationConfig(const CSimpleIniA& ini, const char* section, const f4vr::WandActivationConfig& defaults)
     {
@@ -673,6 +675,10 @@ namespace f4cf
         cfg.secondaryHaptic = rawSecondaryHaptic ? vrcf::parseHapticPattern(rawSecondaryHaptic) : defaults.secondaryHaptic;
 
         cfg.showSphere = f4vr::parseActivationSphereVisibility(ini.GetValue(section, "sShowSphere", ""), defaults.showSphere);
+
+        const char* rawSphereNif = ini.GetValue(section, "sSphereNif", nullptr);
+        cfg.sphereNif = rawSphereNif ? rawSphereNif : defaults.sphereNif;
+        cfg.sphereScale = static_cast<float>(ini.GetDoubleValue(section, "fSphereScale", defaults.sphereScale));
         return cfg;
     }
 
