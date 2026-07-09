@@ -92,6 +92,10 @@ plugin) linked against this framework.
 3. Replace every occurrence of `MyMod` (and `My Mod`) in the template files with your mod's name.
 4. Generate and build: `cmake --preset default`.
 
+**New to the framework?** The [Creating a new mod](docs/creating-a-new-mod.md) guide walks through all
+of this step by step and ends with a complete, running example mod that shows a notification on a
+button press.
+
 Your mod class derives from `ModBase` and overrides the lifecycle hooks:
 
 ```cpp
