@@ -12,11 +12,20 @@ things:
   sOpenMenu = offhand longpress grip
   ```
 
-- **[Activation spheres](#activation-spheres)** — a higher-level *proximity gesture*: a spherical zone
+- **[Activation spheres](#activation-spheres)** — a higher-level _proximity gesture_: a spherical zone
   around a hand, the HMD, or a prop that fires a binding when your hand enters it. A sphere is a small
   group of INI keys (a zone + up to two binding lines + haptics + a visual), each grouped in its own
   section. **Not every binding is part of a sphere** — plain action keys (menus, toggles, …) use just a
   binding line; spheres are for reach-into-a-zone gestures.
+
+```ini
+[MyMod_SomeActivation]
+tZone = 0,0,0;0,0,0;18
+sPrimaryBinding = offhand tap trigger suppress
+sSecondaryBinding = none
+sEntryHaptic = Tick
+sPrimaryHaptic = DoubleClick
+```
 
 Which keys and sections exist (and their defaults) is up to each mod — check its INI. The formats
 below are the same in every mod.
@@ -177,18 +186,18 @@ hand's wand, the HMD, or a prop attached to the body — and, while a bound hand
 A mod groups each sphere into **its own INI section**. The section name is chosen by the mod (check its
 INI); the keys inside are always these:
 
-| Key                       | What it sets                                                                                                                                             |
-| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `tZone`                   | The zone as a transform `x,y,z;heading,roll,attitude;scale`. Only **translate + scale** matter — the zone is a sphere, so rotation is ignored and `scale` is its **diameter**. |
-| `tZonePA`                 | Optional **power-armor variant** of `tZone` (for a zone whose anchor moves in PA). Omit to reuse `tZone`.                                                |
-| `sPrimaryBinding`         | The main [binding line](#the-binding-line). Append `suppress` to hide its button while the hand is in the zone.                                          |
-| `sSecondaryBinding`       | An optional second binding line (e.g. a `longpress` variant of the same button). `none` to omit.                                                         |
-| `sEntryHaptic`            | Haptic played **once** when a hand enters the zone. `none` = silent.                                                                                     |
-| `sPrimaryHaptic`  | Haptic played when `sPrimaryBinding` fires. `none` = silent.                                                                                             |
-| `sSecondaryHaptic`| Haptic played when `sSecondaryBinding` fires. `none` = silent.                                                                                           |
-| `sShowSphere`             | When the zone's visual is drawn: `never`, `always`, or `wheninside` (only while a bound hand is in it — a proximity hint).                               |
-| `sSphereNif`              | The `.nif` mesh drawn as the zone's visual (a mesh path resolved like any prop nif). Empty uses the framework's default debug sphere. Changing it at runtime releases the old mesh and loads the new one. |
-| `fSphereScale`            | Scale multiplier for the drawn visual **only** — the proximity hit test always uses the full `tZone` scale. `< 1` draws the sphere smaller than the interaction radius (e.g. an "inside the zone" hint with `sShowSphere = wheninside`); `1` matches the zone. |
+| Key                 | What it sets                                                                                                                                                                                                                                                   |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `tZone`             | The zone as a transform `x,y,z;heading,roll,attitude;scale`. Only **translate + scale** matter — the zone is a sphere, so rotation is ignored and `scale` is its **diameter**.                                                                                 |
+| `tZonePA`           | Optional **power-armor variant** of `tZone` (for a zone whose anchor moves in PA). Omit to reuse `tZone`.                                                                                                                                                      |
+| `sPrimaryBinding`   | The main [binding line](#the-binding-line). Append `suppress` to hide its button while the hand is in the zone.                                                                                                                                                |
+| `sSecondaryBinding` | An optional second binding line (e.g. a `longpress` variant of the same button). `none` to omit.                                                                                                                                                               |
+| `sEntryHaptic`      | Haptic played **once** when a hand enters the zone. `none` = silent.                                                                                                                                                                                           |
+| `sPrimaryHaptic`    | Haptic played when `sPrimaryBinding` fires. `none` = silent.                                                                                                                                                                                                   |
+| `sSecondaryHaptic`  | Haptic played when `sSecondaryBinding` fires. `none` = silent.                                                                                                                                                                                                 |
+| `sShowSphere`       | When the zone's visual is drawn: `never`, `always`, or `wheninside` (only while a bound hand is in it — a proximity hint).                                                                                                                                     |
+| `sSphereNif`        | The `.nif` mesh drawn as the zone's visual (a mesh path resolved like any prop nif). Empty uses the framework's default sphere mesh. Changing it at runtime releases the old mesh and loads the new one.                                                       |
+| `fSphereScale`      | Scale multiplier for the drawn visual **only** — the proximity hit test always uses the full `tZone` scale. `< 1` draws the sphere smaller than the interaction radius (e.g. an "inside the zone" hint with `sShowSphere = wheninside`); `1` matches the zone. |
 
 Any key you leave out keeps the mod's built-in default for that sphere.
 
@@ -201,10 +210,46 @@ Any key you leave out keeps the mod's built-in default for that sphere.
 `Start`, `Stop`, `RampUp`, `RampDown`, `Heartbeat1`, `Heartbeat2`, `Heartbeat3`, `Buzz`, `MidBuzz`,
 `LongBuzz`.
 
+## Controlling the visual sphere
+
+The sphere you see is **purely cosmetic** and separate from the interaction zone: the proximity hit test
+always uses the full `tZone`, so tuning the visual never changes where the gesture actually fires. Three
+keys control it independently:
+
+- **Whether it shows** — `sShowSphere`: `never` (invisible — the default for most spheres), `always` (a
+  fixed marker, handy while tuning placement), or `wheninside` (appears only while a bound hand is in the
+  zone — a "you're in range" hint).
+- **Which mesh** — `sSphereNif`: point it at any `.nif` to change the look (or pick one of the built-in
+  meshes below); empty falls back to the framework's default sphere. Editing this while the game runs
+  hot-swaps the mesh (the old one is released and the new one loaded on the next frame it's shown).
+- **How big** — `fSphereScale`: multiplies the drawn size **only**. Use `< 1` to draw a small marker inside
+  the real (larger) zone so the hint doesn't fill your whole reach; `1` matches the zone exactly.
+
+**Built-in meshes** shipped under `ui-common\`:
+
+- `ui-common\activation-sphere@white-full.nif`
+- `ui-common\activation-sphere@white-medium.nif`
+- `ui-common\activation-sphere@white-subtle.nif`
+- `ui-common\activation-sphere@cyan-full.nif`
+- `ui-common\activation-sphere@cyan-medium.nif`
+- `ui-common\activation-sphere@cyan-subtle.nif`
+- `ui-common\activation-sphere@green-medium.nif`
+- `ui-common\activation-sphere@green-subtle.nif`
+- `ui-common\activation-sphere@purple-medium.nif`
+- `ui-common\activation-sphere@purple-subtle.nif`
+- `ui-common\activation-sphere@amber-medium.nif`
+- `ui-common\activation-sphere@amber-subtle.nif`
+- `ui-common\activation-sphere@gold-subtle.nif`
+- `ui-common\debug-sphere.nif`
+- `ui-common\debug-sphere@strong.nif`
+
+A common recipe is a small proximity dot — `sShowSphere = wheninside` with `fSphereScale = 0.5` — that
+appears only as your hand nears the zone. To hide the visual entirely, set `sShowSphere = never`.
+
 ## Example
 
 ```ini
-[MyMod_HeadActivation]
+[MyMod_SomeActivation]
 tZone = 0,0,0;0,0,0;18
 sPrimaryBinding = offhand tap trigger suppress
 sSecondaryBinding = offhand longpress trigger suppress
@@ -212,6 +257,7 @@ sEntryHaptic = Tick
 sPrimaryHaptic = DoubleClick
 sSecondaryHaptic = Click
 sShowSphere = wheninside
+sSphereNif = ui-common\activation-sphere@white-medium.nif
 ```
 
 A tap of the off-hand trigger while it's near the HMD fires the primary gesture (its trigger hidden
@@ -233,7 +279,7 @@ parse a string directly with `parseInputBinding(...)`. The `suppress` flag rides
 - `f4cf::f4vr::WandActivationConfig` — the authored bundle (zone + bindings + haptics + visibility + visual mesh/scale).
   Load one whole INI section with `ConfigBase::loadWandActivationConfig(ini, "SectionName", defaults)`.
 - `f4cf::f4vr::WandActivationSphere` — the runtime zone. Drive it each frame with `onFrameUpdate(frame,
-  onActivated)`, composing the per-frame `Frame` from your `WandActivationConfig` (gating a binding off
+onActivated)`, composing the per-frame `Frame` from your `WandActivationConfig` (gating a binding off
   for the frame by passing the disabled binding, and re-anchoring the zone if needed). It handles the
   proximity test, owner-keyed suppression, haptics, cooldown, and the debug/proximity visual.
 
