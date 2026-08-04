@@ -339,17 +339,24 @@ namespace f4cf::f4vr
     // world->VR-origin posAdjust vectors the engine used to render the current frame. Read by the
     // debug-draw overlay (f4cf::debug) so drawn geometry projects exactly where the game drew it
     // (HMD pose already baked in). If overlay geometry reads as garbage after a runtime change this
-    // is the first suspect. Source: ROCK DebugBodyOverlay.cpp:983-1000 via reference library
-    // knowledge-base/debug_draw_overlay.md section 5.3; the sub-offsets are from the same site.
+    // is the first suspect. Source: ROCK DebugBodyOverlay.cpp:1224-1242 (ROCK 0.6) via reference
+    // library knowledge-base/debug_draw_overlay.md section 5.3; the sub-offsets are from the same site.
     inline REL::Relocation<std::uintptr_t*> vrRenderCameraGlobals(REL::Offset(0x6235AC8));
     // [vrRenderCameraGlobals + 0x25D0] -> camera data block pointer
     constexpr std::uintptr_t VR_RENDER_CAMERA_DATA_OFFSET = 0x25D0;
     // [cameraData + 0xD0 / + 0x2E0] -> eye 0 / eye 1 column-major 4x4 view-projection matrix
     constexpr std::uintptr_t VR_RENDER_CAMERA_EYE0_VIEW_PROJ_OFFSET = 0xD0;
     constexpr std::uintptr_t VR_RENDER_CAMERA_EYE1_VIEW_PROJ_OFFSET = 0x2E0;
-    // [vrRenderCameraGlobals + 0x2590 / + 0x25C0] -> eye 0 / eye 1 posAdjust float3
+    // [vrRenderCameraGlobals + 0x2590 / + 0x25A0] -> eye 0 / eye 1 CURRENT-frame posAdjust float3.
+    // The engine copies +0x2590/+0x25A0/+0x25B0/+0x25C0 as one four-slot family, where
+    // +0x25B0/+0x25C0 hold the PREVIOUS-frame origins used by temporal reprojection. Reading
+    // +0x25C0 as the right-eye origin lags one frame of room translation and stutters the right
+    // eye under stick locomotion. ROCK 0.1.0 had that bug and fixed it in 0.6; this framework
+    // inherited the pre-fix value via the knowledge-base doc, which was written from ROCK 0.1.0.
     constexpr std::uintptr_t VR_RENDER_CAMERA_EYE0_POS_ADJUST_OFFSET = 0x2590;
-    constexpr std::uintptr_t VR_RENDER_CAMERA_EYE1_POS_ADJUST_OFFSET = 0x25C0;
+    constexpr std::uintptr_t VR_RENDER_CAMERA_EYE1_POS_ADJUST_OFFSET = 0x25A0;
+    static_assert(VR_RENDER_CAMERA_EYE1_POS_ADJUST_OFFSET - VR_RENDER_CAMERA_EYE0_POS_ADJUST_OFFSET == 0x10,
+        "Eye origins are adjacent 16-byte slots; a 0x30 delta means a previous-frame origin crept back in.");
 
     // Load a specific texture by file path like "data\Textures\Effects\Gobos\FlashlightGobo01.DDS"
     // call with: unk1=1, unk2=0, unk3=0, unk4=0
