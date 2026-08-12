@@ -228,7 +228,11 @@ namespace f4cf::f4vr
     // Thanks Shizof and SmoothMovementVR for below code
     bool isInPowerArmor()
     {
-        const auto biped = getPlayer()->biped.get();
+        const auto player = getPlayer();
+        if (player == nullptr) {
+            return false;
+        }
+        const auto biped = player->biped.get();
         if (!biped) {
             return false;
         }
