@@ -1,7 +1,11 @@
 #include "F4VRUtils.h"
 
+#include <cmath>
+#include <numbers>
+
 #include "ModBase.h"
 #include "PlayerNodes.h"
+#include "common/MatrixUtils.h"
 #include "f4sevr/PapyrusUtils.h"
 #include "vrcf/VRControllersManager.h"
 
@@ -333,6 +337,137 @@ namespace f4cf::f4vr
         }
         RE::NiPoint3 p = point; // the native takes a non-const reference
         ProcessLists_GetActorsWithinRangeOfPoint(processLists, p, radius, outActors);
+    }
+
+    /**
+     * The angle in degrees between the direction the actor is facing and the direction to a world point:
+     * 0 is dead ahead, +/-180 directly behind, the sign following the engine's yaw. Returns 0 for a null actor
+     * or for a point the actor is standing on.
+     *
+     * Facing comes from the actor's own heading (`data.angle.z` — the engine's yaw in radians, zero along +Y
+     * and increasing toward +X), NOT from Actor::GetEyeVector: that virtual returns unusable values on the VR
+     * runtime, filling its origin out-param with what is plainly a direction vector. Reading the member also
+     * cannot fault, and body heading is what the AI actually turns toward a target — head look-at is cosmetic
+     * on top of it.
+     *
+     * Measured horizontally (the vertical component is dropped), so an actor does not stop facing a target
+     * that stands above or below it.
+     */
+    float getActorFacingAngleTo(RE::Actor* actor, const RE::NiPoint3& point)
+    {
+        if (!actor) {
+            return 0.0f;
+        }
+        const float dx = point.x - actor->data.location.x;
+        const float dy = point.y - actor->data.location.y;
+        if (std::abs(dx) < 0.01f && std::abs(dy) < 0.01f) {
+            return 0.0f;
+        }
+        // atan2(x, y), not the usual (y, x), to match the engine's zero-along-+Y yaw
+        constexpr float TWO_PI = 2.0f * std::numbers::pi_v<float>;
+        float delta = std::atan2(dx, dy) - actor->data.angle.z;
+        // wrap into [-pi, pi] so the comparison holds across the 0 / 2pi seam
+        delta = std::fmod(delta + std::numbers::pi_v<float>, TWO_PI);
+        if (delta < 0) {
+            delta += TWO_PI;
+        }
+        return common::MatrixUtils::radsToDegrees(delta - std::numbers::pi_v<float>);
+    }
+
+    /**
+     * Whether the actor is facing the given world point, within `halfAngleDegrees` to either side of where it
+     * is pointed — see getActorFacingAngleTo for how facing is measured. 180 accepts any facing.
+     */
+    bool isActorFacing(RE::Actor* actor, const RE::NiPoint3& point, const float halfAngleDegrees)
+    {
+        if (!actor) {
+            return false;
+        }
+        return halfAngleDegrees >= 180.0f || std::abs(getActorFacingAngleTo(actor, point)) <= halfAngleDegrees;
+    }
+
+    /**
+     * How well the observer currently detects the target — the engine's own perception answer, so light,
+     * distance, facing and sneak are all already accounted for. Priority is left at kNormal, what the game's
+     * own callers use.
+     *
+     * The scale is continuous, not a flag. Measured in-game on VR 1.2.72:
+     *   < 0    unaware of the target
+     *   0..~20 aware — suspicious / investigating, but has not located the target
+     *   >= ~20 has actually seen the target, climbing to roughly 50-60 at point blank
+     * So "detected" depends on which question is being asked: >= 0 answers "does it suspect anything",
+     * while a threshold around 20 answers "has it found me".
+     *
+     * This is the bundled Actor::RequestDetectionLevel, which takes and returns plain scalars. The engine also
+     * has RequestDetectionLevels, which splits the answer into visual and sound channels — do not reach for it
+     * without first establishing its return type; it returns through a hidden pointer that the symbol does not
+     * describe, and guessing at the size overruns the caller's stack. See F4VROffsets.h.
+     *
+     * The call creates the observer's knowledge entry for the target, and that entry lives in the observer's
+     * HIGH process data — an actor that has none has nowhere to create it, and is reported as not detecting.
+     */
+    int getDetectionLevel(RE::Actor* observer, RE::Actor* target)
+    {
+        if (!observer || !target || !observer->currentProcess || !observer->currentProcess->high) {
+            return -1;
+        }
+        return observer->RequestDetectionLevel(target);
+    }
+
+    /**
+     * Whether the actor is in combat with anyone and that combat is still live. Prefer this over the
+     * Actor::IsInCombat() virtual, which does not report reliably on the VR runtime (always false in testing)
+     * and, where it does work, stays true for a combat group that has already ended.
+     *
+     * Note this says nothing about WHO the actor is fighting. `Actor::currentCombatTarget` answers that, but it
+     * is sticky — it holds the last target long after a fight ends — so it is only meaningful while this
+     * returns true.
+     */
+    bool isInActiveCombat(RE::Actor* actor)
+    {
+        return actor && Actor_IsInActiveCombat(actor);
+    }
+
+    /**
+     * Put `actor` into combat with `target`, right now. Note this creates hostility where there was none — an
+     * actor with no reason to fight the target will fight it anyway, permanently — so callers should establish
+     * that the two are already enemies before reaching for this.
+     *
+     * Combat lives in the actor's HIGH process data, so an actor without one cannot be put into it.
+     *
+     * `method` picks between three engine entry points, all verified working — see StartCombatMethod. Note
+     * TaskQueue is deferred, so the actor is not yet in combat when this returns; the other two are immediate.
+     * On an actor already in combat with the target every method does nothing, which is a no-op rather than a
+     * failure.
+     *
+     * None of them files an assault crime the way Actor::AttackAlarm would — the target simply becomes this
+     * actor's problem, with no bounty or witness propagation, which is what "it noticed me" should mean.
+     */
+    void startCombat(RE::Actor* actor, RE::Actor* target, const StartCombatMethod method)
+    {
+        if (!actor || !target) {
+            return;
+        }
+        if (!actor->currentProcess || !actor->currentProcess->high) {
+            logger::warn("startCombat: actor {:08X} has no high process - combat not started", actor->formID);
+            return;
+        }
+
+        switch (method) {
+        case StartCombatMethod::EnterCombat:
+            AIProcess_EnterCombat(actor->currentProcess, actor, target, nullptr);
+            break;
+        case StartCombatMethod::ActorStartCombat:
+            Actor_StartCombat(actor, target, nullptr);
+            break;
+        case StartCombatMethod::TaskQueue:
+            if (const auto queue = RE::TaskQueueInterface::GetSingleton()) {
+                TaskQueueInterface_QueueActorStartCombat(queue, actor, target, false);
+            } else {
+                logger::warn("startCombat: no TaskQueueInterface singleton - combat not started");
+            }
+            break;
+        }
     }
 
     /**

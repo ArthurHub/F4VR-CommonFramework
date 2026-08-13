@@ -70,6 +70,49 @@ namespace f4cf::f4vr
     using _ProcessLists_GetActorsWithinRangeOfPoint = void (*)(RE::ProcessLists*, RE::NiPoint3&, float, RE::BSScrapArray<RE::NiPointer<RE::Actor>>&);
     inline REL::Relocation<_ProcessLists_GetActorsWithinRangeOfPoint> ProcessLists_GetActorsWithinRangeOfPoint(REL::Offset(0xf8e040));
 
+    // NOT declared here on purpose: Actor::RequestDetectionLevels (AddressLib 1368522, VR 0x140dfb3a0), the
+    // variant that splits detection into visual and sound channels. It returns through a hidden result pointer
+    // (MSVC sret) whose type the symbol does not name — assuming the 4-byte DetectionLevels and handing it a
+    // 16-byte buffer crashed the game by overrunning the caller's stack frame. Use the bundled arg-simple
+    // Actor::RequestDetectionLevel (f4vr::getDetectionLevel) unless the real return type is established first.
+
+    // Actor::IsInActiveCombat() — in combat AND the combat group has not already ended. Use instead of the
+    // Actor::IsInCombat() virtual (vtable 0xFE), which was measured to always return false on the VR runtime;
+    // the bundled headers declare that slot arg-less while the VR SDK declares it taking two more arguments.
+    // AddressLib 84790 resolves to VR 0x140e50350.
+    using _Actor_IsInActiveCombat = bool (*)(RE::Actor* a_actor);
+    inline REL::Relocation<_Actor_IsInActiveCombat> Actor_IsInActiveCombat(REL::ID(84790));
+
+    // AIProcess::EnterCombat(Actor* self, Actor* target, Actor*) — make the actor owning this process enter
+    // combat with the target; the trailing actor is passed null. AddressLib 1514649 resolves to VR
+    // 0x140e8f700. This is the call the engine's own Papyrus SendAssaultAlarm implementation makes right after
+    // Actor::AttackAlarm, i.e. the one that actually engages combat rather than merely recording intent.
+    //
+    // Two other routes are declared below and reachable via f4vr::StartCombatMethod. All three are CONFIRMED
+    // WORKING on VR 1.2.72, each verified against an actor not already fighting the target — the precondition
+    // that matters, since every one of them is a no-op on an actor already in combat.
+    using _AIProcess_EnterCombat = void (*)(RE::AIProcess* a_process, RE::Actor* a_actor, RE::Actor* a_target, RE::Actor* a_null);
+    inline REL::Relocation<_AIProcess_EnterCombat> AIProcess_EnterCombat(REL::ID(1514649));
+
+    // Actor::StartCombat(Actor* target, Actor* commandingActor) — immediate, on the calling thread. The
+    // parameter reading is pinned by the Papyrus binding the PDB names
+    // GameScript::mem_Actor_StartCombat(IVirtualMachine*, uint, Actor* self, Actor* target, bool commandAlly),
+    // matching `Actor.StartCombat(Actor akTarget, bool abCommandAlly)`: the member takes the target plus the
+    // actor doing the commanding, null for anyone aggroing on its own account. (That binding would be the
+    // safer thing to call, but it has no row in the VR address library at all.) AddressLib 765218 resolves to
+    // VR 0x140e4fe00 — status 2, the least-verified of the three.
+    using _Actor_StartCombat = void (*)(RE::Actor* a_actor, RE::Actor* a_target, RE::Actor* a_commandingActor);
+    inline REL::Relocation<_Actor_StartCombat> Actor_StartCombat(REL::ID(765218));
+
+    // TaskQueueInterface::QueueActorStartCombat(Actor& combatant, Actor& target, bool commandAlly) — queued
+    // rather than immediate, so the engine applies it on its own schedule instead of mid-frame. AddressLib
+    // 179777 resolves to VR 0x140daa620 (status 4), but note its queue singleton is AddressLib 7491, which the
+    // VR address library lists at status 2 under an auto-generated name (`DAT_…`) — a task written into a
+    // global that nobody drains would fail silently, so this is the shakiest chain of the three despite the
+    // function itself being well mapped. The trailing bool is `abCommandAlly` per the Papyrus signature above.
+    using _TaskQueueInterface_QueueActorStartCombat = void (*)(RE::TaskQueueInterface*, RE::Actor*, RE::Actor*, bool);
+    inline REL::Relocation<_TaskQueueInterface_QueueActorStartCombat> TaskQueueInterface_QueueActorStartCombat(REL::ID(179777));
+
     using _AttackBlockHandler_IsPlayerThrowingWeapon = bool (*)();
     inline REL::Relocation<_AttackBlockHandler_IsPlayerThrowingWeapon> AttackBlockHandler_IsPlayerThrowingWeapon(REL::Offset(0xfcbcd0));
 

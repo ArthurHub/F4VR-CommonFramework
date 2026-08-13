@@ -39,6 +39,27 @@ namespace f4cf::f4vr
     bool isMovementSafe(RE::PlayerCharacter* player, const RE::NiPoint3& currentPos, const RE::NiPoint3& targetPos);
     RE::ProcessLists* getProcessLists();
     void getActorsWithinRangeOfPoint(const RE::NiPoint3& point, float radius, RE::BSScrapArray<RE::NiPointer<RE::Actor>>& outActors);
+    float getActorFacingAngleTo(RE::Actor* actor, const RE::NiPoint3& point);
+    bool isActorFacing(RE::Actor* actor, const RE::NiPoint3& point, float halfAngleDegrees);
+    bool isInActiveCombat(RE::Actor* actor);
+
+    int getDetectionLevel(RE::Actor* observer, RE::Actor* target);
+    /**
+     * Which engine entry point startCombat() uses. All three are verified working on VR 1.2.72; EnterCombat is
+     * the default because it is the one the engine's own Papyrus SendAssaultAlarm calls. See F4VROffsets.h for
+     * each one's provenance.
+     *
+     * Note none of them does anything to an actor already in combat with the target — that is a no-op, not a
+     * failure, and is the first thing to check before concluding one of these is broken.
+     */
+    enum class StartCombatMethod : std::uint8_t
+    {
+        EnterCombat = 0, // AIProcess::EnterCombat - the engine's own path; takes effect immediately
+        ActorStartCombat, // Actor::StartCombat - takes effect immediately
+        TaskQueue, // TaskQueueInterface::QueueActorStartCombat - DEFERRED, lands a frame or more later
+    };
+
+    void startCombat(RE::Actor* actor, RE::Actor* target, StartCombatMethod method = StartCombatMethod::EnterCombat);
     RE::BGSProjectile* getAnyProjectile();
 
     // settings
