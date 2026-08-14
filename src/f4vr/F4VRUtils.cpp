@@ -423,6 +423,34 @@ namespace f4cf::f4vr
      * is sticky — it holds the last target long after a fight ends — so it is only meaningful while this
      * returns true.
      */
+    /**
+     * The actor's cached illumination, as the engine's own detection maths reads it — 0 for an actor with no
+     * high process data, which is also what the native itself returns in that case.
+     */
+    float getLightLevel(RE::Actor* actor)
+    {
+        if (!actor || !actor->currentProcess || !actor->currentProcess->high) {
+            return 0.0f;
+        }
+        return AIProcess_GetLightLevel(actor->currentProcess);
+    }
+
+    /**
+     * Overwrite the actor's cached illumination. This feeds the engine's detection formula (see
+     * F4VROffsets.h), so it is a gameplay-affecting write, not a diagnostic one.
+     *
+     * The engine's lighting refresh owns the field and rewrites it on its own schedule, so a value set here
+     * survives only until then — callers wanting it to hold have to re-apply it every frame, and can read it
+     * back with getLightLevel() to see whether it did.
+     */
+    void setLightLevel(RE::Actor* actor, const float value)
+    {
+        if (!actor || !actor->currentProcess || !actor->currentProcess->high) {
+            return;
+        }
+        AIProcess_SetLightLevel(actor->currentProcess, value);
+    }
+
     bool isInActiveCombat(RE::Actor* actor)
     {
         return actor && Actor_IsInActiveCombat(actor);

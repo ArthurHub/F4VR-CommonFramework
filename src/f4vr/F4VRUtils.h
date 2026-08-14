@@ -44,6 +44,8 @@ namespace f4cf::f4vr
     bool isInActiveCombat(RE::Actor* actor);
 
     int getDetectionLevel(RE::Actor* observer, RE::Actor* target);
+    float getLightLevel(RE::Actor* actor);
+    void setLightLevel(RE::Actor* actor, float value);
     /**
      * Which engine entry point startCombat() uses. All three are verified working on VR 1.2.72; EnterCombat is
      * the default because it is the one the engine's own Papyrus SendAssaultAlarm calls. See F4VROffsets.h for

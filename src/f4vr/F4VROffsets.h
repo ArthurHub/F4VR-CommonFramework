@@ -76,6 +76,42 @@ namespace f4cf::f4vr
     // 16-byte buffer crashed the game by overrunning the caller's stack frame. Use the bundled arg-simple
     // Actor::RequestDetectionLevel (f4vr::getDetectionLevel) unless the real return type is established first.
 
+    // NOT declared here on purpose: AIProcess::SetDetectionModifier(float) (VR 0x140e910d0), which writes
+    // HighProcessData::detectionModifier (+0x488) and arms its timer (+0x48C). The name promises a detection
+    // lever; on VR 1.2.72 it is inert. Verified two ways rather than assumed, after calling it in-game moved
+    // no detection level:
+    //   - a disassembly xref over .text finds only THREE instructions touching +0x488 — the write in this
+    //     setter, the read in its getter at 0x140e91100, and a read in AIProcess::SaveGame (serialization);
+    //   - and that getter has ZERO callers anywhere in the binary, which closes the loophole a field-only
+    //     scan leaves open (a read through an accessor is invisible to it).
+    // So the value is written, persisted into the save, and never consulted by the detection code. Its
+    // sibling AIProcess::ModDetectionModifierTimer (VR 0x140e99a50) really does take void — it subtracts a
+    // constant from the timer — but with nothing reading the modifier that is moot.
+    //
+    // The live equivalent is HighProcessData::lightLevel, declared just below — see
+    // F4VR-ImmersiveFlashlight's docs/tech/npc-light-detection.md §3.3 for the full findings.
+
+    // AIProcess::GetLightLevel() / AIProcess::SetLightLevel(float) — HighProcessData::lightLevel (+0x490),
+    // the actor's cached illumination, which is the quantity the engine's own detection maths asks about.
+    // VR 0x140e9a3a0 / 0x140e9a3c0, raw offsets: neither has a row in the VR address library.
+    //
+    // Signatures verified by disassembly rather than taken from the symbol name — the note above is why that
+    // now happens before anything here is called. The getter is `mov rax,[rcx+0x10]; test; jz; movss
+    // xmm0,[rax+0x490]; ret`, its jz path returning 0.0 for an actor with no high process data; the setter is
+    // the same shape writing xmm1. Neither touches lightLevelTimeStamp (+0x49C).
+    //
+    // Unlike SetDetectionModifier this one IS wired into detection: the getter is called from
+    // GatherDetectionFormulaData (VR 0x140e1c820, addrlib 421115), which fills the DetectionFormulaData that
+    // AiFormulas::CalculateDetectionFormula consumes, and from Actor::CalculateNormalizedLightLevel.
+    //
+    // The engine's own lighting refresh owns this field — it is the setter's only other caller — so a value
+    // written here is transient. Re-apply per frame, and read it back if you need to know whether it survived.
+    using _AIProcess_GetLightLevel = float (*)(RE::AIProcess* a_process);
+    inline REL::Relocation<_AIProcess_GetLightLevel> AIProcess_GetLightLevel(REL::Offset(0xe9a3a0));
+
+    using _AIProcess_SetLightLevel = void (*)(RE::AIProcess* a_process, float a_value);
+    inline REL::Relocation<_AIProcess_SetLightLevel> AIProcess_SetLightLevel(REL::Offset(0xe9a3c0));
+
     // Actor::IsInActiveCombat() — in combat AND the combat group has not already ended. Use instead of the
     // Actor::IsInCombat() virtual (vtable 0xFE), which was measured to always return false on the VR runtime;
     // the bundled headers declare that slot arg-less while the VR SDK declares it taking two more arguments.
