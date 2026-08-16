@@ -3,6 +3,7 @@
 // ReSharper disable CppUnnamedNamespaceInHeaderFile
 // ReSharper disable CppClangTidyBugproneMacroParentheses
 
+#include <algorithm>
 #include <chrono>
 #include <spdlog/pattern_formatter.h>
 #include <spdlog/sinks/rotating_file_sink.h>
@@ -64,7 +65,7 @@ namespace f4cf::logger::internal
      * Same as calling _MESSAGE but only one message log per "time" second, other logs are dropped.
      */
     template <class... Args>
-    void sampleImpl(const int time, spdlog::format_string_t<Args...> fmt, Args&&... args)
+    void sampleImpl(const int time, const std::source_location& loc, spdlog::format_string_t<Args...> fmt, Args&&... args)
     {
         const fmt::basic_string_view<char> fmtView = fmt;
         const std::string_view key(fmtView.data(), fmtView.size());
@@ -76,8 +77,73 @@ namespace f4cf::logger::internal
 
         _sampleMessagesTtl[key] = now;
         std::string formatted = fmt::format(fmt, std::forward<Args>(args)...);
-        _logger->log(spdlog::level::info, "[SAMPLE] {}", formatted);
+        const spdlog::source_loc sourceLoc{ loc.file_name(), static_cast<int>(loc.line()), loc.function_name() };
+        _logger->log(sourceLoc, spdlog::level::info, "[SAMPLE] {}", formatted);
     }
+
+    /**
+     * Pattern flag character for the class name, see ClassNameFlag. Not one of spdlog's own flags.
+     */
+    static constexpr char CLASS_NAME_FLAG = 'k';
+
+    /**
+     * Pattern flag that prints the source file name without directory or extension, which by the
+     * one-class-per-file convention is the name of the class that logged the message.
+     * spdlog's own "%s" is the closest built-in but always keeps the ".cpp".
+     *
+     * Padding is applied by hand because spdlog's scoped_padder lives in the header-only inline
+     * file and is not available when linking against the compiled library.
+     */
+    class ClassNameFlag : public spdlog::custom_flag_formatter
+    {
+    public:
+        void format(const spdlog::details::log_msg& msg, const std::tm&, spdlog::memory_buf_t& dest) override
+        {
+            std::string_view name = classNameOf(msg.source.filename);
+            if (padinfo_.truncate_ && padinfo_.width_ > 0 && name.size() > padinfo_.width_) {
+                name = name.substr(0, padinfo_.width_);
+            }
+
+            const auto pad = padinfo_.width_ > name.size() ? padinfo_.width_ - name.size() : 0;
+            const auto padBefore = padinfo_.side_ == spdlog::details::padding_info::pad_side::left     ? pad
+                                   : padinfo_.side_ == spdlog::details::padding_info::pad_side::center ? pad / 2
+                                                                                                       : 0;
+
+            appendSpaces(dest, padBefore);
+            dest.append(name.data(), name.data() + name.size());
+            appendSpaces(dest, pad - padBefore);
+        }
+
+        virtual std::unique_ptr<spdlog::custom_flag_formatter> clone() const override
+        {
+            // padding is re-applied by pattern_formatter via set_padding_info after cloning
+            return std::make_unique<ClassNameFlag>();
+        }
+
+    private:
+        static std::string_view classNameOf(const char* sourceFilePath)
+        {
+            if (!sourceFilePath) {
+                return {};
+            }
+            std::string_view name(sourceFilePath);
+            if (const auto slash = name.find_last_of("/\\"); slash != std::string_view::npos) {
+                name.remove_prefix(slash + 1);
+            }
+            if (const auto dot = name.find_last_of('.'); dot != std::string_view::npos) {
+                name = name.substr(0, dot);
+            }
+            return name;
+        }
+
+        static void appendSpaces(spdlog::memory_buf_t& dest, const size_t count)
+        {
+            // spdlog caps pattern padding at 64, so one append always covers it
+            static constexpr std::string_view SPACES = "                                                                "sv;
+            const auto clamped = std::min(count, SPACES.size());
+            dest.append(SPACES.data(), SPACES.data() + clamped);
+        }
+    };
 
     /**
      * Custom formatter used to be able to format dump messages without the pattern prefix
@@ -87,7 +153,10 @@ namespace f4cf::logger::internal
     public:
         HybridFormatter()
         {
-            inner = std::make_unique<spdlog::pattern_formatter>(_logPattern);
+            auto formatter = std::make_unique<spdlog::pattern_formatter>();
+            formatter->add_flag<ClassNameFlag>(CLASS_NAME_FLAG);
+            formatter->set_pattern(_logPattern);
+            inner = std::move(formatter);
         }
 
         virtual std::unique_ptr<formatter> clone() const override
@@ -137,34 +206,62 @@ namespace f4cf::logger
     /**
      * Same as calling info() but only one message log per "time" in milliseconds, other logs are dropped.
      * Use the message format as a key to identify the log messages that should be sampled.
+     * Defaults to one message per second, pass "time" as the first argument to override it.
+     *
+     * A struct with deduction guides rather than a function, for the same reason as the level loggers
+     * above: the source location has to be a defaulted parameter after the variadic arguments, which
+     * only works once the pack is fixed by class template argument deduction.
      */
     template <class... Args>
-    void sample(spdlog::format_string_t<Args...> fmt, Args&&... args)
+    struct [[maybe_unused]] sample
     {
-        internal::sampleImpl(1000, fmt, std::forward<Args>(args)...);
-    }
+        sample() = delete;
 
-    template <class... Args>
-    void sample(const int time, spdlog::format_string_t<Args...> fmt, Args&&... args)
-    {
-        internal::sampleImpl(time, fmt, std::forward<Args>(args)...);
-    }
-
-    template <class... Args>
-    void sampleDebug(spdlog::format_string_t<Args...> fmt, Args&&... args)
-    {
-        if (isDebugEnabled()) {
-            internal::sampleImpl(1000, fmt, std::forward<Args>(args)...);
+        explicit sample(spdlog::format_string_t<Args...> fmt, Args&&... args, const std::source_location& loc = std::source_location::current())
+        {
+            internal::sampleImpl(1000, loc, fmt, std::forward<Args>(args)...);
         }
-    }
+
+        explicit sample(const int time, spdlog::format_string_t<Args...> fmt, Args&&... args, const std::source_location& loc = std::source_location::current())
+        {
+            internal::sampleImpl(time, loc, fmt, std::forward<Args>(args)...);
+        }
+    };
 
     template <class... Args>
-    void sampleDebug(const int time, spdlog::format_string_t<Args...> fmt, Args&&... args)
+    sample(spdlog::format_string_t<Args...>, Args&&...) -> sample<Args...>;
+
+    template <class... Args>
+    sample(int, spdlog::format_string_t<Args...>, Args&&...) -> sample<Args...>;
+
+    /**
+     * Same as sample() but only logs when the debug log level is enabled.
+     */
+    template <class... Args>
+    struct [[maybe_unused]] sampleDebug
     {
-        if (isDebugEnabled()) {
-            internal::sampleImpl(time, fmt, std::forward<Args>(args)...);
+        sampleDebug() = delete;
+
+        explicit sampleDebug(spdlog::format_string_t<Args...> fmt, Args&&... args, const std::source_location& loc = std::source_location::current())
+        {
+            if (isDebugEnabled()) {
+                internal::sampleImpl(1000, loc, fmt, std::forward<Args>(args)...);
+            }
         }
-    }
+
+        explicit sampleDebug(const int time, spdlog::format_string_t<Args...> fmt, Args&&... args, const std::source_location& loc = std::source_location::current())
+        {
+            if (isDebugEnabled()) {
+                internal::sampleImpl(time, loc, fmt, std::forward<Args>(args)...);
+            }
+        }
+    };
+
+    template <class... Args>
+    sampleDebug(spdlog::format_string_t<Args...>, Args&&...) -> sampleDebug<Args...>;
+
+    template <class... Args>
+    sampleDebug(int, spdlog::format_string_t<Args...>, Args&&...) -> sampleDebug<Args...>;
 
     template <class... Args>
     void infoRaw(spdlog::format_string_t<Args...> fmt, Args&&... args)
