@@ -193,8 +193,7 @@ namespace f4cf
 
             // debug-draw frame boundary around the mod update; both calls are a single atomic
             // read until the mod issues its first draw call ever (the zero-cost-when-unused contract)
-            const auto& debugConfig = _settings.config->debug;
-            debug::DebugDraw::onFrameStart(debugConfig.drawEnabled, debugConfig.drawDisabledChannels, debugConfig.drawToggleBinding, debugConfig.drawHudPlacement);
+            debug::DebugDraw::onFrameStart();
 
             onFrameUpdate();
 

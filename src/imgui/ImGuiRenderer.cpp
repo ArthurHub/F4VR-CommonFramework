@@ -370,7 +370,7 @@ float4 main(PS_INPUT input) : SV_Target {
                 return false;
             }
             s_installed = true;
-            s_drawCallback = render::registerDrawCallback("ImGuiPanels", &drawFrame);
+            s_drawCallback = render::registerDrawCallback("ImGuiPanels", &drawFrame, render::DRAW_ORDER_PANELS);
         }
 
         return render::ensureInstalled();

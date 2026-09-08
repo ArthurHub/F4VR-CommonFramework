@@ -38,6 +38,19 @@ namespace f4cf::render
     using SubmitDrawCallback = std::function<void(const SubmitFrame&)>;
 
     /**
+     * Painter order for overlay draw callbacks: LOWER draws first and therefore ends up UNDERNEATH.
+     *
+     * Overlays are not depth-tested against each other, so whichever draws last wins the pixel. The
+     * order has to be declared rather than inherited from registration order, because registration
+     * is lazy - each overlay registers the first time it actually draws - which would otherwise make
+     * the layering depend on which one the player happened to trigger first in a session.
+     */
+    inline constexpr int DRAW_ORDER_PANELS = 100;
+    inline constexpr int DRAW_ORDER_DEFAULT = 500;
+    // deliberately last, i.e. on top: diagnostics must never end up hidden behind a mod's UI
+    inline constexpr int DRAW_ORDER_DEBUG = 900;
+
+    /**
      * Handle returned by registerDrawCallback, used to flip that callback active/dormant.
      */
     using DrawCallbackId = std::uint32_t;
@@ -46,11 +59,11 @@ namespace f4cf::render
 
     /**
      * Register a render-thread draw callback. Call once, from the game thread, before first use;
-     * callbacks are never removed (see "never restore" in the hook docs) and fire in registration
-     * order, which is also their painter order. `name` shows up in logs. A newly registered callback
-     * starts dormant - call setDrawCallbackActive to make it draw.
+     * callbacks are never removed (see "never restore" in the hook docs). `name` shows up in logs
+     * and `order` is the painter order above. A newly registered callback starts dormant - call
+     * setDrawCallbackActive to make it draw.
      */
-    DrawCallbackId registerDrawCallback(std::string name, SubmitDrawCallback callback);
+    DrawCallbackId registerDrawCallback(std::string name, SubmitDrawCallback callback, int order);
 
     /**
      * Flip one callback between drawing and dormant. Dormant is genuinely free: when no callback is

@@ -5,6 +5,7 @@
 #include <numbers>
 #include <set>
 
+#include "../ModBase.h"
 #include "../common/CommonUtils.h"
 #include "../common/MatrixUtils.h"
 #include "../f4vr/PlayerNodes.h"
@@ -17,7 +18,7 @@ namespace
 {
     // This overlay's primitive-draw layer on the shared Submit hook. Static so it outlives the
     // render thread's use of it, as PrimitiveDrawRenderer requires.
-    f4cf::render::PrimitiveDrawRenderer s_renderer("DebugDraw");
+    f4cf::render::PrimitiveDrawRenderer s_renderer("DebugDraw", f4cf::render::DRAW_ORDER_DEBUG);
 }
 
 namespace f4cf::debug
@@ -650,11 +651,20 @@ namespace f4cf::debug
      * changes, poll the hotkey, clear the last frame's command list, and re-emit unexpired timed
      * shapes. A no-op (single atomic read) until the first draw call ever.
      */
-    void DebugDraw::onFrameStart(const bool configEnabled, const std::string& configDisabledChannels, const std::string& configToggleBinding, const std::string& configHudPlacement)
+    void DebugDraw::onFrameStart()
     {
         if (!s_everUsed.load(std::memory_order_relaxed)) {
             return;
         }
+        const auto* config = g_mod ? g_mod->getConfig() : nullptr;
+        if (!config) {
+            return;
+        }
+        const bool configEnabled = config->debug.drawEnabled;
+        const std::string& configDisabledChannels = config->debug.drawDisabledChannels;
+        const std::string& configToggleBinding = config->debug.drawToggleBinding;
+        const std::string& configHudPlacement = config->debug.drawHudPlacement;
+
         auto& self = get();
 
         // head position for this frame — feeds distance-scaled markers (during onFrameUpdate) and the

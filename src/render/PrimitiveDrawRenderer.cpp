@@ -788,8 +788,9 @@ float4 main(PS_INPUT input) : SV_Target {
         }
     }
 
-    PrimitiveDrawRenderer::PrimitiveDrawRenderer(std::string name)
-        : _name(std::move(name))
+    PrimitiveDrawRenderer::PrimitiveDrawRenderer(std::string name, const int drawOrder)
+        : _name(std::move(name)),
+          _drawOrder(drawOrder)
     {}
 
     /**
@@ -824,9 +825,12 @@ float4 main(PS_INPUT input) : SV_Target {
                 }
                 s_pipelineReady = true;
             }
-            _callbackId = registerDrawCallback(_name, [this](const SubmitFrame& submitFrame) {
-                drawFrame(submitFrame);
-            });
+            _callbackId = registerDrawCallback(
+                _name,
+                [this](const SubmitFrame& submitFrame) {
+                    drawFrame(submitFrame);
+                },
+                _drawOrder);
         }
 
         return render::ensureInstalled(); // the hook host's, not this class's

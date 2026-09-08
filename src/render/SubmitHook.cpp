@@ -39,6 +39,7 @@ namespace f4cf::render
         {
             std::string name;
             SubmitDrawCallback callback;
+            int order = DRAW_ORDER_DEFAULT;
         };
 
         /**
@@ -174,17 +175,32 @@ namespace f4cf::render
             }
             context->VSSetConstantBuffers(0, 1, &s_cameraConstantBuffer);
 
+            // Collect the active callbacks in painter order. Sorted here, on a stack array of at
+            // most 32 entries, rather than keeping the table itself sorted: registration only ever
+            // appends, so the table is never reordered under the render thread's feet.
             const std::uint32_t activeMask = s_activeMask.load(std::memory_order_relaxed);
             const std::size_t count = s_callbackCount.load(std::memory_order_acquire);
+            std::array<std::size_t, MAX_DRAW_CALLBACKS> ordered{};
+            std::size_t orderedCount = 0;
             for (std::size_t i = 0; i < count; ++i) {
                 if ((activeMask & (1u << i)) == 0) {
                     continue;
                 }
+                std::size_t position = orderedCount++;
+                while (position > 0 && s_callbacks[ordered[position - 1]].order > s_callbacks[i].order) {
+                    ordered[position] = ordered[position - 1];
+                    --position;
+                }
+                ordered[position] = i;
+            }
+
+            for (std::size_t i = 0; i < orderedCount; ++i) {
+                const std::size_t index = ordered[i];
                 try {
-                    s_callbacks[i].callback(frame);
+                    s_callbacks[index].callback(frame);
                 } catch (const std::exception& ex) {
-                    setDrawCallbackActive(static_cast<DrawCallbackId>(i), false);
-                    logger::error("Draw callback '{}' threw ({}); dropped for this session", s_callbacks[i].name, ex.what());
+                    setDrawCallbackActive(static_cast<DrawCallbackId>(index), false);
+                    logger::error("Draw callback '{}' threw ({}); dropped for this session", s_callbacks[index].name, ex.what());
                 }
             }
         }
@@ -347,7 +363,7 @@ namespace f4cf::render
         }
     }
 
-    DrawCallbackId registerDrawCallback(std::string name, SubmitDrawCallback callback)
+    DrawCallbackId registerDrawCallback(std::string name, SubmitDrawCallback callback, const int order)
     {
         const std::size_t index = s_callbackCount.load(std::memory_order_relaxed);
         if (index >= MAX_DRAW_CALLBACKS || !callback) {
@@ -357,6 +373,7 @@ namespace f4cf::render
 
         s_callbacks[index].name = std::move(name);
         s_callbacks[index].callback = std::move(callback);
+        s_callbacks[index].order = order;
         // publish the entry before the count that makes the render thread look at it
         s_callbackCount.store(index + 1, std::memory_order_release);
         return static_cast<DrawCallbackId>(index);

@@ -37,8 +37,10 @@ namespace f4cf::render
     public:
         /**
          * @param name identifies this layer in logs and in the hook's callback table.
+         * @param drawOrder painter order against the other overlays; see DRAW_ORDER_* in
+         *        SubmitHook.h. Lower draws first, i.e. ends up underneath.
          */
-        explicit PrimitiveDrawRenderer(std::string name);
+        explicit PrimitiveDrawRenderer(std::string name, int drawOrder = DRAW_ORDER_DEFAULT);
         ~PrimitiveDrawRenderer();
 
         PrimitiveDrawRenderer(const PrimitiveDrawRenderer&) = delete;
@@ -65,6 +67,7 @@ namespace f4cf::render
         void drawFrame(const SubmitFrame& submitFrame);
 
         std::string _name;
+        int _drawOrder;
         DrawCallbackId _callbackId = INVALID_DRAW_CALLBACK;
 
         // read on the render thread under the mutex, written on the game thread by publish()

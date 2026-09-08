@@ -147,7 +147,7 @@ namespace f4cf::debug
         static RE::NiPoint3 havokToGame(const RE::NiPoint3& point);
 
         // --- per-frame driver, called by ModBase only (no-ops until the first draw call) ---
-        static void onFrameStart(bool configEnabled, const std::string& configDisabledChannels, const std::string& configToggleBinding, const std::string& configHudPlacement);
+        static void onFrameStart();
         static void onFrameEnd();
 
     private:
