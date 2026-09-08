@@ -10,9 +10,15 @@
 #include "../f4vr/PlayerNodes.h"
 #include "../vrcf/InputBindingParser.h"
 #include "../vrcf/VRControllersManager.h"
-#include "DebugDrawRenderer.h"
 
 using namespace common;
+
+namespace
+{
+    // This overlay's primitive-draw layer on the shared Submit hook. Static so it outlives the
+    // render thread's use of it, as PrimitiveDrawRenderer requires.
+    f4cf::render::PrimitiveDrawRenderer s_renderer("DebugDraw");
+}
 
 namespace f4cf::debug
 {
@@ -372,7 +378,7 @@ namespace f4cf::debug
         if (!isAppendActive() || str.empty()) {
             return;
         }
-        _building.texts.push_back(internal::TextEntry{ .text = std::string(str), .x = x, .y = y, .size = size, .color = color });
+        _building.addText(str, x, y, color, size);
     }
 
     /**
@@ -386,7 +392,7 @@ namespace f4cf::debug
         if (!isAppendActive() || str.empty()) {
             return;
         }
-        _building.texts.push_back(internal::TextEntry{ .text = std::string(str), .size = size, .color = color, .worldAnchor = worldPos, .worldAnchored = true, .billboard = true });
+        _building.addBillboardText(str, worldPos, color, size);
     }
 
     /**
@@ -472,11 +478,10 @@ namespace f4cf::debug
         if (!isAppendActive()) {
             return;
         }
-        if (_building.lines.size() * 2 + 2 > internal::MAX_LINE_VERTICES) {
+        if (!_building.addLine(start, end, color)) {
             ++_rejectedLines;
             return;
         }
-        _building.lines.push_back(internal::LineSegment{ .start = start, .end = end, .color = color });
         if (sec > 0) {
             _persist.push_back(TimedLine{ .segment = { .start = start, .end = end, .color = color }, .expiryMs = nowMillis() + static_cast<uint64_t>(sec * 1000.0f) });
         }
@@ -554,26 +559,20 @@ namespace f4cf::debug
 
         // Align the rows to the side the default HUD sits on (left rows flush-left, right flush-right,
         // otherwise centred). An explicit watchAnchor has no placement, so left-align it.
-        internal::TextAlign align = internal::TextAlign::Left;
+        render::TextAlign align = render::TextAlign::Left;
         if (!_watchAnchor) {
             if (_hudPlacement == HudPlacement::CenterLeft || _hudPlacement == HudPlacement::CenterTopLeft) {
-                align = internal::TextAlign::Left;
+                align = render::TextAlign::Left;
             } else if (_hudPlacement == HudPlacement::CenterRight || _hudPlacement == HudPlacement::CenterTopRight) {
-                align = internal::TextAlign::Right;
+                align = render::TextAlign::Right;
             } else {
-                align = internal::TextAlign::Center;
+                align = render::TextAlign::Center;
             }
         }
 
         float y = 0.0f;
         const auto addRow = [&](std::string text) {
-            _building.texts.push_back(internal::TextEntry{ .text = std::move(text),
-                .y = y,
-                .size = WATCH_TABLE_TEXT_SIZE,
-                .color = colors::White,
-                .worldAnchor = *anchor,
-                .worldAnchored = true,
-                .align = align });
+            _building.addWorldAnchoredText(text, *anchor, 0.0f, y, colors::White, WATCH_TABLE_TEXT_SIZE, align);
             y += WATCH_TABLE_ROW_STEP;
         };
 
@@ -684,7 +683,7 @@ namespace f4cf::debug
         self._watchAnchor.reset();
         self._channelsSeen.clear();
         if (self._rejectedLines > 0) {
-            logger::sample(5000, "DebugDraw: {} line(s) dropped over the {}-vertex budget", self._rejectedLines, internal::MAX_LINE_VERTICES);
+            logger::sample(5000, "DebugDraw: {} line(s) dropped over the {}-vertex budget", self._rejectedLines, render::MAX_LINE_VERTICES);
             self._rejectedLines = 0;
         }
 
@@ -695,10 +694,9 @@ namespace f4cf::debug
         });
         if (self.effectiveEnabled()) {
             for (const auto& timed : self._persist) {
-                if (self._building.lines.size() * 2 + 2 > internal::MAX_LINE_VERTICES) {
+                if (!self._building.addLine(timed.segment.start, timed.segment.end, timed.segment.color)) {
                     break;
                 }
-                self._building.lines.push_back(timed.segment);
             }
         }
     }
@@ -718,17 +716,17 @@ namespace f4cf::debug
         self.layoutWatchTable();
 
         if (!self._building.empty()) {
-            renderer::ensureInstalled();
+            s_renderer.ensureInstalled();
         }
 
         // hand this frame's head position to the render thread for orienting billboard labels
-        self._building.cameraPos = self._cameraPos;
+        self._building.viewerPosition = self._cameraPos;
 
         // group same-color lines into contiguous runs so the renderer draws each run in one call
-        std::ranges::stable_sort(self._building.lines, [](const internal::LineSegment& lhs, const internal::LineSegment& rhs) {
+        std::ranges::stable_sort(self._building.lines, [](const render::LineSegment& lhs, const render::LineSegment& rhs) {
             return colorLess(lhs.color, rhs.color);
         });
-        renderer::publish(std::move(self._building));
+        s_renderer.publish(std::move(self._building));
         self._building = {};
     }
 }

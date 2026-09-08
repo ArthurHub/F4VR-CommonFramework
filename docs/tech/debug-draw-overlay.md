@@ -56,8 +56,9 @@ DebugDraw::onFrameEnd()                                        ├─ endFrame: 
   billboard labels, but done on the game thread by adjusting the size, so it needs no renderer
   support. `capsule`/`cone` are excluded (a segment / a directional volume has no single scale
   anchor).
-- **Consumer** ([`src/debug/DebugDrawRenderer.cpp`](../../src/debug/DebugDrawRenderer.cpp)): dumb —
-  no lifetime logic; draws whatever frame was last published.
+- **Consumer** ([`src/render/PrimitiveDrawRenderer.cpp`](../../src/render/PrimitiveDrawRenderer.cpp)):
+  dumb — no lifetime logic; draws whatever frame was last published. Not debug-specific: it is the
+  framework's generic line/glyph renderer, and the debug overlay is one layer registered on it.
 
 ## 3. Zero cost when unused (the lazy-hook contract)
 
@@ -123,7 +124,7 @@ store (`sec > 0`), channels + INI toggles + in-headset hotkey, the `watch()` tab
 | `+0x25D0` | → camera data block pointer | `VR_RENDER_CAMERA_DATA_OFFSET` | same |
 | camera `+0xD0` / `+0x2E0` | eye 0 / eye 1 view-projection 4×4 | `VR_RENDER_CAMERA_EYE{0,1}_VIEW_PROJ_OFFSET` | same |
 | `+0x2590` / `+0x25C0` | eye 0 / eye 1 posAdjust float3 | `VR_RENDER_CAMERA_EYE{0,1}_POS_ADJUST_OFFSET` | same |
-| vtable idx 5 | `IVRCompositor::Submit` | `DebugDrawRenderer.cpp` | ROCK `DebugBodyOverlay.cpp:2614`, OpenVR ABI |
+| vtable idx 5 | `IVRCompositor::Submit` | `render/SubmitHook.cpp` | ROCK `DebugBodyOverlay.cpp:2614`, OpenVR ABI |
 
 This is the overlay's **only** version-specific game address. If overlay geometry reads as garbage
 after a game/runtime change, suspect it first.

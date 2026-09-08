@@ -100,7 +100,11 @@ config toggle is muting.
 | File                    | What it is                                                                                   |
 | ----------------------- | -------------------------------------------------------------------------------------------- |
 | `DebugDraw.h/.cpp`      | Public API + game-thread producer: primitives → line segments, watch table, channels, timed-shape store, frame publish. |
-| `DebugDrawRenderer.h/.cpp` | Internal render-thread consumer: `Submit` vtable hook, stereo-instancing shader, D3D state save/restore, 5×7 bitmap font. |
+
+The actual drawing is not here: `DebugDraw` fills a [`render::PrimitiveDraw`](../render/PrimitiveDraw.h)
+buffer and hands it to a [`render::PrimitiveDrawRenderer`](../render/PrimitiveDrawRenderer.h) layer,
+which owns the shaders, the 5×7 bitmap font and the draw callback on the shared
+[`render::SubmitHook`](../render/SubmitHook.h).
 
 ## Provenance
 

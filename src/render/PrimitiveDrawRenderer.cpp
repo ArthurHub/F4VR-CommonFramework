@@ -1,4 +1,4 @@
-#include "DebugDrawRenderer.h"
+#include "PrimitiveDrawRenderer.h"
 
 #include <DirectXMath.h>
 #include <algorithm>
@@ -10,15 +10,13 @@
 #include <d3d11.h>
 #include <d3dcompiler.h>
 
-#include "../render/SubmitHook.h"
-
-// This file is a port of ROCK's DebugBodyOverlay wire/text renderer (reference library
+// The wire/text drawing here is a port of ROCK's DebugBodyOverlay renderer (reference library
 // github-repos/gold/ROCK/src/physics-interaction/debug/DebugBodyOverlay.cpp) with the physics-body
 // extraction and hknp shape decoding stripped, per knowledge-base/debug_draw_overlay.md. Line-level
-// citations below reference that file. The OpenVR Submit hook it draws through, the pipeline state
-// save/restore around it and the borrowed per-eye camera matrices all live in f4cf::render, shared
-// with every other overlay in the framework.
-namespace f4cf::debug::renderer
+// citations below reference that file. It arrived here as the debug overlay's private renderer and
+// was generalized out of it: what to draw is the producer's business, how to get lines and glyphs
+// onto the submitted stereo target is this file's.
+namespace f4cf::render
 {
     namespace
     {
@@ -41,14 +39,10 @@ namespace f4cf::debug::renderer
             float color[4];
         };
 
-        // game->render thread handoff (ROCK :204-206): the render side only reads s_frame under
-        // the mutex; whether it runs at all is the hook host's active flag
-        internal::RenderFrame s_frame;
-        std::mutex s_frameMutex;
-        render::DrawCallbackId s_drawCallback = render::INVALID_DRAW_CALLBACK;
-
-        bool s_d3dInitialized = false;
-        bool s_loggedD3dInitFailed = false;
+        // One set of shaders / buffers / states serves every PrimitiveDrawRenderer instance: they
+        // are stateless between draws, and the Submit hook serializes the callbacks that use them.
+        bool s_pipelineReady = false;
+        bool s_loggedPipelineFailed = false;
 
         ID3D11VertexShader* s_vertexShader = nullptr;
         ID3D11VertexShader* s_screenTextVertexShader = nullptr;
@@ -144,11 +138,11 @@ float4 main(PS_INPUT input) : SV_Target {
 )";
 
         /**
-         * Compile the three shaders and create the fixed pipeline objects (constant buffer, dynamic
-         * vertex buffers, rasterizer/depth/blend states). The camera constants at b0 belong to the
-         * hook host. ROCK DebugBodyOverlay.cpp:1004-1140.
+         * Compile the three shaders and create the fixed pipeline objects shared by every instance
+         * (constant buffer, dynamic vertex buffers, rasterizer/depth/blend states). The camera
+         * constants at b0 belong to the hook host. ROCK DebugBodyOverlay.cpp:1004-1140.
          */
-        bool initializeD3D(ID3D11Device* device)
+        bool createSharedPipeline(ID3D11Device* device)
         {
             ID3DBlob* vsBlob = nullptr;
             ID3DBlob* psBlob = nullptr;
@@ -246,7 +240,7 @@ float4 main(PS_INPUT input) : SV_Target {
 
             D3D11_BUFFER_DESC lineDesc{};
             lineDesc.Usage = D3D11_USAGE_DYNAMIC;
-            lineDesc.ByteWidth = sizeof(Vertex) * internal::MAX_LINE_VERTICES;
+            lineDesc.ByteWidth = sizeof(Vertex) * MAX_LINE_VERTICES;
             lineDesc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
             lineDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
             if (FAILED(device->CreateBuffer(&lineDesc, nullptr, &s_lineVB))) {
@@ -255,7 +249,7 @@ float4 main(PS_INPUT input) : SV_Target {
 
             D3D11_BUFFER_DESC textDesc{};
             textDesc.Usage = D3D11_USAGE_DYNAMIC;
-            textDesc.ByteWidth = sizeof(Vertex) * internal::TEXT_VERTEX_CAPACITY;
+            textDesc.ByteWidth = sizeof(Vertex) * TEXT_VERTEX_CAPACITY;
             textDesc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
             textDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
             if (FAILED(device->CreateBuffer(&textDesc, nullptr, &s_textVB))) {
@@ -323,7 +317,7 @@ float4 main(PS_INPUT input) : SV_Target {
          * Draw all wire segments: one VB upload, then one instanced draw per same-color run (the
          * producer publishes the list color-sorted). ROCK DebugBodyOverlay.cpp:1961-2006.
          */
-        void drawLines(ID3D11DeviceContext* context, const std::vector<internal::LineSegment>& lines)
+        void drawLines(ID3D11DeviceContext* context, const std::vector<LineSegment>& lines)
         {
             if (lines.empty() || !s_lineVB) {
                 return;
@@ -339,7 +333,7 @@ float4 main(PS_INPUT input) : SV_Target {
                 return;
             }
             auto* vertices = static_cast<Vertex*>(mapped.pData);
-            const std::size_t lineCount = (std::min)(lines.size(), internal::MAX_LINE_VERTICES / 2);
+            const std::size_t lineCount = (std::min)(lines.size(), MAX_LINE_VERTICES / 2);
             for (std::size_t i = 0; i < lineCount; ++i) {
                 vertices[i * 2] = Vertex{ lines[i].start.x, lines[i].start.y, lines[i].start.z };
                 vertices[i * 2 + 1] = Vertex{ lines[i].end.x, lines[i].end.y, lines[i].end.z };
@@ -477,7 +471,7 @@ float4 main(PS_INPUT input) : SV_Target {
          */
         void appendTextQuad(std::vector<Vertex>& vertices, const float x, const float y, const float size, const float textureWidth, const float textureHeight)
         {
-            if (vertices.size() + 6 > internal::TEXT_VERTEX_CAPACITY) {
+            if (vertices.size() + 6 > TEXT_VERTEX_CAPACITY) {
                 return;
             }
 
@@ -497,7 +491,7 @@ float4 main(PS_INPUT input) : SV_Target {
             vertices.push_back(d);
         }
 
-        float textPixelWidth(const internal::TextEntry& entry)
+        float textPixelWidth(const TextEntry& entry)
         {
             return static_cast<float>(entry.text.size()) * 6.0f * (std::max)(1.0f, entry.size);
         }
@@ -533,7 +527,7 @@ float4 main(PS_INPUT input) : SV_Target {
         /**
          * Emit quads for each lit font pixel of the string starting at base. ROCK DebugBodyOverlay.cpp:2292-2314.
          */
-        void appendTextGlyphs(std::vector<Vertex>& vertices, const internal::TextEntry& entry, const float baseX, const float baseY, const float maxX, const float textureWidth,
+        void appendTextGlyphs(std::vector<Vertex>& vertices, const TextEntry& entry, const float baseX, const float baseY, const float maxX, const float textureWidth,
             const float textureHeight)
         {
             const float pixel = (std::max)(1.0f, entry.size);
@@ -562,7 +556,7 @@ float4 main(PS_INPUT input) : SV_Target {
          * World-anchored label: project the anchor per eye and emit the glyphs into that eye's half,
          * clamped inside it. ROCK DebugBodyOverlay.cpp:2316-2348 (always stereo here).
          */
-        void appendWorldAnchoredTextGlyphs(std::vector<Vertex>& vertices, const internal::TextEntry& entry, const DirectX::XMMATRIX& eye0, const DirectX::XMMATRIX& eye1,
+        void appendWorldAnchoredTextGlyphs(std::vector<Vertex>& vertices, const TextEntry& entry, const DirectX::XMMATRIX& eye0, const DirectX::XMMATRIX& eye1,
             const DirectX::XMFLOAT4& adjust0, const DirectX::XMFLOAT4& adjust1, const float textureWidth, const float textureHeight)
         {
             const float halfWidth = textureWidth * 0.5f;
@@ -580,9 +574,9 @@ float4 main(PS_INPUT input) : SV_Target {
                 const float maxX = (std::max)(minX, eyeMaxX - approximateWidth - 24.0f);
                 // Left: start at the anchor (+entry.x); Center: straddle it; Right: end at it.
                 float xOffset = entry.x;
-                if (entry.align == internal::TextAlign::Center) {
+                if (entry.align == TextAlign::Center) {
                     xOffset = -approximateWidth * 0.5f;
-                } else if (entry.align == internal::TextAlign::Right) {
+                } else if (entry.align == TextAlign::Right) {
                     xOffset = -approximateWidth - entry.x;
                 }
                 const float baseX = std::clamp(projectedX + xOffset, minX, maxX);
@@ -620,7 +614,7 @@ float4 main(PS_INPUT input) : SV_Target {
          * the anchor and centred on it. Drawn through the geometry vertex shader, so it shares the exact
          * projection/depth of the shapes and stays welded to the world object.
          */
-        void appendBillboardGlyphs(std::vector<Vertex>& verts, const internal::TextEntry& entry, const RE::NiPoint3& cameraPos)
+        void appendBillboardGlyphs(std::vector<Vertex>& verts, const TextEntry& entry, const RE::NiPoint3& cameraPos)
         {
             const RE::NiPoint3 toCam = cameraPos - entry.worldAnchor;
             const float dist = std::sqrt(toCam.x * toCam.x + toCam.y * toCam.y + toCam.z * toCam.z);
@@ -639,7 +633,7 @@ float4 main(PS_INPUT input) : SV_Target {
             RE::NiPoint3 cursor = entry.worldAnchor + up * (pixel * 3.0f) - right * (textWidth * 0.5f);
 
             for (const char ch : entry.text) {
-                if (verts.size() + 7 * 5 * 6 > internal::TEXT_VERTEX_CAPACITY) {
+                if (verts.size() + 7 * 5 * 6 > TEXT_VERTEX_CAPACITY) {
                     break;
                 }
                 const auto rows = glyphRows(ch);
@@ -669,10 +663,10 @@ float4 main(PS_INPUT input) : SV_Target {
          * Draw billboard labels as world-space geometry through the stereo shader (identical projection
          * to the shapes), one instanced draw per label. Camera CB (b0) must already be uploaded.
          */
-        void drawBillboardTextEntries(ID3D11DeviceContext* context, const std::vector<internal::TextEntry>& texts, const RE::NiPoint3& cameraPos)
+        void drawBillboardTextEntries(ID3D11DeviceContext* context, const std::vector<TextEntry>& texts, const RE::NiPoint3& cameraPos)
         {
-            const bool any = std::ranges::any_of(texts, [](const internal::TextEntry& e) {
-                return e.billboard;
+            const bool any = std::ranges::any_of(texts, [](const TextEntry& e) {
+                return e.placement == TextPlacement::Billboard;
             });
             if (!any || !s_textVB || !s_vertexShader) {
                 return;
@@ -691,7 +685,7 @@ float4 main(PS_INPUT input) : SV_Target {
             context->IASetIndexBuffer(nullptr, DXGI_FORMAT_UNKNOWN, 0);
 
             for (const auto& entry : texts) {
-                if (!entry.billboard) {
+                if (entry.placement != TextPlacement::Billboard) {
                     continue;
                 }
                 std::vector<Vertex> vertices;
@@ -716,8 +710,8 @@ float4 main(PS_INPUT input) : SV_Target {
          * both eye halves, world-anchored entries projected per eye. Billboard entries are handled
          * separately (drawBillboardTextEntries). ROCK DebugBodyOverlay.cpp:2350-2410.
          */
-        void drawTextEntries(ID3D11DeviceContext* context, const float textureWidth, const float textureHeight, const std::vector<internal::TextEntry>& texts,
-            const DirectX::XMMATRIX& eye0, const DirectX::XMMATRIX& eye1, const DirectX::XMFLOAT4& adjust0, const DirectX::XMFLOAT4& adjust1)
+        void drawTextEntries(ID3D11DeviceContext* context, const float textureWidth, const float textureHeight, const std::vector<TextEntry>& texts, const DirectX::XMMATRIX& eye0,
+            const DirectX::XMMATRIX& eye1, const DirectX::XMFLOAT4& adjust0, const DirectX::XMFLOAT4& adjust1)
         {
             if (texts.empty() || !s_textVB || !s_screenTextVertexShader || textureWidth <= 0.0f || textureHeight <= 0.0f) {
                 return;
@@ -737,12 +731,12 @@ float4 main(PS_INPUT input) : SV_Target {
 
             const float eyeWidth = textureWidth * 0.5f;
             for (const auto& entry : texts) {
-                if (entry.billboard) {
+                if (entry.placement == TextPlacement::Billboard) {
                     continue; // world-space billboard, drawn by drawBillboardTextEntries
                 }
                 std::vector<Vertex> vertices;
                 vertices.reserve(4096);
-                if (entry.worldAnchored) {
+                if (entry.placement == TextPlacement::WorldAnchored) {
                     appendWorldAnchoredTextGlyphs(vertices, entry, eye0, eye1, adjust0, adjust1, textureWidth, textureHeight);
                 } else {
                     appendTextGlyphs(vertices, entry, entry.x, entry.y, eyeWidth - 8.0f, textureWidth, textureHeight);
@@ -751,8 +745,8 @@ float4 main(PS_INPUT input) : SV_Target {
                 if (vertices.empty()) {
                     continue;
                 }
-                if (vertices.size() > internal::TEXT_VERTEX_CAPACITY) {
-                    vertices.resize(internal::TEXT_VERTEX_CAPACITY);
+                if (vertices.size() > TEXT_VERTEX_CAPACITY) {
+                    vertices.resize(TEXT_VERTEX_CAPACITY);
                 }
 
                 D3D11_MAPPED_SUBRESOURCE mapped{};
@@ -767,22 +761,13 @@ float4 main(PS_INPUT input) : SV_Target {
         }
 
         /**
-         * The actual draw, on the render thread, into the double-wide eye texture the game just
-         * handed to OpenVR (the shader's half split puts each primitive in its own eye). The hook
+         * Replay one published frame, on the render thread, into the double-wide eye texture the game
+         * just handed to OpenVR (the shader's half split puts each primitive in its own eye). The hook
          * host has already snapshotted the pipeline, bound the render target and uploaded the camera
          * constants at b0. ROCK DebugBodyOverlay.cpp:2412-2589 minus the physics-body pass.
          */
-        void drawFrame(const render::SubmitFrame& submitFrame)
+        void drawPrimitives(const SubmitFrame& submitFrame, const PrimitiveDraw& frame)
         {
-            internal::RenderFrame frame;
-            {
-                std::scoped_lock lock(s_frameMutex);
-                frame = s_frame;
-            }
-            if (frame.empty()) {
-                return;
-            }
-
             auto* context = submitFrame.context;
             const auto& eye0 = submitFrame.camera->viewProj[0];
             const auto& eye1 = submitFrame.camera->viewProj[1];
@@ -798,54 +783,88 @@ float4 main(PS_INPUT input) : SV_Target {
             context->OMSetDepthStencilState(s_depthStencil, 0);
 
             drawLines(context, frame.lines);
-            drawBillboardTextEntries(context, frame.texts, frame.cameraPos);
+            drawBillboardTextEntries(context, frame.texts, frame.viewerPosition);
             drawTextEntries(context, submitFrame.width, submitFrame.height, frame.texts, eye0, eye1, adjust0, adjust1);
         }
     }
 
+    PrimitiveDrawRenderer::PrimitiveDrawRenderer(std::string name)
+        : _name(std::move(name))
+    {}
+
     /**
-     * Lazily build the wire/text pipeline off the game device on first use and register the draw
-     * with the shared Submit hook host, which installs the hook itself. Safe to call every frame —
+     * Best-effort only: a registered draw callback can never be removed, so an instance that dies
+     * while the render thread is inside its callback is still a race. Hold instances for the
+     * process lifetime.
+     */
+    PrimitiveDrawRenderer::~PrimitiveDrawRenderer()
+    {
+        setDrawCallbackActive(_callbackId, false);
+    }
+
+    /**
+     * Lazily build the shared pipeline off the game device on first use and register this layer's
+     * draw with the Submit hook host, which installs the hook itself. Safe to call every frame -
      * each unavailable dependency just retries.
      */
-    bool ensureInstalled()
+    bool PrimitiveDrawRenderer::ensureInstalled()
     {
-        if (!s_d3dInitialized) {
-            auto* device = render::getDevice();
+        if (_callbackId == INVALID_DRAW_CALLBACK) {
+            auto* device = getDevice();
             if (!device) {
                 return false;
             }
-            if (!initializeD3D(device)) {
-                if (!s_loggedD3dInitFailed) {
-                    s_loggedD3dInitFailed = true;
-                    logger::error("D3D initialization failed; overlay disabled");
+            if (!s_pipelineReady) {
+                if (!createSharedPipeline(device)) {
+                    if (!s_loggedPipelineFailed) {
+                        s_loggedPipelineFailed = true;
+                        logger::error("D3D initialization failed; primitive drawing disabled");
+                    }
+                    return false;
                 }
-                return false;
+                s_pipelineReady = true;
             }
-            s_d3dInitialized = true;
-            s_drawCallback = render::registerDrawCallback("DebugDraw", &drawFrame);
+            _callbackId = registerDrawCallback(_name, [this](const SubmitFrame& submitFrame) {
+                drawFrame(submitFrame);
+            });
         }
 
-        return render::ensureInstalled();
+        return render::ensureInstalled(); // the hook host's, not this class's
     }
 
-    bool isInstalled()
+    bool PrimitiveDrawRenderer::isInstalled() const
     {
-        return s_drawCallback != render::INVALID_DRAW_CALLBACK && render::isInstalled();
+        return _callbackId != INVALID_DRAW_CALLBACK && render::isInstalled();
     }
 
     /**
-     * Swap this frame's draws into the render-side buffer and flip our slice of the hook host
-     * active or dormant (the producer publishes lines pre-sorted by color for run batching). ROCK
-     * DebugBodyOverlay.cpp:2674-2686.
+     * Swap this frame's primitives into the render-side buffer and flip this layer active or
+     * dormant. ROCK DebugBodyOverlay.cpp:2674-2686.
      */
-    void publish(internal::RenderFrame&& frame)
+    void PrimitiveDrawRenderer::publish(PrimitiveDraw&& frame)
     {
         const bool hasContent = !frame.empty();
         {
-            std::scoped_lock lock(s_frameMutex);
-            s_frame = std::move(frame);
+            std::scoped_lock lock(_frameMutex);
+            _frame = std::move(frame);
         }
-        render::setDrawCallbackActive(s_drawCallback, hasContent);
+        setDrawCallbackActive(_callbackId, hasContent);
+    }
+
+    /**
+     * The registered draw callback: copy the published frame out from under the mutex (never hold a
+     * game-thread-contended lock across the draw) and replay it.
+     */
+    void PrimitiveDrawRenderer::drawFrame(const SubmitFrame& submitFrame)
+    {
+        PrimitiveDraw frame;
+        {
+            std::scoped_lock lock(_frameMutex);
+            frame = _frame;
+        }
+        if (frame.empty()) {
+            return;
+        }
+        drawPrimitives(submitFrame, frame);
     }
 }
