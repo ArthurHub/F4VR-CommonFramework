@@ -3,25 +3,21 @@
 #include <DirectXMath.h>
 #include <algorithm>
 #include <array>
-#include <atomic>
 #include <cmath>
 #include <mutex>
 #include <vector>
 
 #include <d3d11.h>
 #include <d3dcompiler.h>
-#include <windows.h>
-#include <wrl/client.h>
 
-#include "../../external/openvr/openvr.h"
-#include "../f4vr/F4VROffsets.h"
-
-#include "RE/Bethesda/BSGraphics.h"
+#include "../render/SubmitHook.h"
 
 // This file is a port of ROCK's DebugBodyOverlay wire/text renderer (reference library
 // github-repos/gold/ROCK/src/physics-interaction/debug/DebugBodyOverlay.cpp) with the physics-body
 // extraction and hknp shape decoding stripped, per knowledge-base/debug_draw_overlay.md. Line-level
-// citations below reference that file.
+// citations below reference that file. The OpenVR Submit hook it draws through, the pipeline state
+// save/restore around it and the borrowed per-eye camera matrices all live in f4cf::render, shared
+// with every other overlay in the framework.
 namespace f4cf::debug::renderer
 {
     namespace
@@ -37,16 +33,6 @@ namespace f4cf::debug::renderer
         };
 
         /**
-         * Per-frame camera constants (register b0): both eyes' view-projection + posAdjust for the
-         * stereo-instancing shader. ROCK DebugBodyOverlay.cpp:156-160.
-         */
-        struct alignas(16) PerFrameVSData
-        {
-            DirectX::XMMATRIX matProjView[2];
-            DirectX::XMFLOAT4 posAdjust[2];
-        };
-
-        /**
          * Per-draw constants (register b1): model matrix + flat color. ROCK DebugBodyOverlay.cpp:162-166.
          */
         struct alignas(16) PerObjectVSData
@@ -55,69 +41,19 @@ namespace f4cf::debug::renderer
             float color[4];
         };
 
-        /**
-         * Full D3D pipeline state snapshot taken before drawing and restored after — we draw in the
-         * middle of the game's own pipeline, so missing a single field visibly corrupts the game
-         * frame. ROCK DebugBodyOverlay.cpp:168-195 (state list) — NOT optional.
-         */
-        struct SavedState
-        {
-            ID3D11VertexShader* vs = nullptr;
-            ID3D11PixelShader* ps = nullptr;
-            ID3D11ClassInstance* vsInstances[256] = {};
-            ID3D11ClassInstance* psInstances[256] = {};
-            UINT vsInstanceCount = 0;
-            UINT psInstanceCount = 0;
-            ID3D11Buffer* vsCBs[2] = {};
-            ID3D11InputLayout* inputLayout = nullptr;
-            D3D11_PRIMITIVE_TOPOLOGY topology = D3D11_PRIMITIVE_TOPOLOGY_UNDEFINED;
-            ID3D11RasterizerState* rasterizerState = nullptr;
-            ID3D11DepthStencilState* depthStencilState = nullptr;
-            UINT stencilRef = 0;
-            ID3D11BlendState* blendState = nullptr;
-            FLOAT blendFactor[4] = {};
-            UINT sampleMask = 0;
-            ID3D11RenderTargetView* rtvs[D3D11_SIMULTANEOUS_RENDER_TARGET_COUNT] = {};
-            ID3D11DepthStencilView* dsv = nullptr;
-            D3D11_VIEWPORT viewports[D3D11_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE] = {};
-            UINT numViewports = 0;
-            ID3D11Buffer* vertexBuffer = nullptr;
-            UINT vbStride = 0;
-            UINT vbOffset = 0;
-            ID3D11Buffer* indexBuffer = nullptr;
-            DXGI_FORMAT ibFormat = DXGI_FORMAT_UNKNOWN;
-            UINT ibOffset = 0;
-        };
-
-        /**
-         * RTV over the submitted eye texture, cached keyed by texture pointer + desc — the texture
-         * is stable frame-to-frame so this avoids an RTV creation per frame. ROCK :197-202.
-         */
-        struct CachedRenderTargetView
-        {
-            ID3D11Texture2D* texture = nullptr;
-            D3D11_TEXTURE2D_DESC desc{};
-            Microsoft::WRL::ComPtr<ID3D11RenderTargetView> rtv;
-        };
-
-        // game->render thread handoff (ROCK :204-206): render side only reads s_frame under the
-        // mutex and checks the atomic before doing any work at all
+        // game->render thread handoff (ROCK :204-206): the render side only reads s_frame under
+        // the mutex; whether it runs at all is the hook host's active flag
         internal::RenderFrame s_frame;
         std::mutex s_frameMutex;
-        std::atomic<bool> s_enabled{ false };
+        render::DrawCallbackId s_drawCallback = render::INVALID_DRAW_CALLBACK;
 
-        bool s_installed = false;
         bool s_d3dInitialized = false;
-        bool s_loggedNotVR = false;
-        bool s_loggedNoDevice = false;
-        bool s_loggedNoCompositor = false;
         bool s_loggedD3dInitFailed = false;
 
         ID3D11VertexShader* s_vertexShader = nullptr;
         ID3D11VertexShader* s_screenTextVertexShader = nullptr;
         ID3D11PixelShader* s_pixelShader = nullptr;
         ID3D11InputLayout* s_inputLayout = nullptr;
-        ID3D11Buffer* s_cameraCB = nullptr;
         ID3D11Buffer* s_modelCB = nullptr;
         ID3D11Buffer* s_lineVB = nullptr;
         ID3D11Buffer* s_textVB = nullptr;
@@ -125,12 +61,6 @@ namespace f4cf::debug::renderer
         ID3D11RasterizerState* s_solidRasterizer = nullptr;
         ID3D11DepthStencilState* s_depthStencil = nullptr;
         ID3D11BlendState* s_blendState = nullptr;
-        SavedState s_saved{};
-        CachedRenderTargetView s_submittedTextureRtv{};
-
-        using VRSubmit_t = vr::EVRCompositorError(__thiscall*)(vr::IVRCompositor*, vr::EVREye, const vr::Texture_t*, const vr::VRTextureBounds_t*, vr::EVRSubmitFlags);
-        VRSubmit_t s_originalVRSubmit = nullptr;
-        void** s_vrCompositorVTable = nullptr;
 
         // Stereo-instancing vertex shader: FO4VR renders both eyes into one double-wide target, so
         // each primitive is drawn instanced x2 and the VS picks the eye matrix by SV_InstanceID,
@@ -214,52 +144,9 @@ float4 main(PS_INPUT input) : SV_Target {
 )";
 
         /**
-         * D3D11 device straight off the game renderer singleton — no swapchain creation needed.
-         * ROCK DebugBodyOverlay.cpp:1142-1146.
-         */
-        ID3D11Device* getDevice()
-        {
-            auto* renderer = RE::BSGraphics::RendererData::GetSingleton();
-            return renderer ? reinterpret_cast<ID3D11Device*>(renderer->device) : nullptr;
-        }
-
-        ID3D11DeviceContext* getContext()
-        {
-            auto* renderer = RE::BSGraphics::RendererData::GetSingleton();
-            return renderer ? reinterpret_cast<ID3D11DeviceContext*>(renderer->context) : nullptr;
-        }
-
-        /**
-         * Read the engine's own per-eye view-projection + posAdjust for the frame being submitted,
-         * so anything drawn in game-world coords lands exactly where the game drew it (HMD pose is
-         * already baked in — no OpenVR pose math). ROCK DebugBodyOverlay.cpp:981-1002; offsets are
-         * kept in f4vr::F4VROffsets.h (vrRenderCameraGlobals).
-         */
-        bool getEyeViewProjMatrices(DirectX::XMMATRIX& outEye0, DirectX::XMMATRIX& outEye1, DirectX::XMFLOAT4& outAdjust0, DirectX::XMFLOAT4& outAdjust1)
-        {
-            const std::uintptr_t cameraGlobals = *f4vr::vrRenderCameraGlobals;
-            if (!cameraGlobals) {
-                return false;
-            }
-
-            const auto cameraData = *reinterpret_cast<std::uintptr_t*>(cameraGlobals + f4vr::VR_RENDER_CAMERA_DATA_OFFSET);
-            if (!cameraData) {
-                return false;
-            }
-
-            outEye0 = DirectX::XMLoadFloat4x4(reinterpret_cast<const DirectX::XMFLOAT4X4*>(cameraData + f4vr::VR_RENDER_CAMERA_EYE0_VIEW_PROJ_OFFSET));
-            outEye1 = DirectX::XMLoadFloat4x4(reinterpret_cast<const DirectX::XMFLOAT4X4*>(cameraData + f4vr::VR_RENDER_CAMERA_EYE1_VIEW_PROJ_OFFSET));
-
-            const auto* adjust0 = reinterpret_cast<const float*>(cameraGlobals + f4vr::VR_RENDER_CAMERA_EYE0_POS_ADJUST_OFFSET);
-            const auto* adjust1 = reinterpret_cast<const float*>(cameraGlobals + f4vr::VR_RENDER_CAMERA_EYE1_POS_ADJUST_OFFSET);
-            outAdjust0 = DirectX::XMFLOAT4(adjust0[0], adjust0[1], adjust0[2], 0.0f);
-            outAdjust1 = DirectX::XMFLOAT4(adjust1[0], adjust1[1], adjust1[2], 0.0f);
-            return true;
-        }
-
-        /**
-         * Compile the three shaders and create all fixed pipeline objects (constant buffers, dynamic
-         * vertex buffers, rasterizer/depth/blend states). ROCK DebugBodyOverlay.cpp:1004-1140.
+         * Compile the three shaders and create the fixed pipeline objects (constant buffer, dynamic
+         * vertex buffers, rasterizer/depth/blend states). The camera constants at b0 belong to the
+         * hook host. ROCK DebugBodyOverlay.cpp:1004-1140.
          */
         bool initializeD3D(ID3D11Device* device)
         {
@@ -279,7 +166,7 @@ float4 main(PS_INPUT input) : SV_Target {
                 &errorBlob);
             if (FAILED(hr)) {
                 if (errorBlob) {
-                    logger::error("DebugDraw: vertex shader compile failed: {}", static_cast<const char*>(errorBlob->GetBufferPointer()));
+                    logger::error("Vertex shader compile failed: {}", static_cast<const char*>(errorBlob->GetBufferPointer()));
                     errorBlob->Release();
                 }
                 return false;
@@ -311,7 +198,7 @@ float4 main(PS_INPUT input) : SV_Target {
                 &errorBlob);
             if (FAILED(hr)) {
                 if (errorBlob) {
-                    logger::error("DebugDraw: text vertex shader compile failed: {}", static_cast<const char*>(errorBlob->GetBufferPointer()));
+                    logger::error("Text vertex shader compile failed: {}", static_cast<const char*>(errorBlob->GetBufferPointer()));
                     errorBlob->Release();
                 }
                 return false;
@@ -336,7 +223,7 @@ float4 main(PS_INPUT input) : SV_Target {
                 &errorBlob);
             if (FAILED(hr)) {
                 if (errorBlob) {
-                    logger::error("DebugDraw: pixel shader compile failed: {}", static_cast<const char*>(errorBlob->GetBufferPointer()));
+                    logger::error("Pixel shader compile failed: {}", static_cast<const char*>(errorBlob->GetBufferPointer()));
                     errorBlob->Release();
                 }
                 return false;
@@ -345,15 +232,6 @@ float4 main(PS_INPUT input) : SV_Target {
             hr = device->CreatePixelShader(psBlob->GetBufferPointer(), psBlob->GetBufferSize(), nullptr, &s_pixelShader);
             psBlob->Release();
             if (FAILED(hr)) {
-                return false;
-            }
-
-            D3D11_BUFFER_DESC cameraDesc{};
-            cameraDesc.Usage = D3D11_USAGE_DYNAMIC;
-            cameraDesc.ByteWidth = sizeof(PerFrameVSData);
-            cameraDesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
-            cameraDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
-            if (FAILED(device->CreateBuffer(&cameraDesc, nullptr, &s_cameraCB))) {
                 return false;
             }
 
@@ -421,159 +299,6 @@ float4 main(PS_INPUT input) : SV_Target {
             }
 
             return true;
-        }
-
-        bool sameSubmittedTextureDesc(const D3D11_TEXTURE2D_DESC& lhs, const D3D11_TEXTURE2D_DESC& rhs)
-        {
-            return lhs.Width == rhs.Width && lhs.Height == rhs.Height && lhs.MipLevels == rhs.MipLevels && lhs.ArraySize == rhs.ArraySize && lhs.Format == rhs.Format &&
-                   lhs.SampleDesc.Count == rhs.SampleDesc.Count && lhs.SampleDesc.Quality == rhs.SampleDesc.Quality;
-        }
-
-        /**
-         * RTV over the submitted texture, cached by texture+desc so it is created once, not per
-         * frame. ROCK DebugBodyOverlay.cpp:1167-1185.
-         */
-        ID3D11RenderTargetView* getSubmittedTextureRtv(ID3D11Device* device, ID3D11Texture2D* texture, const D3D11_TEXTURE2D_DESC& desc)
-        {
-            if (s_submittedTextureRtv.texture == texture && s_submittedTextureRtv.rtv && sameSubmittedTextureDesc(s_submittedTextureRtv.desc, desc)) {
-                return s_submittedTextureRtv.rtv.Get();
-            }
-
-            s_submittedTextureRtv.rtv.Reset();
-            s_submittedTextureRtv.texture = nullptr;
-            Microsoft::WRL::ComPtr<ID3D11RenderTargetView> rtv;
-            if (FAILED(device->CreateRenderTargetView(texture, nullptr, rtv.GetAddressOf())) || !rtv) {
-                return nullptr;
-            }
-
-            s_submittedTextureRtv.texture = texture;
-            s_submittedTextureRtv.desc = desc;
-            s_submittedTextureRtv.rtv = std::move(rtv);
-            return s_submittedTextureRtv.rtv.Get();
-        }
-
-        /**
-         * Release every AddRef'd pointer captured by beginFrame. ROCK DebugBodyOverlay.cpp:929-979.
-         */
-        void releaseSavedState()
-        {
-            if (s_saved.vs) {
-                s_saved.vs->Release();
-            }
-            if (s_saved.ps) {
-                s_saved.ps->Release();
-            }
-            for (UINT i = 0; i < s_saved.vsInstanceCount; i++) {
-                if (s_saved.vsInstances[i]) {
-                    s_saved.vsInstances[i]->Release();
-                }
-            }
-            for (UINT i = 0; i < s_saved.psInstanceCount; i++) {
-                if (s_saved.psInstances[i]) {
-                    s_saved.psInstances[i]->Release();
-                }
-            }
-            for (auto* cb : s_saved.vsCBs) {
-                if (cb) {
-                    cb->Release();
-                }
-            }
-            if (s_saved.inputLayout) {
-                s_saved.inputLayout->Release();
-            }
-            if (s_saved.rasterizerState) {
-                s_saved.rasterizerState->Release();
-            }
-            if (s_saved.depthStencilState) {
-                s_saved.depthStencilState->Release();
-            }
-            if (s_saved.blendState) {
-                s_saved.blendState->Release();
-            }
-            for (auto* rtv : s_saved.rtvs) {
-                if (rtv) {
-                    rtv->Release();
-                }
-            }
-            if (s_saved.dsv) {
-                s_saved.dsv->Release();
-            }
-            if (s_saved.vertexBuffer) {
-                s_saved.vertexBuffer->Release();
-            }
-            if (s_saved.indexBuffer) {
-                s_saved.indexBuffer->Release();
-            }
-            std::memset(&s_saved, 0, sizeof(s_saved));
-        }
-
-        /**
-         * Snapshot the game's pipeline state and bind ours. ROCK DebugBodyOverlay.cpp:1187-1214.
-         */
-        void beginFrame(ID3D11DeviceContext* context)
-        {
-            std::memset(&s_saved, 0, sizeof(s_saved));
-            s_saved.vsInstanceCount = 256;
-            s_saved.psInstanceCount = 256;
-            context->VSGetShader(&s_saved.vs, s_saved.vsInstances, &s_saved.vsInstanceCount);
-            context->PSGetShader(&s_saved.ps, s_saved.psInstances, &s_saved.psInstanceCount);
-            context->VSGetConstantBuffers(0, 2, s_saved.vsCBs);
-            context->IAGetInputLayout(&s_saved.inputLayout);
-            context->IAGetPrimitiveTopology(&s_saved.topology);
-            context->RSGetState(&s_saved.rasterizerState);
-            context->OMGetDepthStencilState(&s_saved.depthStencilState, &s_saved.stencilRef);
-            context->OMGetBlendState(&s_saved.blendState, s_saved.blendFactor, &s_saved.sampleMask);
-            context->OMGetRenderTargets(D3D11_SIMULTANEOUS_RENDER_TARGET_COUNT, s_saved.rtvs, &s_saved.dsv);
-            s_saved.numViewports = D3D11_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE;
-            context->RSGetViewports(&s_saved.numViewports, s_saved.viewports);
-            context->IAGetVertexBuffers(0, 1, &s_saved.vertexBuffer, &s_saved.vbStride, &s_saved.vbOffset);
-            context->IAGetIndexBuffer(&s_saved.indexBuffer, &s_saved.ibFormat, &s_saved.ibOffset);
-
-            context->IASetInputLayout(s_inputLayout);
-            context->VSSetShader(s_vertexShader, nullptr, 0);
-            context->PSSetShader(s_pixelShader, nullptr, 0);
-            context->RSSetState(s_wireRasterizer);
-            FLOAT blendFactor[4] = {};
-            context->OMSetBlendState(s_blendState, blendFactor, 0xFFFFFFFF);
-            context->OMSetDepthStencilState(s_depthStencil, 0);
-        }
-
-        /**
-         * Restore the game's pipeline state captured by beginFrame. ROCK DebugBodyOverlay.cpp:1216-1231.
-         */
-        void endFrame(ID3D11DeviceContext* context)
-        {
-            context->VSSetShader(s_saved.vs, s_saved.vsInstances, s_saved.vsInstanceCount);
-            context->PSSetShader(s_saved.ps, s_saved.psInstances, s_saved.psInstanceCount);
-            context->VSSetConstantBuffers(0, 2, s_saved.vsCBs);
-            context->IASetInputLayout(s_saved.inputLayout);
-            context->IASetPrimitiveTopology(s_saved.topology);
-            context->RSSetState(s_saved.rasterizerState);
-            context->OMSetDepthStencilState(s_saved.depthStencilState, s_saved.stencilRef);
-            context->OMSetBlendState(s_saved.blendState, s_saved.blendFactor, s_saved.sampleMask);
-            context->OMSetRenderTargets(D3D11_SIMULTANEOUS_RENDER_TARGET_COUNT, s_saved.rtvs, s_saved.dsv);
-            context->RSSetViewports(s_saved.numViewports, s_saved.viewports);
-            context->IASetVertexBuffers(0, 1, &s_saved.vertexBuffer, &s_saved.vbStride, &s_saved.vbOffset);
-            context->IASetIndexBuffer(s_saved.indexBuffer, s_saved.ibFormat, s_saved.ibOffset);
-            releaseSavedState();
-        }
-
-        /**
-         * Upload both eyes' camera constants once per frame. ROCK DebugBodyOverlay.cpp:1233-1246.
-         */
-        void uploadCamera(ID3D11DeviceContext* context, const DirectX::XMMATRIX& eye0, const DirectX::XMMATRIX& eye1, const DirectX::XMFLOAT4& adjust0,
-            const DirectX::XMFLOAT4& adjust1)
-        {
-            D3D11_MAPPED_SUBRESOURCE mapped{};
-            if (SUCCEEDED(context->Map(s_cameraCB, 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped))) {
-                auto* data = static_cast<PerFrameVSData*>(mapped.pData);
-                data->matProjView[0] = eye0;
-                data->matProjView[1] = eye1;
-                data->posAdjust[0] = adjust0;
-                data->posAdjust[1] = adjust1;
-                context->Unmap(s_cameraCB, 0);
-            }
-            context->VSSetConstantBuffers(0, 1, &s_cameraCB);
         }
 
         /**
@@ -1042,11 +767,12 @@ float4 main(PS_INPUT input) : SV_Target {
         }
 
         /**
-         * The actual draw, on the render thread, into the left-eye texture the game just handed to
-         * OpenVR (the double-wide target carries both eyes via the shader's half split). ROCK
-         * DebugBodyOverlay.cpp:2412-2589 minus the physics-body pass.
+         * The actual draw, on the render thread, into the double-wide eye texture the game just
+         * handed to OpenVR (the shader's half split puts each primitive in its own eye). The hook
+         * host has already snapshotted the pipeline, bound the render target and uploaded the camera
+         * constants at b0. ROCK DebugBodyOverlay.cpp:2412-2589 minus the physics-body pass.
          */
-        void drawToSubmittedTexture(const vr::Texture_t* texture)
+        void drawFrame(const render::SubmitFrame& submitFrame)
         {
             internal::RenderFrame frame;
             {
@@ -1057,149 +783,61 @@ float4 main(PS_INPUT input) : SV_Target {
                 return;
             }
 
-            auto* device = getDevice();
-            auto* context = getContext();
-            if (!device || !context || !texture || !texture->handle || texture->eType != vr::TextureType_DirectX) {
-                return;
-            }
+            auto* context = submitFrame.context;
+            const auto& eye0 = submitFrame.camera->viewProj[0];
+            const auto& eye1 = submitFrame.camera->viewProj[1];
+            const auto& adjust0 = submitFrame.camera->posAdjust[0];
+            const auto& adjust1 = submitFrame.camera->posAdjust[1];
 
-            auto* submittedTexture = static_cast<ID3D11Texture2D*>(texture->handle);
-            D3D11_TEXTURE2D_DESC textureDesc{};
-            submittedTexture->GetDesc(&textureDesc);
+            context->IASetInputLayout(s_inputLayout);
+            context->VSSetShader(s_vertexShader, nullptr, 0);
+            context->PSSetShader(s_pixelShader, nullptr, 0);
+            context->RSSetState(s_wireRasterizer);
+            FLOAT blendFactor[4] = {};
+            context->OMSetBlendState(s_blendState, blendFactor, 0xFFFFFFFF);
+            context->OMSetDepthStencilState(s_depthStencil, 0);
 
-            ID3D11RenderTargetView* rtv = getSubmittedTextureRtv(device, submittedTexture, textureDesc);
-            if (!rtv) {
-                return;
-            }
-
-            DirectX::XMMATRIX eye0;
-            DirectX::XMMATRIX eye1;
-            DirectX::XMFLOAT4 adjust0;
-            DirectX::XMFLOAT4 adjust1;
-            if (!getEyeViewProjMatrices(eye0, eye1, adjust0, adjust1)) {
-                return;
-            }
-
-            // beginFrame snapshots the game's RTVs/viewports before we override them, so endFrame
-            // restores everything including the render target
-            beginFrame(context);
-
-            context->OMSetRenderTargets(1, &rtv, nullptr);
-            D3D11_VIEWPORT viewport{};
-            viewport.Width = static_cast<float>(textureDesc.Width);
-            viewport.Height = static_cast<float>(textureDesc.Height);
-            viewport.MinDepth = 0.0f;
-            viewport.MaxDepth = 1.0f;
-            context->RSSetViewports(1, &viewport);
-
-            uploadCamera(context, eye0, eye1, adjust0, adjust1);
             drawLines(context, frame.lines);
             drawBillboardTextEntries(context, frame.texts, frame.cameraPos);
-            drawTextEntries(context, static_cast<float>(textureDesc.Width), static_cast<float>(textureDesc.Height), frame.texts, eye0, eye1, adjust0, adjust1);
-
-            endFrame(context);
-        }
-
-        /**
-         * The Submit hook: a single relaxed atomic read when there is nothing to draw; never touches
-         * game-thread state (only the swapped frame under its mutex). ROCK DebugBodyOverlay.cpp:2591-2598.
-         */
-        vr::EVRCompositorError vrSubmitHook(vr::IVRCompositor* compositor, const vr::EVREye eye, const vr::Texture_t* texture, const vr::VRTextureBounds_t* bounds,
-            const vr::EVRSubmitFlags flags)
-        {
-            if (s_enabled.load(std::memory_order_relaxed) && eye == vr::Eye_Left) {
-                drawToSubmittedTexture(texture);
-            }
-            return s_originalVRSubmit(compositor, eye, texture, bounds, flags);
-        }
-
-        /**
-         * Patch IVRCompositor vtable index 5 (Submit) on the live compositor — the same vtable-swap
-         * technique the framework uses for controller input suppression. ROCK DebugBodyOverlay.cpp:2600-2628.
-         */
-        bool installSubmitHook()
-        {
-            auto* compositor = vr::VRCompositor();
-            if (!compositor) {
-                if (!s_loggedNoCompositor) {
-                    s_loggedNoCompositor = true;
-                    logger::warn("DebugDraw: OpenVR compositor unavailable; will retry on frame update");
-                }
-                return false;
-            }
-
-            auto*** objectVTable = reinterpret_cast<void***>(compositor);
-            s_vrCompositorVTable = *objectVTable;
-            constexpr std::size_t SUBMIT_VTABLE_INDEX = 5;
-
-            DWORD oldProtect = 0;
-            if (!VirtualProtect(&s_vrCompositorVTable[SUBMIT_VTABLE_INDEX], sizeof(void*), PAGE_EXECUTE_READWRITE, &oldProtect)) {
-                logger::warn("DebugDraw: VirtualProtect failed; Submit hook not installed");
-                return false;
-            }
-
-            s_originalVRSubmit = reinterpret_cast<VRSubmit_t>(s_vrCompositorVTable[SUBMIT_VTABLE_INDEX]);
-            s_vrCompositorVTable[SUBMIT_VTABLE_INDEX] = reinterpret_cast<void*>(&vrSubmitHook);
-            VirtualProtect(&s_vrCompositorVTable[SUBMIT_VTABLE_INDEX], sizeof(void*), oldProtect, &oldProtect);
-            return true;
+            drawTextEntries(context, submitFrame.width, submitFrame.height, frame.texts, eye0, eye1, adjust0, adjust1);
         }
     }
 
     /**
-     * Lazily install everything on first use: D3D pipeline objects off the game device, then the
-     * OpenVR Submit hook. Safe to call every frame — each unavailable dependency just retries.
+     * Lazily build the wire/text pipeline off the game device on first use and register the draw
+     * with the shared Submit hook host, which installs the hook itself. Safe to call every frame —
+     * each unavailable dependency just retries.
      */
     bool ensureInstalled()
     {
-        if (s_installed) {
-            return true;
-        }
-
-        if (!REL::Module::IsVR()) {
-            if (!s_loggedNotVR) {
-                s_loggedNotVR = true;
-                logger::warn("DebugDraw: only supported on Fallout 4 VR; overlay disabled");
-            }
-            return false;
-        }
-
-        auto* device = getDevice();
-        if (!device) {
-            if (!s_loggedNoDevice) {
-                s_loggedNoDevice = true;
-                logger::warn("DebugDraw: D3D11 device unavailable; will retry on frame update");
-            }
-            return false;
-        }
-
         if (!s_d3dInitialized) {
+            auto* device = render::getDevice();
+            if (!device) {
+                return false;
+            }
             if (!initializeD3D(device)) {
                 if (!s_loggedD3dInitFailed) {
                     s_loggedD3dInitFailed = true;
-                    logger::error("DebugDraw: D3D initialization failed; overlay disabled");
+                    logger::error("D3D initialization failed; overlay disabled");
                 }
                 return false;
             }
             s_d3dInitialized = true;
+            s_drawCallback = render::registerDrawCallback("DebugDraw", &drawFrame);
         }
 
-        if (!installSubmitHook()) {
-            return false;
-        }
-
-        s_installed = true;
-        logger::info("DebugDraw: OpenVR Submit hook + D3D renderer installed");
-        return true;
+        return render::ensureInstalled();
     }
 
     bool isInstalled()
     {
-        return s_installed;
+        return s_drawCallback != render::INVALID_DRAW_CALLBACK && render::isInstalled();
     }
 
     /**
-     * Swap this frame's draws into the render-side buffer and flip the enabled atomic (the producer
-     * publishes lines pre-sorted by color for run batching). ROCK DebugBodyOverlay.cpp:2674-2686.
+     * Swap this frame's draws into the render-side buffer and flip our slice of the hook host
+     * active or dormant (the producer publishes lines pre-sorted by color for run batching). ROCK
+     * DebugBodyOverlay.cpp:2674-2686.
      */
     void publish(internal::RenderFrame&& frame)
     {
@@ -1208,6 +846,6 @@ float4 main(PS_INPUT input) : SV_Target {
             std::scoped_lock lock(s_frameMutex);
             s_frame = std::move(frame);
         }
-        s_enabled.store(hasContent && s_installed, std::memory_order_release);
+        render::setDrawCallbackActive(s_drawCallback, hasContent);
     }
 }
