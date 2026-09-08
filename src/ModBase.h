@@ -5,6 +5,17 @@
 
 namespace f4cf
 {
+    /**
+     * Register a callback to run at the end of every frame, right after the mod's onFrameUpdate.
+     *
+     * This exists so an optional subsystem can be pumped without ModBase naming any of its symbols:
+     * with static-library semantics, a mod that never calls that subsystem's API never pulls its
+     * object files, so it pays neither the code size nor the frame cost. The subsystem registers
+     * itself the first time the mod uses it - the ImGui UI layer does so when the first panel is
+     * constructed - which is also why callbacks are never removed.
+     */
+    void registerFrameEndCallback(void (*callback)());
+
     class ModBase
     {
     public:

@@ -154,6 +154,27 @@ namespace f4cf
         return success;
     }
 
+    namespace
+    {
+        /**
+         * Function-local static, not a namespace-level one: a subsystem's static initializer can run
+         * before this translation unit's, and registering into a not-yet-constructed vector would be
+         * undefined behaviour.
+         */
+        std::vector<void (*)()>& frameEndCallbacks()
+        {
+            static std::vector<void (*)()> callbacks;
+            return callbacks;
+        }
+    }
+
+    void registerFrameEndCallback(void (*callback)())
+    {
+        if (callback) {
+            frameEndCallbacks().push_back(callback);
+        }
+    }
+
     /**
      * Runs on every game frame, main logic goes here.
      * Handle any exceptions and log them.
@@ -178,6 +199,12 @@ namespace f4cf
             onFrameUpdate();
 
             DebugAdjuster::onFrameUpdate(*_settings.config);
+
+            // optional subsystems that self-registered (see registerFrameEndCallback); empty unless
+            // the mod actually uses one, which is what keeps them out of binaries that do not
+            for (const auto& callback : frameEndCallbacks()) {
+                callback();
+            }
 
             debug::DebugDraw::onFrameEnd();
 
