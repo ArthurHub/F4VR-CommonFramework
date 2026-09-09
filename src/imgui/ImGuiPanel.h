@@ -107,6 +107,22 @@ namespace f4cf::imgui
          * Runtime show/hide on top of whatever the placement provider decides. A hidden panel costs
          * nothing: it is not packed, not drawn, and does not run its content callback.
          */
+        /**
+         * Whether the world hides the panel when something is in front of it. On by default, which is
+         * what makes a panel read as part of the scene rather than pasted over it.
+         *
+         * Turn it off for a panel that must always be readable - a warning, or a menu you do not want
+         * to lose when you turn and a wall comes between you and it. Occlusion also depends on the
+         * framework capturing the engine's depth buffer; where it cannot, every panel draws on top
+         * regardless, so this is a preference rather than a guarantee.
+         */
+        void setOccluded(bool occluded);
+
+        bool isOccluded() const
+        {
+            return _occluded;
+        }
+
         void setVisible(bool visible);
         bool isVisible() const;
 
@@ -123,6 +139,7 @@ namespace f4cf::imgui
         int _pixelWidth;
         int _pixelHeight;
         bool _visible = true;
+        bool _occluded = true;
         ContentCallback _content;
         PlacementProvider _placement;
     };

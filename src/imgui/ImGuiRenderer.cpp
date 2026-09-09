@@ -107,6 +107,11 @@ float4 main(PS_INPUT input) : SV_Target {
         ID3D11SamplerState* s_atlasSampler = nullptr;
         ID3D11RasterizerState* s_quadRasterizer = nullptr;
         ID3D11DepthStencilState* s_quadDepthStencil = nullptr;
+
+        // One depth-testing state per comparison function, built on demand: the engine's comparison
+        // is read from the captured frame rather than assumed, so which one is needed is not known
+        // until the first draw.
+        std::array<ID3D11DepthStencilState*, 9> s_quadDepthTestStates{};
         ID3D11BlendState* s_quadBlend = nullptr;
 
         bool compileShader(const char* source, const char* name, const char* target, ID3DBlob** outBlob)
@@ -263,18 +268,49 @@ float4 main(PS_INPUT input) : SV_Target {
         }
 
         /**
-         * Composite the panels: every quad this frame samples the same atlas with the same state, so
-         * they all go in one instanced draw (x2 for the eye split).
+         * The state that lets the world hide a panel: test against the engine's own depth with its
+         * own comparison, and never write. The write mask matters as much as the read-only view the
+         * host binds - together they make it impossible for a panel to disturb the scene's depth.
+         *
+         * Falls back to the always-on-top state if the state cannot be built, so a panel still draws.
+         */
+        ID3D11DepthStencilState* quadDepthTestState(ID3D11Device* device, const D3D11_COMPARISON_FUNC comparison)
+        {
+            const auto index = static_cast<std::size_t>(comparison);
+            if (index >= s_quadDepthTestStates.size()) {
+                return s_quadDepthStencil;
+            }
+            if (!s_quadDepthTestStates[index]) {
+                D3D11_DEPTH_STENCIL_DESC desc{};
+                desc.DepthEnable = TRUE;
+                desc.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ZERO;
+                desc.DepthFunc = comparison;
+                if (FAILED(device->CreateDepthStencilState(&desc, &s_quadDepthTestStates[index]))) {
+                    return s_quadDepthStencil;
+                }
+            }
+            return s_quadDepthTestStates[index];
+        }
+
+        /**
+         * Composite the panels: every quad samples the same atlas with the same shaders, so the only
+         * thing that splits a draw is whether the world may hide it. The quads arrive sorted with the
+         * occluded ones first, so that is at most two draws (x2 each for the eye split) - and exactly
+         * one whenever every panel agrees, which is the usual case.
          */
         void drawQuads(const render::SubmitFrame& submitFrame, const std::vector<PanelQuad>& quads)
         {
             std::vector<QuadVertex> vertices;
             vertices.reserve(quads.size() * VERTICES_PER_QUAD);
+            std::size_t occludedVertices = 0;
             for (const auto& quad : quads) {
                 if (vertices.size() + VERTICES_PER_QUAD > MAX_QUAD_VERTICES) {
                     break;
                 }
                 appendQuad(vertices, quad);
+                if (quad.occluded) {
+                    occludedVertices = vertices.size(); // the sort keeps these contiguous, at the front
+                }
             }
             if (vertices.empty()) {
                 return;
@@ -300,11 +336,20 @@ float4 main(PS_INPUT input) : SV_Target {
             context->PSSetShaderResources(0, 1, &s_atlasSrv);
             context->PSSetSamplers(0, 1, &s_atlasSampler);
             context->RSSetState(s_quadRasterizer);
-            context->OMSetDepthStencilState(s_quadDepthStencil, 0);
             FLOAT blendFactor[4] = {};
             context->OMSetBlendState(s_quadBlend, blendFactor, 0xFFFFFFFF);
 
-            context->DrawInstanced(static_cast<UINT>(vertices.size()), 2, 0, 0); // x2: the shader splits the eyes
+            // with no scene depth captured there is nothing to test against, so everything draws on
+            // top exactly as it did before occlusion existed
+            const std::size_t occludedCount = submitFrame.sceneDepth ? occludedVertices : 0;
+            if (occludedCount > 0) {
+                context->OMSetDepthStencilState(quadDepthTestState(submitFrame.device, submitFrame.sceneDepthComparison), 0);
+                context->DrawInstanced(static_cast<UINT>(occludedCount), 2, 0, 0); // x2: the shader splits the eyes
+            }
+            if (occludedCount < vertices.size()) {
+                context->OMSetDepthStencilState(s_quadDepthStencil, 0);
+                context->DrawInstanced(static_cast<UINT>(vertices.size() - occludedCount), 2, static_cast<UINT>(occludedCount), 0);
+            }
         }
 
         /**

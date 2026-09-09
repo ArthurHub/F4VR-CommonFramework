@@ -69,6 +69,11 @@ namespace f4cf::imgui
         _pixelHeight = std::clamp(pixelHeight, 1, MAX_PANEL_PIXEL_SIZE);
     }
 
+    void Panel::setOccluded(const bool occluded)
+    {
+        _occluded = occluded;
+    }
+
     void Panel::setVisible(const bool visible)
     {
         _visible = visible;

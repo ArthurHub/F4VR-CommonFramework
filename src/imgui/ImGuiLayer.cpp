@@ -122,7 +122,8 @@ namespace f4cf::imgui::internal
          * The panel's four world corners from its placement: local +X is right, local +Z is up, and
          * the quad is centred on the transform's translate.
          */
-        PanelQuad buildQuad(const PanelPlacement& placement, const int atlasX, const int atlasY, const int atlasW, const int atlasH, const RE::NiPoint3& viewer)
+        PanelQuad buildQuad(const PanelPlacement& placement, const int atlasX, const int atlasY, const int atlasW, const int atlasH, const RE::NiPoint3& viewer,
+            const bool occluded)
         {
             const RE::NiMatrix3 toWorld = placement.transform.rotate.Transpose(); // the codebase's local->world convention
             const RE::NiPoint3 right = toWorld * RE::NiPoint3(1, 0, 0) * (placement.worldWidth * 0.5f);
@@ -139,6 +140,7 @@ namespace f4cf::imgui::internal
             quad.u1 = static_cast<float>(atlasX + atlasW) / ATLAS_WIDTH;
             quad.v1 = static_cast<float>(atlasY + atlasH) / ATLAS_HEIGHT;
             quad.viewerDistance = common::MatrixUtils::vec3Len(centre - viewer);
+            quad.occluded = occluded;
             return quad;
         }
     }
@@ -273,11 +275,17 @@ namespace f4cf::imgui::internal
         frame.drawData->copyFrom(*ImGui::GetDrawData());
         frame.quads.reserve(packed.size());
         for (const auto& entry : packed) {
-            frame.quads.push_back(buildQuad(entry.placement, entry.x, entry.y, entry.panel->pixelWidth(), entry.panel->pixelHeight(), viewer));
+            frame.quads.push_back(buildQuad(entry.placement, entry.x, entry.y, entry.panel->pixelWidth(), entry.panel->pixelHeight(), viewer, entry.panel->isOccluded()));
         }
 
-        // No depth write, so quads do not occlude each other - draw far ones first.
+        // Occluded quads first, so each group is one contiguous run the renderer can draw with one
+        // pipeline state - and so a panel that opted out of being hidden is not then hidden by a
+        // panel that did not. Within a group: no depth write, so quads do not occlude each other,
+        // and far ones have to be drawn first.
         std::ranges::sort(frame.quads, [](const PanelQuad& lhs, const PanelQuad& rhs) {
+            if (lhs.occluded != rhs.occluded) {
+                return lhs.occluded;
+            }
             return lhs.viewerDistance > rhs.viewerDistance;
         });
 

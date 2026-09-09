@@ -53,6 +53,8 @@ namespace f4cf::imgui::internal
         float v1 = 1;
         // distance to the viewer, for painter-order sorting (no depth write, so overlap is our job)
         float viewerDistance = 0;
+        // whether the world may hide this panel; quads are grouped by it so each group is one draw
+        bool occluded = true;
     };
 
     /**

@@ -69,6 +69,13 @@ namespace f4cf::imgui
          */
         void setContent(ContentCallback content);
 
+        /**
+         * Whether the world hides the canvas when something is in front of it. On by default, so it
+         * sits in the scene like the widgets around it; turn it off for a canvas that has to stay
+         * readable whatever is in front of it. See imgui::Panel::setOccluded.
+         */
+        void setOccluded(bool occluded);
+
         virtual std::string toString() const override;
 
         // Internal: keep the panel's resolution in step with the size vrui laid out for it.

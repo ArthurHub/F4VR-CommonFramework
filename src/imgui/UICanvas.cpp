@@ -83,6 +83,11 @@ namespace f4cf::imgui
         _panel->setContent(std::move(content));
     }
 
+    void UICanvas::setOccluded(const bool occluded)
+    {
+        _panel->setOccluded(occluded);
+    }
+
     std::string UICanvas::toString() const
     {
         return std::format("UICanvas({}): {}, Pos({:.2f}, {:.2f}, {:.2f}), Size({:.2f}, {:.2f})",
