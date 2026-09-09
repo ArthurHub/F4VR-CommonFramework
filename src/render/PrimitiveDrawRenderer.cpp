@@ -358,6 +358,12 @@ float4 main(PS_INPUT input) : SV_Target {
             }
         }
 
+        // Metrics of the built-in font: 5 columns x 7 rows of bits per glyph, advanced 6 columns so
+        // neighbouring glyphs do not touch. GLYPH_ASPECT in PrimitiveDraw.h is the caller-facing 6/7.
+        constexpr std::uint8_t GLYPH_COLUMNS = 5;
+        constexpr std::uint8_t GLYPH_ROWS = 7;
+        constexpr float GLYPH_ADVANCE_COLUMNS = 6.0f;
+
         /**
          * Self-contained 5x7 bitmap font: 7 bit-rows per glyph, no texture, no asset. ROCK
          * DebugBodyOverlay.cpp:2129-2229.
@@ -534,12 +540,10 @@ float4 main(PS_INPUT input) : SV_Target {
             float cursorX = baseX;
             const float cursorY = baseY;
             for (const char ch : entry.text) {
-                constexpr float GLYPH_ADVANCE_COLUMNS = 6.0f;
                 const auto rows = glyphRows(ch);
                 for (std::size_t row = 0; row < rows.size(); ++row) {
-                    constexpr float GLYPH_COLUMNS = 5.0f;
-                    for (std::uint8_t col = 0; col < static_cast<std::uint8_t>(GLYPH_COLUMNS); ++col) {
-                        const auto bit = static_cast<std::uint8_t>(1u << (4u - col));
+                    for (std::uint8_t col = 0; col < GLYPH_COLUMNS; ++col) {
+                        const auto bit = static_cast<std::uint8_t>(1u << (GLYPH_COLUMNS - 1u - col));
                         if ((rows[row] & bit) != 0) {
                             appendTextQuad(vertices, cursorX + static_cast<float>(col) * pixel, cursorY + static_cast<float>(row) * pixel, pixel, textureWidth, textureHeight);
                         }
@@ -604,9 +608,63 @@ float4 main(PS_INPUT input) : SV_Target {
             return Vertex{ p.x, p.y, p.z };
         }
 
+        // billboardNorm collapses a degenerate vector to zero, which is how a bad basis is detected.
+        bool isZeroVector(const RE::NiPoint3& v)
+        {
+            return v.x == 0.0f && v.y == 0.0f && v.z == 0.0f;
+        }
+
+        /**
+         * True for placements built as world-space geometry rather than projected into a screen half.
+         */
+        constexpr bool isWorldTextPlacement(const TextPlacement placement)
+        {
+            return placement == TextPlacement::Billboard || placement == TextPlacement::Oriented;
+        }
+
         // World units per font pixel, per unit of distance to the viewer — so a billboard label keeps a
         // roughly constant apparent size at any range (scaled again by the entry's text size).
         constexpr float BILLBOARD_TEXT_SCALE = 0.0008f;
+
+        /**
+         * Lay one text run out as filled glyph-pixel quads on an arbitrary world plane: the run
+         * advances along +right, glyph rows descend along -up, and `cursor` is the top-left corner of
+         * the first glyph.
+         *
+         * Camera-facing billboards and plane-welded panel text both reduce to this - all that differs
+         * is who picks the basis and the pixel size, which is the whole reason it is worth splitting
+         * out. The vertex budget is checked per glyph, so a run that would overflow stops mid-string
+         * rather than dropping the whole label.
+         */
+        void appendPlanarGlyphs(std::vector<Vertex>& verts, const std::string& text, RE::NiPoint3 cursor, const RE::NiPoint3& right, const RE::NiPoint3& up, const float pixel)
+        {
+            constexpr std::size_t VERTS_PER_GLYPH = static_cast<std::size_t>(GLYPH_ROWS) * GLYPH_COLUMNS * 6;
+            for (const char ch : text) {
+                if (verts.size() + VERTS_PER_GLYPH > TEXT_VERTEX_CAPACITY) {
+                    break;
+                }
+                const auto rows = glyphRows(ch);
+                for (std::size_t row = 0; row < rows.size(); ++row) {
+                    for (std::uint8_t col = 0; col < GLYPH_COLUMNS; ++col) {
+                        const auto bit = static_cast<std::uint8_t>(1u << (GLYPH_COLUMNS - 1u - col));
+                        if ((rows[row] & bit) == 0) {
+                            continue;
+                        }
+                        const RE::NiPoint3 c = cursor + right * (static_cast<float>(col) * pixel) - up * (static_cast<float>(row) * pixel);
+                        const RE::NiPoint3 cr = c + right * pixel;
+                        const RE::NiPoint3 cd = c - up * pixel;
+                        const RE::NiPoint3 crd = cr - up * pixel;
+                        verts.push_back(toVertex(c));
+                        verts.push_back(toVertex(cr));
+                        verts.push_back(toVertex(crd));
+                        verts.push_back(toVertex(c));
+                        verts.push_back(toVertex(crd));
+                        verts.push_back(toVertex(cd));
+                    }
+                }
+                cursor = cursor + right * (GLYPH_ADVANCE_COLUMNS * pixel);
+            }
+        }
 
         /**
          * Build a world-space, camera-facing billboard for one label: a filled quad per lit glyph pixel
@@ -623,54 +681,126 @@ float4 main(PS_INPUT input) : SV_Target {
             }
             const RE::NiPoint3 viewDir = toCam * (1.0f / dist);
             RE::NiPoint3 right = billboardNorm(billboardCross(RE::NiPoint3(0.0f, 0.0f, 1.0f), viewDir));
-            if (right.x == 0.0f && right.y == 0.0f && right.z == 0.0f) {
+            if (isZeroVector(right)) {
                 right = RE::NiPoint3(1.0f, 0.0f, 0.0f); // viewer straight above/below — pick any horizontal
             }
             const RE::NiPoint3 up = billboardNorm(billboardCross(viewDir, right));
 
             const float pixel = dist * BILLBOARD_TEXT_SCALE * (std::max)(1.0f, entry.size);
-            const float textWidth = static_cast<float>(entry.text.size()) * 6.0f * pixel;
-            RE::NiPoint3 cursor = entry.worldAnchor + up * (pixel * 3.0f) - right * (textWidth * 0.5f);
-
-            for (const char ch : entry.text) {
-                if (verts.size() + 7 * 5 * 6 > TEXT_VERTEX_CAPACITY) {
-                    break;
-                }
-                const auto rows = glyphRows(ch);
-                for (std::size_t row = 0; row < rows.size(); ++row) {
-                    for (std::uint8_t col = 0; col < 5; ++col) {
-                        const auto bit = static_cast<std::uint8_t>(1u << (4u - col));
-                        if ((rows[row] & bit) == 0) {
-                            continue;
-                        }
-                        const RE::NiPoint3 c = cursor + right * (static_cast<float>(col) * pixel) - up * (static_cast<float>(row) * pixel);
-                        const RE::NiPoint3 cr = c + right * pixel;
-                        const RE::NiPoint3 cd = c - up * pixel;
-                        const RE::NiPoint3 crd = cr - up * pixel;
-                        verts.push_back(toVertex(c));
-                        verts.push_back(toVertex(cr));
-                        verts.push_back(toVertex(crd));
-                        verts.push_back(toVertex(c));
-                        verts.push_back(toVertex(crd));
-                        verts.push_back(toVertex(cd));
-                    }
-                }
-                cursor = cursor + right * (6.0f * pixel);
-            }
+            const float textWidth = static_cast<float>(entry.text.size()) * GLYPH_ADVANCE_COLUMNS * pixel;
+            const RE::NiPoint3 cursor = entry.worldAnchor + up * (pixel * 3.0f) - right * (textWidth * 0.5f);
+            appendPlanarGlyphs(verts, entry.text, cursor, right, up, pixel);
         }
 
         /**
-         * Draw billboard labels as world-space geometry through the stereo shader (identical projection
-         * to the shapes), one instanced draw per label. Camera CB (b0) must already be uploaded.
+         * Build a plane-welded run for one Oriented label. The caller's right/up pick the plane, so
+         * the text keeps a fixed world size and foreshortens as the viewer moves around it, instead
+         * of turning to face them.
+         *
+         * entry.size is the world height of one glyph - divided down to the per-glyph-pixel size the
+         * layout works in - and x/y offset the run along the plane's own axes before alignment.
          */
-        void drawBillboardTextEntries(ID3D11DeviceContext* context, const std::vector<TextEntry>& texts, const RE::NiPoint3& cameraPos)
+        void appendOrientedGlyphs(std::vector<Vertex>& verts, const TextEntry& entry)
         {
-            const bool any = std::ranges::any_of(texts, [](const TextEntry& e) {
-                return e.placement == TextPlacement::Billboard;
-            });
-            if (!any || !s_textVB || !s_vertexShader) {
+            const RE::NiPoint3 right = billboardNorm(entry.right);
+            const RE::NiPoint3 up = billboardNorm(entry.up);
+            const float pixel = entry.size / static_cast<float>(GLYPH_ROWS);
+            if (isZeroVector(right) || isZeroVector(up) || pixel <= 0.0f) {
+                return; // degenerate plane, or text with no extent to draw
+            }
+
+            const float textWidth = static_cast<float>(entry.text.size()) * GLYPH_ADVANCE_COLUMNS * pixel;
+            float alignShift = 0.0f;
+            if (entry.align == TextAlign::Center) {
+                alignShift = textWidth * -0.5f;
+            } else if (entry.align == TextAlign::Right) {
+                alignShift = -textWidth;
+            }
+
+            const RE::NiPoint3 cursor = entry.worldAnchor + right * (entry.x + alignShift) + up * entry.y;
+            appendPlanarGlyphs(verts, entry.text, cursor, right, up, pixel);
+        }
+
+        /**
+         * Draw all solid world-space geometry - filled triangles first, then camera-facing billboards
+         * and plane-welded Oriented text - through the stereo shader, so it shares the exact
+         * projection and depth of the shapes. Camera CB (b0) must already be uploaded.
+         *
+         * Everything goes into ONE vertex-buffer upload, and consecutive runs of the same color
+         * collapse into a single draw: color is a constant-buffer upload rather than a vertex
+         * attribute, so a color CHANGE is what forces a new draw, not a new shape. A bordered text
+         * panel therefore costs two draws - one for the border, one for the rows - not one per row.
+         *
+         * Fills and world text share the one vertex buffer, so they also share its budget; whichever
+         * would overflow it stops early rather than growing the buffer.
+         */
+        void drawWorldGeometry(ID3D11DeviceContext* context, const PrimitiveDraw& frame)
+        {
+            if (!s_textVB || !s_vertexShader) {
                 return;
             }
+
+            // one contiguous span of the buffer, drawn with one color
+            struct ColorRun
+            {
+                std::size_t start;
+                std::size_t count;
+                Color color;
+            };
+
+            // enough for a bordered panel of text without a reallocation; it grows if a frame needs
+            // more, and the budget check below is what actually bounds it
+            std::vector<Vertex> vertices;
+            vertices.reserve(8192);
+            std::vector<ColorRun> runs;
+
+            // runs are appended in buffer order, so extending the last one keeps it contiguous
+            const auto appendRun = [&runs](const std::size_t start, const std::size_t count, const Color& color) {
+                if (count == 0) {
+                    return; // degenerate or budget-exhausted, and merging it would corrupt the runs
+                }
+                if (!runs.empty() && runs.back().color == color) {
+                    runs.back().count += count;
+                } else {
+                    runs.push_back(ColorRun{ .start = start, .count = count, .color = color });
+                }
+            };
+
+            // fills first: depth testing is off, so this is what puts a border or background UNDER
+            // the text drawn over it
+            for (const auto& triangle : frame.triangles) {
+                if (vertices.size() + 3 > TEXT_VERTEX_CAPACITY) {
+                    break;
+                }
+                const std::size_t start = vertices.size();
+                vertices.push_back(toVertex(triangle.a));
+                vertices.push_back(toVertex(triangle.b));
+                vertices.push_back(toVertex(triangle.c));
+                appendRun(start, 3, triangle.color);
+            }
+
+            for (const auto& entry : frame.texts) {
+                if (!isWorldTextPlacement(entry.placement)) {
+                    continue;
+                }
+                const std::size_t start = vertices.size();
+                if (entry.placement == TextPlacement::Billboard) {
+                    appendBillboardGlyphs(vertices, entry, frame.viewerPosition);
+                } else {
+                    appendOrientedGlyphs(vertices, entry);
+                }
+                appendRun(start, vertices.size() - start, entry.color);
+            }
+            if (runs.empty()) {
+                return;
+            }
+
+            D3D11_MAPPED_SUBRESOURCE mapped{};
+            if (FAILED(context->Map(s_textVB, 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped))) {
+                return;
+            }
+            std::memcpy(mapped.pData, vertices.data(), vertices.size() * sizeof(Vertex));
+            context->Unmap(s_textVB, 0);
 
             context->IASetInputLayout(s_inputLayout);
             context->VSSetShader(s_vertexShader, nullptr, 0);
@@ -684,31 +814,17 @@ float4 main(PS_INPUT input) : SV_Target {
             context->IASetVertexBuffers(0, 1, &vertexBuffer, &stride, &offset);
             context->IASetIndexBuffer(nullptr, DXGI_FORMAT_UNKNOWN, 0);
 
-            for (const auto& entry : texts) {
-                if (entry.placement != TextPlacement::Billboard) {
-                    continue;
-                }
-                std::vector<Vertex> vertices;
-                vertices.reserve(4096);
-                appendBillboardGlyphs(vertices, entry, cameraPos);
-                if (vertices.empty()) {
-                    continue;
-                }
-                D3D11_MAPPED_SUBRESOURCE mapped{};
-                if (FAILED(context->Map(s_textVB, 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped))) {
-                    continue;
-                }
-                std::memcpy(mapped.pData, vertices.data(), vertices.size() * sizeof(Vertex));
-                context->Unmap(s_textVB, 0);
-                uploadColorModel(context, DirectX::XMMatrixIdentity(), entry.color);
-                context->DrawInstanced(static_cast<UINT>(vertices.size()), 2, 0, 0); // ×2: the shader splits the eyes
+            for (const auto& run : runs) {
+                uploadColorModel(context, DirectX::XMMatrixIdentity(), run.color);
+                context->DrawInstanced(static_cast<UINT>(run.count), 2, static_cast<UINT>(run.start), 0); // ×2: the shader splits the eyes
             }
         }
 
         /**
          * Draw all text entries as solid glyph-pixel quads; screen-space entries are duplicated into
-         * both eye halves, world-anchored entries projected per eye. Billboard entries are handled
-         * separately (drawBillboardTextEntries). ROCK DebugBodyOverlay.cpp:2350-2410.
+         * both eye halves, world-anchored entries projected per eye. Billboard and Oriented entries
+         * are world-space geometry, drawn by drawWorldGeometry. ROCK
+         * DebugBodyOverlay.cpp:2350-2410.
          */
         void drawTextEntries(ID3D11DeviceContext* context, const float textureWidth, const float textureHeight, const std::vector<TextEntry>& texts, const DirectX::XMMATRIX& eye0,
             const DirectX::XMMATRIX& eye1, const DirectX::XMFLOAT4& adjust0, const DirectX::XMFLOAT4& adjust1)
@@ -731,8 +847,8 @@ float4 main(PS_INPUT input) : SV_Target {
 
             const float eyeWidth = textureWidth * 0.5f;
             for (const auto& entry : texts) {
-                if (entry.placement == TextPlacement::Billboard) {
-                    continue; // world-space billboard, drawn by drawBillboardTextEntries
+                if (isWorldTextPlacement(entry.placement)) {
+                    continue; // world-space geometry, drawn by drawWorldGeometry
                 }
                 std::vector<Vertex> vertices;
                 vertices.reserve(4096);
@@ -783,7 +899,7 @@ float4 main(PS_INPUT input) : SV_Target {
             context->OMSetDepthStencilState(s_depthStencil, 0);
 
             drawLines(context, frame.lines);
-            drawBillboardTextEntries(context, frame.texts, frame.viewerPosition);
+            drawWorldGeometry(context, frame);
             drawTextEntries(context, submitFrame.width, submitFrame.height, frame.texts, eye0, eye1, adjust0, adjust1);
         }
     }

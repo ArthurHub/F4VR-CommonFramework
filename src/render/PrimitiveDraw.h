@@ -35,6 +35,14 @@ namespace f4cf::render
     // Hard budgets so a runaway producer degrades gracefully instead of ballooning GPU buffers.
     constexpr std::size_t MAX_LINE_VERTICES = 65536;
     constexpr std::uint32_t TEXT_VERTEX_CAPACITY = 131072;
+    constexpr std::size_t MAX_FILL_TRIANGLES = 8192;
+
+    /**
+     * Width of one character as a fraction of its height: the built-in font advances 6 columns per
+     * glyph and is 7 rows tall. A caller fitting text to a known width needs this, and it is the one
+     * font metric worth exposing - everything else about the glyphs is the renderer's business.
+     */
+    constexpr float GLYPH_ASPECT = 6.0f / 7.0f;
 
     /**
      * Where a text entry lives, and therefore how it is projected.
@@ -49,11 +57,15 @@ namespace f4cf::render
         // a world-space quad welded to the anchor and turned to face the viewer, so it tilts and
         // shrinks with the world like real geometry
         Billboard,
+        // a world-space quad welded to the anchor and lying in a plane the CALLER chooses, at a
+        // fixed world size. Unlike Billboard it does not turn toward the viewer, so it foreshortens
+        // as you move around it: text ON a surface, rather than text held up to the camera.
+        Oriented,
     };
 
     /**
-     * Horizontal alignment of a text row about its anchor's projected X (WorldAnchored only):
-     * Left starts at the anchor, Center straddles it, Right ends at it.
+     * Horizontal alignment of a text row about its anchor (WorldAnchored and Oriented): Left starts
+     * at the anchor, Center straddles it, Right ends at it.
      */
     enum class TextAlign : std::uint8_t
     {
@@ -73,8 +85,34 @@ namespace f4cf::render
     };
 
     /**
-     * One text run. x/y are screen pixels for Screen placement and an offset from the projected
-     * anchor for WorldAnchored; both are ignored for Billboard, which centres on the anchor.
+     * One filled world-space triangle: panel borders, backgrounds, any solid shape the caller
+     * tessellates.
+     *
+     * Solid geometry exists as its own list because a line CANNOT be thick - D3D11 rasterizes every
+     * line one pixel wide, whatever the API asks for - so anything that needs width has to be built
+     * from triangles. Culling is off and depth testing is disabled, so winding does not matter and
+     * these are painted in the order they were added, under any text added after them.
+     */
+    struct FillTriangle
+    {
+        RE::NiPoint3 a;
+        RE::NiPoint3 b;
+        RE::NiPoint3 c;
+        Color color;
+    };
+
+    /**
+     * One text run. Three fields change meaning with the placement, because the placements measure
+     * in different spaces:
+     *
+     * - x/y: screen pixels for Screen, an offset from the projected anchor for WorldAnchored, a
+     *   world offset along right/up for Oriented, and ignored for Billboard (it centres on the
+     *   anchor).
+     * - size: glyph pixels for Screen and WorldAnchored, an apparent scale for Billboard (which
+     *   sizes itself by viewer distance), and the WORLD HEIGHT of one glyph for Oriented, whose
+     *   whole point is a fixed physical size.
+     * - right/up: the plane for Oriented, ignored otherwise. They are normalized on use, so any
+     *   length works, but they must not be parallel.
      */
     struct TextEntry
     {
@@ -84,6 +122,8 @@ namespace f4cf::render
         float size = 2.0f;
         Color color = colors::White;
         RE::NiPoint3 worldAnchor{};
+        RE::NiPoint3 right{};
+        RE::NiPoint3 up{};
         TextPlacement placement = TextPlacement::Screen;
         TextAlign align = TextAlign::Left;
     };
@@ -101,6 +141,7 @@ namespace f4cf::render
     struct PrimitiveDraw
     {
         std::vector<LineSegment> lines;
+        std::vector<FillTriangle> triangles;
         std::vector<TextEntry> texts;
 
         // Head position captured game-side, used to turn Billboard text toward the viewer. Only
@@ -109,12 +150,13 @@ namespace f4cf::render
 
         bool empty() const
         {
-            return lines.empty() && texts.empty();
+            return lines.empty() && triangles.empty() && texts.empty();
         }
 
         void clear()
         {
             lines.clear();
+            triangles.clear();
             texts.clear();
         }
 
@@ -128,6 +170,34 @@ namespace f4cf::render
                 return false;
             }
             lines.push_back(LineSegment{ .start = start, .end = end, .color = color });
+            return true;
+        }
+
+        /**
+         * Append a filled world-space triangle. False when the budget is full, so a caller that wants
+         * to report drops can count them.
+         */
+        bool addTriangle(const RE::NiPoint3& a, const RE::NiPoint3& b, const RE::NiPoint3& c, const Color& color)
+        {
+            if (triangles.size() + 1 > MAX_FILL_TRIANGLES) {
+                return false;
+            }
+            triangles.push_back(FillTriangle{ .a = a, .b = b, .c = c, .color = color });
+            return true;
+        }
+
+        /**
+         * Append a filled quad as two triangles; the corners go round the perimeter, in either
+         * direction. The budget is checked for both halves up front, so a full buffer drops the whole
+         * quad rather than leaving a triangular remnant.
+         */
+        bool addQuad(const RE::NiPoint3& a, const RE::NiPoint3& b, const RE::NiPoint3& c, const RE::NiPoint3& d, const Color& color)
+        {
+            if (triangles.size() + 2 > MAX_FILL_TRIANGLES) {
+                return false;
+            }
+            addTriangle(a, b, c, color);
+            addTriangle(a, c, d, color);
             return true;
         }
 
@@ -163,6 +233,31 @@ namespace f4cf::render
         void addBillboardText(const std::string_view text, const RE::NiPoint3& worldAnchor, const Color& color = colors::White, const float size = 2.0f)
         {
             texts.push_back(TextEntry{ .text = std::string(text), .size = size, .color = color, .worldAnchor = worldAnchor, .placement = TextPlacement::Billboard });
+        }
+
+        /**
+         * Append world-space text lying in the plane spanned by right/up, at a fixed world size.
+         *
+         * The run advances along +right and its rows descend along -up, so a caller laying out
+         * several rows steps the anchor down by -up. Unlike a billboard it stays welded to the plane
+         * and foreshortens as the viewer moves, which is what makes it read as text on a surface.
+         *
+         * @param glyphHeight world height of one glyph; a character is GLYPH_ASPECT as wide.
+         * @param offsetRight / offsetUp world offset from the anchor along the plane's own axes.
+         */
+        void addOrientedText(const std::string_view text, const RE::NiPoint3& worldAnchor, const RE::NiPoint3& right, const RE::NiPoint3& up, const float glyphHeight,
+            const Color& color = colors::White, const TextAlign align = TextAlign::Left, const float offsetRight = 0.0f, const float offsetUp = 0.0f)
+        {
+            texts.push_back(TextEntry{ .text = std::string(text),
+                .x = offsetRight,
+                .y = offsetUp,
+                .size = glyphHeight,
+                .color = color,
+                .worldAnchor = worldAnchor,
+                .right = right,
+                .up = up,
+                .placement = TextPlacement::Oriented,
+                .align = align });
         }
     };
 }
