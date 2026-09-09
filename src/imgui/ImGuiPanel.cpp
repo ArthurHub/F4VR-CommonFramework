@@ -31,8 +31,8 @@ namespace f4cf::imgui
 
     Panel::Panel(std::string name, const int pixelWidth, const int pixelHeight)
         : _name(std::move(name)),
-          _pixelWidth(pixelWidth),
-          _pixelHeight(pixelHeight)
+          _pixelWidth(std::clamp(pixelWidth, 1, MAX_PANEL_PIXEL_SIZE)),
+          _pixelHeight(std::clamp(pixelHeight, 1, MAX_PANEL_PIXEL_SIZE))
     {
         // Registering the pump here, on the first panel ever built, is what keeps ImGui out of mods
         // that never draw one: ModBase names no symbol in this subsystem, so with static-library
@@ -61,6 +61,12 @@ namespace f4cf::imgui
     void Panel::setPlacement(PlacementProvider placement)
     {
         _placement = std::move(placement);
+    }
+
+    void Panel::setPixelSize(const int pixelWidth, const int pixelHeight)
+    {
+        _pixelWidth = std::clamp(pixelWidth, 1, MAX_PANEL_PIXEL_SIZE);
+        _pixelHeight = std::clamp(pixelHeight, 1, MAX_PANEL_PIXEL_SIZE);
     }
 
     void Panel::setVisible(const bool visible)

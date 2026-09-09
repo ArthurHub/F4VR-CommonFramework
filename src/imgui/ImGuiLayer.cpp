@@ -18,8 +18,8 @@ namespace f4cf::imgui::internal
     {
         // The shared panel texture. Every panel is an ImGui window packed into a sub-rect of this
         // one atlas, so N panels still cost one ImGui frame, one rasterization pass and one draw.
-        constexpr int ATLAS_WIDTH = 1024;
-        constexpr int ATLAS_HEIGHT = 1024;
+        constexpr int ATLAS_WIDTH = MAX_PANEL_PIXEL_SIZE;
+        constexpr int ATLAS_HEIGHT = MAX_PANEL_PIXEL_SIZE;
 
         // ImGui asserts on a non-positive delta; also stops a load-hitch from animating wildly.
         constexpr float MIN_DELTA_SECONDS = 1.0f / 1000.0f;

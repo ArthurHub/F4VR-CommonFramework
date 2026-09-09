@@ -6,6 +6,16 @@
 namespace f4cf::imgui
 {
     /**
+     * Largest a panel may be in either dimension: panels are packed into one shared atlas texture of
+     * this size, and one bigger than the atlas can never be placed.
+     *
+     * It is also the budget every panel shares, so raising it is not free: the atlas is one RGBA8
+     * texture (2048^2 = 16MB) cleared and re-rasterized on each frame a panel is visible. Nothing is
+     * allocated until the first panel actually draws, so a mod with no panels pays none of it.
+     */
+    inline constexpr int MAX_PANEL_PIXEL_SIZE = 2048;
+
+    /**
      * Size the shared panel font is rasterized at, before any panel exists (default 48px).
      *
      * The VR legibility trick is to rasterize far above the nominal on-screen size and scale the
@@ -85,6 +95,13 @@ namespace f4cf::imgui
 
         void setContent(ContentCallback content);
         void setPlacement(PlacementProvider placement);
+
+        /**
+         * Change the panel's resolution. Cheap and safe at any time - the atlas is repacked every
+         * frame - so a panel that grows or shrinks in the world can keep its pixel density constant
+         * instead of being stretched. Clamped to 1..MAX_PANEL_PIXEL_SIZE.
+         */
+        void setPixelSize(int pixelWidth, int pixelHeight);
 
         /**
          * Runtime show/hide on top of whatever the placement provider decides. A hidden panel costs
