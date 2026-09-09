@@ -261,12 +261,50 @@ namespace f4cf::imgui::internal
         constexpr ImGuiWindowFlags PANEL_FLAGS = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse |
                                                  ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNav;
         for (const auto& entry : packed) {
-            ImGui::SetNextWindowPos(ImVec2(static_cast<float>(entry.x), static_cast<float>(entry.y)));
-            ImGui::SetNextWindowSize(ImVec2(static_cast<float>(entry.panel->pixelWidth()), static_cast<float>(entry.panel->pixelHeight())));
+            // Pushed per panel rather than set on the shared style, so panels in one frame can
+            // differ - and popped whether or not Begin returned true, because Begin pushes them
+            // regardless of whether the window is skipped, and an unbalanced stack corrupts every
+            // panel after this one.
+            //
+            // Rounding goes on the WINDOW, which is what makes the background and the border agree at
+            // the corners: ImGui rounds the background fill and the border stroke with the same
+            // radius, so no background can show past the stroke.
+            const auto& background = entry.panel->backgroundColor();
+            const auto& borderColor = entry.panel->borderColor();
+            const float borderThickness = entry.panel->borderThickness();
+
+            // ImGui strokes the window border CENTRED on the window rect, so half of it lands outside
+            // that rect - and the rect is exactly the atlas region this panel is sampled from, so that
+            // half is simply lost. The straight edges come out at half thickness while the rounded
+            // corners, curving inward, keep nearly all of theirs, which reads as corners fatter than
+            // the sides; the lost half also bleeds over whatever the packer placed next door.
+            //
+            // Insetting the window by half the thickness puts the whole stroke inside the panel, so
+            // the border grows INWARD from the panel's edge - the same convention vrui::UITextPanel's
+            // border follows, and why the two now match.
+            const float halfBorder = borderThickness * 0.5f;
+            const float windowWidth = (std::max)(1.0f, static_cast<float>(entry.panel->pixelWidth()) - borderThickness);
+            const float windowHeight = (std::max)(1.0f, static_cast<float>(entry.panel->pixelHeight()) - borderThickness);
+            ImGui::SetNextWindowPos(ImVec2(static_cast<float>(entry.x) + halfBorder, static_cast<float>(entry.y) + halfBorder));
+            ImGui::SetNextWindowSize(ImVec2(windowWidth, windowHeight));
+
+            // Radius and padding are stated against the panel's edge but applied to the inset window,
+            // so both hand back the half thickness the inset already spent: the border's OUTER arc
+            // lands on exactly the radius that was asked for, and the content still clears the
+            // border's inner edge by the full padding.
+            const float rounding = (std::max)(0.0f, entry.panel->cornerRadius() - halfBorder);
+            const float inset = entry.panel->padding() + halfBorder;
+            ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(background.r, background.g, background.b, background.a));
+            ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(borderColor.r, borderColor.g, borderColor.b, borderColor.a));
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, rounding);
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, borderThickness);
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(inset, inset));
             if (ImGui::Begin(entry.panel->name().c_str(), nullptr, PANEL_FLAGS)) {
                 entry.panel->content()();
             }
             ImGui::End();
+            ImGui::PopStyleVar(3);
+            ImGui::PopStyleColor(2);
         }
         ImGui::Render();
 

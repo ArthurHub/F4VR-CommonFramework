@@ -49,6 +49,9 @@ namespace f4cf::imgui
         // onFrameUpdate corrects it once it is laid out
         const auto [pixelWidth, pixelHeight] = pixelSizeFor(name, width, height);
         _panel = std::make_unique<Panel>(name, pixelWidth, pixelHeight);
+        // a canvas is laid out in vrui units, so its padding defaults in those terms rather than
+        // inheriting the panel's pixel default
+        _panel->setPadding(CANVAS_PADDING_UNITS * CANVAS_PIXELS_PER_UNIT);
 
         setSize(width, height);
         _panel->setPlacement([this](PanelPlacement& out) {
@@ -86,6 +89,36 @@ namespace f4cf::imgui
     void UICanvas::setOccluded(const bool occluded)
     {
         _panel->setOccluded(occluded);
+    }
+
+    void UICanvas::setBackgroundColor(const render::Color& color)
+    {
+        _panel->setBackgroundColor(color);
+    }
+
+    /**
+     * The unit conversions below are all the canvas adds: a vrui unit is CANVAS_PIXELS_PER_UNIT atlas
+     * pixels by definition, and that ratio is fixed, so a border stated in units keeps the same
+     * physical thickness at any size or scale the layout gives the element.
+     */
+    void UICanvas::setBorder(const render::Color& color, const float thicknessUnits, const float cornerRadiusUnits)
+    {
+        _panel->setBorder(color, thicknessUnits * CANVAS_PIXELS_PER_UNIT, cornerRadiusUnits * CANVAS_PIXELS_PER_UNIT);
+    }
+
+    void UICanvas::clearBorder()
+    {
+        _panel->clearBorder();
+    }
+
+    void UICanvas::setCornerRadius(const float units)
+    {
+        _panel->setCornerRadius(units * CANVAS_PIXELS_PER_UNIT);
+    }
+
+    void UICanvas::setPadding(const float units)
+    {
+        _panel->setPadding(units * CANVAS_PIXELS_PER_UNIT);
     }
 
     std::string UICanvas::toString() const

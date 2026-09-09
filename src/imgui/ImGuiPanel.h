@@ -3,8 +3,31 @@
 #include <functional>
 #include <string>
 
+#include "../render/PrimitiveDraw.h"
+
 namespace f4cf::imgui
 {
+    /**
+     * A panel's background, behind whatever its content draws.
+     *
+     * Half-transparent by default, to sit alongside vrui's own widgets rather than punching an opaque
+     * hole through the world behind it - ImGui's own dark style is 94% opaque, which reads as a solid
+     * slab in VR. The alpha composites correctly because the atlas carries premultiplied colour; see
+     * the blend state in ImGuiRenderer.
+     */
+    inline constexpr render::Color PANEL_BACKGROUND{ 0.06f, 0.06f, 0.06f, 0.5f };
+
+    /**
+     * Defaults for setBorder's optional arguments, and the panel's content inset, all in atlas
+     * pixels - Panel measures in pixels throughout; UICanvas is the one that speaks vrui units.
+     *
+     * The padding default is ImGui's own, so a panel that never asks for one is laid out exactly as
+     * it was before padding was configurable.
+     */
+    inline constexpr float PANEL_BORDER_THICKNESS_PIXELS = 4.0f;
+    inline constexpr float PANEL_BORDER_CORNER_RADIUS_PIXELS = 20.0f;
+    inline constexpr float PANEL_PADDING_PIXELS = 8.0f;
+
     /**
      * Largest a panel may be in either dimension: panels are packed into one shared atlas texture of
      * this size, and one bigger than the atlas can never be placed.
@@ -104,10 +127,6 @@ namespace f4cf::imgui
         void setPixelSize(int pixelWidth, int pixelHeight);
 
         /**
-         * Runtime show/hide on top of whatever the placement provider decides. A hidden panel costs
-         * nothing: it is not packed, not drawn, and does not run its content callback.
-         */
-        /**
          * Whether the world hides the panel when something is in front of it. On by default, which is
          * what makes a panel read as part of the scene rather than pasted over it.
          *
@@ -123,6 +142,69 @@ namespace f4cf::imgui
             return _occluded;
         }
 
+        /**
+         * The panel's background colour, alpha included. Defaults to PANEL_BACKGROUND; a fully
+         * transparent one (alpha 0) leaves only the content visible, floating in the world.
+         */
+        void setBackgroundColor(const render::Color& color);
+
+        const render::Color& backgroundColor() const
+        {
+            return _background;
+        }
+
+        /**
+         * Draw a border around the panel. Off until called; clearBorder turns it off again.
+         *
+         * The corner radius rounds the BACKGROUND as well as the border, so the two cannot disagree
+         * and leave background showing past the stroke at the corners - which is why the radius lives
+         * here rather than being a property of the border alone. setCornerRadius sets it on its own,
+         * for a rounded panel with no border.
+         *
+         * Thickness and radius are in atlas pixels. The border is drawn INSIDE the panel's rect, so
+         * adding one never changes the element's footprint, and the content is inset by the thickness
+         * on top of the padding rather than the border eating into it.
+         */
+        void setBorder(const render::Color& color, float thicknessPixels = PANEL_BORDER_THICKNESS_PIXELS, float cornerRadiusPixels = PANEL_BORDER_CORNER_RADIUS_PIXELS);
+
+        void clearBorder();
+
+        /**
+         * Round the panel's corners without changing the border. Kept separate because the rounding
+         * applies to the background whether or not there is a border to stroke.
+         */
+        void setCornerRadius(float pixels);
+
+        /**
+         * Space between the content and the panel's edge, in atlas pixels. The border's thickness
+         * adds to this rather than eating into it, so changing one does not move the other.
+         */
+        void setPadding(float pixels);
+
+        const render::Color& borderColor() const
+        {
+            return _borderColor;
+        }
+
+        float borderThickness() const
+        {
+            return _borderThickness;
+        }
+
+        float cornerRadius() const
+        {
+            return _cornerRadius;
+        }
+
+        float padding() const
+        {
+            return _padding;
+        }
+
+        /**
+         * Runtime show/hide on top of whatever the placement provider decides. A hidden panel costs
+         * nothing: it is not packed, not drawn, and does not run its content callback.
+         */
         void setVisible(bool visible);
         bool isVisible() const;
 
@@ -140,6 +222,13 @@ namespace f4cf::imgui
         int _pixelHeight;
         bool _visible = true;
         bool _occluded = true;
+        render::Color _background = PANEL_BACKGROUND;
+
+        // zero thickness is what "no border" means, so no separate flag is needed
+        render::Color _borderColor = render::colors::White;
+        float _borderThickness = 0.0f;
+        float _cornerRadius = 0.0f;
+        float _padding = PANEL_PADDING_PIXELS;
         ContentCallback _content;
         PlacementProvider _placement;
     };

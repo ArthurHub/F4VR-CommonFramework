@@ -26,6 +26,17 @@ namespace f4cf::imgui
     inline constexpr float CANVAS_PIXELS_PER_UNIT = 48.0f;
 
     /**
+     * What a canvas's border and padding default to, in vrui units rather than pixels, so a canvas is
+     * styled in the same terms it is laid out in.
+     *
+     * The border values match vrui::UITextPanel's, so the two kinds of panel sit beside each other
+     * without one looking heavier than the other.
+     */
+    inline constexpr float CANVAS_BORDER_THICKNESS_UNITS = 0.08f;
+    inline constexpr float CANVAS_BORDER_CORNER_RADIUS_UNITS = 0.4f;
+    inline constexpr float CANVAS_PADDING_UNITS = 0.2f;
+
+    /**
      * A vrui element whose content is drawn by Dear ImGui instead of scene-graph geometry.
      *
      * It takes part in vrui layout like any other element - put it in a UIContainer next to buttons
@@ -75,6 +86,30 @@ namespace f4cf::imgui
          * readable whatever is in front of it. See imgui::Panel::setOccluded.
          */
         void setOccluded(bool occluded);
+
+        /**
+         * The canvas background, alpha included. Half-transparent by default so it reads like the
+         * vrui widgets beside it; see imgui::PANEL_BACKGROUND.
+         */
+        void setBackgroundColor(const render::Color& color);
+
+        /**
+         * Draw a border around the canvas, in vrui units. Off until called. The corner radius rounds
+         * the background too, so nothing shows past the stroke at the corners - see Panel::setBorder.
+         */
+        void setBorder(const render::Color& color, float thicknessUnits = CANVAS_BORDER_THICKNESS_UNITS, float cornerRadiusUnits = CANVAS_BORDER_CORNER_RADIUS_UNITS);
+
+        void clearBorder();
+
+        /**
+         * Round the canvas corners without adding a border, in vrui units.
+         */
+        void setCornerRadius(float units);
+
+        /**
+         * Space between the content and the canvas edge, in vrui units. The border adds to it.
+         */
+        void setPadding(float units);
 
         virtual std::string toString() const override;
 

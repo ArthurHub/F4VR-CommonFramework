@@ -74,6 +74,34 @@ namespace f4cf::imgui
         _occluded = occluded;
     }
 
+    void Panel::setBackgroundColor(const render::Color& color)
+    {
+        _background = color;
+    }
+
+    void Panel::setBorder(const render::Color& color, const float thicknessPixels, const float cornerRadiusPixels)
+    {
+        _borderColor = color;
+        _borderThickness = (std::max)(0.0f, thicknessPixels);
+        _cornerRadius = (std::max)(0.0f, cornerRadiusPixels);
+    }
+
+    void Panel::clearBorder()
+    {
+        // the rounding is deliberately kept: it shapes the background, which is still there
+        _borderThickness = 0.0f;
+    }
+
+    void Panel::setCornerRadius(const float pixels)
+    {
+        _cornerRadius = (std::max)(0.0f, pixels);
+    }
+
+    void Panel::setPadding(const float pixels)
+    {
+        _padding = (std::max)(0.0f, pixels);
+    }
+
     void Panel::setVisible(const bool visible)
     {
         _visible = visible;
