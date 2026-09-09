@@ -40,7 +40,13 @@ namespace f4cf::render
          * @param drawOrder painter order against the other overlays; see DRAW_ORDER_* in
          *        SubmitHook.h. Lower draws first, i.e. ends up underneath.
          */
-        explicit PrimitiveDrawRenderer(std::string name, int drawOrder = DRAW_ORDER_DEFAULT);
+        /**
+         * @param occluded whether the world hides what this layer draws. Off by default, which is
+         *        what diagnostics want - a debug shape behind a wall is exactly the one you need to
+         *        see. It also degrades safely: with no scene depth captured, an occluded layer simply
+         *        draws on top as before.
+         */
+        explicit PrimitiveDrawRenderer(std::string name, int drawOrder = DRAW_ORDER_DEFAULT, bool occluded = false);
         ~PrimitiveDrawRenderer();
 
         PrimitiveDrawRenderer(const PrimitiveDrawRenderer&) = delete;
@@ -68,6 +74,7 @@ namespace f4cf::render
 
         std::string _name;
         int _drawOrder;
+        bool _occluded;
         DrawCallbackId _callbackId = INVALID_DRAW_CALLBACK;
 
         // read on the render thread under the mutex, written on the game thread by publish()

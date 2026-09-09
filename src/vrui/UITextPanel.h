@@ -82,8 +82,9 @@ namespace f4cf::vrui
      * What you gain is that it costs almost nothing and reads like an instrument panel. Every panel
      * shares one overlay layer, and rows of one color collapse into a single draw call.
      *
-     * Like UICanvas it draws through the overlay path, so it is always ON TOP - a sibling widget in
-     * front of it will not occlude it - and it is not interactive.
+     * It is occluded by the world by default, so it sits in the scene like the widgets around it
+     * rather than showing through walls - see setOccluded for when to turn that off, and for what
+     * happens on a build where the scene depth cannot be captured. It is not interactive.
      */
     class UITextPanel : public UIElement
     {
@@ -155,6 +156,22 @@ namespace f4cf::vrui
          */
         void setPadding(float units);
 
+        /**
+         * Whether the world hides the panel when something is in front of it. On by default, which is
+         * what makes a panel read as part of the scene rather than pasted over it.
+         *
+         * Turn it off for a panel that must always be readable - a warning, or a menu you do not want
+         * to lose when you turn and a wall comes between you and it. Note that occlusion also depends
+         * on the framework capturing the engine's depth buffer; where it cannot, every panel draws on
+         * top regardless, so this is a preference rather than a guarantee.
+         */
+        void setOccluded(bool occluded);
+
+        bool isOccluded() const
+        {
+            return _occluded;
+        }
+
         virtual std::string toString() const override;
 
         // Internal: nothing to do during layout - the rows are pulled at frame end, once the whole
@@ -169,6 +186,7 @@ namespace f4cf::vrui
         TextRowsCallback _content;
         render::Color _color = render::colors::White;
         render::TextAlign _align = render::TextAlign::Left;
+        bool _occluded = true;
         float _textHeightUnits = TEXT_PANEL_TEXT_HEIGHT_UNITS;
         float _lineSpacing = TEXT_PANEL_LINE_SPACING;
 

@@ -54,6 +54,11 @@ namespace f4cf::render
         ID3D11RasterizerState* s_wireRasterizer = nullptr;
         ID3D11RasterizerState* s_solidRasterizer = nullptr;
         ID3D11DepthStencilState* s_depthStencil = nullptr;
+
+        // One state per comparison function, built on demand. The engine's comparison is read from
+        // the frame rather than assumed, so we cannot know which we need until the first draw - and
+        // indexing by the enum keeps that to one cheap lookup per frame.
+        std::array<ID3D11DepthStencilState*, 9> s_depthTestStates{};
         ID3D11BlendState* s_blendState = nullptr;
 
         // Stereo-instancing vertex shader: FO4VR renders both eyes into one double-wide target, so
@@ -882,7 +887,33 @@ float4 main(PS_INPUT input) : SV_Target {
          * host has already snapshotted the pipeline, bound the render target and uploaded the camera
          * constants at b0. ROCK DebugBodyOverlay.cpp:2412-2589 minus the physics-body pass.
          */
-        void drawPrimitives(const SubmitFrame& submitFrame, const PrimitiveDraw& frame)
+        /**
+         * The state that lets the world hide our geometry: test against the engine's depth with its
+         * own comparison, and never write. The write mask matters as much as the read-only view -
+         * together they make it impossible for an overlay to disturb the scene's depth.
+         *
+         * Falls back to the always-on-top state when there is no depth to test against, so a frame
+         * where capture failed still draws.
+         */
+        ID3D11DepthStencilState* depthTestState(ID3D11Device* device, const D3D11_COMPARISON_FUNC comparison)
+        {
+            const auto index = static_cast<std::size_t>(comparison);
+            if (index >= s_depthTestStates.size()) {
+                return s_depthStencil;
+            }
+            if (!s_depthTestStates[index]) {
+                D3D11_DEPTH_STENCIL_DESC desc{};
+                desc.DepthEnable = TRUE;
+                desc.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ZERO;
+                desc.DepthFunc = comparison;
+                if (FAILED(device->CreateDepthStencilState(&desc, &s_depthTestStates[index]))) {
+                    return s_depthStencil;
+                }
+            }
+            return s_depthTestStates[index];
+        }
+
+        void drawPrimitives(const SubmitFrame& submitFrame, const PrimitiveDraw& frame, const bool occluded)
         {
             auto* context = submitFrame.context;
             const auto& eye0 = submitFrame.camera->viewProj[0];
@@ -896,7 +927,21 @@ float4 main(PS_INPUT input) : SV_Target {
             context->RSSetState(s_wireRasterizer);
             FLOAT blendFactor[4] = {};
             context->OMSetBlendState(s_blendState, blendFactor, 0xFFFFFFFF);
-            context->OMSetDepthStencilState(s_depthStencil, 0);
+            const bool testDepth = occluded && submitFrame.sceneDepth != nullptr;
+            if (occluded) {
+                // one line the first time, and again if the answer changes: it separates "the layer
+                // never asked for depth" from "it asked and there was none to bind"
+                static bool everLogged = false;
+                static bool lastHadDepth = false;
+                if (!everLogged || lastHadDepth != testDepth) {
+                    everLogged = true;
+                    lastHadDepth = testDepth;
+                    logger::info("occluded overlay: scene depth {}, comparison {}",
+                        testDepth ? "bound, testing against the world" : "NOT AVAILABLE, drawing on top",
+                        static_cast<int>(submitFrame.sceneDepthComparison));
+                }
+            }
+            context->OMSetDepthStencilState(testDepth ? depthTestState(submitFrame.device, submitFrame.sceneDepthComparison) : s_depthStencil, 0);
 
             drawLines(context, frame.lines);
             drawWorldGeometry(context, frame);
@@ -904,9 +949,10 @@ float4 main(PS_INPUT input) : SV_Target {
         }
     }
 
-    PrimitiveDrawRenderer::PrimitiveDrawRenderer(std::string name, const int drawOrder)
+    PrimitiveDrawRenderer::PrimitiveDrawRenderer(std::string name, const int drawOrder, const bool occluded)
         : _name(std::move(name)),
-          _drawOrder(drawOrder)
+          _drawOrder(drawOrder),
+          _occluded(occluded)
     {}
 
     /**
@@ -985,6 +1031,6 @@ float4 main(PS_INPUT input) : SV_Target {
         if (frame.empty()) {
             return;
         }
-        drawPrimitives(submitFrame, frame);
+        drawPrimitives(submitFrame, frame, _occluded);
     }
 }

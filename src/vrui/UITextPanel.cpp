@@ -27,12 +27,23 @@ namespace f4cf::vrui
         }
 
         /**
-         * The single overlay layer all text panels share, so N panels still cost one draw callback
-         * and one game -> render handoff. Built on first use, which is after the first panel exists.
+         * Two shared layers rather than one, because occlusion is a pipeline state for a whole draw
+         * rather than a property of a shape: panels that the world may hide and panels that are
+         * always readable cannot be batched together. Panels of each kind still share a layer, so
+         * the usual case is one draw callback, not one per panel.
+         *
+         * The always-on-top layer is ordered just above the occluded one, so a panel that opted out
+         * of being hidden is not then hidden by a panel that did not.
          */
-        render::PrimitiveDrawRenderer& renderer()
+        render::PrimitiveDrawRenderer& occludedRenderer()
         {
-            static render::PrimitiveDrawRenderer instance("UITextPanel", render::DRAW_ORDER_PANELS);
+            static render::PrimitiveDrawRenderer instance("UITextPanel", render::DRAW_ORDER_PANELS, true);
+            return instance;
+        }
+
+        render::PrimitiveDrawRenderer& alwaysOnTopRenderer()
+        {
+            static render::PrimitiveDrawRenderer instance("UITextPanelOnTop", render::DRAW_ORDER_PANELS + 1, false);
             return instance;
         }
 
@@ -114,14 +125,21 @@ namespace f4cf::vrui
          */
         void onFrameEnd()
         {
-            render::PrimitiveDraw frame;
+            render::PrimitiveDraw occluded;
+            render::PrimitiveDraw alwaysOnTop;
             for (const UITextPanel* panel : panels()) {
-                panel->appendTo(frame);
+                panel->appendTo(panel->isOccluded() ? occluded : alwaysOnTop);
             }
-            if (!frame.empty()) {
-                renderer().ensureInstalled();
+
+            if (!occluded.empty()) {
+                occludedRenderer().ensureInstalled();
             }
-            renderer().publish(std::move(frame));
+            if (!alwaysOnTop.empty()) {
+                alwaysOnTopRenderer().ensureInstalled();
+            }
+            // published even when empty: that is what puts a layer dormant
+            occludedRenderer().publish(std::move(occluded));
+            alwaysOnTopRenderer().publish(std::move(alwaysOnTop));
         }
     }
 
@@ -187,6 +205,11 @@ namespace f4cf::vrui
     void UITextPanel::setPadding(const float units)
     {
         _paddingUnits = (std::max)(0.0f, units);
+    }
+
+    void UITextPanel::setOccluded(const bool occluded)
+    {
+        _occluded = occluded;
     }
 
     std::string UITextPanel::toString() const
