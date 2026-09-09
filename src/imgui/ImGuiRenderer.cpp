@@ -343,7 +343,11 @@ float4 main(PS_INPUT input) : SV_Target {
             // callback's responsibility - the host binds it once for the whole callback list, so a
             // callback that redirects the render target and does not put it back would silently
             // steal every overlay drawn after it.
-            context->OMSetRenderTargets(1, &submitFrame.renderTarget, nullptr);
+            // Restores the host's DEPTH view as well as its render target. Binding null here would
+            // not just skip occlusion for this pass - it would strip the depth view out from under
+            // every callback drawn after this one, which is the same silent theft the comment above
+            // warns about, one binding further along.
+            context->OMSetRenderTargets(1, &submitFrame.renderTarget, submitFrame.sceneDepth);
             D3D11_VIEWPORT viewport{};
             viewport.Width = submitFrame.width;
             viewport.Height = submitFrame.height;

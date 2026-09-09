@@ -8,6 +8,7 @@
 #include <wrl/client.h>
 
 #include "../../external/openvr/openvr.h"
+#include "SceneDepthCapture.h"
 
 // The OpenVR IVRCompositor::Submit vtable hook every framework overlay draws through. Extracted
 // from the debug-draw overlay (a port of ROCK's DebugBodyOverlay, see
@@ -139,6 +140,14 @@ namespace f4cf::render
             D3D11_TEXTURE2D_DESC textureDesc{};
             submittedTexture->GetDesc(&textureDesc);
 
+            // Scene depth for world occlusion has to be taken during the engine's own render, where
+            // it is still bound, and matched back to this texture by size. Publishing that size here
+            // is what lets the capture tell the view we draw into from every other pass; the first
+            // frame therefore captures nothing, because the commit ran before this ever executed.
+            sceneDepth::ensureInstalled();
+            sceneDepth::setSubmittedTexture(submittedTexture);
+            sceneDepth::setCaptureRequested(true);
+
             ID3D11RenderTargetView* rtv = getSubmittedTextureRtv(device, submittedTexture, textureDesc);
             if (!rtv) {
                 return;
@@ -149,10 +158,14 @@ namespace f4cf::render
                 return;
             }
 
+            const auto capturedDepth = sceneDepth::acquireForSubmittedTexture(submittedTexture);
+
             SubmitFrame frame;
             frame.device = device;
             frame.context = context;
             frame.renderTarget = rtv;
+            frame.sceneDepth = capturedDepth.readOnlyView;
+            frame.sceneDepthComparison = capturedDepth.comparison;
             frame.width = static_cast<float>(textureDesc.Width);
             frame.height = static_cast<float>(textureDesc.Height);
             frame.camera = &camera;
@@ -160,7 +173,10 @@ namespace f4cf::render
             // constructed before anything is bound, destroyed after the last callback returns
             const ScopedPipelineState savedState(context);
 
-            context->OMSetRenderTargets(1, &rtv, nullptr);
+            // The depth view is read-only, so binding it for everyone is safe: a callback that does
+            // not enable depth testing is unaffected, and none of them can write to the engine's
+            // buffer even by accident.
+            context->OMSetRenderTargets(1, &rtv, capturedDepth.readOnlyView);
             D3D11_VIEWPORT viewport{};
             viewport.Width = frame.width;
             viewport.Height = frame.height;
@@ -178,6 +194,8 @@ namespace f4cf::render
             // Collect the active callbacks in painter order. Sorted here, on a stack array of at
             // most 32 entries, rather than keeping the table itself sorted: registration only ever
             // appends, so the table is never reordered under the render thread's feet.
+            sceneDepth::advanceFrame();
+
             const std::uint32_t activeMask = s_activeMask.load(std::memory_order_relaxed);
             const std::size_t count = s_callbackCount.load(std::memory_order_acquire);
             std::array<std::size_t, MAX_DRAW_CALLBACKS> ordered{};

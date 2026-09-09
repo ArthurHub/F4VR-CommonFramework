@@ -22,6 +22,18 @@ namespace f4cf::render
         float width = 0;
         float height = 0;
         const StereoCameraConstants* camera = nullptr;
+
+        /**
+         * The engine's scene depth for this eye texture, READ-ONLY, or null when it could not be
+         * captured (see SceneDepthCapture.h). It is bound for the whole callback list, so a callback
+         * opts IN to being occluded simply by using a depth-stencil state that tests, and opts out by
+         * leaving DepthEnable FALSE - which is what every existing overlay already does.
+         *
+         * Test with `sceneDepthComparison`, not a guess: it is the comparison the engine drew the
+         * world with, and the opposite sense hides exactly what should be visible.
+         */
+        ID3D11DepthStencilView* sceneDepth = nullptr;
+        D3D11_COMPARISON_FUNC sceneDepthComparison = D3D11_COMPARISON_LESS;
     };
 
     /**
