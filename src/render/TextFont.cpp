@@ -4,10 +4,17 @@
 #include <array>
 #include <chrono>
 #include <cstring>
+#include <filesystem>
+#include <format>
+#include <fstream>
 #include <functional>
 #include <limits>
 #include <numeric>
 #include <optional>
+#include <span>
+#include <string>
+
+#include "../ModBase.h"
 
 // Vendored in external/stb rather than taken from the imgui port, so text works with
 // F4CF_WITH_IMGUI_UI off. STBTT_STATIC keeps every function private to this file, so it cannot
@@ -185,7 +192,65 @@ namespace
     }
 
     /**
-     * Load the embedded font and bake every supported character into the distance-field atlas,
+     * Whether bytes hold a font the atlas can be built from: one stb_truetype parses, with an 'H' to
+     * measure capitals by.
+     */
+    bool isUsableFont(const std::span<const std::uint8_t> bytes)
+    {
+        if (bytes.size() < 12) {
+            return false; // shorter than a font's table directory header
+        }
+        const int offset = stbtt_GetFontOffsetForIndex(bytes.data(), 0);
+        stbtt_fontinfo info{};
+        return offset >= 0 && static_cast<std::size_t>(offset) < bytes.size() && stbtt_InitFont(&info, bytes.data(), offset) != 0 && stbtt_FindGlyphIndex(&info, 'H') != 0;
+    }
+
+    /**
+     * The font text is drawn from. custom holds the mod's own file when it shipped a usable one; left
+     * empty, it means the embedded font.
+     */
+    struct FontFile
+    {
+        std::vector<std::uint8_t> custom;
+        std::string source = "embedded Roboto Medium";
+    };
+
+    FontFile resolveFontFile()
+    {
+        FontFile file;
+        if (!f4cf::g_mod) {
+            return file;
+        }
+
+        const std::string& modName = f4cf::g_mod->getName();
+        const std::string path = std::vformat(f4cf::render::CUSTOM_TEXT_FONT_PATH, std::make_format_args(modName));
+        std::error_code error;
+        if (!std::filesystem::is_regular_file(path, error)) {
+            return file;
+        }
+
+        const auto size = std::filesystem::file_size(path, error);
+        std::vector<std::uint8_t> bytes(error ? 0 : static_cast<std::size_t>(size));
+        std::ifstream stream(path, std::ios::binary);
+        stream.read(reinterpret_cast<char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
+        if (!stream || !isUsableFont(bytes)) {
+            logger::warn("Text font: '{}' is not a font the framework can use; using the embedded Roboto Medium", path);
+            return file;
+        }
+
+        file.custom = std::move(bytes);
+        file.source = std::format("'{}'", path);
+        return file;
+    }
+
+    const FontFile& fontFile()
+    {
+        static const FontFile file = resolveFontFile();
+        return file;
+    }
+
+    /**
+     * Load the text font and bake every supported character into the distance-field atlas,
      * along with the metrics and kerning that lay it out.
      *
      * The glyphs are packed onto shelves, tallest first, so each shelf is filled by glyphs of about
@@ -197,9 +262,9 @@ namespace
         Font font;
 
         stbtt_fontinfo info{};
-        const unsigned char* data = f4cf::render::internal::TEXT_FONT_TTF;
+        const unsigned char* data = f4cf::render::internal::textFontBytes().data();
         if (!stbtt_InitFont(&info, data, stbtt_GetFontOffsetForIndex(data, 0))) {
-            logger::error("Text font: the embedded font ({} bytes) failed to load; text will not draw", f4cf::render::internal::TEXT_FONT_TTF_SIZE);
+            logger::error("Text font: {} failed to load; text will not draw", f4cf::render::internal::textFontSource());
             font.atlas = solidOnlyAtlas();
             return font;
         }
@@ -211,7 +276,7 @@ namespace
         int capTop = 0;
         const int capGlyph = stbtt_FindGlyphIndex(&info, 'H');
         if (capGlyph == 0 || !stbtt_GetGlyphBox(&info, capGlyph, &capLeft, &capBottom, &capRight, &capTop) || capTop <= 0) {
-            logger::error("Text font: the embedded font has no usable 'H' to measure capitals by; text will not draw");
+            logger::error("Text font: {} has no usable 'H' to measure capitals by; text will not draw", f4cf::render::internal::textFontSource());
             font.atlas = solidOnlyAtlas();
             return font;
         }
@@ -354,7 +419,12 @@ namespace
 
         font.loaded = true;
         const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - started);
-        logger::info("Text font: Roboto Medium, {} characters on a {}x{} distance-field atlas, built in {}ms", GLYPH_COUNT, font.atlas.width, font.atlas.height, elapsed.count());
+        logger::info("Text font: {}, {} characters on a {}x{} distance-field atlas, built in {}ms",
+            f4cf::render::internal::textFontSource(),
+            GLYPH_COUNT,
+            font.atlas.width,
+            font.atlas.height,
+            elapsed.count());
         return font;
     }
 
@@ -445,6 +515,17 @@ namespace f4cf::render
 
 namespace f4cf::render::internal
 {
+    std::span<const std::uint8_t> textFontBytes()
+    {
+        const FontFile& file = fontFile();
+        return file.custom.empty() ? std::span<const std::uint8_t>(TEXT_FONT_TTF, TEXT_FONT_TTF_SIZE) : std::span<const std::uint8_t>(file.custom);
+    }
+
+    const std::string& textFontSource()
+    {
+        return fontFile().source;
+    }
+
     const FontAtlas& fontAtlas()
     {
         return textFont().atlas;

@@ -6,7 +6,6 @@
 
 #include <imgui_impl_dx11.h>
 
-#include "../ModBase.h"
 #include "../common/MatrixUtils.h"
 #include "../f4vr/PlayerNodes.h"
 #include "../render/RenderUtils.h"
@@ -112,7 +111,7 @@ namespace f4cf::imgui::internal
             io.FontGlobalScale = 1.0f / s_atlasScale;
 
             ImGui::StyleColorsDark();
-            loadPanelFont(g_mod ? g_mod->getName().c_str() : nullptr, fontSizePixels(), s_atlasScale);
+            loadPanelFont(fontSizePixels(), s_atlasScale);
 
             if (!ImGui_ImplDX11_Init(device, context)) {
                 ImGui::DestroyContext();

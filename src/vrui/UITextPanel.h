@@ -73,12 +73,13 @@ namespace f4cf::vrui
      *     });
      *     panel->addElement(readout);
      *
-     * The text is the framework's font, Roboto Medium, kerned and drawn from a distance field so it
-     * stays sharp at any size and viewing distance. What you give up against UICanvas is layout: one
-     * size and one color per row, no wrapping and no scrolling. Rows that do not fit are clipped
-     * rather than reflowed - past the bottom edge they are dropped, past the right edge they are cut
-     * after the last character that fits - because an overflowing row would otherwise cover the
-     * sibling widgets. Text, in other words, and nothing else: no widgets, no tables, no input.
+     * The text is the framework's font - Roboto Medium, unless the mod ships its own at
+     * render::CUSTOM_TEXT_FONT_PATH - kerned and drawn from a distance field so it stays sharp at any
+     * size and viewing distance. What you give up against UICanvas is layout: one size and one color
+     * per row, no wrapping and no scrolling. Rows that do not fit are clipped rather than reflowed -
+     * past the bottom edge they are dropped, past the right edge they are cut after the last
+     * character that fits - because an overflowing row would otherwise cover the sibling widgets.
+     * Text, in other words, and nothing else: no widgets, no tables, no input.
      *
      * What you gain is that it costs almost nothing. Every panel shares one overlay layer, and rows
      * of one color collapse into a single draw call.

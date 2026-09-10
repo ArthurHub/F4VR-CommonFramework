@@ -2,15 +2,29 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <span>
+#include <string>
 #include <string_view>
 #include <vector>
 
 namespace f4cf::render
 {
     /**
-     * Width of a run of text in the framework's font, Roboto Medium, in the unit textHeight is
-     * given in: from the left edge of the first letter's ink to the right edge of the last, the
-     * extent a reader sees and the one the renderer aligns.
+     * Where a mod can ship a font to replace the framework's own, relative to the game folder, with
+     * {0} the mod's name: Data\Interface\<ModName>\<ModName>.ttf. The primitive renderer and the
+     * ImGui panels both draw from it, so every panel keeps one typeface.
+     *
+     * TrueType or OpenType. It is read once, the first time any text needs the font, so replacing
+     * it takes a restart. A file that will not load, or has no 'H' to size capitals by, is logged
+     * and the embedded Roboto Medium used instead; characters the font lacks draw as '?'. The parser
+     * does not bounds-check the file, so a damaged one can crash the game rather than be rejected.
+     */
+    inline constexpr std::string_view CUSTOM_TEXT_FONT_PATH = "Data\\Interface\\{0}\\{0}.ttf";
+
+    /**
+     * Width of a run of text in the framework's font, in the unit textHeight is given in: from the
+     * left edge of the first letter's ink to the right edge of the last, the extent a reader sees
+     * and the one the renderer aligns.
      *
      * textHeight is the height of a capital letter - the size every text call in the framework
      * takes. Lowercase ascenders reach a little above it, and descenders below the baseline by
@@ -80,7 +94,16 @@ namespace f4cf::render::internal
     };
 
     /**
-     * The atlas, built from the embedded font the first time anything uses it - about a tenth of a
+     * The font file's bytes - the mod's own when CUSTOM_TEXT_FONT_PATH holds a usable one, the
+     * embedded Roboto Medium otherwise. Resolved once and kept for the life of the process, so the
+     * ImGui atlas builds from the same bytes without copying them. textFontSource names which one,
+     * for logs.
+     */
+    std::span<const std::uint8_t> textFontBytes();
+    const std::string& textFontSource();
+
+    /**
+     * The atlas, built from textFontBytes the first time anything uses it - about a tenth of a
      * second, once, on whichever thread gets there first. If the font cannot be loaded it holds
      * only the solid block, so lines and fills still draw and text draws nothing.
      */
