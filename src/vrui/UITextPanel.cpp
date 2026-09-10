@@ -87,7 +87,7 @@ namespace f4cf::vrui
         for (std::size_t row = 0; row < rows.size() && row < maxRows; ++row) {
             const std::string_view text = std::string_view(rows[row].text).substr(0, render::fitText(rows[row].text, textHeight, area.width));
             const RE::NiPoint3 anchor = area.center + area.right * alignOffset + area.up * (topOffset - static_cast<float>(row) * rowPitch);
-            frame.addOrientedText(text, anchor, area.right, area.up, textHeight, rows[row].color.value_or(_style.color), _align);
+            frame.addOrientedText(text, anchor, area.right, area.up, textHeight, rows[row].color.value_or(_style.color), _align, 0.0f, 0.0f, rows[row].decoration);
         }
     }
 }

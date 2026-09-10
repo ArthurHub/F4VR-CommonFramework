@@ -531,9 +531,10 @@ namespace f4cf::render::internal
         return textFont().atlas;
     }
 
-    void layoutText(const std::string_view text, const float maxWidth, std::vector<GlyphQuad>& out)
+    float layoutText(const std::string_view text, const float maxWidth, std::vector<GlyphQuad>& out)
     {
         std::optional<float> origin;
+        float inkWidth = 0.0f;
         walkGlyphs(text, [&](const Glyph& glyph, const float pen, std::size_t) {
             if (!glyph.hasInk) {
                 return true;
@@ -549,7 +550,9 @@ namespace f4cf::render::internal
             quad.x0 += x;
             quad.x1 += x;
             out.push_back(quad);
+            inkWidth = x + glyph.inkRight;
             return true;
         });
+        return inkWidth;
     }
 }

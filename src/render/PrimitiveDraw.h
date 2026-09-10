@@ -88,6 +88,18 @@ namespace f4cf::render
     };
 
     /**
+     * A line drawn with a text run, in every placement. It goes out with the run's glyphs, in the same
+     * colour and the same draw, and spans the run's ink - from the first letter's left edge to the right
+     * edge of the last letter drawn - so a run cut short is only decorated as far as it reaches.
+     */
+    enum class TextDecoration : std::uint8_t
+    {
+        None,
+        // just under the baseline; descenders cross it
+        Underline,
+    };
+
+    /**
      * One world-space line segment; every wire primitive tessellates down to these.
      */
     struct LineSegment
@@ -166,6 +178,7 @@ namespace f4cf::render
         RE::NiPoint3 up{};
         TextPlacement placement = TextPlacement::Screen;
         TextAlign align = TextAlign::Left;
+        TextDecoration decoration = TextDecoration::None;
     };
 
     /**
@@ -267,9 +280,10 @@ namespace f4cf::render
         /**
          * Append 2D text at a screen pixel position, drawn into both eye halves.
          */
-        void addText(const std::string_view text, const float x, const float y, const Color& color = colors::White, const float size = 2.0f)
+        void addText(const std::string_view text, const float x, const float y, const Color& color = colors::White, const float size = 2.0f,
+            const TextDecoration decoration = TextDecoration::None)
         {
-            texts.push_back(TextEntry{ .text = std::string(text), .x = x, .y = y, .size = size, .color = color });
+            texts.push_back(TextEntry{ .text = std::string(text), .x = x, .y = y, .size = size, .color = color, .decoration = decoration });
         }
 
         /**
@@ -277,7 +291,7 @@ namespace f4cf::render
          * pixels and aligned about that spot.
          */
         void addWorldAnchoredText(const std::string_view text, const RE::NiPoint3& worldAnchor, const float x, const float y, const Color& color = colors::White,
-            const float size = 2.0f, const TextAlign align = TextAlign::Left)
+            const float size = 2.0f, const TextAlign align = TextAlign::Left, const TextDecoration decoration = TextDecoration::None)
         {
             texts.push_back(TextEntry{ .text = std::string(text),
                 .x = x,
@@ -286,16 +300,19 @@ namespace f4cf::render
                 .color = color,
                 .worldAnchor = worldAnchor,
                 .placement = TextPlacement::WorldAnchored,
-                .align = align });
+                .align = align,
+                .decoration = decoration });
         }
 
         /**
          * Append world-space text welded to an anchor and facing the viewer. Remember to set
          * viewerPosition on the frame, or every billboard faces the world origin.
          */
-        void addBillboardText(const std::string_view text, const RE::NiPoint3& worldAnchor, const Color& color = colors::White, const float size = 2.0f)
+        void addBillboardText(const std::string_view text, const RE::NiPoint3& worldAnchor, const Color& color = colors::White, const float size = 2.0f,
+            const TextDecoration decoration = TextDecoration::None)
         {
-            texts.push_back(TextEntry{ .text = std::string(text), .size = size, .color = color, .worldAnchor = worldAnchor, .placement = TextPlacement::Billboard });
+            texts.push_back(
+                TextEntry{ .text = std::string(text), .size = size, .color = color, .worldAnchor = worldAnchor, .placement = TextPlacement::Billboard, .decoration = decoration });
         }
 
         /**
@@ -310,7 +327,8 @@ namespace f4cf::render
          * @param offsetRight / offsetUp world offset from the anchor along the plane's own axes.
          */
         void addOrientedText(const std::string_view text, const RE::NiPoint3& worldAnchor, const RE::NiPoint3& right, const RE::NiPoint3& up, const float textHeight,
-            const Color& color = colors::White, const TextAlign align = TextAlign::Left, const float offsetRight = 0.0f, const float offsetUp = 0.0f)
+            const Color& color = colors::White, const TextAlign align = TextAlign::Left, const float offsetRight = 0.0f, const float offsetUp = 0.0f,
+            const TextDecoration decoration = TextDecoration::None)
         {
             texts.push_back(TextEntry{ .text = std::string(text),
                 .x = offsetRight,
@@ -321,7 +339,8 @@ namespace f4cf::render
                 .right = right,
                 .up = up,
                 .placement = TextPlacement::Oriented,
-                .align = align });
+                .align = align,
+                .decoration = decoration });
         }
     };
 }

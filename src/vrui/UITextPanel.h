@@ -11,17 +11,21 @@
 namespace f4cf::vrui
 {
     /**
-     * One row of the panel: its text, and optionally a color of its own.
+     * One row of the panel: its text, and optionally a color and a decoration of its own.
      *
      * A row that names no color takes the panel's (setColor), so a panel that is mostly one color
      * says so once and only the rows that stand out name their own. Color is what splits a draw
      * call, not the row, so rows sharing a color cost nothing extra - but the runs are emitted in
-     * order, so alternating colors down a long panel does add draws.
+     * order, so alternating colors down a long panel does add draws. A decoration adds no draw: it
+     * goes out with its row's text.
+     *
+     *     rows.emplace_back("PRESETS", std::nullopt, render::TextDecoration::Underline);
      */
     struct TextRow
     {
         std::string text;
         std::optional<render::Color> color;
+        render::TextDecoration decoration = render::TextDecoration::None;
     };
 
     /**

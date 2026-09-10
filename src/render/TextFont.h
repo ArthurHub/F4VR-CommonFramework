@@ -112,6 +112,9 @@ namespace f4cf::render::internal
     /**
      * Append the quads for text to out, kerned, stopping before the first letter whose ink would
      * pass maxWidth (in text-height units). Characters without ink, like spaces, add no quad.
+     *
+     * Returns the width of the ink it laid out, in text-height units - measureText's width for the
+     * part that fit, so a caller can size something to the run as drawn rather than as written.
      */
-    void layoutText(std::string_view text, float maxWidth, std::vector<GlyphQuad>& out);
+    float layoutText(std::string_view text, float maxWidth, std::vector<GlyphQuad>& out);
 }

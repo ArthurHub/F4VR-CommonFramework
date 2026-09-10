@@ -544,6 +544,33 @@ float4 main(PS_INPUT input) : SV_Target {
             return quads;
         }
 
+        // Where an underline sits below the baseline and how thick it is, in capital heights. Heavier and
+        // lower than the font's own tables ask for, which read as a hairline hugging the letters in VR.
+        constexpr float UNDERLINE_OFFSET = 0.15f;
+        constexpr float UNDERLINE_THICKNESS = 0.12f;
+
+        /**
+         * Add a laid-out run's decoration to its quads, as one more quad spanning the ink that was laid
+         * out. It samples the atlas's solid block, the way lines and fills do, so it draws solid and
+         * goes out with the glyphs in the run's own colour and draw.
+         */
+        void appendDecoration(std::vector<internal::GlyphQuad>& quads, const TextDecoration decoration, const float inkWidth)
+        {
+            if (decoration != TextDecoration::Underline || inkWidth <= 0.0f) {
+                return;
+            }
+
+            // quad y runs down from the top of the capitals, so the baseline is at 1
+            quads.push_back(internal::GlyphQuad{ .x0 = 0.0f,
+                .y0 = 1.0f + UNDERLINE_OFFSET,
+                .x1 = inkWidth,
+                .y1 = 1.0f + UNDERLINE_OFFSET + UNDERLINE_THICKNESS,
+                .u0 = s_solidU,
+                .v0 = s_solidV,
+                .u1 = s_solidU,
+                .v1 = s_solidV });
+        }
+
         /**
          * Project a world anchor through one eye's matrix to its half of the double-wide target.
          * ROCK DebugBodyOverlay.cpp:2262-2290.
@@ -582,7 +609,8 @@ float4 main(PS_INPUT input) : SV_Target {
             const float textHeight = screenTextHeight(entry);
             const float limitX = (std::min)(maxX, textureWidth - 8.0f);
             auto& quads = glyphScratch();
-            internal::layoutText(entry.text, (limitX - baseX) / textHeight, quads);
+            const float inkWidth = internal::layoutText(entry.text, (limitX - baseX) / textHeight, quads);
+            appendDecoration(quads, entry.decoration, inkWidth);
 
             const auto toClip = [&](const float x, const float y, const float u, const float v) {
                 const float px = baseX + x * textHeight;
@@ -681,10 +709,11 @@ float4 main(PS_INPUT input) : SV_Target {
          * run that would overflow stops mid-string rather than dropping the whole label.
          */
         void appendPlanarGlyphs(std::vector<Vertex>& vertices, const std::string& text, const RE::NiPoint3& cursor, const RE::NiPoint3& right, const RE::NiPoint3& up,
-            const float textHeight)
+            const float textHeight, const TextDecoration decoration)
         {
             auto& quads = glyphScratch();
-            internal::layoutText(text, (std::numeric_limits<float>::max)(), quads);
+            const float inkWidth = internal::layoutText(text, (std::numeric_limits<float>::max)(), quads);
+            appendDecoration(quads, decoration, inkWidth);
 
             const auto at = [&](const float x, const float y, const float u, const float v) {
                 const RE::NiPoint3 point = cursor + right * (x * textHeight) - up * (y * textHeight);
@@ -730,7 +759,7 @@ float4 main(PS_INPUT input) : SV_Target {
             const float textHeight = dist * BILLBOARD_TEXT_HEIGHT_PER_DISTANCE * (std::max)(1.0f, entry.size);
             const float textWidth = measureText(entry.text, textHeight);
             const RE::NiPoint3 cursor = entry.worldAnchor + up * (textHeight * 0.5f) - right * (textWidth * 0.5f);
-            appendPlanarGlyphs(vertices, entry.text, cursor, right, up, textHeight);
+            appendPlanarGlyphs(vertices, entry.text, cursor, right, up, textHeight, entry.decoration);
         }
 
         /**
@@ -758,7 +787,7 @@ float4 main(PS_INPUT input) : SV_Target {
             }
 
             const RE::NiPoint3 cursor = entry.worldAnchor + right * (entry.x + alignShift) + up * entry.y;
-            appendPlanarGlyphs(vertices, entry.text, cursor, right, up, entry.size);
+            appendPlanarGlyphs(vertices, entry.text, cursor, right, up, entry.size, entry.decoration);
         }
 
         /**
