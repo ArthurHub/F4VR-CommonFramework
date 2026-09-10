@@ -24,8 +24,9 @@ namespace f4cf::vrui
      * fact, or for something that has to move per frame.
      *
      * Units, not pixels, which is what lets one style serve both kinds of panel - imgui::UICanvas
-     * and UITextPanel - each converting as it needs. A raw imgui::Panel is placed by its own
-     * provider and has no vrui units to state a style in, so it keeps its pixel setters instead.
+     * and the vrui::UIPanel family - each converting as it needs. A raw imgui::Panel is placed by
+     * its own provider and has no vrui units to state a style in, so it keeps its pixel setters
+     * instead.
      */
     struct UIPanelStyle
     {

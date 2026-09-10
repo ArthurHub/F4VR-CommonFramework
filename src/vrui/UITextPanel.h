@@ -3,11 +3,10 @@
 #include <functional>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <vector>
 
-#include "../render/PrimitiveDraw.h"
-#include "UIElement.h"
-#include "UIPanelStyle.h"
+#include "UIPanel.h"
 
 namespace f4cf::vrui
 {
@@ -53,13 +52,7 @@ namespace f4cf::vrui
     inline constexpr float TEXT_PANEL_LINE_SPACING = 1.6f;
 
     /**
-     * Default border thickness and corner radius, in vrui units, for setBorder's optional arguments.
-     */
-    inline constexpr float TEXT_PANEL_BORDER_THICKNESS_UNITS = 0.04f;
-    inline constexpr float TEXT_PANEL_BORDER_CORNER_RADIUS_UNITS = 0.2f;
-
-    /**
-     * A vrui element that draws rows of text with the framework's own primitive renderer.
+     * A vrui panel that draws rows of text with the framework's own primitive renderer.
      *
      * It is the low-fidelity sibling of imgui::UICanvas: the same idea - a rectangle in a vrui
      * layout whose inside is drawn by the overlay rather than by scene-graph geometry - but with no
@@ -67,6 +60,7 @@ namespace f4cf::vrui
      * so it is available even when F4CF_WITH_IMGUI_UI is OFF.
      *
      *     auto readout = std::make_shared<vrui::UITextPanel>("BeamReadout", 12.0f, 4.0f);
+     *     readout->setStyle(vrui::F4VR_PANEL_STYLE);
      *     readout->setContent([this](std::vector<vrui::TextRow>& rows) {
      *         rows.emplace_back(std::format("FOV {:.1f}", beamFov()));
      *         rows.emplace_back("OVERHEAT", render::colors::Red);
@@ -79,18 +73,11 @@ namespace f4cf::vrui
      * per row, no wrapping and no scrolling. Rows that do not fit are clipped rather than reflowed -
      * past the bottom edge they are dropped, past the right edge they are cut after the last
      * character that fits - because an overflowing row would otherwise cover the sibling widgets.
-     * Text, in other words, and nothing else: no widgets, no tables, no input.
      *
-     * What you gain is that it costs almost nothing. Every panel shares one overlay layer, and rows
-     * of one color collapse into a single draw call.
-     *
-     * It starts bare - no background, no border, a little padding - and setStyle dresses it:
-     * vrui::F4VR_PANEL_STYLE is the house look, and a mod can name its own. It is occluded by the
-     * world by default, so it sits in the scene like the widgets around it rather than showing
-     * through walls; see setOccluded for when to turn that off, and for what happens on a build
-     * where the scene depth cannot be captured. It is not interactive.
+     * The chrome - background, border, rounding, padding, occlusion - is UIPanel's; the rows are laid
+     * out inside what it leaves, and the style's content colour is the rows' default colour.
      */
-    class UITextPanel : public UIElement
+    class UITextPanel : public UIPanel
     {
     public:
         /**
@@ -101,12 +88,6 @@ namespace f4cf::vrui
          *        descenders, and in each row as much text as that width holds.
          */
         UITextPanel(const std::string& name, float width, float height);
-        ~UITextPanel() override;
-
-        UITextPanel(const UITextPanel&) = delete;
-        UITextPanel& operator=(const UITextPanel&) = delete;
-        UITextPanel(UITextPanel&&) = delete;
-        UITextPanel& operator=(UITextPanel&&) = delete;
 
         /**
          * The rows to draw. See TextRowsCallback - it runs on the game thread each frame.
@@ -136,101 +117,18 @@ namespace f4cf::vrui
          */
         void setLineSpacing(float multiplier);
 
-        /**
-         * The whole look in one go - row colour, background, border, rounding and padding; see
-         * vrui::UIPanelStyle, and vrui::F4VR_PANEL_STYLE for the house look. Replaces all of it; the
-         * setters below change one part.
-         */
-        void setStyle(const UIPanelStyle& style);
+    protected:
+        void appendContent(render::PrimitiveDraw& frame, const UIPanelContentArea& area) const override;
 
-        /**
-         * The panel's background colour, alpha included. Transparent until asked for; a fully
-         * transparent one (alpha 0) is not drawn at all, leaving the rows floating in the world.
-         *
-         * It fills the panel's rectangle, rounded by the corner radius and painted under both the
-         * border and the rows.
-         */
-        void setBackgroundColor(const render::Color& color);
-
-        /**
-         * Draw a border around the panel's rectangle. Off until called; clearBorder turns it off.
-         *
-         * It is built from filled triangles rather than lines, because D3D11 draws every line one
-         * pixel wide no matter what is asked of it - so thickness is only possible as geometry.
-         *
-         * The border grows INWARD from the panel's rectangle: the outer edge is exactly the slot the
-         * layout gave the panel, so a bordered panel never spills onto its neighbours. The rows are
-         * inset by its thickness, on top of the padding, so they never run over it - which does mean
-         * a thicker border leaves less room for text.
-         *
-         * The corner radius shapes the BACKGROUND as well as the border, which is why it is one
-         * value for both rather than a property of the border alone: the background's outline is the
-         * border's outer edge, so no background can be left showing past the border at a corner.
-         * setCornerRadius sets it on its own, for a rounded panel with no border.
-         *
-         * @param thickness in vrui units, clamped to half the shorter side.
-         * @param cornerRadius in vrui units, 0 for square corners, clamped to half the shorter side.
-         */
-        void setBorder(const render::Color& color, float thickness = TEXT_PANEL_BORDER_THICKNESS_UNITS, float cornerRadius = TEXT_PANEL_BORDER_CORNER_RADIUS_UNITS);
-
-        void clearBorder();
-
-        /**
-         * Round the panel's corners without adding a border, in vrui units. Kept separate from
-         * setBorder because the radius rounds the background whether or not there is a border on top
-         * of it.
-         */
-        void setCornerRadius(float units);
-
-        /**
-         * Space between the rows and the panel's edge, in vrui units, one value per side - see
-         * UIPadding for the named constructors. The border's thickness adds to it rather than eating
-         * into it, so changing one never moves the other.
-         *
-         * Per side because a row of text is wider than it is tall, so the same number rarely reads
-         * the same way above it as beside it.
-         */
-        void setPadding(const UIPadding& padding);
-
-        /**
-         * The same padding on all four sides - UIPadding::all in one call, and the common case.
-         */
-        void setPadding(float units);
-
-        /**
-         * Whether the world hides the panel when something is in front of it. On by default, which is
-         * what makes a panel read as part of the scene rather than pasted over it.
-         *
-         * Turn it off for a panel that must always be readable - a warning, or a menu you do not want
-         * to lose when you turn and a wall comes between you and it. Note that occlusion also depends
-         * on the framework capturing the engine's depth buffer; where it cannot, every panel draws on
-         * top regardless, so this is a preference rather than a guarantee.
-         */
-        void setOccluded(bool occluded);
-
-        bool isOccluded() const
+        std::string_view typeName() const override
         {
-            return _occluded;
+            return "UITextPanel";
         }
-
-        virtual std::string toString() const override;
-
-        // Internal: nothing to do during layout - the rows are pulled at frame end, once the whole
-        // tree has been laid out and this panel's transform is final.
-        virtual void onFrameUpdate(UIFrameUpdateContext*) override
-        {}
-
-        // Internal: append this panel's rows to the frame being built for the render thread.
-        void appendTo(render::PrimitiveDraw& frame) const;
 
     private:
         TextRowsCallback _content;
         render::TextAlign _align = render::TextAlign::Left;
-        bool _occluded = true;
         float _textHeightUnits = TEXT_PANEL_TEXT_HEIGHT_UNITS;
         float _lineSpacing = TEXT_PANEL_LINE_SPACING;
-
-        // row colour, background, border, rounding and padding together, defaulting to a bare panel
-        UIPanelStyle _style;
     };
 }

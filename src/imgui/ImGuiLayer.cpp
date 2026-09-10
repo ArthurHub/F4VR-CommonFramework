@@ -318,7 +318,7 @@ namespace f4cf::imgui::internal
 
             // A border is stroked centred on its rectangle's edge. The window is inset by half the
             // thickness so the whole stroke lands inside the panel's atlas slot: the border grows
-            // inward from the panel's edge, as vrui::UITextPanel's does, and never reaches the
+            // inward from the panel's edge, as a vrui::UIPanel's does, and never reaches the
             // neighbouring slot.
             const float halfBorder = borderThickness * 0.5f;
             const float windowX = static_cast<float>(entry.x) + halfBorder;
