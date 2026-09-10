@@ -29,9 +29,10 @@ namespace f4cf::render
         /**
          * Vertex layout shared by every pipeline (POS float3, TEXCOORD float2).
          *
-         * Everything samples the font atlas: text for its glyphs, lines and fills for the atlas's
-         * solid block, which comes out fully opaque. One shader therefore draws all three, so a fill
-         * and the text over it stay in one batch instead of splitting on a shader change.
+         * Everything samples a texture: text the font atlas for its glyphs, lines and fills the
+         * atlas's solid block, which comes out fully opaque, and images their own texture. One shader
+         * therefore draws all four, so a fill and the text over it stay in one batch instead of
+         * splitting on a shader change.
          */
         struct Vertex
         {
@@ -43,12 +44,29 @@ namespace f4cf::render
         };
 
         /**
-         * Per-draw constants (register b1): model matrix + flat color. ROCK DebugBodyOverlay.cpp:162-166.
+         * How the pixel shader turns what it samples into colour, uploaded with every draw.
+         */
+        enum class ShadeMode : std::uint8_t
+        {
+            // the sample is a distance to a glyph's outline: text, and lines and fills through the
+            // atlas's solid block
+            DistanceField = 0,
+            // the sample is the colour itself: an image
+            Image = 1,
+            // an image whose view decodes sRGB, encoded back so its colours survive the non-sRGB target
+            ImageSRGB = 2,
+        };
+
+        /**
+         * Per-draw constants (register b1): model matrix + flat color for the vertex shader, and the
+         * shade mode for the pixel shader. ROCK DebugBodyOverlay.cpp:162-166, plus the mode.
          */
         struct alignas(16) PerObjectVSData
         {
             DirectX::XMMATRIX matModel;
             float color[4];
+            // x: the ShadeMode; the rest pads to the 16-byte boundary constant buffers are laid out on
+            float params[4];
         };
 
         // One set of shaders / buffers / states serves every PrimitiveDrawRenderer instance: they
@@ -114,6 +132,7 @@ cbuffer Camera : register(b0) {
 cbuffer Model : register(b1) {
     row_major float4x4 matModel;
     float4 color;
+    float4 params;
 };
 
 VS_OUTPUT main(VS_INPUT input) {
@@ -153,6 +172,7 @@ struct VS_OUTPUT {
 cbuffer Model : register(b1) {
     row_major float4x4 matModel;
     float4 color;
+    float4 params;
 };
 
 VS_OUTPUT main(VS_INPUT input) {
@@ -164,14 +184,30 @@ VS_OUTPUT main(VS_INPUT input) {
 }
 )";
 
-        // Distance-field pixel shader shared by every pipeline. The sampled distance to the glyph's
-        // outline is converted from atlas texels to screen pixels through the uv derivatives, and the
-        // pixel is covered by however much of it lies inside - one pixel of antialiasing at any size,
-        // distance or angle. Solid geometry samples far inside a shape, so it comes out opaque.
-        // SDF_ON_EDGE and SDF_DISTANCE_SCALE are defined at compile time, from TextFont.h.
+        // Pixel shader shared by every pipeline, switched per draw by the shade mode in Model.params.x.
+        //
+        // Distance field (0) - text, and lines and fills through the atlas's solid block: the sampled
+        // distance to the glyph's outline is converted from atlas texels to screen pixels through the
+        // uv derivatives, and the pixel is covered by however much of it lies inside - one pixel of
+        // antialiasing at any size, distance or angle. Solid geometry samples far inside a shape, so
+        // it comes out opaque. SDF_ON_EDGE and SDF_DISTANCE_SCALE are defined at compile time, from
+        // TextFont.h.
+        //
+        // Image (1, or 2 for a view that decodes sRGB): the sample is the colour, times the tint. The
+        // target is not sRGB-encoded, so a view that linearized its sample is encoded back, or the
+        // image would come out darker than the file.
+        //
+        // Both results are computed and one selected, rather than branched between, so the
+        // derivatives the distance field takes never sit inside flow control.
         const char* K_PIXEL_SHADER_SOURCE = R"(
-Texture2D fontAtlas : register(t0);
-SamplerState fontSampler : register(s0);
+Texture2D shaderTexture : register(t0);
+SamplerState textureSampler : register(s0);
+
+cbuffer Model : register(b1) {
+    row_major float4x4 matModel;
+    float4 color;
+    float4 params;
+};
 
 struct PS_INPUT {
     float4 pos : SV_POSITION;
@@ -179,17 +215,29 @@ struct PS_INPUT {
     float2 uv : TEXCOORD0;
 };
 
+float3 linearToSrgb(float3 value) {
+    value = saturate(value);
+    return value <= 0.0031308 ? value * 12.92 : 1.055 * pow(max(value, 1.0e-6), 1.0 / 2.4) - 0.055;
+}
+
 float4 main(PS_INPUT input) : SV_Target {
-    float atlasWidth;
-    float atlasHeight;
-    fontAtlas.GetDimensions(atlasWidth, atlasHeight);
-    float2 texelsAlongX = ddx(input.uv) * float2(atlasWidth, atlasHeight);
-    float2 texelsAlongY = ddy(input.uv) * float2(atlasWidth, atlasHeight);
+    float4 texel = shaderTexture.Sample(textureSampler, input.uv);
+
+    float textureWidth;
+    float textureHeight;
+    shaderTexture.GetDimensions(textureWidth, textureHeight);
+    float2 texelsAlongX = ddx(input.uv) * float2(textureWidth, textureHeight);
+    float2 texelsAlongY = ddy(input.uv) * float2(textureWidth, textureHeight);
     float texelsPerPixel = sqrt(0.5 * (dot(texelsAlongX, texelsAlongX) + dot(texelsAlongY, texelsAlongY)));
 
-    float texelsInside = (fontAtlas.Sample(fontSampler, input.uv).r * 255.0 - SDF_ON_EDGE) / SDF_DISTANCE_SCALE;
+    float texelsInside = (texel.r * 255.0 - SDF_ON_EDGE) / SDF_DISTANCE_SCALE;
     float coverage = saturate(texelsInside / max(texelsPerPixel, 1.0e-4) + 0.5);
-    return float4(input.color.rgb, input.color.a * coverage);
+    float4 glyph = float4(input.color.rgb, input.color.a * coverage);
+
+    float3 imageRgb = params.x > 1.5 ? linearToSrgb(texel.rgb) : texel.rgb;
+    float4 image = float4(imageRgb, texel.a) * input.color;
+
+    return params.x > 0.5 ? image : glyph;
 }
 )";
 
@@ -408,9 +456,10 @@ float4 main(PS_INPUT input) : SV_Target {
         }
 
         /**
-         * Upload the per-draw model matrix + color. ROCK DebugBodyOverlay.cpp:1248-1261.
+         * Upload the per-draw model matrix, color and shade mode, and bind them to both stages - the
+         * pixel shader reads the mode. ROCK DebugBodyOverlay.cpp:1248-1261.
          */
-        void uploadColorModel(ID3D11DeviceContext* context, const DirectX::XMMATRIX& model, const Color& color)
+        void uploadColorModel(ID3D11DeviceContext* context, const DirectX::XMMATRIX& model, const Color& color, const ShadeMode mode = ShadeMode::DistanceField)
         {
             D3D11_MAPPED_SUBRESOURCE mapped{};
             if (SUCCEEDED(context->Map(s_modelCB, 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped))) {
@@ -420,9 +469,14 @@ float4 main(PS_INPUT input) : SV_Target {
                 data->color[1] = color.g;
                 data->color[2] = color.b;
                 data->color[3] = color.a;
+                data->params[0] = static_cast<float>(mode);
+                data->params[1] = 0.0f;
+                data->params[2] = 0.0f;
+                data->params[3] = 0.0f;
                 context->Unmap(s_modelCB, 0);
             }
             context->VSSetConstantBuffers(1, 1, &s_modelCB);
+            context->PSSetConstantBuffers(1, 1, &s_modelCB);
         }
 
         /**
@@ -708,17 +762,19 @@ float4 main(PS_INPUT input) : SV_Target {
         }
 
         /**
-         * Draw all solid world-space geometry - filled triangles first, then camera-facing billboards
-         * and plane-welded Oriented text - through the stereo shader, so it shares the exact
-         * projection and depth of the shapes. Camera CB (b0) must already be uploaded.
+         * Draw all solid world-space geometry - filled triangles first, then images, then
+         * camera-facing billboards and plane-welded Oriented text - through the stereo shader, so it
+         * shares the exact projection and depth of the shapes. Camera CB (b0) must already be
+         * uploaded, and the font atlas bound.
          *
-         * Everything goes into ONE vertex-buffer upload, and consecutive runs of the same color
-         * collapse into a single draw: color is a constant-buffer upload rather than a vertex
-         * attribute, so a color CHANGE is what forces a new draw, not a new shape. A bordered text
-         * panel therefore costs two draws - one for the border, one for the rows - not one per row.
+         * Everything goes into ONE vertex-buffer upload, and consecutive runs of the same texture,
+         * shading and color collapse into a single draw: those are constant-buffer and binding
+         * changes rather than vertex attributes, so a CHANGE of any of them is what forces a new
+         * draw, not a new shape. A bordered text panel therefore costs two draws - one for the
+         * border, one for the rows - not one per row, and each distinct image one more.
          *
-         * Fills and world text share the one vertex buffer, so they also share its budget; whichever
-         * would overflow it stops early rather than growing the buffer.
+         * Fills, images and world text share the one vertex buffer, so they also share its budget;
+         * whichever would overflow it stops early rather than growing the buffer.
          */
         void drawWorldGeometry(ID3D11DeviceContext* context, const PrimitiveDraw& frame)
         {
@@ -726,11 +782,13 @@ float4 main(PS_INPUT input) : SV_Target {
                 return;
             }
 
-            // one contiguous span of the buffer, drawn with one color
-            struct ColorRun
+            // one contiguous span of the buffer, drawn in one go
+            struct DrawRun
             {
                 std::size_t start;
                 std::size_t count;
+                ID3D11ShaderResourceView* texture;
+                ShadeMode mode;
                 Color color;
             };
 
@@ -738,22 +796,22 @@ float4 main(PS_INPUT input) : SV_Target {
             // more, and the budget check below is what actually bounds it
             std::vector<Vertex> vertices;
             vertices.reserve(8192);
-            std::vector<ColorRun> runs;
+            std::vector<DrawRun> runs;
 
             // runs are appended in buffer order, so extending the last one keeps it contiguous
-            const auto appendRun = [&runs](const std::size_t start, const std::size_t count, const Color& color) {
+            const auto appendRun = [&runs](const std::size_t start, const std::size_t count, ID3D11ShaderResourceView* texture, const ShadeMode mode, const Color& color) {
                 if (count == 0) {
                     return; // degenerate or budget-exhausted, and merging it would corrupt the runs
                 }
-                if (!runs.empty() && runs.back().color == color) {
+                if (!runs.empty() && runs.back().texture == texture && runs.back().mode == mode && runs.back().color == color) {
                     runs.back().count += count;
                 } else {
-                    runs.push_back(ColorRun{ .start = start, .count = count, .color = color });
+                    runs.push_back(DrawRun{ .start = start, .count = count, .texture = texture, .mode = mode, .color = color });
                 }
             };
 
             // fills first: depth testing is off, so this is what puts a border or background UNDER
-            // the text drawn over it
+            // the images and text drawn over it
             for (const auto& triangle : frame.triangles) {
                 if (vertices.size() + 3 > TEXT_VERTEX_CAPACITY) {
                     break;
@@ -762,7 +820,31 @@ float4 main(PS_INPUT input) : SV_Target {
                 vertices.push_back(solidVertex(triangle.a));
                 vertices.push_back(solidVertex(triangle.b));
                 vertices.push_back(solidVertex(triangle.c));
-                appendRun(start, 3, triangle.color);
+                appendRun(start, 3, s_fontView, ShadeMode::DistanceField, triangle.color);
+            }
+
+            // images between the two, so a panel's image sits on its background and under its labels.
+            // The frame being replayed holds a reference to every view, so the raw pointers in the runs
+            // stay valid for the whole draw.
+            for (const auto& image : frame.images) {
+                if (vertices.size() + 6 > TEXT_VERTEX_CAPACITY) {
+                    break;
+                }
+                if (!image.texture) {
+                    continue;
+                }
+                const std::size_t start = vertices.size();
+                const Vertex topLeft{ image.topLeft.x, image.topLeft.y, image.topLeft.z, image.u0, image.v0 };
+                const Vertex topRight{ image.topRight.x, image.topRight.y, image.topRight.z, image.u1, image.v0 };
+                const Vertex bottomRight{ image.bottomRight.x, image.bottomRight.y, image.bottomRight.z, image.u1, image.v1 };
+                const Vertex bottomLeft{ image.bottomLeft.x, image.bottomLeft.y, image.bottomLeft.z, image.u0, image.v1 };
+                vertices.push_back(topLeft);
+                vertices.push_back(topRight);
+                vertices.push_back(bottomRight);
+                vertices.push_back(topLeft);
+                vertices.push_back(bottomRight);
+                vertices.push_back(bottomLeft);
+                appendRun(start, 6, image.texture.Get(), image.srgb ? ShadeMode::ImageSRGB : ShadeMode::Image, image.tint);
             }
 
             for (const auto& entry : frame.texts) {
@@ -775,7 +857,7 @@ float4 main(PS_INPUT input) : SV_Target {
                 } else {
                     appendOrientedGlyphs(vertices, entry);
                 }
-                appendRun(start, vertices.size() - start, entry.color);
+                appendRun(start, vertices.size() - start, s_fontView, ShadeMode::DistanceField, entry.color);
             }
             if (runs.empty()) {
                 return;
@@ -800,9 +882,18 @@ float4 main(PS_INPUT input) : SV_Target {
             context->IASetVertexBuffers(0, 1, &vertexBuffer, &stride, &offset);
             context->IASetIndexBuffer(nullptr, DXGI_FORMAT_UNKNOWN, 0);
 
+            // the caller bound the font atlas, so a texture only needs binding when a run changes it
+            ID3D11ShaderResourceView* boundTexture = s_fontView;
             for (const auto& run : runs) {
-                uploadColorModel(context, DirectX::XMMatrixIdentity(), run.color);
+                if (run.texture != boundTexture) {
+                    context->PSSetShaderResources(0, 1, &run.texture);
+                    boundTexture = run.texture;
+                }
+                uploadColorModel(context, DirectX::XMMatrixIdentity(), run.color, run.mode);
                 context->DrawInstanced(static_cast<UINT>(run.count), 2, static_cast<UINT>(run.start), 0); // ×2: the shader splits the eyes
+            }
+            if (boundTexture != s_fontView) {
+                context->PSSetShaderResources(0, 1, &s_fontView); // screen text, drawn next, expects the atlas
             }
         }
 
@@ -862,12 +953,6 @@ float4 main(PS_INPUT input) : SV_Target {
         }
 
         /**
-         * Replay one published frame, on the render thread, into the double-wide eye texture the game
-         * just handed to OpenVR (the shader's half split puts each primitive in its own eye). The hook
-         * host has already snapshotted the pipeline, bound the render target and uploaded the camera
-         * constants at b0. ROCK DebugBodyOverlay.cpp:2412-2589 minus the physics-body pass.
-         */
-        /**
          * The state that lets the world hide our geometry: test against the engine's depth with its
          * own comparison, and never write. The write mask matters as much as the read-only view -
          * together they make it impossible for an overlay to disturb the scene's depth.
@@ -893,6 +978,12 @@ float4 main(PS_INPUT input) : SV_Target {
             return s_depthTestStates[index];
         }
 
+        /**
+         * Replay one published frame, on the render thread, into the double-wide eye texture the game
+         * just handed to OpenVR (the shader's half split puts each primitive in its own eye). The hook
+         * host has already snapshotted the pipeline, bound the render target and uploaded the camera
+         * constants at b0. ROCK DebugBodyOverlay.cpp:2412-2589 minus the physics-body pass.
+         */
         void drawPrimitives(const SubmitFrame& submitFrame, const PrimitiveDraw& frame, const bool occluded)
         {
             auto* context = submitFrame.context;
@@ -907,8 +998,8 @@ float4 main(PS_INPUT input) : SV_Target {
             context->RSSetState(s_wireRasterizer);
             FLOAT blendFactor[4] = {};
             context->OMSetBlendState(s_blendState, blendFactor, 0xFFFFFFFF);
-            // every pipeline samples the font atlas - text for its glyphs, lines and fills for its
-            // solid block
+            // lines, fills and text all sample the font atlas - text for its glyphs, the rest for its
+            // solid block - so it is the default binding; images swap their own texture in and back out
             context->PSSetShaderResources(0, 1, &s_fontView);
             context->PSSetSamplers(0, 1, &s_fontSampler);
             const bool testDepth = occluded && submitFrame.sceneDepth != nullptr;

@@ -4,6 +4,8 @@
 #include <string>
 #include <vector>
 
+#include "Texture.h"
+
 namespace f4cf::render
 {
     /**
@@ -53,6 +55,7 @@ namespace f4cf::render
     constexpr std::size_t MAX_LINE_VERTICES = 65536;
     constexpr std::uint32_t TEXT_VERTEX_CAPACITY = 131072;
     constexpr std::size_t MAX_FILL_TRIANGLES = 8192;
+    constexpr std::size_t MAX_IMAGE_QUADS = 4096;
 
     /**
      * Where a text entry lives, and therefore how it is projected.
@@ -101,7 +104,7 @@ namespace f4cf::render
      * Solid geometry exists as its own list because a line CANNOT be thick - D3D11 rasterizes every
      * line one pixel wide, whatever the API asks for - so anything that needs width has to be built
      * from triangles. Culling is off and depth testing is disabled, so winding does not matter and
-     * these are painted in the order they were added, under any text added after them.
+     * these are painted in the order they were added, under every image and text in the frame.
      */
     struct FillTriangle
     {
@@ -109,6 +112,31 @@ namespace f4cf::render
         RE::NiPoint3 b;
         RE::NiPoint3 c;
         Color color;
+    };
+
+    /**
+     * One textured world-space quad: an image drawn in its own colours and alpha, multiplied by a
+     * tint.
+     *
+     * The UV rectangle maps onto the corners the way the names say - (u0, v0) at the top-left - so a
+     * quad can show part of a texture as well as all of it. Images are painted in the order they were
+     * added, over every fill in the frame and under every text.
+     */
+    struct ImageQuad
+    {
+        RE::NiPoint3 topLeft;
+        RE::NiPoint3 topRight;
+        RE::NiPoint3 bottomRight;
+        RE::NiPoint3 bottomLeft;
+        float u0 = 0.0f;
+        float v0 = 0.0f;
+        float u1 = 1.0f;
+        float v1 = 1.0f;
+        Color tint = colors::White;
+        TextureView texture;
+
+        // the view decodes sRGB when sampled, so the renderer re-encodes it; see Texture::isSRGB
+        bool srgb = false;
     };
 
     /**
@@ -143,8 +171,8 @@ namespace f4cf::render
     /**
      * One frame's worth of primitives to draw over the VR view, built on the GAME thread and handed
      * to PrimitiveDrawRenderer, which replays it on the render thread. Anything a producer wants
-     * drawn - lines, glyph text, world labels - reduces to the two lists here, so a producer never
-     * touches D3D and never runs render-side.
+     * drawn - lines, fills, images, glyph text, world labels - reduces to the lists here, so a
+     * producer never touches D3D and never runs render-side.
      *
      * The lists are public: producers with their own budget accounting or ordering rules (the debug
      * overlay sorts by color to batch runs) manipulate them directly, while the add* helpers cover
@@ -154,6 +182,7 @@ namespace f4cf::render
     {
         std::vector<LineSegment> lines;
         std::vector<FillTriangle> triangles;
+        std::vector<ImageQuad> images;
         std::vector<TextEntry> texts;
 
         // Head position captured game-side, used to turn Billboard text toward the viewer. Only
@@ -162,13 +191,14 @@ namespace f4cf::render
 
         bool empty() const
         {
-            return lines.empty() && triangles.empty() && texts.empty();
+            return lines.empty() && triangles.empty() && images.empty() && texts.empty();
         }
 
         void clear()
         {
             lines.clear();
             triangles.clear();
+            images.clear();
             texts.clear();
         }
 
@@ -210,6 +240,27 @@ namespace f4cf::render
             }
             addTriangle(a, b, c, color);
             addTriangle(a, c, d, color);
+            return true;
+        }
+
+        /**
+         * Append a whole texture as a world-space quad, tinted. Pass what Texture::view() returned
+         * this frame, with Texture::isSRGB alongside it; a null view is dropped, like a full budget,
+         * and both return false.
+         */
+        bool addImage(TextureView texture, const bool srgb, const RE::NiPoint3& topLeft, const RE::NiPoint3& topRight, const RE::NiPoint3& bottomRight,
+            const RE::NiPoint3& bottomLeft, const Color& tint = colors::White)
+        {
+            if (!texture || images.size() + 1 > MAX_IMAGE_QUADS) {
+                return false;
+            }
+            images.push_back(ImageQuad{ .topLeft = topLeft,
+                .topRight = topRight,
+                .bottomRight = bottomRight,
+                .bottomLeft = bottomLeft,
+                .tint = tint,
+                .texture = std::move(texture),
+                .srgb = srgb });
             return true;
         }
 
