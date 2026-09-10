@@ -4,21 +4,22 @@
 #include <string>
 
 #include "../vrui/UIElement.h"
+#include "../vrui/UIPanelStyle.h"
 #include "ImGuiPanel.h"
 
 namespace f4cf::imgui
 {
     /**
-     * Atlas pixels per vrui unit - the same for every canvas, deliberately.
+     * Layout pixels per vrui unit - the same for every canvas, deliberately.
      *
      * A canvas states its size once, in vrui units like every other element, and its pixel
      * resolution follows from this, so the two can never disagree and squash the content.
      *
-     * It is not a per-canvas knob because it is not really a sharpness knob. The font is rasterized
-     * at one fixed pixel size, so this ratio also decides how much of the panel a line of text
+     * It is not a per-canvas knob because it is not a sharpness knob - that is setSupersample. The
+     * font has one fixed pixel size, so this ratio decides how much of the panel a line of text
      * covers: raising it does not draw the same text more finely, it draws it SMALLER. Held fixed,
-     * it gives every canvas the same relation between world size and text size - one vrui unit is
-     * about one line of text, so a canvas 6 units tall fits roughly 6 rows, in any container.
+     * it gives every canvas the same relation between its size and its text: 48px of font is one
+     * vrui unit to the em, so at the default 24px a row of text takes about 0.6 of a unit.
      *
      * The knob for how big the text looks is the font size (setFontSizePixels), which moves the
      * text without touching the layout.
@@ -26,15 +27,11 @@ namespace f4cf::imgui
     inline constexpr float CANVAS_PIXELS_PER_UNIT = 48.0f;
 
     /**
-     * What a canvas's border and padding default to, in vrui units rather than pixels, so a canvas is
-     * styled in the same terms it is laid out in.
-     *
-     * The border values match vrui::UITextPanel's, so the two kinds of panel sit beside each other
-     * without one looking heavier than the other.
+     * What setBorder's optional arguments default to, in vrui units rather than pixels, so a canvas
+     * is styled in the same terms it is laid out in. The whole chrome at once is vrui::UIPanelStyle.
      */
-    inline constexpr float CANVAS_BORDER_THICKNESS_UNITS = 0.08f;
-    inline constexpr float CANVAS_BORDER_CORNER_RADIUS_UNITS = 0.4f;
-    inline constexpr float CANVAS_PADDING_UNITS = 0.2f;
+    inline constexpr float CANVAS_BORDER_THICKNESS_UNITS = 0.04f;
+    inline constexpr float CANVAS_BORDER_CORNER_RADIUS_UNITS = 0.2f;
 
     /**
      * A vrui element whose content is drawn by Dear ImGui instead of scene-graph geometry.
@@ -49,16 +46,19 @@ namespace f4cf::imgui
      *     panel->addElement(canvas);
      *
      * Size is given once, in vrui units; the pixel resolution follows from CANVAS_PIXELS_PER_UNIT
-     * and keeps following it - resize the element or rescale a parent container and the resolution
-     * tracks it, so the content stays the same physical size and sharpness instead of stretching.
+     * and the element's own size, never its containers' scale. The content is laid out and rendered
+     * at scale 1 and the quad stretches it with the rest of the layout, so text, widgets and chrome
+     * scale together like any other vrui element. The price is density: in a container scaled 1.6
+     * the canvas has 1.6x fewer atlas pixels per world unit and reads correspondingly softer, which
+     * setSupersample buys back at a memory cost.
      * A canvas too large to fit the shared atlas is scaled down to fit, keeping its aspect, and says
      * so in the log - it never silently distorts.
      *
-     * Two things it does not inherit from its neighbours. It draws through the framework's overlay
-     * path, so it is always ON TOP - a sibling widget physically in front of it will not occlude it,
-     * which does not show in a row or column layout but will in nested or overlapping containers.
-     * And it is not interactive: vrui's finger-collision press handling does not apply, since the
-     * content is pixels rather than widgets (see the interactivity work in the design docs).
+     * Two things set it apart from its neighbours. It draws through the framework's overlay path
+     * rather than the scene graph, so what hides it is the depth test described at setOccluded, not
+     * the scene's own draw order. And it is not interactive: vrui's finger-collision press handling
+     * does not apply, since the content is pixels rather than widgets (see the interactivity work in
+     * the design docs).
      *
      * Lives under imgui/ rather than vrui/ because it is the adapter BETWEEN the two: building it
      * with vrui would make every vrui consumer depend on Dear ImGui, and it has to disappear along
@@ -88,8 +88,24 @@ namespace f4cf::imgui
         void setOccluded(bool occluded);
 
         /**
-         * The canvas background, alpha included. Half-transparent by default so it reads like the
-         * vrui widgets beside it; see imgui::PANEL_BACKGROUND.
+         * The whole look in one go - content colour, background, border, rounding and padding; see
+         * vrui::UIPanelStyle, and vrui::F4VR_PANEL_STYLE for the house look. Replaces all of it; the
+         * setters below change one part.
+         *
+         * Setters only record what was asked, in vrui units. The panel picks it up at the next frame
+         * update, converted into the canvas's layout pixels.
+         */
+        void setStyle(const vrui::UIPanelStyle& style);
+
+        /**
+         * Colour for the canvas's text. Content that colours itself still wins - see
+         * Panel::setTextColor.
+         */
+        void setTextColor(const render::Color& color);
+
+        /**
+         * The canvas background, alpha included. Transparent until asked for, so a canvas starts as
+         * its content and nothing else.
          */
         void setBackgroundColor(const render::Color& color);
 
@@ -107,19 +123,32 @@ namespace f4cf::imgui
         void setCornerRadius(float units);
 
         /**
-         * Space between the content and the canvas edge, in vrui units. The border adds to it.
+         * Space between the content and the canvas edge, in vrui units, one value per side - see
+         * vrui::UIPadding for the named constructors. The border adds to it rather than eating in.
+         *
+         * This is padding to ImGui's own layout box, so a first row of TEXT sits a little lower than
+         * the top padding suggests: a font reserves ascender space above its capitals, and ImGui
+         * lays out the line box, not the ink. Trimming the top side is how to even that up by eye.
+         */
+        void setPadding(const vrui::UIPadding& padding);
+
+        /**
+         * The same padding on all four sides - vrui::UIPadding::all in one call.
          */
         void setPadding(float units);
 
         virtual std::string toString() const override;
 
-        // Internal: keep the panel's resolution in step with the size vrui laid out for it.
+        // Internal: keep the panel's resolution and chrome in step with what vrui laid out.
         virtual void onFrameUpdate(vrui::UIFrameUpdateContext* context) override;
 
     private:
         bool resolvePlacement(PanelPlacement& out) const;
-        void refreshPixelSize();
+        void refreshPanel();
 
         std::unique_ptr<Panel> _panel;
+
+        // the look as asked for, in vrui units; converted into the panel's pixels each frame
+        vrui::UIPanelStyle _style;
     };
 }

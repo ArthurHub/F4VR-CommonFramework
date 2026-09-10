@@ -8,45 +8,38 @@
 namespace f4cf::imgui
 {
     /**
-     * A panel's background, behind whatever its content draws.
-     *
-     * Half-transparent by default, to sit alongside vrui's own widgets rather than punching an opaque
-     * hole through the world behind it - ImGui's own dark style is 94% opaque, which reads as a solid
-     * slab in VR. The alpha composites correctly because the atlas carries premultiplied colour; see
-     * the blend state in ImGuiRenderer.
-     */
-    inline constexpr render::Color PANEL_BACKGROUND{ 0.06f, 0.06f, 0.06f, 0.5f };
-
-    /**
-     * Defaults for setBorder's optional arguments, and the panel's content inset, all in atlas
-     * pixels - Panel measures in pixels throughout; UICanvas is the one that speaks vrui units.
-     *
-     * The padding default is ImGui's own, so a panel that never asks for one is laid out exactly as
-     * it was before padding was configurable.
+     * Defaults for setBorder's optional arguments, and the panel's content inset, all in layout
+     * pixels - Panel measures in layout pixels throughout; UICanvas is the one that speaks vrui
+     * units. The padding default is ImGui's own WindowPadding.
      */
     inline constexpr float PANEL_BORDER_THICKNESS_PIXELS = 4.0f;
     inline constexpr float PANEL_BORDER_CORNER_RADIUS_PIXELS = 20.0f;
     inline constexpr float PANEL_PADDING_PIXELS = 8.0f;
 
     /**
-     * Largest a panel may be in either dimension: panels are packed into one shared atlas texture of
-     * this size, and one bigger than the atlas can never be placed.
+     * Space between a panel's content and its edge, one value per side, in layout pixels.
      *
-     * It is also the budget every panel shares, so raising it is not free: the atlas is one RGBA8
-     * texture (2048^2 = 16MB) cleared and re-rasterized on each frame a panel is visible. Nothing is
-     * allocated until the first panel actually draws, so a mod with no panels pays none of it.
+     * Aggregate-initialised in CSS order - { top, right, bottom, left }. This is vrui::UIPadding's
+     * idea in the units Panel works in; UICanvas is what converts between the two.
      */
-    inline constexpr int MAX_PANEL_PIXEL_SIZE = 2048;
+    struct PanelPadding
+    {
+        float top = PANEL_PADDING_PIXELS;
+        float right = PANEL_PADDING_PIXELS;
+        float bottom = PANEL_PADDING_PIXELS;
+        float left = PANEL_PADDING_PIXELS;
+    };
 
     /**
-     * Size the shared panel font is rasterized at, before any panel exists (default 48px).
+     * Largest a panel may be in either dimension, in layout pixels; a panel bigger than this can
+     * never be placed.
      *
-     * The VR legibility trick is to rasterize far above the nominal on-screen size and scale the
-     * QUAD down, never to re-rasterize - so this is not "how big the text looks", it is how much
-     * detail the glyphs carry. How big the text looks comes from the panel's pixel size against its
-     * placement's world size. Clamped to 16..128.
+     * It is also the layout size of the atlas every panel shares. The texture behind it is this times
+     * the supersample factor on each side (see setSupersample) - one RGBA8 texture, about 9MB at 1.5
+     * and 16MB at 2, cleared and re-rasterized on each frame a panel is visible. Nothing is allocated
+     * until the first panel draws, so a mod with no panels pays none of it.
      */
-    void setFontSizePixels(float sizePixels);
+    inline constexpr int MAX_PANEL_PIXEL_SIZE = 1024;
 
     /**
      * Where a panel's quad sits in the world, resolved on the GAME thread each frame.
@@ -143,8 +136,23 @@ namespace f4cf::imgui
         }
 
         /**
-         * The panel's background colour, alpha included. Defaults to PANEL_BACKGROUND; a fully
-         * transparent one (alpha 0) leaves only the content visible, floating in the world.
+         * Colour for the panel's text, pushed as ImGuiCol_Text around the content callback. White
+         * until asked otherwise; content that colours itself (ImGui::TextColored, its own style
+         * push) still wins, so this is the colour everything else falls back to.
+         */
+        void setTextColor(const render::Color& color);
+
+        const render::Color& textColor() const
+        {
+            return _textColor;
+        }
+
+        /**
+         * The panel's background colour, alpha included. Transparent until asked for, so a panel
+         * shows only its content until something dresses it - see vrui::UIPanelStyle, which UICanvas
+         * takes. ImGui's own dark style is 94% opaque, which reads as a solid slab in VR, so any
+         * background wanted here is worth an alpha. It composites correctly because the atlas carries
+         * premultiplied colour; see the blend state in ImGuiRenderer.
          */
         void setBackgroundColor(const render::Color& color);
 
@@ -161,7 +169,7 @@ namespace f4cf::imgui
          * here rather than being a property of the border alone. setCornerRadius sets it on its own,
          * for a rounded panel with no border.
          *
-         * Thickness and radius are in atlas pixels. The border is drawn INSIDE the panel's rect, so
+         * Thickness and radius are in layout pixels. The border is drawn INSIDE the panel's rect, so
          * adding one never changes the element's footprint, and the content is inset by the thickness
          * on top of the padding rather than the border eating into it.
          */
@@ -176,8 +184,14 @@ namespace f4cf::imgui
         void setCornerRadius(float pixels);
 
         /**
-         * Space between the content and the panel's edge, in atlas pixels. The border's thickness
-         * adds to this rather than eating into it, so changing one does not move the other.
+         * Space between the content and the panel's edge, in layout pixels, one value per side. The
+         * border's thickness adds to this rather than eating into it, so changing one does not move
+         * the other.
+         */
+        void setPadding(const PanelPadding& padding);
+
+        /**
+         * The same padding on all four sides.
          */
         void setPadding(float pixels);
 
@@ -196,7 +210,7 @@ namespace f4cf::imgui
             return _cornerRadius;
         }
 
-        float padding() const
+        const PanelPadding& padding() const
         {
             return _padding;
         }
@@ -222,13 +236,16 @@ namespace f4cf::imgui
         int _pixelHeight;
         bool _visible = true;
         bool _occluded = true;
-        render::Color _background = PANEL_BACKGROUND;
+        render::Color _textColor = render::colors::White;
+
+        // alpha 0 is what "no background" means; ImGui skips a fully transparent fill outright
+        render::Color _background{ .r = 0.0f, .g = 0.0f, .b = 0.0f, .a = 0.0f };
 
         // zero thickness is what "no border" means, so no separate flag is needed
         render::Color _borderColor = render::colors::White;
         float _borderThickness = 0.0f;
         float _cornerRadius = 0.0f;
-        float _padding = PANEL_PADDING_PIXELS;
+        PanelPadding _padding;
         ContentCallback _content;
         PlacementProvider _placement;
     };

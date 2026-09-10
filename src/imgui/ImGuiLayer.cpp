@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cmath>
 
 #include <imgui_impl_dx11.h>
 
@@ -11,15 +12,33 @@
 #include "../render/RenderUtils.h"
 #include "ImGuiFonts.h"
 #include "ImGuiRenderer.h"
+#include "ImGuiSettings.h"
 
 namespace f4cf::imgui::internal
 {
     namespace
     {
-        // The shared panel texture. Every panel is an ImGui window packed into a sub-rect of this
-        // one atlas, so N panels still cost one ImGui frame, one rasterization pass and one draw.
+        // The shared panel atlas in ImGui's 1x layout pixels, square. Every panel is an ImGui window
+        // packed into a sub-rect of it, so N panels still cost one ImGui frame, one rasterization
+        // pass and one draw; the texture behind it is larger by the supersample factor on each side.
         constexpr int ATLAS_WIDTH = MAX_PANEL_PIXEL_SIZE;
         constexpr int ATLAS_HEIGHT = MAX_PANEL_PIXEL_SIZE;
+
+        // The atlas texture's side and the scale from layout to texture pixels, fixed on the first
+        // frame a panel draws: the texture and the font raster are built from them, so they cannot
+        // follow a later setSupersample. The scale is taken from the whole-pixel texture size rather
+        // than the requested factor, so the scaled frame lands exactly on what the quads' UVs address.
+        int s_atlasTextureSize = 0;
+        float s_atlasScale = 1.0f;
+
+        void latchAtlasScale()
+        {
+            if (s_atlasTextureSize > 0) {
+                return;
+            }
+            s_atlasTextureSize = static_cast<int>(std::ceil(static_cast<float>(ATLAS_WIDTH) * supersample()));
+            s_atlasScale = static_cast<float>(s_atlasTextureSize) / static_cast<float>(ATLAS_WIDTH);
+        }
 
         // ImGui asserts on a non-positive delta; also stops a load-hitch from animating wildly.
         constexpr float MIN_DELTA_SECONDS = 1.0f / 1000.0f;
@@ -89,9 +108,11 @@ namespace f4cf::imgui::internal
             io.LogFilename = nullptr;
             io.MouseDrawCursor = false;
             io.DisplaySize = ImVec2(static_cast<float>(ATLAS_WIDTH), static_cast<float>(ATLAS_HEIGHT));
+            // glyphs are rasterized at the atlas scale and laid out at 1x
+            io.FontGlobalScale = 1.0f / s_atlasScale;
 
             ImGui::StyleColorsDark();
-            loadPanelFont(g_mod ? g_mod->getName().c_str() : nullptr, fontSizePixels());
+            loadPanelFont(g_mod ? g_mod->getName().c_str() : nullptr, fontSizePixels(), s_atlasScale);
 
             if (!ImGui_ImplDX11_Init(device, context)) {
                 ImGui::DestroyContext();
@@ -100,7 +121,7 @@ namespace f4cf::imgui::internal
 
             s_lastFrameTime = std::chrono::steady_clock::now();
             s_contextReady = true;
-            logger::info("ImGui context ready ({}x{} atlas)", ATLAS_WIDTH, ATLAS_HEIGHT);
+            logger::info("ImGui context ready ({}x{} atlas, {:.2f}x supersampled)", s_atlasTextureSize, s_atlasTextureSize, s_atlasScale);
             return true;
         }
 
@@ -173,6 +194,30 @@ namespace f4cf::imgui::internal
         drawData.CmdListsCount = drawData.CmdLists.Size;
     }
 
+    /**
+     * The DX11 backend takes its viewport and clip rects straight from the draw data, so scaling the
+     * data is all it takes to rasterize at a multiple - the backend needs no changes.
+     */
+    void ClonedDrawData::scale(const float factor)
+    {
+        drawData.DisplayPos.x *= factor;
+        drawData.DisplayPos.y *= factor;
+        drawData.DisplaySize.x *= factor;
+        drawData.DisplaySize.y *= factor;
+        for (ImDrawList* list : drawData.CmdLists) {
+            for (ImDrawVert& vertex : list->VtxBuffer) {
+                vertex.pos.x *= factor;
+                vertex.pos.y *= factor;
+            }
+            for (ImDrawCmd& command : list->CmdBuffer) {
+                command.ClipRect.x *= factor;
+                command.ClipRect.y *= factor;
+                command.ClipRect.z *= factor;
+                command.ClipRect.w *= factor;
+            }
+        }
+    }
+
     namespace
     {
         /**
@@ -212,7 +257,8 @@ namespace f4cf::imgui::internal
             return;
         }
 
-        if (!renderer::ensureInstalled(ATLAS_WIDTH, ATLAS_HEIGHT) || !ensureContext()) {
+        latchAtlasScale();
+        if (!renderer::ensureInstalled(s_atlasTextureSize, s_atlasTextureSize) || !ensureContext()) {
             if (!s_contextReady && !s_loggedContextFailed) {
                 s_loggedContextFailed = true;
                 logger::warn("ImGui context not ready yet; panels will retry on frame update");
@@ -259,58 +305,87 @@ namespace f4cf::imgui::internal
         ImGui_ImplDX11_NewFrame();
         ImGui::NewFrame();
         constexpr ImGuiWindowFlags PANEL_FLAGS = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse |
-                                                 ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNav;
+                                                 ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoBackground;
+
+        // ImGui's anti-aliasing fringe is one layout pixel; scaled by this it stays one atlas pixel
+        // instead of softening every edge by the atlas scale
+        const float fringeScale = 1.0f / s_atlasScale;
+
         for (const auto& entry : packed) {
-            // Pushed per panel rather than set on the shared style, so panels in one frame can
-            // differ - and popped whether or not Begin returned true, because Begin pushes them
-            // regardless of whether the window is skipped, and an unbalanced stack corrupts every
-            // panel after this one.
-            //
-            // Rounding goes on the WINDOW, which is what makes the background and the border agree at
-            // the corners: ImGui rounds the background fill and the border stroke with the same
-            // radius, so no background can show past the stroke.
+            const auto& textColor = entry.panel->textColor();
             const auto& background = entry.panel->backgroundColor();
             const auto& borderColor = entry.panel->borderColor();
             const float borderThickness = entry.panel->borderThickness();
 
-            // ImGui strokes the window border CENTRED on the window rect, so half of it lands outside
-            // that rect - and the rect is exactly the atlas region this panel is sampled from, so that
-            // half is simply lost. The straight edges come out at half thickness while the rounded
-            // corners, curving inward, keep nearly all of theirs, which reads as corners fatter than
-            // the sides; the lost half also bleeds over whatever the packer placed next door.
-            //
-            // Insetting the window by half the thickness puts the whole stroke inside the panel, so
-            // the border grows INWARD from the panel's edge - the same convention vrui::UITextPanel's
-            // border follows, and why the two now match.
+            // A border is stroked centred on its rectangle's edge. The window is inset by half the
+            // thickness so the whole stroke lands inside the panel's atlas slot: the border grows
+            // inward from the panel's edge, as vrui::UITextPanel's does, and never reaches the
+            // neighbouring slot.
             const float halfBorder = borderThickness * 0.5f;
+            const float windowX = static_cast<float>(entry.x) + halfBorder;
+            const float windowY = static_cast<float>(entry.y) + halfBorder;
             const float windowWidth = (std::max)(1.0f, static_cast<float>(entry.panel->pixelWidth()) - borderThickness);
             const float windowHeight = (std::max)(1.0f, static_cast<float>(entry.panel->pixelHeight()) - borderThickness);
-            ImGui::SetNextWindowPos(ImVec2(static_cast<float>(entry.x) + halfBorder, static_cast<float>(entry.y) + halfBorder));
+            ImGui::SetNextWindowPos(ImVec2(windowX, windowY));
             ImGui::SetNextWindowSize(ImVec2(windowWidth, windowHeight));
 
-            // Radius and padding are stated against the panel's edge but applied to the inset window,
-            // so both hand back the half thickness the inset already spent: the border's OUTER arc
-            // lands on exactly the radius that was asked for, and the content still clears the
-            // border's inner edge by the full padding.
-            const float rounding = (std::max)(0.0f, entry.panel->cornerRadius() - halfBorder);
-            const float inset = entry.panel->padding() + halfBorder;
-            ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(background.r, background.g, background.b, background.a));
-            ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(borderColor.r, borderColor.g, borderColor.b, borderColor.a));
-            ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, rounding);
-            ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, borderThickness);
-            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(inset, inset));
+            // Pushed per panel so panels in one frame can differ, and popped whether or not Begin
+            // returned true: an unbalanced stack corrupts every panel after this one.
+            //
+            // ImGui's WindowPadding is one number per axis, so per-side padding cannot come from it.
+            // The window gets none and the content goes in a child sized to the padded rectangle,
+            // which also gives stretch-to-fit items (a separator, a full-width progress bar) the
+            // right edge to stretch to.
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(textColor.r, textColor.g, textColor.b, textColor.a));
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
             if (ImGui::Begin(entry.panel->name().c_str(), nullptr, PANEL_FLAGS)) {
-                entry.panel->content()();
+                // ImGui draws a window's own background and border inside Begin, before its draw list
+                // can take the fringe scale, so the panel draws them here instead - the same two
+                // calls. One radius rounds both, so no background shows past the border at a corner;
+                // taking off the inset puts the border's outer arc on the radius asked for. Clipped to
+                // the slot rather than the window, since half the stroke lies outside the window rect.
+                ImDrawList* drawList = ImGui::GetWindowDrawList();
+                drawList->_FringeScale = fringeScale;
+                const ImVec2 windowMin(windowX, windowY);
+                const ImVec2 windowMax(windowX + windowWidth, windowY + windowHeight);
+                const float rounding = (std::max)(0.0f, entry.panel->cornerRadius() - halfBorder);
+                drawList->PushClipRect(ImVec2(static_cast<float>(entry.x), static_cast<float>(entry.y)),
+                    ImVec2(static_cast<float>(entry.x + entry.panel->pixelWidth()), static_cast<float>(entry.y + entry.panel->pixelHeight())),
+                    false);
+                drawList->AddRectFilled(windowMin, windowMax, ImGui::ColorConvertFloat4ToU32(ImVec4(background.r, background.g, background.b, background.a)), rounding);
+                if (borderThickness > 0.0f) {
+                    drawList->AddRect(windowMin,
+                        windowMax,
+                        ImGui::ColorConvertFloat4ToU32(ImVec4(borderColor.r, borderColor.g, borderColor.b, borderColor.a)),
+                        rounding,
+                        0,
+                        borderThickness);
+                }
+                drawList->PopClipRect();
+
+                // the window starts half a border in, so each side adds its padding plus the border's
+                // other half to clear the inner edge
+                const auto& padding = entry.panel->padding();
+                const float contentWidth = (std::max)(1.0f, windowWidth - padding.left - padding.right - borderThickness);
+                const float contentHeight = (std::max)(1.0f, windowHeight - padding.top - padding.bottom - borderThickness);
+                ImGui::SetCursorPos(ImVec2(padding.left + halfBorder, padding.top + halfBorder));
+                if (ImGui::BeginChild("content", ImVec2(contentWidth, contentHeight), ImGuiChildFlags_None, ImGuiWindowFlags_NoBackground)) {
+                    ImGui::GetWindowDrawList()->_FringeScale = fringeScale;
+                    entry.panel->content()();
+                }
+                ImGui::EndChild(); // unconditional: ImGui asserts on an unmatched BeginChild
             }
             ImGui::End();
-            ImGui::PopStyleVar(3);
-            ImGui::PopStyleColor(2);
+            ImGui::PopStyleVar(2);
+            ImGui::PopStyleColor();
         }
         ImGui::Render();
 
         RenderFrame frame;
         frame.drawData = std::make_shared<ClonedDrawData>();
         frame.drawData->copyFrom(*ImGui::GetDrawData());
+        frame.drawData->scale(s_atlasScale);
         frame.quads.reserve(packed.size());
         for (const auto& entry : packed) {
             frame.quads.push_back(buildQuad(entry.placement, entry.x, entry.y, entry.panel->pixelWidth(), entry.panel->pixelHeight(), viewer, entry.panel->isOccluded()));

@@ -16,10 +16,11 @@ namespace f4cf::imgui::internal
      * raises no font-licensing question. The variants are deliberately BOLD: regular weight goes
      * mushy at VR's effective angular resolution.
      *
-     * @param sizePixels rasterization size, deliberately far above the nominal on-screen size - the
-     *        legibility trick in VR is to rasterize large and scale the QUAD down, never to
-     *        re-rasterize. Clamped to a sane range.
+     * @param sizePixels the size text is laid out at - see setFontSizePixels. Clamped to the same
+     *        range, so no caller can ask for a size the setter would have refused.
+     * @param rasterScale how much larger than that the glyphs are rasterized. The caller sets
+     *        io.FontGlobalScale to its inverse, so layout still sees sizePixels.
      * @return the loaded font, or nullptr if even the embedded fallback failed.
      */
-    ImFont* loadPanelFont(const char* modName, float sizePixels);
+    ImFont* loadPanelFont(const char* modName, float sizePixels, float rasterScale);
 }

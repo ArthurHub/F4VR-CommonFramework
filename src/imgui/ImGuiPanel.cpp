@@ -7,28 +7,6 @@
 
 namespace f4cf::imgui
 {
-    namespace
-    {
-        // Below ~16 glyphs lose their shape; above ~128 the atlas grows for nothing.
-        constexpr float MIN_FONT_SIZE = 16.0f;
-        constexpr float MAX_FONT_SIZE = 128.0f;
-
-        float s_fontSizePixels = 48.0f;
-    }
-
-    void setFontSizePixels(const float sizePixels)
-    {
-        s_fontSizePixels = std::clamp(sizePixels, MIN_FONT_SIZE, MAX_FONT_SIZE);
-    }
-
-    namespace internal
-    {
-        float fontSizePixels()
-        {
-            return s_fontSizePixels;
-        }
-    }
-
     Panel::Panel(std::string name, const int pixelWidth, const int pixelHeight)
         : _name(std::move(name)),
           _pixelWidth(std::clamp(pixelWidth, 1, MAX_PANEL_PIXEL_SIZE)),
@@ -74,6 +52,11 @@ namespace f4cf::imgui
         _occluded = occluded;
     }
 
+    void Panel::setTextColor(const render::Color& color)
+    {
+        _textColor = color;
+    }
+
     void Panel::setBackgroundColor(const render::Color& color)
     {
         _background = color;
@@ -97,9 +80,16 @@ namespace f4cf::imgui
         _cornerRadius = (std::max)(0.0f, pixels);
     }
 
+    void Panel::setPadding(const PanelPadding& padding)
+    {
+        // a negative side would push the content out over the border instead of away from it
+        _padding = { (std::max)(0.0f, padding.top), (std::max)(0.0f, padding.right), (std::max)(0.0f, padding.bottom), (std::max)(0.0f, padding.left) };
+    }
+
     void Panel::setPadding(const float pixels)
     {
-        _padding = (std::max)(0.0f, pixels);
+        const float side = (std::max)(0.0f, pixels);
+        setPadding(PanelPadding{ side, side, side, side });
     }
 
     void Panel::setVisible(const bool visible)

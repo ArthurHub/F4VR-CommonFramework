@@ -9,9 +9,6 @@
 
 namespace f4cf::imgui::internal
 {
-    // Defined alongside setFontSizePixels() in the panel translation unit.
-    float fontSizePixels();
-
     /**
      * ImDrawData handed across the game/render thread boundary.
      *
@@ -32,6 +29,12 @@ namespace f4cf::imgui::internal
          * Deep-copy the context's current draw data into this holder.
          */
         void copyFrom(const ImDrawData& source);
+
+        /**
+         * Multiply every position in the copy by `factor` - vertices, clip rects and the display
+         * rect - so a frame laid out at 1x rasterizes at that multiple.
+         */
+        void scale(float factor);
 
         ImDrawData drawData{};
     };
