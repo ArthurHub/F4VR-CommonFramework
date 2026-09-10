@@ -86,13 +86,6 @@ namespace f4cf::render::sceneDepth
         std::atomic<UINT> s_submittedWidth = 0;
         std::atomic<UINT> s_submittedHeight = 0;
 
-        // Enough to tell the failure modes apart: a detour that never runs, a seam where depth is
-        // never bound, and a game that renders the world somewhere other than the texture it submits
-        // are three different problems with three different answers.
-        std::atomic<std::uint64_t> s_commitCalls = 0;
-        std::atomic<std::uint64_t> s_depthBoundCalls = 0;
-        std::atomic<std::uint64_t> s_matchedCalls = 0;
-
         /**
          * COM identity: the same object can be handed out behind different interface pointers, so
          * only the IUnknown a QueryInterface returns is safe to compare.
@@ -259,7 +252,6 @@ namespace f4cf::render::sceneDepth
             if (!colorView || !depthView) {
                 return; // far too common to be worth logging
             }
-            s_depthBoundCalls.fetch_add(1, std::memory_order_relaxed);
 
             Microsoft::WRL::ComPtr<ID3D11Resource> depthResource;
             depthView->GetResource(depthResource.GetAddressOf());
@@ -282,7 +274,6 @@ namespace f4cf::render::sceneDepth
             if (!usable) {
                 return;
             }
-            s_matchedCalls.fetch_add(1, std::memory_order_relaxed);
             D3D11_DEPTH_STENCIL_VIEW_DESC viewDesc{};
             depthView->GetDesc(&viewDesc);
 
@@ -313,7 +304,6 @@ namespace f4cf::render::sceneDepth
             if (s_original) {
                 s_original(firstMode, secondMode);
             }
-            s_commitCalls.fetch_add(1, std::memory_order_relaxed);
             captureBoundDepth();
         }
 
@@ -434,19 +424,6 @@ namespace f4cf::render::sceneDepth
 
     void advanceFrame()
     {
-        // Debug-gated: these counters are how the three failure modes were told apart while this was
-        // being brought up, and they are the first thing to want if occlusion ever stops working on
-        // someone's build - but they have nothing to say once it does work.
-        if (logger::isDebugEnabled()) {
-            logger::sample(5000,
-                "scene depth: submitted {}x{}; commits {}, with depth bound {}, usable {}",
-                s_submittedWidth.load(std::memory_order_relaxed),
-                s_submittedHeight.load(std::memory_order_relaxed),
-                s_commitCalls.load(std::memory_order_relaxed),
-                s_depthBoundCalls.load(std::memory_order_relaxed),
-                s_matchedCalls.load(std::memory_order_relaxed));
-        }
-
         s_frameEpoch.fetch_add(1, std::memory_order_acq_rel);
     }
 }
