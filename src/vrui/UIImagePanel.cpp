@@ -33,37 +33,10 @@ namespace f4cf::vrui
         _fit = fit;
     }
 
-    /**
-     * Fit the image into the content area and add it as one textured quad.
-     *
-     * Contain needs the image's proportions, which are only known once the texture has loaded - but
-     * nothing is drawn before then anyway, so the fit never has to guess. A texture that reports no
-     * size falls back to filling the area.
-     */
     void UIImagePanel::appendContent(render::PrimitiveDraw& frame, const UIPanelContentArea& area) const
     {
-        if (!_texture) {
-            return;
+        if (_texture) {
+            appendImage(frame, *_texture, area.center, area.right, area.up, area.width, area.height, _fit, _tint);
         }
-        render::TextureView view = _texture->view(); // loads on first use, so it must run game-side
-        if (!view) {
-            return;
-        }
-
-        float halfW = area.width * 0.5f;
-        float halfH = area.height * 0.5f;
-        if (_fit == UIImageFit::Contain && _texture->width() > 0 && _texture->height() > 0) {
-            const float imageAspect = static_cast<float>(_texture->width()) / static_cast<float>(_texture->height());
-            if (area.width > area.height * imageAspect) {
-                halfW = halfH * imageAspect; // the area is wider than the image: empty bands left and right
-            } else {
-                halfH = halfW / imageAspect; // taller: empty bands above and below
-            }
-        }
-
-        const auto at = [&](const float u, const float v) {
-            return area.center + area.right * u + area.up * v;
-        };
-        frame.addImage(std::move(view), _texture->isSRGB(), at(-halfW, halfH), at(halfW, halfH), at(halfW, -halfH), at(-halfW, -halfH), _tint);
     }
 }

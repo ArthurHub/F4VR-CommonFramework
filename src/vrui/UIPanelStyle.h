@@ -69,4 +69,19 @@ namespace f4cf::vrui
         .cornerRadiusUnits = 0.2f,
         .padding = UIPadding::all(0.3f),
     };
+
+    /**
+     * The house style for buttons: the panel look with tight padding, since a 2x2 button has little
+     * room to give away. Matches the look the NIF buttons were drawn with.
+     *
+     *     button->setStyle(vrui::F4VR_BUTTON_STYLE);
+     */
+    inline constexpr UIPanelStyle F4VR_BUTTON_STYLE{
+        .color = render::Color::rgba(10, 250, 120),
+        .background = render::Color::rgba(15, 15, 15, 166),
+        .borderColor = render::Color::rgba(10, 250, 120),
+        .borderThicknessUnits = 0.05f,
+        .cornerRadiusUnits = 0.2f,
+        .padding = UIPadding::symmetric(0.15f, 0.2f),
+    };
 }

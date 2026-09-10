@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <string>
 #include <string_view>
 
@@ -36,6 +37,17 @@ namespace f4cf::vrui
 
         // world units per vrui unit, for content that states its own sizes in vrui units
         float scale = 1.0f;
+    };
+
+    /**
+     * How an image fills the rectangle it is given.
+     */
+    enum class UIImageFit : std::uint8_t
+    {
+        // as large as fits in the image's own proportions, centred, leaving the rest of the area empty
+        Contain,
+        // stretched to fill the area exactly, whatever that does to its proportions
+        Stretch,
     };
 
     /**
@@ -172,6 +184,24 @@ namespace f4cf::vrui
          * The concrete class's name, for toString.
          */
         virtual std::string_view typeName() const = 0;
+
+        /**
+         * The look to draw with this frame: the panel's style as set, unless a subclass whose look
+         * follows its state - a disabled button - adjusts a copy of it here, so the chrome drawn by
+         * the base and the content drawn by the subclass agree.
+         */
+        virtual UIPanelStyle resolveStyle() const
+        {
+            return _style;
+        }
+
+        /**
+         * Draw a texture into a rectangle of the panel's plane, centred on `center` and fitted by
+         * `fit`. Draws nothing while the texture has not loaded. GAME thread only, since the first
+         * call loads it.
+         */
+        static void appendImage(render::PrimitiveDraw& frame, render::Texture& texture, const RE::NiPoint3& center, const RE::NiPoint3& right, const RE::NiPoint3& up, float width,
+            float height, UIImageFit fit, const render::Color& tint);
 
         // content colour, background, border, rounding and padding together, defaulting to a bare
         // panel

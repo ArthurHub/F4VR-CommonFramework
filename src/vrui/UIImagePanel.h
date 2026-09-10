@@ -11,17 +11,6 @@
 namespace f4cf::vrui
 {
     /**
-     * How an image fills the panel's content area.
-     */
-    enum class UIImageFit : std::uint8_t
-    {
-        // as large as fits in the image's own proportions, centred, leaving the rest of the area empty
-        Contain,
-        // stretched to fill the area exactly, whatever that does to its proportions
-        Stretch,
-    };
-
-    /**
      * A vrui panel that draws an image with the framework's own primitive renderer.
      *
      *     auto icon = std::make_shared<vrui::UIImagePanel>("BeamIcon", 4.0f, 4.0f);

@@ -312,29 +312,30 @@ namespace f4cf::vrui
 
         // depth testing is off within the layer, so this order is what stacks them: the background
         // under the border (and the renderer puts both under the content)
-        const float cornerRadius = _style.cornerRadiusUnits * world.scale;
-        if (_style.background.a > 0.0f) {
-            appendBackground(frame, world.translate, right, up, worldWidth, worldHeight, cornerRadius, _style.background);
+        const UIPanelStyle style = resolveStyle();
+        const float cornerRadius = style.cornerRadiusUnits * world.scale;
+        if (style.background.a > 0.0f) {
+            appendBackground(frame, world.translate, right, up, worldWidth, worldHeight, cornerRadius, style.background);
         }
-        if (_style.borderThicknessUnits > 0.0f) {
-            appendBorder(frame, world.translate, right, up, worldWidth, worldHeight, _style.borderThicknessUnits * world.scale, cornerRadius, _style.borderColor);
+        if (style.borderThicknessUnits > 0.0f) {
+            appendBorder(frame, world.translate, right, up, worldWidth, worldHeight, style.borderThicknessUnits * world.scale, cornerRadius, style.borderColor);
         }
 
         // the content lives inside the border, not on it, and inside the padding as well - the two add
         // up rather than sharing, so setting one never silently moves the other
-        const float border = _style.borderThicknessUnits * world.scale;
-        const float insetTop = border + _style.padding.top * world.scale;
-        const float insetRight = border + _style.padding.right * world.scale;
-        const float insetBottom = border + _style.padding.bottom * world.scale;
-        const float insetLeft = border + _style.padding.left * world.scale;
+        const float border = style.borderThicknessUnits * world.scale;
+        const float insetTop = border + style.padding.top * world.scale;
+        const float insetRight = border + style.padding.right * world.scale;
+        const float insetBottom = border + style.padding.bottom * world.scale;
+        const float insetLeft = border + style.padding.left * world.scale;
         const float areaWidth = worldWidth - insetLeft - insetRight;
         const float areaHeight = worldHeight - insetTop - insetBottom;
         if (areaWidth <= 0.0f || areaHeight <= 0.0f) {
             logger::sample(5000,
                 "Panel '{}' has no room for content inside its border and padding ({:.2f} x {:.2f} units); only its chrome is drawn",
                 _name,
-                _size.width - _style.borderThicknessUnits * 2.0f - _style.padding.left - _style.padding.right,
-                _size.height - _style.borderThicknessUnits * 2.0f - _style.padding.top - _style.padding.bottom);
+                _size.width - style.borderThicknessUnits * 2.0f - style.padding.left - style.padding.right,
+                _size.height - style.borderThicknessUnits * 2.0f - style.padding.top - style.padding.bottom);
             return;
         }
 
@@ -349,5 +350,40 @@ namespace f4cf::vrui
             .scale = world.scale,
         };
         appendContent(frame, area);
+    }
+
+    /**
+     * Fit the texture into the rectangle and add it as one textured quad.
+     *
+     * Contain needs the image's proportions, which are only known once the texture has loaded - but
+     * nothing is drawn before then anyway, so the fit never has to guess. A texture that reports no
+     * size falls back to filling the rectangle.
+     */
+    void UIPanel::appendImage(render::PrimitiveDraw& frame, render::Texture& texture, const RE::NiPoint3& center, const RE::NiPoint3& right, const RE::NiPoint3& up,
+        const float width, const float height, const UIImageFit fit, const render::Color& tint)
+    {
+        if (width <= 0.0f || height <= 0.0f) {
+            return;
+        }
+        render::TextureView view = texture.view(); // loads on first use, so it must run game-side
+        if (!view) {
+            return;
+        }
+
+        float halfW = width * 0.5f;
+        float halfH = height * 0.5f;
+        if (fit == UIImageFit::Contain && texture.width() > 0 && texture.height() > 0) {
+            const float imageAspect = static_cast<float>(texture.width()) / static_cast<float>(texture.height());
+            if (width > height * imageAspect) {
+                halfW = halfH * imageAspect; // the rectangle is wider than the image: empty bands left and right
+            } else {
+                halfH = halfW / imageAspect; // taller: empty bands above and below
+            }
+        }
+
+        const auto at = [&](const float u, const float v) {
+            return center + right * u + up * v;
+        };
+        frame.addImage(std::move(view), texture.isSRGB(), at(-halfW, halfH), at(halfW, halfH), at(halfW, -halfH), at(-halfW, -halfH), tint);
     }
 }
