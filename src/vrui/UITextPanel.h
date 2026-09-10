@@ -7,6 +7,7 @@
 
 #include "../render/PrimitiveDraw.h"
 #include "UIElement.h"
+#include "UIPanelStyle.h"
 
 namespace f4cf::vrui
 {
@@ -37,25 +38,23 @@ namespace f4cf::vrui
      * Deliberately separate from the spacing below, so opening the rows up does not shrink the text
      * and resizing the text does not change how tight the rows are. setTextHeight overrides it.
      */
-    inline constexpr float TEXT_PANEL_TEXT_HEIGHT_UNITS = 0.28f;
+    inline constexpr float TEXT_PANEL_TEXT_HEIGHT_UNITS = 0.25f;
 
     /**
      * Distance from one row to the next, as a multiple of the text height. 1.0 stacks rows so their
      * glyphs touch; higher gives them air. setLineSpacing overrides it.
+     *
+     * The extra space goes BETWEEN rows only. The first row starts on the top edge of the text area,
+     * so opening the rows up never widens the gap to the top border - that gap is the padding, and
+     * matches the gap to the left border.
      */
-    inline constexpr float TEXT_PANEL_LINE_SPACING = 1.5f;
+    inline constexpr float TEXT_PANEL_LINE_SPACING = 1.6f;
 
     /**
      * Default border thickness and corner radius, in vrui units, for setBorder's optional arguments.
      */
-    inline constexpr float TEXT_PANEL_BORDER_THICKNESS_UNITS = 0.08f;
-    inline constexpr float TEXT_PANEL_BORDER_CORNER_RADIUS_UNITS = 0.4f;
-
-    /**
-     * Space between the rows and the panel's edge, in vrui units, on top of any border. Small by
-     * default so text does not sit hard against the edge; setPadding overrides it, 0 included.
-     */
-    inline constexpr float TEXT_PANEL_PADDING_UNITS = 0.15f;
+    inline constexpr float TEXT_PANEL_BORDER_THICKNESS_UNITS = 0.04f;
+    inline constexpr float TEXT_PANEL_BORDER_CORNER_RADIUS_UNITS = 0.2f;
 
     /**
      * A vrui element that draws rows of text with the framework's own primitive renderer.
@@ -82,9 +81,11 @@ namespace f4cf::vrui
      * What you gain is that it costs almost nothing and reads like an instrument panel. Every panel
      * shares one overlay layer, and rows of one color collapse into a single draw call.
      *
-     * It is occluded by the world by default, so it sits in the scene like the widgets around it
-     * rather than showing through walls - see setOccluded for when to turn that off, and for what
-     * happens on a build where the scene depth cannot be captured. It is not interactive.
+     * It starts bare - no background, no border, a little padding - and setStyle dresses it:
+     * vrui::F4VR_PANEL_STYLE is the house look, and a mod can name its own. It is occluded by the
+     * world by default, so it sits in the scene like the widgets around it rather than showing
+     * through walls; see setOccluded for when to turn that off, and for what happens on a build
+     * where the scene depth cannot be captured. It is not interactive.
      */
     class UITextPanel : public UIElement
     {
@@ -92,7 +93,7 @@ namespace f4cf::vrui
         /**
          * @param name identifies the element in logs.
          * @param width / height size in vrui units. What fits is measured against the area left
-         *        after the border and padding are taken off both sides: rows are that height over the
+         *        after the border and padding are taken off each side: rows are that height over the
          *        row pitch (text height x line spacing), characters that width over the character
          *        width (text height x render::GLYPH_ASPECT).
          */
@@ -133,6 +134,22 @@ namespace f4cf::vrui
         void setLineSpacing(float multiplier);
 
         /**
+         * The whole look in one go - row colour, background, border, rounding and padding; see
+         * vrui::UIPanelStyle, and vrui::F4VR_PANEL_STYLE for the house look. Replaces all of it; the
+         * setters below change one part.
+         */
+        void setStyle(const UIPanelStyle& style);
+
+        /**
+         * The panel's background colour, alpha included. Transparent until asked for; a fully
+         * transparent one (alpha 0) is not drawn at all, leaving the rows floating in the world.
+         *
+         * It fills the panel's rectangle, rounded by the corner radius and painted under both the
+         * border and the rows.
+         */
+        void setBackgroundColor(const render::Color& color);
+
+        /**
          * Draw a border around the panel's rectangle. Off until called; clearBorder turns it off.
          *
          * It is built from filled triangles rather than lines, because D3D11 draws every line one
@@ -143,6 +160,11 @@ namespace f4cf::vrui
          * inset by its thickness, on top of the padding, so they never run over it - which does mean
          * a thicker border leaves less room for text.
          *
+         * The corner radius shapes the BACKGROUND as well as the border, which is why it is one
+         * value for both rather than a property of the border alone: the background's outline is the
+         * border's outer edge, so no background can be left showing past the border at a corner.
+         * setCornerRadius sets it on its own, for a rounded panel with no border.
+         *
          * @param thickness in vrui units, clamped to half the shorter side.
          * @param cornerRadius in vrui units, 0 for square corners, clamped to half the shorter side.
          */
@@ -151,8 +173,24 @@ namespace f4cf::vrui
         void clearBorder();
 
         /**
-         * Space between the rows and the panel's edge, in vrui units. The border's thickness adds to
-         * this rather than eating into it, so changing one does not move the other.
+         * Round the panel's corners without adding a border, in vrui units. Kept separate from
+         * setBorder because the radius rounds the background whether or not there is a border on top
+         * of it.
+         */
+        void setCornerRadius(float units);
+
+        /**
+         * Space between the rows and the panel's edge, in vrui units, one value per side - see
+         * UIPadding for the named constructors. The border's thickness adds to it rather than eating
+         * into it, so changing one never moves the other.
+         *
+         * Per side because a row of text is wider than it is tall, so the same number rarely reads
+         * the same way above it as beside it.
+         */
+        void setPadding(const UIPadding& padding);
+
+        /**
+         * The same padding on all four sides - UIPadding::all in one call, and the common case.
          */
         void setPadding(float units);
 
@@ -184,17 +222,12 @@ namespace f4cf::vrui
 
     private:
         TextRowsCallback _content;
-        render::Color _color = render::colors::White;
         render::TextAlign _align = render::TextAlign::Left;
         bool _occluded = true;
         float _textHeightUnits = TEXT_PANEL_TEXT_HEIGHT_UNITS;
         float _lineSpacing = TEXT_PANEL_LINE_SPACING;
 
-        float _paddingUnits = TEXT_PANEL_PADDING_UNITS;
-
-        // zero thickness is what "no border" means, so no separate flag is needed
-        render::Color _borderColor = render::colors::White;
-        float _borderThicknessUnits = 0.0f;
-        float _borderCornerRadiusUnits = 0.0f;
+        // row colour, background, border, rounding and padding together, defaulting to a bare panel
+        UIPanelStyle _style;
     };
 }

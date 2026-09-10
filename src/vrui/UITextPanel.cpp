@@ -117,6 +117,65 @@ namespace f4cf::vrui
         }
 
         /**
+         * Fill the panel's rectangle into the frame, in the plane spanned by right/up and centred on
+         * `center`, with the same rounded outline appendBorder traces.
+         *
+         * The radius and the corner centres are the border's own, so the fill ends exactly where the
+         * border's outer edge begins: at a rounded corner there is no background left showing outside
+         * the border, and no seam between the two either, since both are walked from the same angles.
+         * With no border it is simply a rounded rectangle.
+         *
+         * Tessellated as one fan from the middle rather than as a band with caps, because every
+         * triangle in a fan shares whole edges with its neighbours - splitting the rectangle into
+         * slabs would leave T-junctions along the seams, and a half-transparent fill shows those as
+         * hairline cracks.
+         */
+        void appendBackground(render::PrimitiveDraw& frame, const RE::NiPoint3& center, const RE::NiPoint3& right, const RE::NiPoint3& up, const float width, const float height,
+            const float radius, const render::Color& color)
+        {
+            const auto at = [&](const float u, const float v) {
+                return center + right * u + up * v;
+            };
+
+            const float halfW = width * 0.5f;
+            const float halfH = height * 0.5f;
+            if (halfW <= 0.0f || halfH <= 0.0f) {
+                return;
+            }
+
+            const float outerR = std::clamp(radius, 0.0f, (std::min)(halfW, halfH));
+            if (outerR <= 0.0f) {
+                frame.addQuad(at(-halfW, halfH), at(halfW, halfH), at(halfW, -halfH), at(-halfW, -halfH), color);
+                return;
+            }
+
+            // the same corner centres and sweep order appendBorder uses, so the outlines agree
+            const std::array<std::pair<float, float>, 4> corners = { {
+                { halfW - outerR, halfH - outerR },
+                { -halfW + outerR, halfH - outerR },
+                { -halfW + outerR, -halfH + outerR },
+                { halfW - outerR, -halfH + outerR },
+            } };
+
+            // each corner's arc in turn; consecutive arcs are joined by the straight edge between
+            // them, which the fan covers without needing a quad of its own
+            constexpr std::size_t OUTLINE_POINTS = corners.size() * (BORDER_ARC_SEGMENTS + 1);
+            std::array<RE::NiPoint3, OUTLINE_POINTS> outline{};
+            std::size_t next = 0;
+            for (std::size_t corner = 0; corner < corners.size(); ++corner) {
+                const auto [cu, cv] = corners[corner];
+                const float base = static_cast<float>(corner) * HALF_PI;
+                for (int segment = 0; segment <= BORDER_ARC_SEGMENTS; ++segment) {
+                    const float angle = base + HALF_PI * static_cast<float>(segment) / BORDER_ARC_SEGMENTS;
+                    outline[next++] = at(cu + outerR * std::cos(angle), cv + outerR * std::sin(angle));
+                }
+            }
+            for (std::size_t point = 0; point < OUTLINE_POINTS; ++point) {
+                frame.addTriangle(center, outline[point], outline[(point + 1) % OUTLINE_POINTS], color);
+            }
+        }
+
+        /**
          * Collect every visible panel's rows into one frame and hand it across to the render thread.
          *
          * Runs after the mod's onFrameUpdate, which is where vrui is pumped, so every panel's
@@ -170,7 +229,7 @@ namespace f4cf::vrui
 
     void UITextPanel::setColor(const render::Color& color)
     {
-        _color = color;
+        _style.color = color;
     }
 
     void UITextPanel::setAlign(const render::TextAlign align)
@@ -190,21 +249,46 @@ namespace f4cf::vrui
         _lineSpacing = (std::max)(1.0f, multiplier);
     }
 
+    void UITextPanel::setStyle(const UIPanelStyle& style)
+    {
+        setColor(style.color);
+        setBackgroundColor(style.background);
+        setBorder(style.borderColor, style.borderThicknessUnits, style.cornerRadiusUnits);
+        setPadding(style.padding);
+    }
+
+    void UITextPanel::setBackgroundColor(const render::Color& color)
+    {
+        _style.background = color;
+    }
+
     void UITextPanel::setBorder(const render::Color& color, const float thickness, const float cornerRadius)
     {
-        _borderColor = color;
-        _borderThicknessUnits = (std::max)(0.0f, thickness);
-        _borderCornerRadiusUnits = (std::max)(0.0f, cornerRadius);
+        _style.borderColor = color;
+        _style.borderThicknessUnits = (std::max)(0.0f, thickness);
+        _style.cornerRadiusUnits = (std::max)(0.0f, cornerRadius);
     }
 
     void UITextPanel::clearBorder()
     {
-        _borderThicknessUnits = 0.0f;
+        // the rounding is deliberately kept: it shapes the background, which is still there
+        _style.borderThicknessUnits = 0.0f;
+    }
+
+    void UITextPanel::setCornerRadius(const float units)
+    {
+        _style.cornerRadiusUnits = (std::max)(0.0f, units);
+    }
+
+    void UITextPanel::setPadding(const UIPadding& padding)
+    {
+        // a negative side would pull the rows out over the border instead of away from it
+        _style.padding = { (std::max)(0.0f, padding.top), (std::max)(0.0f, padding.right), (std::max)(0.0f, padding.bottom), (std::max)(0.0f, padding.left) };
     }
 
     void UITextPanel::setPadding(const float units)
     {
-        _paddingUnits = (std::max)(0.0f, units);
+        setPadding(UIPadding::all(units));
     }
 
     void UITextPanel::setOccluded(const bool occluded)
@@ -257,9 +341,14 @@ namespace f4cf::vrui
         const float worldWidth = _size.width * world.scale;
         const float worldHeight = _size.height * world.scale;
 
-        // before the rows, so it is painted under them rather than over
-        if (_borderThicknessUnits > 0.0f) {
-            appendBorder(frame, world.translate, right, up, worldWidth, worldHeight, _borderThicknessUnits * world.scale, _borderCornerRadiusUnits * world.scale, _borderColor);
+        // depth testing is off within the layer, so this order is what stacks them: the background
+        // under the border, and both under the rows
+        const float cornerRadius = _style.cornerRadiusUnits * world.scale;
+        if (_style.background.a > 0.0f) {
+            appendBackground(frame, world.translate, right, up, worldWidth, worldHeight, cornerRadius, _style.background);
+        }
+        if (_style.borderThicknessUnits > 0.0f) {
+            appendBorder(frame, world.translate, right, up, worldWidth, worldHeight, _style.borderThicknessUnits * world.scale, cornerRadius, _style.borderColor);
         }
         if (rows.empty()) {
             return;
@@ -273,15 +362,19 @@ namespace f4cf::vrui
 
         // the rows live inside the border, not on it, and inside the padding as well - the two add up
         // rather than sharing, so setting one never silently moves the other
-        const float inset = (_borderThicknessUnits + _paddingUnits) * world.scale;
-        const float areaWidth = worldWidth - inset * 2.0f;
-        const float areaHeight = worldHeight - inset * 2.0f;
+        const float border = _style.borderThicknessUnits * world.scale;
+        const float insetTop = border + _style.padding.top * world.scale;
+        const float insetRight = border + _style.padding.right * world.scale;
+        const float insetBottom = border + _style.padding.bottom * world.scale;
+        const float insetLeft = border + _style.padding.left * world.scale;
+        const float areaWidth = worldWidth - insetLeft - insetRight;
+        const float areaHeight = worldHeight - insetTop - insetBottom;
         if (areaWidth <= 0.0f || areaHeight < rowPitch) {
             logger::sample(5000,
                 "Text panel '{}' has no room for text inside its border and padding ({:.2f} x {:.2f} units); nothing drawn",
                 _name,
-                _size.width - (_borderThicknessUnits + _paddingUnits) * 2.0f,
-                _size.height - (_borderThicknessUnits + _paddingUnits) * 2.0f);
+                _size.width - _style.borderThicknessUnits * 2.0f - _style.padding.left - _style.padding.right,
+                _size.height - _style.borderThicknessUnits * 2.0f - _style.padding.top - _style.padding.bottom);
             return;
         }
 
@@ -290,9 +383,16 @@ namespace f4cf::vrui
         const auto maxRows = static_cast<std::size_t>(areaHeight / rowPitch);
         const auto maxChars = static_cast<std::size_t>(areaWidth / (glyphHeight * render::GLYPH_ASPECT));
 
-        // half the leading above the first row, so the block sits evenly inside the text area
-        const float topOffset = areaHeight * 0.5f - (rowPitch - glyphHeight) * 0.5f;
-        const float alignOffset = _align == render::TextAlign::Left ? areaWidth * -0.5f : _align == render::TextAlign::Right ? areaWidth * 0.5f : 0.0f;
+        // the sides can differ, so the text area need not be centred on the panel: half the
+        // difference between opposite insets is its offset from the panel's middle
+        const float areaCenterU = (insetLeft - insetRight) * 0.5f;
+        const float areaCenterV = (insetBottom - insetTop) * 0.5f;
+
+        // the first row's glyphs start ON the top edge of the text area, so the space above them is
+        // the padding and nothing else - matching the space to their left; line spacing only adds
+        // room between rows
+        const float topOffset = areaCenterV + areaHeight * 0.5f;
+        const float alignOffset = areaCenterU + (_align == render::TextAlign::Left ? areaWidth * -0.5f : _align == render::TextAlign::Right ? areaWidth * 0.5f : 0.0f);
 
         for (std::size_t row = 0; row < rows.size() && row < maxRows; ++row) {
             std::string_view text = rows[row].text;
@@ -300,7 +400,7 @@ namespace f4cf::vrui
                 text = text.substr(0, maxChars);
             }
             const RE::NiPoint3 anchor = world.translate + right * alignOffset + up * (topOffset - static_cast<float>(row) * rowPitch);
-            frame.addOrientedText(text, anchor, right, up, glyphHeight, rows[row].color.value_or(_color), _align);
+            frame.addOrientedText(text, anchor, right, up, glyphHeight, rows[row].color.value_or(_style.color), _align);
         }
     }
 }

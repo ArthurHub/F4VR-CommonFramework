@@ -16,6 +16,40 @@ namespace f4cf::vrui
         {}
     };
 
+    /**
+     * Space between an element's content and its own edge, one value per side, in vrui units.
+     *
+     * The two shapes that come up most have named constructors, because a bare pair of floats leaves
+     * the reader guessing which of them is which:
+     *
+     *     UIPadding::all(0.2f)                 // the same on every side
+     *     UIPadding::symmetric(0.15f, 0.3f)    // 0.15 above and below, 0.3 either side
+     *     UIPadding{ 0.1f, 0.3f, 0.2f, 0.3f }  // top, right, bottom, left - CSS order
+     */
+    struct UIPadding
+    {
+        float top = 0.0f;
+        float right = 0.0f;
+        float bottom = 0.0f;
+        float left = 0.0f;
+
+        /**
+         * The same padding on every side.
+         */
+        static constexpr UIPadding all(const float units)
+        {
+            return { units, units, units, units };
+        }
+
+        /**
+         * One value above and below, another to the left and right.
+         */
+        static constexpr UIPadding symmetric(const float vertical, const float horizontal)
+        {
+            return { vertical, horizontal, vertical, horizontal };
+        }
+    };
+
     class UIElement
     {
     public:

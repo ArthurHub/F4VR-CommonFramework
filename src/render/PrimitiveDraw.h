@@ -16,6 +16,23 @@ namespace f4cf::render
         float b = 1.0f;
         float a = 1.0f;
 
+        /**
+         * A colour from the 0-255 bytes a colour picker reports, rather than the 0-1 floats stored
+         * here.
+         *
+         * Sampling a colour off a screenshot gives bytes, and putting those straight into the fields
+         * saturates every channel to white, since anything at or above 1.0 is full brightness. This
+         * is the conversion, so a sampled value can stay written the way it was read.
+         *
+         * The overlay draws into the eye texture after the engine has finished tonemapping it, and
+         * that target is not sRGB-encoded, so no gamma step comes between these bytes and the final
+         * image: a byte in is that byte out.
+         */
+        static constexpr Color rgba(const int red, const int green, const int blue, const int alpha = 255)
+        {
+            return { static_cast<float>(red) / 255.0f, static_cast<float>(green) / 255.0f, static_cast<float>(blue) / 255.0f, static_cast<float>(alpha) / 255.0f };
+        }
+
         bool operator==(const Color&) const = default;
     };
 
