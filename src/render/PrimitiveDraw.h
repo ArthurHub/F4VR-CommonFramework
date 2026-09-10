@@ -55,13 +55,6 @@ namespace f4cf::render
     constexpr std::size_t MAX_FILL_TRIANGLES = 8192;
 
     /**
-     * Width of one character as a fraction of its height: the built-in font advances 6 columns per
-     * glyph and is 7 rows tall. A caller fitting text to a known width needs this, and it is the one
-     * font metric worth exposing - everything else about the glyphs is the renderer's business.
-     */
-    constexpr float GLYPH_ASPECT = 6.0f / 7.0f;
-
-    /**
      * Where a text entry lives, and therefore how it is projected.
      */
     enum class TextPlacement : std::uint8_t
@@ -119,15 +112,17 @@ namespace f4cf::render
     };
 
     /**
-     * One text run. Three fields change meaning with the placement, because the placements measure
-     * in different spaces:
+     * One text run, in the framework's font - render::measureText (TextFont.h) gives its width.
+     * Three fields change meaning with the placement, because the placements measure in different
+     * spaces:
      *
      * - x/y: screen pixels for Screen, an offset from the projected anchor for WorldAnchored, a
      *   world offset along right/up for Oriented, and ignored for Billboard (it centres on the
      *   anchor).
-     * - size: glyph pixels for Screen and WorldAnchored, an apparent scale for Billboard (which
-     *   sizes itself by viewer distance), and the WORLD HEIGHT of one glyph for Oriented, whose
-     *   whole point is a fixed physical size.
+     * - size: how big the text is, as the height of a capital letter. For Screen and WorldAnchored
+     *   each step of size is 7 pixels of it (size 2 draws 14px capitals); for Billboard it is an
+     *   apparent scale, since the label sizes itself by viewer distance; for Oriented it is the
+     *   WORLD HEIGHT of a capital, whose whole point is a fixed physical size.
      * - right/up: the plane for Oriented, ignored otherwise. They are normalized on use, so any
      *   length works, but they must not be parallel.
      */
@@ -259,16 +254,17 @@ namespace f4cf::render
          * several rows steps the anchor down by -up. Unlike a billboard it stays welded to the plane
          * and foreshortens as the viewer moves, which is what makes it read as text on a surface.
          *
-         * @param glyphHeight world height of one glyph; a character is GLYPH_ASPECT as wide.
+         * @param textHeight world height of a capital letter; render::measureText gives the run's
+         *        width at it.
          * @param offsetRight / offsetUp world offset from the anchor along the plane's own axes.
          */
-        void addOrientedText(const std::string_view text, const RE::NiPoint3& worldAnchor, const RE::NiPoint3& right, const RE::NiPoint3& up, const float glyphHeight,
+        void addOrientedText(const std::string_view text, const RE::NiPoint3& worldAnchor, const RE::NiPoint3& right, const RE::NiPoint3& up, const float textHeight,
             const Color& color = colors::White, const TextAlign align = TextAlign::Left, const float offsetRight = 0.0f, const float offsetUp = 0.0f)
         {
             texts.push_back(TextEntry{ .text = std::string(text),
                 .x = offsetRight,
                 .y = offsetUp,
-                .size = glyphHeight,
+                .size = textHeight,
                 .color = color,
                 .worldAnchor = worldAnchor,
                 .right = right,

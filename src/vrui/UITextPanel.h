@@ -33,7 +33,8 @@ namespace f4cf::vrui
     using TextRowsCallback = std::function<void(std::vector<TextRow>&)>;
 
     /**
-     * Height of the glyphs themselves, in vrui units: the text size, and nothing else.
+     * Height of a capital letter, in vrui units: the text size, and nothing else. Lowercase
+     * ascenders reach a little above it, and descenders about a third of it below the baseline.
      *
      * Deliberately separate from the spacing below, so opening the rows up does not shrink the text
      * and resizing the text does not change how tight the rows are. setTextHeight overrides it.
@@ -41,12 +42,13 @@ namespace f4cf::vrui
     inline constexpr float TEXT_PANEL_TEXT_HEIGHT_UNITS = 0.25f;
 
     /**
-     * Distance from one row to the next, as a multiple of the text height. 1.0 stacks rows so their
-     * glyphs touch; higher gives them air. setLineSpacing overrides it.
+     * Distance from one baseline to the next, as a multiple of the text height. At 1.0 a row's
+     * capitals start right where the row above sits, so its descenders run into them; about 1.4
+     * clears them. setLineSpacing overrides it.
      *
-     * The extra space goes BETWEEN rows only. The first row starts on the top edge of the text area,
-     * so opening the rows up never widens the gap to the top border - that gap is the padding, and
-     * matches the gap to the left border.
+     * The extra space goes BETWEEN rows only. The first row's capitals start on the top edge of the
+     * text area, so opening the rows up never widens the gap to the top border - that gap is the
+     * padding, and matches the gap to the left border, which is measured to the first letter's ink.
      */
     inline constexpr float TEXT_PANEL_LINE_SPACING = 1.6f;
 
@@ -71,15 +73,15 @@ namespace f4cf::vrui
      *     });
      *     panel->addElement(readout);
      *
-     * What you give up against UICanvas is everything typographic. The font is the built-in 5x7
-     * bitmap: blocky, fixed-width, UPPERCASE ONLY (lowercase is upcased on the way in), with no
-     * kerning, wrapping or scrolling. Rows that do not fit are clipped rather than reflowed - past
-     * the bottom edge they are dropped, past the right edge they are truncated - because an
-     * overflowing row would otherwise cover the sibling widgets. Text, in other words, and nothing
-     * else: no widgets, no tables, no input.
+     * The text is the framework's font, Roboto Medium, kerned and drawn from a distance field so it
+     * stays sharp at any size and viewing distance. What you give up against UICanvas is layout: one
+     * size and one color per row, no wrapping and no scrolling. Rows that do not fit are clipped
+     * rather than reflowed - past the bottom edge they are dropped, past the right edge they are cut
+     * after the last character that fits - because an overflowing row would otherwise cover the
+     * sibling widgets. Text, in other words, and nothing else: no widgets, no tables, no input.
      *
-     * What you gain is that it costs almost nothing and reads like an instrument panel. Every panel
-     * shares one overlay layer, and rows of one color collapse into a single draw call.
+     * What you gain is that it costs almost nothing. Every panel shares one overlay layer, and rows
+     * of one color collapse into a single draw call.
      *
      * It starts bare - no background, no border, a little padding - and setStyle dresses it:
      * vrui::F4VR_PANEL_STYLE is the house look, and a mod can name its own. It is occluded by the
@@ -93,9 +95,9 @@ namespace f4cf::vrui
         /**
          * @param name identifies the element in logs.
          * @param width / height size in vrui units. What fits is measured against the area left
-         *        after the border and padding are taken off each side: rows are that height over the
-         *        row pitch (text height x line spacing), characters that width over the character
-         *        width (text height x render::GLYPH_ASPECT).
+         *        after the border and padding are taken off each side: as many rows as that height
+         *        holds at the row pitch (text height x line spacing), with room under the last for its
+         *        descenders, and in each row as much text as that width holds.
          */
         UITextPanel(const std::string& name, float width, float height);
         ~UITextPanel() override;
@@ -122,14 +124,14 @@ namespace f4cf::vrui
         void setAlign(render::TextAlign align);
 
         /**
-         * Height of the glyphs in vrui units - the text size. Rows stay as tightly or loosely spaced
-         * as they were, because the spacing is a multiple of this.
+         * Height of a capital letter in vrui units - the text size. Rows stay as tightly or loosely
+         * spaced as they were, because the spacing is a multiple of this.
          */
         void setTextHeight(float units);
 
         /**
-         * Distance from one row to the next, as a multiple of the text height. Below 1.0 the glyphs
-         * would collide, so it is clamped there.
+         * Distance from one baseline to the next, as a multiple of the text height. Below 1.0 a row's
+         * capitals would overlap the row above's, so it is clamped there.
          */
         void setLineSpacing(float multiplier);
 

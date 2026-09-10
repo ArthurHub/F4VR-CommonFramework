@@ -32,8 +32,9 @@ namespace f4cf::debug
 
         // watch-table layout: one "name: value" line per entry, stacked downward
         constexpr float WATCH_TABLE_TEXT_SIZE = 2.0f;
-        // glyphs are 7 rows tall at `size` px per row; 9 rows of advance leaves a 2-row gap
-        constexpr float WATCH_TABLE_ROW_STEP = 9.0f * WATCH_TABLE_TEXT_SIZE;
+        // capitals are 7px tall per step of size and descenders reach about 2.3 more below them, so
+        // 11 steps between rows leaves a clear gap
+        constexpr float WATCH_TABLE_ROW_STEP = 11.0f * WATCH_TABLE_TEXT_SIZE;
 
         // Default head HUD placement (used when no explicit watchAnchor is set). The anchor is a
         // world point in front of the HMD so the table gets natural stereo depth. FORWARD_DIST sets
@@ -531,7 +532,7 @@ namespace f4cf::debug
         if (_channelsSeen.empty()) {
             return {};
         }
-        std::string out = "channels:";
+        std::string out = "Channels:";
         for (const auto& name : _channelsSeen) {
             bool enabled;
             if (const auto it = _channelOverrides.find(name); it != _channelOverrides.end()) {

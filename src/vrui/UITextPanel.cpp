@@ -10,6 +10,7 @@
 #include "../ModBase.h"
 #include "../common/MatrixUtils.h"
 #include "../render/PrimitiveDrawRenderer.h"
+#include "../render/TextFont.h"
 
 namespace f4cf::vrui
 {
@@ -316,9 +317,9 @@ namespace f4cf::vrui
      * which is what lands the text in the same plane and facing as its sibling widgets instead of
      * turning to face the viewer like a billboard.
      *
-     * Rows are laid out downward from the top edge and clipped in both directions, since the font
-     * has neither wrapping nor scrolling: a row past the bottom is dropped, a row wider than the
-     * panel is truncated. Silently spilling over the edges would cover the neighbouring widgets.
+     * Rows are laid out downward from the top edge and clipped in both directions, since the panel
+     * neither wraps nor scrolls: a row past the bottom is dropped, a row wider than the panel is
+     * truncated. Silently spilling over the edges would cover the neighbouring widgets.
      *
      * Drawing nothing is how the panel honours being hidden, hidden by a parent, or detached.
      */
@@ -354,11 +355,14 @@ namespace f4cf::vrui
             return;
         }
 
-        const float glyphHeight = _textHeightUnits * world.scale;
-        const float rowPitch = glyphHeight * _lineSpacing;
+        const float textHeight = _textHeightUnits * world.scale;
+        const float rowPitch = textHeight * _lineSpacing;
         if (rowPitch <= 0.0f) {
             return;
         }
+        // a row takes its capitals and the descenders under them; the line spacing only adds room
+        // between rows
+        const float rowHeight = textHeight + render::textDescent(textHeight);
 
         // the rows live inside the border, not on it, and inside the padding as well - the two add up
         // rather than sharing, so setting one never silently moves the other
@@ -369,7 +373,7 @@ namespace f4cf::vrui
         const float insetLeft = border + _style.padding.left * world.scale;
         const float areaWidth = worldWidth - insetLeft - insetRight;
         const float areaHeight = worldHeight - insetTop - insetBottom;
-        if (areaWidth <= 0.0f || areaHeight < rowPitch) {
+        if (areaWidth <= 0.0f || areaHeight < rowHeight) {
             logger::sample(5000,
                 "Text panel '{}' has no room for text inside its border and padding ({:.2f} x {:.2f} units); nothing drawn",
                 _name,
@@ -378,29 +382,24 @@ namespace f4cf::vrui
             return;
         }
 
-        // the scale cancels out of these divisions, so what fits follows the layout rather than the
-        // size the container happens to have been given
-        const auto maxRows = static_cast<std::size_t>(areaHeight / rowPitch);
-        const auto maxChars = static_cast<std::size_t>(areaWidth / (glyphHeight * render::GLYPH_ASPECT));
+        // the scale cancels out of this division, and out of fitting each row to the width below, so
+        // what fits follows the layout rather than the size the container happens to have been given
+        const auto maxRows = 1 + static_cast<std::size_t>((areaHeight - rowHeight) / rowPitch);
 
         // the sides can differ, so the text area need not be centred on the panel: half the
         // difference between opposite insets is its offset from the panel's middle
         const float areaCenterU = (insetLeft - insetRight) * 0.5f;
         const float areaCenterV = (insetBottom - insetTop) * 0.5f;
 
-        // the first row's glyphs start ON the top edge of the text area, so the space above them is
-        // the padding and nothing else - matching the space to their left; line spacing only adds
-        // room between rows
+        // the first row's capitals start ON the top edge of the text area, so the space above them is
+        // the padding and nothing else - matching the space left of the first letter's ink
         const float topOffset = areaCenterV + areaHeight * 0.5f;
         const float alignOffset = areaCenterU + (_align == render::TextAlign::Left ? areaWidth * -0.5f : _align == render::TextAlign::Right ? areaWidth * 0.5f : 0.0f);
 
         for (std::size_t row = 0; row < rows.size() && row < maxRows; ++row) {
-            std::string_view text = rows[row].text;
-            if (text.size() > maxChars) {
-                text = text.substr(0, maxChars);
-            }
+            const std::string_view text = std::string_view(rows[row].text).substr(0, render::fitText(rows[row].text, textHeight, areaWidth));
             const RE::NiPoint3 anchor = world.translate + right * alignOffset + up * (topOffset - static_cast<float>(row) * rowPitch);
-            frame.addOrientedText(text, anchor, right, up, glyphHeight, rows[row].color.value_or(_style.color), _align);
+            frame.addOrientedText(text, anchor, right, up, textHeight, rows[row].color.value_or(_style.color), _align);
         }
     }
 }

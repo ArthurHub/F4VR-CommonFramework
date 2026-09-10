@@ -24,8 +24,8 @@ namespace f4cf::render
      *     _renderer.ensureInstalled();
      *     _renderer.publish(std::move(frame));
      *
-     * Text is drawn with a self-contained 5x7 bitmap font: no assets, no font loading, and blocky by
-     * nature - fine for readouts and markers, not a substitute for real type.
+     * Text is Roboto Medium, embedded in the framework and drawn from a distance-field atlas, so it
+     * stays sharp at any size, distance or angle; TextFont.h measures it.
      *
      * The instance must outlive the render thread's use of it: draw callbacks can never be
      * unregistered (see SubmitHook), so hold it as a static or a member of something that lives for

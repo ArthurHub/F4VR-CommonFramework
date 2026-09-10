@@ -162,6 +162,25 @@ target_include_directories(${PROJECT_NAME}
     ${SOURCE_DIR}
 )
 
+
+# >>> Embedded text font for src/render/TextFont.cpp: the TTF is compiled in as a byte array, so the
+# framework carries its own font and no mod has to ship one
+set(F4CF_TEXT_FONT "${SOURCE_DIR}/render/fonts/Roboto-Medium.ttf")
+set(F4CF_TEXT_FONT_SOURCE "${BUILD_DIR}/generated/EmbeddedTextFont.cpp")
+add_custom_command(
+  OUTPUT "${F4CF_TEXT_FONT_SOURCE}"
+  COMMAND "${CMAKE_COMMAND}" "-DINPUT=${F4CF_TEXT_FONT}" "-DOUTPUT=${F4CF_TEXT_FONT_SOURCE}" -DNAMESPACE=f4cf::render::internal -DSYMBOL=TEXT_FONT_TTF -P "${ROOT_DIR}/cmake/embed-binary.cmake"
+  DEPENDS "${F4CF_TEXT_FONT}" "${ROOT_DIR}/cmake/embed-binary.cmake"
+  COMMENT "Embedding Roboto-Medium.ttf"
+  VERBATIM
+)
+set_source_files_properties("${F4CF_TEXT_FONT_SOURCE}" PROPERTIES GENERATED TRUE SKIP_PRECOMPILE_HEADERS ON)
+target_sources(${PROJECT_NAME} PRIVATE "${F4CF_TEXT_FONT_SOURCE}")
+source_group("Generated Files" FILES "${F4CF_TEXT_FONT_SOURCE}")
+# stb_truetype rasterizes it - vendored rather than taken from the imgui port, so text still builds
+# with F4CF_WITH_IMGUI_UI off
+target_include_directories(${PROJECT_NAME} PRIVATE "${ROOT_DIR}/external/stb")
+
 # Dependencies
 target_link_libraries(${PROJECT_NAME}
   PUBLIC
