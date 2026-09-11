@@ -86,6 +86,71 @@ namespace f4cf::vrui
         }
     }
 
+    void UIButtonPanel::setFitWidth(const bool fitWidth)
+    {
+        setSizing(fitWidth ? UIPanelSizing::FixedHeight : UIPanelSizing::Fixed);
+    }
+
+    /**
+     * The width the column needs at the button's height: the widest line at its full text height, or the
+     * image at its proportions in the height the lines leave, whichever is wider. Measured the way
+     * appendContent lays the column out, including the shrink it applies when the lines alone overfill
+     * the height, so what is measured is what gets drawn. Never narrower than the button is tall, and
+     * never wider than the max width allows.
+     *
+     * Only a fit-width button asks, since only its width follows the content. Loads the image, if it has
+     * not loaded yet, for its proportions - layout runs on the game thread, which loading requires.
+     */
+    std::optional<UISize> UIButtonPanel::measureContent(const float availableWidth, const float availableHeight)
+    {
+        if (getSizing() != UIPanelSizing::FixedHeight) {
+            return std::nullopt;
+        }
+
+        const bool hasImage = _texture != nullptr;
+        const float maxTextHeight = hasImage ? _textHeightUnits : _textOnlyHeightUnits;
+        const float descentPerHeight = render::textDescent(1.0f);
+        const auto lineWidth = [&](const std::string& text) {
+            return text.empty() ? 0.0f : render::measureText(text, maxTextHeight);
+        };
+
+        float contentWidth = 0.0f;
+        if (!hasImage) {
+            std::size_t count = 0;
+            float widest = 0.0f;
+            for (const std::string* text : { &_topText, &_middleText, &_bottomText }) {
+                if (!text->empty()) {
+                    ++count;
+                    widest = (std::max)(widest, lineWidth(*text));
+                }
+            }
+            if (count > 0) {
+                // the lines at full height, with room between them for the descenders of all but the last
+                const float needed = static_cast<float>(count) * maxTextHeight + static_cast<float>(count - 1) * descentPerHeight * maxTextHeight;
+                contentWidth = widest * (std::min)(1.0f, availableHeight / needed);
+            }
+        } else {
+            const bool hasTop = !_topText.empty();
+            const bool hasBottom = !_bottomText.empty();
+            const float rows = ((hasTop ? maxTextHeight : 0.0f) + (hasBottom ? maxTextHeight : 0.0f)) * (1.0f + descentPerHeight);
+            const float gaps = static_cast<float>((hasTop ? 1 : 0) + (hasBottom ? 1 : 0)) * BUTTON_PANEL_CONTENT_GAP_UNITS;
+            const float shrink = rows > 0.0f && rows + gaps > availableHeight ? (std::max)(0.0f, availableHeight - gaps) / rows : 1.0f;
+            contentWidth = (std::max)(lineWidth(_topText), lineWidth(_bottomText)) * shrink;
+
+            const bool loaded = _texture->width() != 0 || _texture->view();
+            if (loaded && _texture->width() != 0 && _texture->height() != 0) {
+                const float imageHeight = (std::max)(0.0f, availableHeight - rows * shrink - gaps);
+                contentWidth = (std::max)(contentWidth, imageHeight * static_cast<float>(_texture->width()) / static_cast<float>(_texture->height()));
+            }
+        }
+
+        // never narrower than tall, so a short label still makes a square button
+        const UIPanelStyle style = resolveStyle();
+        const float chromeWidth = style.borderThicknessUnits * 2.0f + style.padding.left + style.padding.right;
+        contentWidth = (std::max)(contentWidth, _size.height - chromeWidth);
+        return UISize((std::min)(contentWidth, availableWidth), availableHeight);
+    }
+
     /**
      * Detect presses while the button is attached and visible; a hidden button lets go of any push in
      * progress.

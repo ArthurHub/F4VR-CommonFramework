@@ -43,6 +43,30 @@ namespace f4cf::render
      * a row needs beneath its capitals.
      */
     float textDescent(float textHeight);
+
+    /**
+     * Where a run of text puts its ink and moves the pen, in the unit textHeight is given in - what
+     * placing runs one after another needs, where measureText's ink extent alone is not enough.
+     */
+    struct TextRunMetrics
+    {
+        // from the run's start to where the character after it would start, spaces included
+        float advance = 0.0f;
+
+        // from the run's start to the left edge of its first ink, and to the right edge of its last
+        float inkLeft = 0.0f;
+        float inkRight = 0.0f;
+
+        // false for a run with no ink, like spaces alone, which leaves both ink edges at 0
+        bool hasInk = false;
+    };
+
+    /**
+     * The pen advance and ink edges of text at textHeight, kerned within the run. Kerning against the
+     * character before the run is not included, so runs placed side by side lose only the kerning at
+     * their seams.
+     */
+    TextRunMetrics measureTextRun(std::string_view text, float textHeight);
 }
 
 namespace f4cf::render::internal

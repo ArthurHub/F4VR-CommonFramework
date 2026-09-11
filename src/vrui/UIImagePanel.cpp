@@ -4,6 +4,12 @@
 
 namespace f4cf::vrui
 {
+    UIImagePanel::UIImagePanel(const std::string& name)
+        : UIPanel(name, 0.0f, 0.0f)
+    {
+        setSizing(UIPanelSizing::FitContent);
+    }
+
     UIImagePanel::UIImagePanel(const std::string& name, const float width)
         : UIPanel(name, width, width)
     {
@@ -13,25 +19,6 @@ namespace f4cf::vrui
     UIImagePanel::UIImagePanel(const std::string& name, const float width, const float height)
         : UIPanel(name, width, height)
     {}
-
-    /**
-     * The content width it is given, at the image's proportions - loading the texture if this is the
-     * first time anything asked, since its size is not known before. Layout runs on the game thread,
-     * which loading requires. A fixed-size panel has no use for the answer, so it does not ask.
-     */
-    std::optional<UISize> UIImagePanel::measureContent(const float availableWidth)
-    {
-        if (getSizing() == UIPanelSizing::Fixed || !_texture) {
-            return std::nullopt;
-        }
-        if (_texture->width() == 0 && !_texture->view()) {
-            return std::nullopt;
-        }
-        if (_texture->width() == 0 || _texture->height() == 0) {
-            return std::nullopt;
-        }
-        return UISize(availableWidth, availableWidth * static_cast<float>(_texture->height()) / static_cast<float>(_texture->width()));
-    }
 
     void UIImagePanel::setImage(std::string path)
     {
@@ -56,6 +43,36 @@ namespace f4cf::vrui
     void UIImagePanel::setFit(const UIImageFit fit)
     {
         _fit = fit;
+    }
+
+    /**
+     * A fixed-width panel's image at that width, in its proportions; a fit-content panel's at its own
+     * size in pixels over IMAGE_PANEL_PIXELS_PER_UNIT, scaled down to the width available when that is
+     * less. Loads the texture if this is the first time anything asked, since its size is not known
+     * before - layout runs on the game thread, which loading requires. A fixed-size panel has no use for
+     * the answer, so it does not ask.
+     */
+    std::optional<UISize> UIImagePanel::measureContent(const float availableWidth, float)
+    {
+        if (getSizing() == UIPanelSizing::Fixed || !_texture) {
+            return std::nullopt;
+        }
+        if (_texture->width() == 0 && !_texture->view()) {
+            return std::nullopt;
+        }
+        if (_texture->width() == 0 || _texture->height() == 0) {
+            return std::nullopt;
+        }
+
+        const auto imageWidth = static_cast<float>(_texture->width());
+        const auto imageHeight = static_cast<float>(_texture->height());
+        if (getSizing() == UIPanelSizing::FixedWidth) {
+            return UISize(availableWidth, availableWidth * imageHeight / imageWidth);
+        }
+
+        const float naturalWidth = imageWidth / IMAGE_PANEL_PIXELS_PER_UNIT;
+        const float scale = naturalWidth > availableWidth ? availableWidth / naturalWidth : 1.0f;
+        return UISize(naturalWidth * scale, imageHeight / IMAGE_PANEL_PIXELS_PER_UNIT * scale);
     }
 
     void UIImagePanel::appendContent(render::PrimitiveDraw& frame, const UIPanelContentArea& area) const

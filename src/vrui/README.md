@@ -191,11 +191,20 @@ auto fixed = std::make_shared<vrui::UITextPanel>("Readout", 8.0f, 4.0f); // fixe
 fit->setMaxWidth(10.0f);                                                // fit-content wraps past this width
 
 auto icon  = std::make_shared<vrui::UIImagePanel>("Icon", 3.0f);        // fixed width, height from the image's proportions
+auto photo = std::make_shared<vrui::UIImagePanel>("Photo");             // the image's own size, 100 px per unit (as vrui_atlas.py bakes NIFs)
+photo->setMaxWidth(4.0f);                                               // ...scaled down past this width, proportions kept
+
+auto btn = std::make_shared<vrui::UIButtonPanel>("Tuning");              // buttons (and toggle / multi-state panels) too:
+btn->setFitWidth(true);                                                 // height as given, width fits the label (never narrower than tall)
+btn->setMaxWidth(6.0f);                                                 // ...and past this the label shrinks again
 ```
 
 Text wraps at spaces to the width it has (a word too long for a line is broken inside it), and a
-`'\n'` in a row starts a new line. The rows callback runs once per frame during layout; the text is
-only re-wrapped when it, the width, or the text height changes.
+`'\n'` in a row starts a new line. A `'\t'` moves to the next tab stop, measured from the line start
+(`setTabWidth`), so columns line up across rows. A row can name its own `textHeight`, and can be
+given `spans` - pieces in colors of their own - instead of one `text`. The rows callback runs once per
+frame during layout; the text is only re-laid-out when a row's text, spans or height, the width, the
+text height or the tab width changes.
 
 ## Notes
 

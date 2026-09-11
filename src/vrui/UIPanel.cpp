@@ -281,7 +281,7 @@ namespace f4cf::vrui
         _maxWidthUnits = (std::max)(0.0f, units);
     }
 
-    std::optional<UISize> UIPanel::measureContent(float)
+    std::optional<UISize> UIPanel::measureContent(float, float)
     {
         return std::nullopt;
     }
@@ -307,19 +307,26 @@ namespace f4cf::vrui
         const float chromeWidth = style.borderThicknessUnits * 2.0f + style.padding.left + style.padding.right;
         const float chromeHeight = style.borderThicknessUnits * 2.0f + style.padding.top + style.padding.bottom;
 
-        float availableWidth = _size.width - chromeWidth;
-        if (_sizing == UIPanelSizing::FitContent) {
-            availableWidth = _maxWidthUnits > 0.0f ? _maxWidthUnits - chromeWidth : std::numeric_limits<float>::infinity();
-        }
+        const bool widthFollows = _sizing == UIPanelSizing::FitContent || _sizing == UIPanelSizing::FixedHeight;
+        const bool heightFollows = _sizing == UIPanelSizing::FitContent || _sizing == UIPanelSizing::FixedWidth;
+        const float unbounded = std::numeric_limits<float>::infinity();
 
-        const std::optional<UISize> content = measureContent((std::max)(0.0f, availableWidth));
-        if (!content || _sizing == UIPanelSizing::Fixed) {
+        float availableWidth = _size.width - chromeWidth;
+        if (widthFollows) {
+            availableWidth = _maxWidthUnits > 0.0f ? _maxWidthUnits - chromeWidth : unbounded;
+        }
+        const float availableHeight = heightFollows ? unbounded : _size.height - chromeHeight;
+
+        const std::optional<UISize> content = measureContent((std::max)(0.0f, availableWidth), (std::max)(0.0f, availableHeight));
+        if (!content) {
             return;
         }
-        if (_sizing == UIPanelSizing::FitContent) {
+        if (widthFollows) {
             _size.width = content->width + chromeWidth;
         }
-        _size.height = content->height + chromeHeight;
+        if (heightFollows) {
+            _size.height = content->height + chromeHeight;
+        }
     }
 
     std::string UIPanel::toString() const
@@ -387,7 +394,8 @@ namespace f4cf::vrui
         if (areaWidth <= 0.0f || areaHeight <= 0.0f) {
             // a panel sized to its content collapses to its chrome while it has none, which is not a
             // mistake worth reporting; only a size the caller chose can be too small
-            const bool callerSizedTooSmall = _sizing == UIPanelSizing::Fixed || (_sizing == UIPanelSizing::FixedWidth && areaWidth <= 0.0f);
+            const bool callerSizedTooSmall =
+                _sizing == UIPanelSizing::Fixed || (_sizing == UIPanelSizing::FixedWidth && areaWidth <= 0.0f) || (_sizing == UIPanelSizing::FixedHeight && areaHeight <= 0.0f);
             if (!callerSizedTooSmall) {
                 return;
             }

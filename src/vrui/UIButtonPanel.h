@@ -7,6 +7,7 @@
 
 #include "../render/Texture.h"
 #include "UIPanel.h"
+#include "UIPressable.h"
 
 namespace f4cf::vrui
 {
@@ -66,8 +67,11 @@ namespace f4cf::vrui
      * once, and fires again only after the bone has backed away in front of it. While disabled it is
      * dimmed and cannot be pressed. It starts in vrui::F4VR_BUTTON_STYLE; the style's content colour is
      * the text colour, and the image is tinted by setImageTint alone.
+     *
+     * Its size is fixed unless setFitWidth is on: then its height stays as given and its width follows
+     * the content, so a long label widens the button instead of shrinking.
      */
-    class UIButtonPanel : public UIPanel
+    class UIButtonPanel : public UIPanel, public UIPressable
     {
     public:
         /**
@@ -127,12 +131,22 @@ namespace f4cf::vrui
         void setTextOnlyHeight(float units);
 
         /**
+         * Size the button's width to its content at its height, instead of shrinking the text to the width
+         * it was given. Each line then keeps its full text height, and the image its proportions in the
+         * height the lines leave. The button never gets narrower than it is tall, so a short label still
+         * makes a square button; setMaxWidth caps it, past which the lines shrink to fit as before.
+         */
+        void setFitWidth(bool fitWidth);
+
+        using UIPanel::setMaxWidth;
+
+        /**
          * Called on the game thread each time the button is pressed. A button with no handler is not
          * pressable.
          */
         void setOnPressHandler(std::function<void(UIButtonPanel*)> handler);
 
-        bool isDisabled() const
+        bool isDisabled() const override
         {
             return _disabled;
         }
@@ -140,7 +154,7 @@ namespace f4cf::vrui
         /**
          * A disabled button cannot be pressed and is drawn dimmed.
          */
-        void setDisabled(bool disabled);
+        void setDisabled(bool disabled) override;
 
         // Internal: press detection, run by the UI manager each frame.
         void onFrameUpdate(UIFrameUpdateContext* context) override;
@@ -155,6 +169,7 @@ namespace f4cf::vrui
             return !_disabled && _onPressHandler != nullptr;
         }
 
+        std::optional<UISize> measureContent(float availableWidth, float availableHeight) override;
         RE::NiTransform calculateTransform() const override;
         void onPressEventFired(UIElement* element, UIFrameUpdateContext* context) override;
         UIPanelStyle resolveStyle() const override;

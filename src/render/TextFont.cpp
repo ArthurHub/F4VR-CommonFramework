@@ -511,6 +511,26 @@ namespace f4cf::render
     {
         return textFont().descent * textHeight;
     }
+
+    TextRunMetrics measureTextRun(const std::string_view text, const float textHeight)
+    {
+        TextRunMetrics metrics;
+        walkGlyphs(text, [&](const Glyph& glyph, const float pen, std::size_t) {
+            if (glyph.hasInk) {
+                if (!metrics.hasInk) {
+                    metrics.inkLeft = pen + glyph.inkLeft;
+                    metrics.hasInk = true;
+                }
+                metrics.inkRight = pen + glyph.inkRight;
+            }
+            metrics.advance = pen + glyph.advance;
+            return true;
+        });
+        metrics.advance *= textHeight;
+        metrics.inkLeft *= textHeight;
+        metrics.inkRight *= textHeight;
+        return metrics;
+    }
 }
 
 namespace f4cf::render::internal

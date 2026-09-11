@@ -11,6 +11,12 @@
 namespace f4cf::vrui
 {
     /**
+     * Image pixels per vrui unit for a panel sized to its image: nif-tools/vrui_atlas.py's
+     * PIXELS_PER_UNIT, so a 200-pixel image is as wide as the 2-unit NIF built from it.
+     */
+    inline constexpr float IMAGE_PANEL_PIXELS_PER_UNIT = 100.0f;
+
+    /**
      * A vrui panel that draws an image with the framework's own primitive renderer.
      *
      *     auto icon = std::make_shared<vrui::UIImagePanel>("BeamIcon", 4.0f, 4.0f);
@@ -31,14 +37,22 @@ namespace f4cf::vrui
      * screen costs one.
      *
      * Built with a width alone, the panel takes its height from the image's proportions, so the image
-     * fills its content area with no empty bands and the fit makes no difference. The proportions are
-     * only known once the texture has loaded, which the panel asks for during layout; until then, and
-     * for good if the image cannot load, the panel is square. There is no fit-content sizing, since an
-     * image has proportions but no natural size in vrui units.
+     * fills its content area with no empty bands and the fit makes no difference. Built with no size, it
+     * takes the image's own size at IMAGE_PANEL_PIXELS_PER_UNIT - the scale the atlas tool bakes NIF
+     * sizes at, so an image and a NIF made from the same picture come out the same size - scaled down,
+     * proportions kept, when setMaxWidth allows less. Either way the size is only known once the texture
+     * has loaded, which the panel asks for during layout; until then, and for good if the image cannot
+     * load, a fixed-width panel is square and a fit-content one shows only its chrome.
      */
     class UIImagePanel : public UIPanel
     {
     public:
+        /**
+         * A panel sized to the image, at IMAGE_PANEL_PIXELS_PER_UNIT.
+         * @param name identifies the element in logs.
+         */
+        explicit UIImagePanel(const std::string& name);
+
         /**
          * A panel of fixed width whose height follows the image's proportions.
          * @param name identifies the element in logs.
@@ -82,8 +96,10 @@ namespace f4cf::vrui
          */
         void setFit(UIImageFit fit);
 
+        using UIPanel::setMaxWidth;
+
     protected:
-        std::optional<UISize> measureContent(float availableWidth) override;
+        std::optional<UISize> measureContent(float availableWidth, float availableHeight) override;
         void appendContent(render::PrimitiveDraw& frame, const UIPanelContentArea& area) const override;
 
         std::string_view typeName() const override

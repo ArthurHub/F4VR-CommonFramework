@@ -63,6 +63,9 @@ namespace f4cf::vrui
         FixedWidth,
         // both follow the content, which wraps only past the max width when one is set
         FitContent,
+        // height as given, width grown or shrunk to hold the content at that height, up to the max width
+        // when one is set
+        FixedHeight,
     };
 
     /**
@@ -209,14 +212,16 @@ namespace f4cf::vrui
 
         /**
          * Size of the content in vrui units, border and padding excluded, when laid out no wider than
-         * `availableWidth` - infinite for a FitContent panel with no max width. Runs on the GAME thread
+         * `availableWidth` and no taller than `availableHeight`. A dimension that follows the content is
+         * unbounded - infinite - unless it is the width and a max width is set. Runs on the GAME thread
          * during layout, every frame the panel is visible and whatever its sizing, so it is also where a
          * subclass prepares what appendContent draws.
          *
-         * The default, and nullopt from an override, leaves the size as it is: a panel whose content
-         * has no size to report yet, like an image that has not loaded.
+         * Only the dimensions that follow the content are read from the result. The default, and nullopt
+         * from an override, leaves the size as it is: a panel whose content has no size to report yet,
+         * like an image that has not loaded.
          */
-        virtual std::optional<UISize> measureContent(float availableWidth);
+        virtual std::optional<UISize> measureContent(float availableWidth, float availableHeight);
 
         /**
          * Which dimensions follow the content. Protected, so a subclass exposes only the modes its
@@ -225,8 +230,9 @@ namespace f4cf::vrui
         void setSizing(UIPanelSizing sizing);
 
         /**
-         * The widest a FitContent panel grows before its content has to wrap, in vrui units, border
-         * and padding included. 0, the default, lets it grow without limit.
+         * The widest a panel whose width follows its content (FitContent, FixedHeight) grows before its
+         * content has to wrap or shrink, in vrui units, border and padding included. 0, the default, lets
+         * it grow without limit.
          */
         void setMaxWidth(float units);
 
