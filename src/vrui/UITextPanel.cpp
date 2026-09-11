@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <format>
 #include <optional>
 #include <string_view>
 #include <utility>
@@ -386,6 +387,25 @@ namespace f4cf::vrui
     void UITextPanel::setTabWidth(const float units)
     {
         _tabWidthUnits = (std::max)(0.0f, units);
+    }
+
+    /**
+     * The panel's fields, then the text size and spacing as Text:(height,spacing) - the two that most
+     * change how much a text panel holds.
+     */
+    void UITextPanel::writeDevLayoutFields(std::string& line) const
+    {
+        UIPanel::writeDevLayoutFields(line);
+        line += std::format(", Text:({:.2f},{:.2f})", _textHeightUnits, _lineSpacing);
+    }
+
+    void UITextPanel::readDevLayoutFields(const DevLayoutFields& fields)
+    {
+        UIPanel::readDevLayoutFields(fields);
+        if (const auto text = fields.find("Text"); text != fields.end() && text->second.size() == 2) {
+            setTextHeight(text->second[0]);
+            setLineSpacing(text->second[1]);
+        }
     }
 
     std::size_t UITextPanel::spanCount(const TextRow& row)

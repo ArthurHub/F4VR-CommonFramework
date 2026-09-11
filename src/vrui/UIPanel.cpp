@@ -329,17 +329,59 @@ namespace f4cf::vrui
         }
     }
 
+    /**
+     * One line in the NIF widgets' shape: name, state letters, position and size. A size that follows
+     * the content is tagged with how - "auto" for both dimensions, "auto-w" or "auto-h" for one - since
+     * that is what explains a size nobody set.
+     */
     std::string UIPanel::toString() const
     {
-        return std::format("{}({}): {}, Pos({:.2f}, {:.2f}, {:.2f}), Size({:.2f}, {:.2f})",
+        const std::string_view sizing = _sizing == UIPanelSizing::FitContent    ? " auto"
+                                        : _sizing == UIPanelSizing::FixedWidth  ? " auto-h"
+                                        : _sizing == UIPanelSizing::FixedHeight ? " auto-w"
+                                                                                : "";
+        return std::format("{}({}): {}, Pos({:.2f}, {:.2f}, {:.2f}), Size({:.2f}, {:.2f}{})",
             typeName(),
             _name,
-            _visible ? "V" : "H",
+            stateFlags(),
             _transform.translate.x,
             _transform.translate.y,
             _transform.translate.z,
             _size.width,
-            _size.height);
+            _size.height,
+            sizing);
+    }
+
+    std::string UIPanel::stateFlags() const
+    {
+        return _visible ? "V" : "H";
+    }
+
+    /**
+     * The element's fields, then what decides how much room the content gets: the padding, as
+     * Pad:(top,right,bottom,left), and while the width follows the content its cap, as MaxW:(width). The
+     * style's colours and border are looks rather than layout, so they stay out of the line.
+     */
+    void UIPanel::writeDevLayoutFields(std::string& line) const
+    {
+        UIElement::writeDevLayoutFields(line);
+        const UIPadding& padding = _style.padding;
+        line += std::format(", Pad:({:.2f},{:.2f},{:.2f},{:.2f})", padding.top, padding.right, padding.bottom, padding.left);
+        if (_sizing == UIPanelSizing::FitContent || _sizing == UIPanelSizing::FixedHeight) {
+            line += std::format(", MaxW:({:.2f})", _maxWidthUnits);
+        }
+    }
+
+    void UIPanel::readDevLayoutFields(const DevLayoutFields& fields)
+    {
+        UIElement::readDevLayoutFields(fields);
+        if (const auto padding = fields.find("Pad"); padding != fields.end() && padding->second.size() == 4) {
+            const std::vector<float>& sides = padding->second;
+            setPadding(UIPadding{ .top = sides[0], .right = sides[1], .bottom = sides[2], .left = sides[3] });
+        }
+        if (const auto maxWidth = fields.find("MaxW"); maxWidth != fields.end() && maxWidth->second.size() == 1) {
+            setMaxWidth(maxWidth->second[0]);
+        }
     }
 
     /**

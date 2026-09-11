@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <format>
 #include <utility>
 
 #include "../common/MatrixUtils.h"
@@ -83,6 +84,33 @@ namespace f4cf::vrui
             // snap back a half-done push, so a button disabled mid-press does not stay pushed in
             _pressYOffset = 0.0f;
             _pressEventFired = false;
+        }
+    }
+
+    /**
+     * The panel's visibility, then D for disabled and P for pressable - UIButton's letters.
+     */
+    std::string UIButtonPanel::stateFlags() const
+    {
+        return UIPanel::stateFlags() + (_disabled ? "D" : ".") + (isPressable() ? "P" : ".");
+    }
+
+    /**
+     * The panel's fields, then the largest text heights as Text:(beside an image, text only) - what decides
+     * how large a label is drawn before it has to shrink.
+     */
+    void UIButtonPanel::writeDevLayoutFields(std::string& line) const
+    {
+        UIPanel::writeDevLayoutFields(line);
+        line += std::format(", Text:({:.2f},{:.2f})", _textHeightUnits, _textOnlyHeightUnits);
+    }
+
+    void UIButtonPanel::readDevLayoutFields(const DevLayoutFields& fields)
+    {
+        UIPanel::readDevLayoutFields(fields);
+        if (const auto text = fields.find("Text"); text != fields.end() && text->second.size() == 2) {
+            setTextHeight(text->second[0]);
+            setTextOnlyHeight(text->second[1]);
         }
     }
 

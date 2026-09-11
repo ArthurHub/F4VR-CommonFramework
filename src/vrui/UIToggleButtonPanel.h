@@ -85,6 +85,7 @@ namespace f4cf::vrui
         bool isPressable() const override;
         void onPressEventFired(UIElement* element, UIFrameUpdateContext* context) override;
         void appendAround(render::PrimitiveDraw& frame, const UIPanelContentArea& bounds) const override;
+        std::string stateFlags() const override;
 
         std::string_view typeName() const override
         {

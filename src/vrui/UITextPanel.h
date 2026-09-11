@@ -197,6 +197,8 @@ namespace f4cf::vrui
     protected:
         std::optional<UISize> measureContent(float availableWidth, float availableHeight) override;
         void appendContent(render::PrimitiveDraw& frame, const UIPanelContentArea& area) const override;
+        void writeDevLayoutFields(std::string& line) const override;
+        void readDevLayoutFields(const DevLayoutFields& fields) override;
 
         std::string_view typeName() const override
         {

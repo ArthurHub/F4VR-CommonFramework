@@ -170,6 +170,9 @@ namespace f4cf::vrui
         }
 
         std::optional<UISize> measureContent(float availableWidth, float availableHeight) override;
+        std::string stateFlags() const override;
+        void writeDevLayoutFields(std::string& line) const override;
+        void readDevLayoutFields(const DevLayoutFields& fields) override;
         RE::NiTransform calculateTransform() const override;
         void onPressEventFired(UIElement* element, UIFrameUpdateContext* context) override;
         UIPanelStyle resolveStyle() const override;

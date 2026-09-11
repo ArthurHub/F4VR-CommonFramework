@@ -242,6 +242,16 @@ namespace f4cf::vrui
         virtual std::string_view typeName() const = 0;
 
         /**
+         * The state letters toString prints after the name, in the NIF widgets' order: V or H for
+         * visible or hidden here, and a subclass with more state - disabled, pressable, toggled - appends
+         * its own.
+         */
+        virtual std::string stateFlags() const;
+
+        void writeDevLayoutFields(std::string& line) const override;
+        void readDevLayoutFields(const DevLayoutFields& fields) override;
+
+        /**
          * The look to draw with this frame: the panel's style as set, unless a subclass whose look
          * follows its state - a disabled button - adjusts a copy of it here, so the chrome drawn by
          * the base and the content drawn by the subclass agree.

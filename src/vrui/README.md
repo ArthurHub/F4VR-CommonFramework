@@ -216,4 +216,7 @@ text height or the tab width changes.
 - Detaching mid-frame can be unsafe; `UIManager::detachElement(element, releaseSafe=true)` defers the
   release to the next frame.
 - A dev layout mode (`UIManager::enableDevLayoutViaConfig`) reads element positions from the config's
-  `debugVRUIProperties` so you can tune placement live via INI reload.
+  `debugVRUIProperties` so you can tune placement live via INI reload. Each element's line holds
+  `Pos`, `Scale` and `Size`; containers add `Padding` and `Layout`, panels add `Pad:(t,r,b,l)` (and
+  `MaxW` while their width follows the content), and text and button panels add their text sizes as
+  `Text`. Delete a field from a line and it is simply no longer applied.

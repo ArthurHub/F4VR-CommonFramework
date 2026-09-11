@@ -1,6 +1,7 @@
 #pragma once
 
 #include <functional>
+#include <iterator>
 #include <map>
 #include <memory>
 #include <string>
@@ -77,6 +78,7 @@ namespace f4cf::vrui
     protected:
         bool isPressable() const override;
         void onPressEventFired(UIElement* element, UIFrameUpdateContext* context) override;
+        std::string stateFlags() const override;
 
         std::string_view typeName() const override
         {
@@ -148,6 +150,18 @@ namespace f4cf::vrui
     void UIMultiStateToggleButtonPanel<StateT>::setOnStateChangedHandler(std::function<void(UIMultiStateToggleButtonPanel<StateT>*, StateT)> handler)
     {
         _onStateChangedHandler = std::move(handler);
+    }
+
+    /**
+     * The button's letters, then where the current state sits in the press cycle, counting from 0 - the
+     * state itself may be any type, but its place in the order always prints.
+     */
+    template <class StateT>
+    std::string UIMultiStateToggleButtonPanel<StateT>::stateFlags() const
+    {
+        const auto current = _contentPerState.find(_currentState);
+        const std::string position = current == _contentPerState.end() ? "." : std::to_string(std::distance(_contentPerState.begin(), current));
+        return UIButtonPanel::stateFlags() + position;
     }
 
     template <class StateT>

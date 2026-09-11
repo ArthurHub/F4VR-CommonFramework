@@ -1,5 +1,10 @@
 #pragma once
 
+#include <map>
+#include <string>
+#include <string_view>
+#include <vector>
+
 #include "../common/Quaternion.h"
 #include "UIModAdapter.h"
 
@@ -106,6 +111,28 @@ namespace f4cf::vrui
 
         virtual void writeDevLayoutProperties(const std::string& namePrefix, std::map<std::string, std::string>& propertiesMap) const;
         virtual void readDevLayoutProperties(const std::string& namePrefix, const std::map<std::string, std::string>& propertiesMap);
+
+        /**
+         * One dev-layout line split into its named fields: "Pos:(1,2,3), Scale:(1)" holds Pos -> {1, 2, 3}
+         * and Scale -> {1}.
+         */
+        using DevLayoutFields = std::map<std::string, std::vector<float>, std::less<>>;
+
+        /**
+         * Append this element's dev-layout fields to its line, as ", Name:(values)" after whatever is already
+         * there. An override calls its base first, and adds only what is worth tuning live - layout, not
+         * looks - so the line stays short enough to edit.
+         */
+        virtual void writeDevLayoutFields(std::string& line) const;
+
+        /**
+         * Apply the dev-layout fields this element knows. A field that is missing, or has the wrong number of
+         * values, is left alone, so a field deleted from the line simply stops being applied. An override
+         * calls its base first.
+         */
+        virtual void readDevLayoutFields(const DevLayoutFields& fields);
+
+        static DevLayoutFields parseDevLayoutFields(std::string_view line);
 
         // friendly name used for debugging and dev-config-layout
         std::string _name;

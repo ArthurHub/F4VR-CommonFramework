@@ -44,6 +44,14 @@ namespace f4cf::vrui
     }
 
     /**
+     * The button's letters, then T while toggled on - UIToggleButton's letters.
+     */
+    std::string UIToggleButtonPanel::stateFlags() const
+    {
+        return UIButtonPanel::stateFlags() + (_isToggleOn ? "T" : ".");
+    }
+
+    /**
      * Fire the press as a button does - haptic, and the press handler if one is set - then flip the state
      * and report the new one.
      */
