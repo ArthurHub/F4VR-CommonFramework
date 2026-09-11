@@ -365,6 +365,8 @@ namespace f4cf::vrui
         // depth testing is off within the layer, so this order is what stacks them: the background
         // under the border (and the renderer puts both under the content)
         const UIPanelStyle style = resolveStyle();
+        appendAround(frame, UIPanelContentArea{ .center = world.translate, .right = right, .up = up, .width = worldWidth, .height = worldHeight, .scale = world.scale });
+
         const float cornerRadius = style.cornerRadiusUnits * world.scale;
         if (style.background.a > 0.0f) {
             appendBackground(frame, world.translate, right, up, worldWidth, worldHeight, cornerRadius, style.background);
@@ -408,6 +410,12 @@ namespace f4cf::vrui
             .scale = world.scale,
         };
         appendContent(frame, area);
+    }
+
+    void UIPanel::appendOutline(render::PrimitiveDraw& frame, const RE::NiPoint3& center, const RE::NiPoint3& right, const RE::NiPoint3& up, const float width, const float height,
+        const float thickness, const float cornerRadius, const render::Color& color)
+    {
+        appendBorder(frame, center, right, up, width, height, thickness, cornerRadius, color);
     }
 
     /**

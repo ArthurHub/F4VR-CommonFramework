@@ -146,6 +146,15 @@ namespace f4cf::vrui
         void onFrameUpdate(UIFrameUpdateContext* context) override;
 
     protected:
+        /**
+         * Whether a push fires the button this frame. A subclass that fires through a handler of its own
+         * decides for itself.
+         */
+        virtual bool isPressable() const
+        {
+            return !_disabled && _onPressHandler != nullptr;
+        }
+
         RE::NiTransform calculateTransform() const override;
         void onPressEventFired(UIElement* element, UIFrameUpdateContext* context) override;
         UIPanelStyle resolveStyle() const override;
@@ -157,11 +166,6 @@ namespace f4cf::vrui
         }
 
     private:
-        bool isPressable() const
-        {
-            return !_disabled && _onPressHandler != nullptr;
-        }
-
         void handlePress(UIFrameUpdateContext* context);
 
         std::string _topText;

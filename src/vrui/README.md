@@ -106,7 +106,13 @@ void MyMod::openPanel()
 ```
 
 For mutually-exclusive options (radio buttons), add `UIToggleButton`s to a
-[`UIToggleGroupContainer`](UIToggleGroupContainer.h) instead of a plain `UIContainer`.
+[`UIToggleGroupContainer`](UIToggleGroupContainer.h) instead of a plain `UIContainer`. The group
+works on the [`UIToggleable`](UIToggleable.h) interface, so
+[`UIToggleButtonPanel`](UIToggleButtonPanel.h) - the toggle drawn by the primitive renderer, with
+text and an image composed at runtime instead of a NIF - can go in the same group, even mixed with
+NIF toggles. Like the NIF toggle's white frame, a panel toggle that is on draws an extra ring around
+the button, outside its own border, 0.1 units deep by default - so leave at least that much padding in
+the container. `setToggleFrame(color, thickness, gap)` changes it.
 
 ### 3. Drive it each frame, then tear it down
 

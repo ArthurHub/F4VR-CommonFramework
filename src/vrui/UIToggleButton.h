@@ -1,26 +1,27 @@
 #pragma once
 
+#include "UIToggleable.h"
 #include "UIWidget.h"
 
 namespace f4cf::vrui
 {
-    class UIToggleButton : public UIWidget
+    class UIToggleButton : public UIWidget, public UIToggleable
     {
     public:
         explicit UIToggleButton(const std::string& nifPath);
         virtual std::string toString() const override;
 
         // is the button is currently toggled ON or OFF
-        bool isToggleOn() const
+        bool isToggleOn() const override
         {
             return _isToggleOn;
         }
 
-        void setToggleState(const bool isToggleOn);
+        void setToggleState(const bool isToggleOn) override;
 
         // is a user is allowed to un-toggle the button (useful for toggle group)
-        bool isUnToggleAllowed() const;
-        void setUnToggleAllowed(bool allowUnToggle);
+        bool isUnToggleAllowed() const override;
+        void setUnToggleAllowed(bool allowUnToggle) override;
 
         void setOnToggleHandler(std::function<void(UIToggleButton*, bool)> handler);
 

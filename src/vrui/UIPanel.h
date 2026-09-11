@@ -253,6 +253,27 @@ namespace f4cf::vrui
         static void appendImage(render::PrimitiveDraw& frame, render::Texture& texture, const RE::NiPoint3& center, const RE::NiPoint3& right, const RE::NiPoint3& up, float width,
             float height, UIImageFit fit, const render::Color& tint);
 
+        /**
+         * Draw a rounded rectangular outline in the panel's plane, centred on `center` and growing inward
+         * from the width x height rectangle - the border's own tessellation, for outlining something other
+         * than the panel's edge. Thickness and radius are world units, each clamped to half the shorter
+         * side.
+         */
+        static void appendOutline(render::PrimitiveDraw& frame, const RE::NiPoint3& center, const RE::NiPoint3& right, const RE::NiPoint3& up, float width, float height,
+            float thickness, float cornerRadius, const render::Color& color);
+
+        /**
+         * Draw what the panel adds around its rectangle rather than inside it, like a toggle's frame.
+         * `bounds` describes the panel's whole rectangle, border included, in world space. Runs on the
+         * GAME thread at frame end with the chrome, whenever the panel is visible and attached - even when
+         * there is no room left for content. Draws nothing by default.
+         *
+         * Whatever it draws outside the rectangle lands in the space the layout left between the panel
+         * and its neighbours, so it should stay within the container's padding.
+         */
+        virtual void appendAround(render::PrimitiveDraw&, const UIPanelContentArea&) const
+        {}
+
         // content colour, background, border, rounding and padding together, defaulting to a bare
         // panel
         UIPanelStyle _style;
