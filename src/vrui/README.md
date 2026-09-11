@@ -114,6 +114,11 @@ NIF toggles. Like the NIF toggle's white frame, a panel toggle that is on draws 
 the button, outside its own border, 0.1 units deep by default - so leave at least that much padding in
 the container. `setToggleFrame(color, thickness, gap)` changes it.
 
+For an N-way cycle, [`UIMultiStateToggleButtonPanel<State>`](UIMultiStateToggleButtonPanel.h) is the
+panel counterpart of `UIMultiStateToggleButton`: instead of a NIF per state it takes a
+`std::map<State, UIButtonPanelContent>` - each state's text lines and image - and a press moves to the
+next state in key order.
+
 ### 3. Drive it each frame, then tear it down
 
 ```cpp
