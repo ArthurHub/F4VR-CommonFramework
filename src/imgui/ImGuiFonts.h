@@ -5,10 +5,10 @@ struct ImFont;
 namespace f4cf::imgui::internal
 {
     /**
-     * Load the panel font into the current ImGui context's atlas: the framework's text font, from
+     * Load the canvas font into the current ImGui context's atlas: the framework's text font, from
      * the same bytes the primitive renderer draws with - the mod's own file at
      * render::CUSTOM_TEXT_FONT_PATH when it ships a usable one, the embedded Roboto Medium
-     * otherwise - so a UICanvas and a UITextPanel always share a typeface.
+     * otherwise - so a UIImGuiPanel and a UITextPanel always share a typeface.
      *
      * ImGui's embedded bitmap font is the last resort, logged as a warning, for when ImGui will not
      * take the font at all.
@@ -19,5 +19,5 @@ namespace f4cf::imgui::internal
      *        io.FontGlobalScale to its inverse, so layout still sees sizePixels.
      * @return the loaded font, or nullptr if even the bitmap fallback failed.
      */
-    ImFont* loadPanelFont(float sizePixels, float rasterScale);
+    ImFont* loadCanvasFont(float sizePixels, float rasterScale);
 }

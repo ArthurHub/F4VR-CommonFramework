@@ -5,7 +5,7 @@
 
 #include <imgui.h>
 
-#include "ImGuiPanel.h"
+#include "ImGuiCanvas.h"
 
 namespace f4cf::imgui::internal
 {
@@ -15,7 +15,7 @@ namespace f4cf::imgui::internal
      * ImGui's own draw data points into per-frame buffers that the next NewFrame() recycles, so a
      * render thread still reading last frame's lists while the game thread starts the next one is a
      * use-after-free. ImGui ships ImDrawList::CloneOutput() for exactly this: the clone owns its
-     * vertex/index/command buffers, costing a few KB of memcpy per frame for panel-sized UI.
+     * vertex/index/command buffers, costing a few KB of memcpy per frame for canvas-sized UI.
      */
     struct ClonedDrawData
     {
@@ -40,11 +40,11 @@ namespace f4cf::imgui::internal
     };
 
     /**
-     * One panel's composited quad: four world-space corners (resolved game-side) and the sub-rect of
+     * One canvas's composited quad: four world-space corners (resolved game-side) and the sub-rect of
      * the shared atlas that holds its pixels. Every placement mode reduces to this, which is why the
      * renderer needs to know nothing about vrui, nodes or billboards.
      */
-    struct PanelQuad
+    struct CanvasQuad
     {
         RE::NiPoint3 topLeft;
         RE::NiPoint3 topRight;
@@ -56,12 +56,12 @@ namespace f4cf::imgui::internal
         float v1 = 1;
         // distance to the viewer, for painter-order sorting (no depth write, so overlap is our job)
         float viewerDistance = 0;
-        // whether the world may hide this panel; quads are grouped by it so each group is one draw
+        // whether the world may hide this canvas; quads are grouped by it so each group is one draw
         bool occluded = true;
     };
 
     /**
-     * One published frame: the ImGui pixels to rasterize into the atlas, plus where each panel's
+     * One published frame: the ImGui pixels to rasterize into the atlas, plus where each canvas's
      * slice of that atlas goes in the world.
      */
     struct RenderFrame
@@ -70,7 +70,7 @@ namespace f4cf::imgui::internal
         // outside it, so publishing never blocks on a draw and a frame that misses a publish redraws
         // the last one instead of blinking
         std::shared_ptr<ClonedDrawData> drawData;
-        std::vector<PanelQuad> quads;
+        std::vector<CanvasQuad> quads;
 
         bool empty() const
         {
@@ -78,14 +78,14 @@ namespace f4cf::imgui::internal
         }
     };
 
-    // Panel registration, called from Panel's constructor/destructor (game thread).
-    void registerPanel(Panel* panel);
-    void unregisterPanel(Panel* panel);
+    // Canvas registration, called from Canvas's constructor/destructor (game thread).
+    void registerCanvas(Canvas* canvas);
+    void unregisterCanvas(Canvas* canvas);
 
     /**
      * The per-frame pump, run after the mod's onFrameUpdate: build one ImGui frame containing every
-     * visible panel, clone it, and publish it with the quads to the render thread. A no-op while no
-     * panel is visible.
+     * visible canvas, clone it, and publish it with the quads to the render thread. A no-op while no
+     * canvas is visible.
      */
     void onFrameEnd();
 }

@@ -1,4 +1,4 @@
-#include "ImGuiPanel.h"
+#include "ImGuiCanvas.h"
 
 #include <algorithm>
 
@@ -7,15 +7,15 @@
 
 namespace f4cf::imgui
 {
-    Panel::Panel(std::string name, const int pixelWidth, const int pixelHeight)
+    Canvas::Canvas(std::string name, const int pixelWidth, const int pixelHeight)
         : _name(std::move(name)),
-          _pixelWidth(std::clamp(pixelWidth, 1, MAX_PANEL_PIXEL_SIZE)),
-          _pixelHeight(std::clamp(pixelHeight, 1, MAX_PANEL_PIXEL_SIZE))
+          _pixelWidth(std::clamp(pixelWidth, 1, MAX_CANVAS_PIXEL_SIZE)),
+          _pixelHeight(std::clamp(pixelHeight, 1, MAX_CANVAS_PIXEL_SIZE))
     {
-        // Registering the pump here, on the first panel ever built, is what keeps ImGui out of mods
+        // Registering the pump here, on the first canvas ever built, is what keeps ImGui out of mods
         // that never draw one: ModBase names no symbol in this subsystem, so with static-library
         // semantics none of its object files - and therefore none of ImGui - is pulled into such a
-        // mod at all. Once a panel exists the framework pumps it, with nothing for the mod to
+        // mod at all. Once a canvas exists the framework pumps it, with nothing for the mod to
         // remember to call.
         static const bool pumpRegistered = [] {
             registerFrameEndCallback(&internal::onFrameEnd);
@@ -23,106 +23,106 @@ namespace f4cf::imgui
         }();
         static_cast<void>(pumpRegistered);
 
-        internal::registerPanel(this);
+        internal::registerCanvas(this);
     }
 
-    Panel::~Panel()
+    Canvas::~Canvas()
     {
-        internal::unregisterPanel(this);
+        internal::unregisterCanvas(this);
     }
 
-    void Panel::setContent(ContentCallback content)
+    void Canvas::setContent(ContentCallback content)
     {
         _content = std::move(content);
     }
 
-    void Panel::setPlacement(PlacementProvider placement)
+    void Canvas::setPlacement(PlacementProvider placement)
     {
         _placement = std::move(placement);
     }
 
-    void Panel::setPixelSize(const int pixelWidth, const int pixelHeight)
+    void Canvas::setPixelSize(const int pixelWidth, const int pixelHeight)
     {
-        _pixelWidth = std::clamp(pixelWidth, 1, MAX_PANEL_PIXEL_SIZE);
-        _pixelHeight = std::clamp(pixelHeight, 1, MAX_PANEL_PIXEL_SIZE);
+        _pixelWidth = std::clamp(pixelWidth, 1, MAX_CANVAS_PIXEL_SIZE);
+        _pixelHeight = std::clamp(pixelHeight, 1, MAX_CANVAS_PIXEL_SIZE);
     }
 
-    void Panel::setOccluded(const bool occluded)
+    void Canvas::setOccluded(const bool occluded)
     {
         _occluded = occluded;
     }
 
-    void Panel::setTextColor(const render::Color& color)
+    void Canvas::setTextColor(const render::Color& color)
     {
         _textColor = color;
     }
 
-    void Panel::setBackgroundColor(const render::Color& color)
+    void Canvas::setBackgroundColor(const render::Color& color)
     {
         _background = color;
     }
 
-    void Panel::setBorder(const render::Color& color, const float thicknessPixels, const float cornerRadiusPixels)
+    void Canvas::setBorder(const render::Color& color, const float thicknessPixels, const float cornerRadiusPixels)
     {
         _borderColor = color;
         _borderThickness = (std::max)(0.0f, thicknessPixels);
         _cornerRadius = (std::max)(0.0f, cornerRadiusPixels);
     }
 
-    void Panel::clearBorder()
+    void Canvas::clearBorder()
     {
         // the rounding is deliberately kept: it shapes the background, which is still there
         _borderThickness = 0.0f;
     }
 
-    void Panel::setCornerRadius(const float pixels)
+    void Canvas::setCornerRadius(const float pixels)
     {
         _cornerRadius = (std::max)(0.0f, pixels);
     }
 
-    void Panel::setPadding(const PanelPadding& padding)
+    void Canvas::setPadding(const CanvasPadding& padding)
     {
         // a negative side would push the content out over the border instead of away from it
         _padding = { (std::max)(0.0f, padding.top), (std::max)(0.0f, padding.right), (std::max)(0.0f, padding.bottom), (std::max)(0.0f, padding.left) };
     }
 
-    void Panel::setPadding(const float pixels)
+    void Canvas::setPadding(const float pixels)
     {
         const float side = (std::max)(0.0f, pixels);
-        setPadding(PanelPadding{ side, side, side, side });
+        setPadding(CanvasPadding{ side, side, side, side });
     }
 
-    void Panel::setVisible(const bool visible)
+    void Canvas::setVisible(const bool visible)
     {
         _visible = visible;
     }
 
-    bool Panel::isVisible() const
+    bool Canvas::isVisible() const
     {
         return _visible;
     }
 
-    const std::string& Panel::name() const
+    const std::string& Canvas::name() const
     {
         return _name;
     }
 
-    int Panel::pixelWidth() const
+    int Canvas::pixelWidth() const
     {
         return _pixelWidth;
     }
 
-    int Panel::pixelHeight() const
+    int Canvas::pixelHeight() const
     {
         return _pixelHeight;
     }
 
-    const ContentCallback& Panel::content() const
+    const ContentCallback& Canvas::content() const
     {
         return _content;
     }
 
-    const PlacementProvider& Panel::placement() const
+    const PlacementProvider& Canvas::placement() const
     {
         return _placement;
     }

@@ -23,14 +23,14 @@ namespace f4cf::vrui
      * setStyle applies the lot at once; the individual setters stay for changing one thing after the
      * fact, or for something that has to move per frame.
      *
-     * Units, not pixels, which is what lets one style serve both kinds of panel - imgui::UICanvas
-     * and the vrui::UIPanel family - each converting as it needs. A raw imgui::Panel is placed by
+     * Units, not pixels, which is what lets one style serve both kinds of panel - imgui::UIImGuiPanel
+     * and the vrui::UIPanel family - each converting as it needs. A raw imgui::Canvas is placed by
      * its own provider and has no vrui units to state a style in, so it keeps its pixel setters
      * instead.
      */
     struct UIPanelStyle
     {
-        // What the panel's own content is drawn in: a text panel's rows, a canvas's ImGui text.
+        // What the panel's own content is drawn in: a text panel's rows, an ImGui panel's text.
         // Content that names a colour of its own still wins - this is only the one it falls back to.
         render::Color color = render::colors::White;
 
@@ -55,7 +55,7 @@ namespace f4cf::vrui
      *
      *     panel->setStyle(vrui::F4VR_PANEL_STYLE);
      *
-     * Both kinds of panel take it, which is what lets a canvas and a text panel stand side by side
+     * Both kinds of panel take it, which is what lets an ImGui panel and a text panel stand side by side
      * and read as one UI rather than as two widgets that happen to be adjacent.
      */
     inline constexpr UIPanelStyle F4VR_PANEL_STYLE{

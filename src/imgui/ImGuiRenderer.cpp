@@ -15,9 +15,9 @@ namespace f4cf::imgui::internal::renderer
     namespace
     {
         /**
-         * One corner of a panel quad, already in world space (the game thread resolved the
+         * One corner of a canvas quad, already in world space (the game thread resolved the
          * placement) plus its spot in the atlas. Putting world coordinates in the vertex buffer
-         * rather than a per-quad model matrix means every panel this frame draws in ONE call.
+         * rather than a per-quad model matrix means every canvas this frame draws in ONE call.
          */
         struct QuadVertex
         {
@@ -139,7 +139,7 @@ float4 main(PS_INPUT input) : SV_Target {
         }
 
         /**
-         * The offscreen atlas every panel rasterizes into, plus the pipeline that composites slices
+         * The offscreen atlas every canvas rasterizes into, plus the pipeline that composites slices
          * of it into the world.
          */
         bool createDeviceObjects(ID3D11Device* device, const int atlasWidth, const int atlasHeight)
@@ -213,7 +213,7 @@ float4 main(PS_INPUT input) : SV_Target {
 
             D3D11_RASTERIZER_DESC rasterDesc{};
             rasterDesc.FillMode = D3D11_FILL_SOLID;
-            // no back-face culling: a panel seen from behind should still render rather than vanish
+            // no back-face culling: a canvas seen from behind should still render rather than vanish
             rasterDesc.CullMode = D3D11_CULL_NONE;
             rasterDesc.FrontCounterClockwise = TRUE;
             rasterDesc.DepthClipEnable = TRUE;
@@ -250,7 +250,7 @@ float4 main(PS_INPUT input) : SV_Target {
             return true;
         }
 
-        void appendQuad(std::vector<QuadVertex>& vertices, const PanelQuad& quad)
+        void appendQuad(std::vector<QuadVertex>& vertices, const CanvasQuad& quad)
         {
             const auto vertex = [](const RE::NiPoint3& p, const float u, const float v) {
                 return QuadVertex{ .x = p.x, .y = p.y, .z = p.z, .u = u, .v = v };
@@ -268,11 +268,11 @@ float4 main(PS_INPUT input) : SV_Target {
         }
 
         /**
-         * The state that lets the world hide a panel: test against the engine's own depth with its
+         * The state that lets the world hide a canvas: test against the engine's own depth with its
          * own comparison, and never write. The write mask matters as much as the read-only view the
-         * host binds - together they make it impossible for a panel to disturb the scene's depth.
+         * host binds - together they make it impossible for a canvas to disturb the scene's depth.
          *
-         * Falls back to the always-on-top state if the state cannot be built, so a panel still draws.
+         * Falls back to the always-on-top state if the state cannot be built, so a canvas still draws.
          */
         ID3D11DepthStencilState* quadDepthTestState(ID3D11Device* device, const D3D11_COMPARISON_FUNC comparison)
         {
@@ -293,12 +293,12 @@ float4 main(PS_INPUT input) : SV_Target {
         }
 
         /**
-         * Composite the panels: every quad samples the same atlas with the same shaders, so the only
+         * Composite the canvases: every quad samples the same atlas with the same shaders, so the only
          * thing that splits a draw is whether the world may hide it. The quads arrive sorted with the
          * occluded ones first, so that is at most two draws (x2 each for the eye split) - and exactly
-         * one whenever every panel agrees, which is the usual case.
+         * one whenever every canvas agrees, which is the usual case.
          */
-        void drawQuads(const render::SubmitFrame& submitFrame, const std::vector<PanelQuad>& quads)
+        void drawQuads(const render::SubmitFrame& submitFrame, const std::vector<CanvasQuad>& quads)
         {
             std::vector<QuadVertex> vertices;
             vertices.reserve(quads.size() * VERTICES_PER_QUAD);
@@ -362,7 +362,7 @@ float4 main(PS_INPUT input) : SV_Target {
             // ImGui_ImplDX11_RenderDrawData reads its backend state off the ImGui context, which the
             // game thread sets once at init and never changes - a stable read from here.
             std::shared_ptr<ClonedDrawData> drawData;
-            std::vector<PanelQuad> quads;
+            std::vector<CanvasQuad> quads;
             {
                 std::scoped_lock lock(s_frameMutex);
                 drawData = s_frame.drawData;
@@ -414,12 +414,12 @@ float4 main(PS_INPUT input) : SV_Target {
             if (!createDeviceObjects(device, atlasWidth, atlasHeight)) {
                 if (!s_loggedInitFailed) {
                     s_loggedInitFailed = true;
-                    logger::error("D3D initialization failed; ImGui panels disabled");
+                    logger::error("D3D initialization failed; ImGui canvases disabled");
                 }
                 return false;
             }
             s_installed = true;
-            s_drawCallback = render::registerDrawCallback("ImGuiPanels", &drawFrame, render::DRAW_ORDER_PANELS);
+            s_drawCallback = render::registerDrawCallback("ImGuiCanvases", &drawFrame, render::DRAW_ORDER_PANELS);
         }
 
         return render::ensureInstalled();

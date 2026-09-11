@@ -7,7 +7,7 @@ namespace f4cf::imgui::internal
 {
     /**
      * Render-thread half of the ImGui layer: rasterizes a published ImGui frame into an offscreen
-     * atlas texture, then composites each panel's slice of that atlas as a world-space quad on the
+     * atlas texture, then composites each canvas's slice of that atlas as a world-space quad on the
      * submitted eye texture, through the engine's own per-eye matrices.
      *
      * ImGui emits per-command SCISSOR RECTANGLES in 2D screen space - that is how scrolling regions,
@@ -22,7 +22,7 @@ namespace f4cf::imgui::internal
          * (idempotent). False while the D3D device or the OpenVR compositor is unavailable - safe to
          * retry every frame from the game thread.
          *
-         * @param atlasWidth / atlasHeight size of the shared panel texture; all panels pack into it.
+         * @param atlasWidth / atlasHeight size of the shared canvas texture; all canvases pack into it.
          */
         bool ensureInstalled(int atlasWidth, int atlasHeight);
 

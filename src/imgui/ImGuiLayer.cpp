@@ -17,14 +17,14 @@ namespace f4cf::imgui::internal
 {
     namespace
     {
-        // The shared panel atlas in ImGui's 1x layout pixels, square. Every panel is an ImGui window
-        // packed into a sub-rect of it, so N panels still cost one ImGui frame, one rasterization
+        // The shared canvas atlas in ImGui's 1x layout pixels, square. Every canvas is an ImGui window
+        // packed into a sub-rect of it, so N canvases still cost one ImGui frame, one rasterization
         // pass and one draw; the texture behind it is larger by the supersample factor on each side.
-        constexpr int ATLAS_WIDTH = MAX_PANEL_PIXEL_SIZE;
-        constexpr int ATLAS_HEIGHT = MAX_PANEL_PIXEL_SIZE;
+        constexpr int ATLAS_WIDTH = MAX_CANVAS_PIXEL_SIZE;
+        constexpr int ATLAS_HEIGHT = MAX_CANVAS_PIXEL_SIZE;
 
         // The atlas texture's side and the scale from layout to texture pixels, fixed on the first
-        // frame a panel draws: the texture and the font raster are built from them, so they cannot
+        // frame a canvas draws: the texture and the font raster are built from them, so they cannot
         // follow a later setSupersample. The scale is taken from the whole-pixel texture size rather
         // than the requested factor, so the scaled frame lands exactly on what the quads' UVs address.
         int s_atlasTextureSize = 0;
@@ -48,8 +48,8 @@ namespace f4cf::imgui::internal
         std::chrono::steady_clock::time_point s_lastFrameTime;
 
         /**
-         * Shelf packer: fill a row left to right, drop to a new row when the next panel does not
-         * fit. v1 has a single panel, so this is "the whole atlas"; it is here because retrofitting
+         * Shelf packer: fill a row left to right, drop to a new row when the next canvas does not
+         * fit. v1 has a single canvas, so this is "the whole atlas"; it is here because retrofitting
          * packing later would mean rewriting the render path (world-anchored elements, of which
          * there can be dozens, are the same machinery with many small sub-rects).
          */
@@ -102,7 +102,7 @@ namespace f4cf::imgui::internal
             }
 
             auto& io = ImGui::GetIO();
-            // no imgui.ini next to the game exe, and no OS cursor: panels are pointed at, not moused
+            // no imgui.ini next to the game exe, and no OS cursor: canvases are pointed at, not moused
             io.IniFilename = nullptr;
             io.LogFilename = nullptr;
             io.MouseDrawCursor = false;
@@ -111,7 +111,7 @@ namespace f4cf::imgui::internal
             io.FontGlobalScale = 1.0f / s_atlasScale;
 
             ImGui::StyleColorsDark();
-            loadPanelFont(fontSizePixels(), s_atlasScale);
+            loadCanvasFont(fontSizePixels(), s_atlasScale);
 
             if (!ImGui_ImplDX11_Init(device, context)) {
                 ImGui::DestroyContext();
@@ -139,10 +139,10 @@ namespace f4cf::imgui::internal
         }
 
         /**
-         * The panel's four world corners from its placement: local +X is right, local +Z is up, and
+         * The canvas's four world corners from its placement: local +X is right, local +Z is up, and
          * the quad is centred on the transform's translate.
          */
-        PanelQuad buildQuad(const PanelPlacement& placement, const int atlasX, const int atlasY, const int atlasW, const int atlasH, const RE::NiPoint3& viewer,
+        CanvasQuad buildQuad(const CanvasPlacement& placement, const int atlasX, const int atlasY, const int atlasW, const int atlasH, const RE::NiPoint3& viewer,
             const bool occluded)
         {
             const RE::NiMatrix3 toWorld = placement.transform.rotate.Transpose(); // the codebase's local->world convention
@@ -150,7 +150,7 @@ namespace f4cf::imgui::internal
             const RE::NiPoint3 up = toWorld * RE::NiPoint3(0, 0, 1) * (placement.worldHeight * 0.5f);
             const RE::NiPoint3 centre = placement.transform.translate;
 
-            PanelQuad quad;
+            CanvasQuad quad;
             quad.topLeft = centre - right + up;
             quad.topRight = centre + right + up;
             quad.bottomRight = centre + right - up;
@@ -220,35 +220,35 @@ namespace f4cf::imgui::internal
     namespace
     {
         /**
-         * Function-local static: a mod may declare a Panel at namespace scope, whose constructor
+         * Function-local static: a mod may declare a Canvas at namespace scope, whose constructor
          * would then register into a vector this translation unit had not constructed yet.
          */
-        std::vector<Panel*>& panels()
+        std::vector<Canvas*>& canvases()
         {
-            static std::vector<Panel*> registered;
+            static std::vector<Canvas*> registered;
             return registered;
         }
     }
 
-    void registerPanel(Panel* panel)
+    void registerCanvas(Canvas* canvas)
     {
-        if (std::ranges::find(panels(), panel) == panels().end()) {
-            panels().push_back(panel);
+        if (std::ranges::find(canvases(), canvas) == canvases().end()) {
+            canvases().push_back(canvas);
         }
     }
 
-    void unregisterPanel(Panel* panel)
+    void unregisterCanvas(Canvas* canvas)
     {
-        std::erase(panels(), panel);
+        std::erase(canvases(), canvas);
     }
 
     void onFrameEnd()
     {
-        // The zero-cost path: no panel has ever been created, or none is visible right now.
-        std::vector<Panel*> active;
-        for (Panel* panel : panels()) {
-            if (panel->isVisible() && panel->content()) {
-                active.push_back(panel);
+        // The zero-cost path: no canvas has ever been created, or none is visible right now.
+        std::vector<Canvas*> active;
+        for (Canvas* canvas : canvases()) {
+            if (canvas->isVisible() && canvas->content()) {
+                active.push_back(canvas);
             }
         }
         if (active.empty()) {
@@ -260,7 +260,7 @@ namespace f4cf::imgui::internal
         if (!renderer::ensureInstalled(s_atlasTextureSize, s_atlasTextureSize) || !ensureContext()) {
             if (!s_contextReady && !s_loggedContextFailed) {
                 s_loggedContextFailed = true;
-                logger::warn("ImGui context not ready yet; panels will retry on frame update");
+                logger::warn("ImGui context not ready yet; canvases will retry on frame update");
             }
             return;
         }
@@ -269,28 +269,28 @@ namespace f4cf::imgui::internal
         // render thread, which is why the quads travel as finished world coordinates.
         const RE::NiPoint3 viewer = viewerPosition();
 
-        struct PackedPanel
+        struct PackedCanvas
         {
-            Panel* panel;
+            Canvas* canvas;
             int x;
             int y;
-            PanelPlacement placement;
+            CanvasPlacement placement;
         };
 
-        std::vector<PackedPanel> packed;
+        std::vector<PackedCanvas> packed;
         ShelfPacker packer;
-        for (Panel* panel : active) {
-            PanelPlacement placement;
-            if (panel->placement() && !panel->placement()(placement)) {
+        for (Canvas* canvas : active) {
+            CanvasPlacement placement;
+            if (canvas->placement() && !canvas->placement()(placement)) {
                 continue;
             }
             int x = 0;
             int y = 0;
-            if (!packer.place(panel->pixelWidth(), panel->pixelHeight(), x, y)) {
-                logger::sample(5000, "Panel '{}' does not fit the {}x{} atlas; skipped", panel->name(), ATLAS_WIDTH, ATLAS_HEIGHT);
+            if (!packer.place(canvas->pixelWidth(), canvas->pixelHeight(), x, y)) {
+                logger::sample(5000, "Canvas '{}' does not fit the {}x{} atlas; skipped", canvas->name(), ATLAS_WIDTH, ATLAS_HEIGHT);
                 continue;
             }
-            packed.push_back(PackedPanel{ .panel = panel, .x = x, .y = y, .placement = placement });
+            packed.push_back(PackedCanvas{ .canvas = canvas, .x = x, .y = y, .placement = placement });
         }
         if (packed.empty()) {
             renderer::publish({});
@@ -303,33 +303,34 @@ namespace f4cf::imgui::internal
 
         ImGui_ImplDX11_NewFrame();
         ImGui::NewFrame();
-        constexpr ImGuiWindowFlags PANEL_FLAGS = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse |
-                                                 ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoBackground;
+        constexpr ImGuiWindowFlags CANVAS_FLAGS = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse |
+                                                  ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNav |
+                                                  ImGuiWindowFlags_NoBackground;
 
         // ImGui's anti-aliasing fringe is one layout pixel; scaled by this it stays one atlas pixel
         // instead of softening every edge by the atlas scale
         const float fringeScale = 1.0f / s_atlasScale;
 
         for (const auto& entry : packed) {
-            const auto& textColor = entry.panel->textColor();
-            const auto& background = entry.panel->backgroundColor();
-            const auto& borderColor = entry.panel->borderColor();
-            const float borderThickness = entry.panel->borderThickness();
+            const auto& textColor = entry.canvas->textColor();
+            const auto& background = entry.canvas->backgroundColor();
+            const auto& borderColor = entry.canvas->borderColor();
+            const float borderThickness = entry.canvas->borderThickness();
 
             // A border is stroked centred on its rectangle's edge. The window is inset by half the
-            // thickness so the whole stroke lands inside the panel's atlas slot: the border grows
-            // inward from the panel's edge, as a vrui::UIPanel's does, and never reaches the
+            // thickness so the whole stroke lands inside the canvas's atlas slot: the border grows
+            // inward from the canvas's edge, as a vrui::UIPanel's does, and never reaches the
             // neighbouring slot.
             const float halfBorder = borderThickness * 0.5f;
             const float windowX = static_cast<float>(entry.x) + halfBorder;
             const float windowY = static_cast<float>(entry.y) + halfBorder;
-            const float windowWidth = (std::max)(1.0f, static_cast<float>(entry.panel->pixelWidth()) - borderThickness);
-            const float windowHeight = (std::max)(1.0f, static_cast<float>(entry.panel->pixelHeight()) - borderThickness);
+            const float windowWidth = (std::max)(1.0f, static_cast<float>(entry.canvas->pixelWidth()) - borderThickness);
+            const float windowHeight = (std::max)(1.0f, static_cast<float>(entry.canvas->pixelHeight()) - borderThickness);
             ImGui::SetNextWindowPos(ImVec2(windowX, windowY));
             ImGui::SetNextWindowSize(ImVec2(windowWidth, windowHeight));
 
-            // Pushed per panel so panels in one frame can differ, and popped whether or not Begin
-            // returned true: an unbalanced stack corrupts every panel after this one.
+            // Pushed per canvas so canvases in one frame can differ, and popped whether or not Begin
+            // returned true: an unbalanced stack corrupts every canvas after this one.
             //
             // ImGui's WindowPadding is one number per axis, so per-side padding cannot come from it.
             // The window gets none and the content goes in a child sized to the padded rectangle,
@@ -338,9 +339,9 @@ namespace f4cf::imgui::internal
             ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(textColor.r, textColor.g, textColor.b, textColor.a));
             ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
             ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
-            if (ImGui::Begin(entry.panel->name().c_str(), nullptr, PANEL_FLAGS)) {
+            if (ImGui::Begin(entry.canvas->name().c_str(), nullptr, CANVAS_FLAGS)) {
                 // ImGui draws a window's own background and border inside Begin, before its draw list
-                // can take the fringe scale, so the panel draws them here instead - the same two
+                // can take the fringe scale, so the canvas draws them here instead - the same two
                 // calls. One radius rounds both, so no background shows past the border at a corner;
                 // taking off the inset puts the border's outer arc on the radius asked for. Clipped to
                 // the slot rather than the window, since half the stroke lies outside the window rect.
@@ -348,9 +349,9 @@ namespace f4cf::imgui::internal
                 drawList->_FringeScale = fringeScale;
                 const ImVec2 windowMin(windowX, windowY);
                 const ImVec2 windowMax(windowX + windowWidth, windowY + windowHeight);
-                const float rounding = (std::max)(0.0f, entry.panel->cornerRadius() - halfBorder);
+                const float rounding = (std::max)(0.0f, entry.canvas->cornerRadius() - halfBorder);
                 drawList->PushClipRect(ImVec2(static_cast<float>(entry.x), static_cast<float>(entry.y)),
-                    ImVec2(static_cast<float>(entry.x + entry.panel->pixelWidth()), static_cast<float>(entry.y + entry.panel->pixelHeight())),
+                    ImVec2(static_cast<float>(entry.x + entry.canvas->pixelWidth()), static_cast<float>(entry.y + entry.canvas->pixelHeight())),
                     false);
                 drawList->AddRectFilled(windowMin, windowMax, ImGui::ColorConvertFloat4ToU32(ImVec4(background.r, background.g, background.b, background.a)), rounding);
                 if (borderThickness > 0.0f) {
@@ -365,13 +366,13 @@ namespace f4cf::imgui::internal
 
                 // the window starts half a border in, so each side adds its padding plus the border's
                 // other half to clear the inner edge
-                const auto& padding = entry.panel->padding();
+                const auto& padding = entry.canvas->padding();
                 const float contentWidth = (std::max)(1.0f, windowWidth - padding.left - padding.right - borderThickness);
                 const float contentHeight = (std::max)(1.0f, windowHeight - padding.top - padding.bottom - borderThickness);
                 ImGui::SetCursorPos(ImVec2(padding.left + halfBorder, padding.top + halfBorder));
                 if (ImGui::BeginChild("content", ImVec2(contentWidth, contentHeight), ImGuiChildFlags_None, ImGuiWindowFlags_NoBackground)) {
                     ImGui::GetWindowDrawList()->_FringeScale = fringeScale;
-                    entry.panel->content()();
+                    entry.canvas->content()();
                 }
                 ImGui::EndChild(); // unconditional: ImGui asserts on an unmatched BeginChild
             }
@@ -387,14 +388,14 @@ namespace f4cf::imgui::internal
         frame.drawData->scale(s_atlasScale);
         frame.quads.reserve(packed.size());
         for (const auto& entry : packed) {
-            frame.quads.push_back(buildQuad(entry.placement, entry.x, entry.y, entry.panel->pixelWidth(), entry.panel->pixelHeight(), viewer, entry.panel->isOccluded()));
+            frame.quads.push_back(buildQuad(entry.placement, entry.x, entry.y, entry.canvas->pixelWidth(), entry.canvas->pixelHeight(), viewer, entry.canvas->isOccluded()));
         }
 
         // Occluded quads first, so each group is one contiguous run the renderer can draw with one
-        // pipeline state - and so a panel that opted out of being hidden is not then hidden by a
-        // panel that did not. Within a group: no depth write, so quads do not occlude each other,
+        // pipeline state - and so a canvas that opted out of being hidden is not then hidden by a
+        // canvas that did not. Within a group: no depth write, so quads do not occlude each other,
         // and far ones have to be drawn first.
-        std::ranges::sort(frame.quads, [](const PanelQuad& lhs, const PanelQuad& rhs) {
+        std::ranges::sort(frame.quads, [](const CanvasQuad& lhs, const CanvasQuad& rhs) {
             if (lhs.occluded != rhs.occluded) {
                 return lhs.occluded;
             }

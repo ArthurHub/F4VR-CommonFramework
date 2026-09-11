@@ -9,7 +9,7 @@
 
 namespace f4cf::imgui::internal
 {
-    ImFont* loadPanelFont(const float sizePixels, const float rasterScale)
+    ImFont* loadCanvasFont(const float sizePixels, const float rasterScale)
     {
         auto& io = ImGui::GetIO();
         const float size = std::clamp(sizePixels, MIN_FONT_SIZE_PIXELS, MAX_FONT_SIZE_PIXELS);
@@ -21,11 +21,11 @@ namespace f4cf::imgui::internal
         // off, ImGui only reads through the mutable pointer it asks for
         config.FontDataOwnedByAtlas = false;
         if (ImFont* font = io.Fonts->AddFontFromMemoryTTF(const_cast<unsigned char*>(bytes.data()), static_cast<int>(bytes.size()), rasterSize, &config)) {
-            logger::info("Panel font: {} at {:.0f}px, rasterized at {:.0f}px", render::internal::textFontSource(), size, rasterSize);
+            logger::info("Canvas font: {} at {:.0f}px, rasterized at {:.0f}px", render::internal::textFontSource(), size, rasterSize);
             return font;
         }
 
-        logger::warn("Panel font: ImGui would not take {}; falling back to its embedded bitmap font - panels will look pixelated", render::internal::textFontSource());
+        logger::warn("Canvas font: ImGui would not take {}; falling back to its embedded bitmap font - canvases will look pixelated", render::internal::textFontSource());
         ImFontConfig fallback;
         fallback.SizePixels = rasterSize;
         return io.Fonts->AddFontDefault(&fallback);

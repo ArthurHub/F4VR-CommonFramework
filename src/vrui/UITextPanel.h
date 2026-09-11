@@ -95,7 +95,7 @@ namespace f4cf::vrui
     /**
      * A vrui panel that draws rows of text with the framework's own primitive renderer.
      *
-     * It is the low-fidelity sibling of imgui::UICanvas: the same idea - a rectangle in a vrui
+     * It is the low-fidelity sibling of imgui::UIImGuiPanel: the same idea - a rectangle in a vrui
      * layout whose inside is drawn by the overlay rather than by scene-graph geometry - but with no
      * Dear ImGui behind it. No atlas texture, no render-to-texture pass, no ImGui dependency at all,
      * so it is available even when F4CF_WITH_IMGUI_UI is OFF.
@@ -121,7 +121,7 @@ namespace f4cf::vrui
      *
      * The text is the framework's font - Roboto Medium, unless the mod ships its own at
      * render::CUSTOM_TEXT_FONT_PATH - kerned and drawn from a distance field so it stays sharp at any
-     * size and viewing distance. What you give up against UICanvas is layout: no scrolling, and no mixing
+     * size and viewing distance. What you give up against UIImGuiPanel is layout: no scrolling, and no mixing
      * sizes within a row.
      *
      * The content callback runs every frame, but the text is only re-wrapped and re-measured when a row's
