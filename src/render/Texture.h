@@ -63,6 +63,11 @@ namespace f4cf::render
          *
          * Paths match the way the engine resolves them, ignoring case and treating / and \ alike.
          * GAME thread only.
+         *
+         * A path may be partial, as a vrui NIF path may: it is tried as given, then under
+         * Data\Textures\, then under the mod's own Data\Textures\<ModName>\, and the first loose file
+         * that exists wins - so "Gobos\\star.dds" finds Data\Textures\MyMod\Gobos\star.dds. Only loose
+         * files are probed, so a texture packed in a BA2 archive needs its full path.
          */
         static std::shared_ptr<Texture> load(std::string_view path);
 
