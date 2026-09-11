@@ -167,6 +167,25 @@ at your mod's data folder and load the nifs via `UIButton`/`UIWidget` as shown a
 `pip install Pillow`; full options (and the reverse, `unpack`) are in the
 [nif-tools README](../../nif-tools/README.md).
 
+## Panel sizing
+
+[`UITextPanel`](UITextPanel.h) and [`UIImagePanel`](UIImagePanel.h) are drawn by the primitive
+renderer rather than a `.nif`, so they can size themselves to their content during layout
+([`UIPanelSizing`](UIPanel.h)). The constructor you call picks the mode:
+
+```cpp
+auto fit   = std::make_shared<vrui::UITextPanel>("Status");             // width + height fit the text
+auto wrap  = std::make_shared<vrui::UITextPanel>("Help", 8.0f);         // fixed width, height fits the wrapped text
+auto fixed = std::make_shared<vrui::UITextPanel>("Readout", 8.0f, 4.0f); // fixed; lines past the bottom are dropped
+fit->setMaxWidth(10.0f);                                                // fit-content wraps past this width
+
+auto icon  = std::make_shared<vrui::UIImagePanel>("Icon", 3.0f);        // fixed width, height from the image's proportions
+```
+
+Text wraps at spaces to the width it has (a word too long for a line is broken inside it), and a
+`'\n'` in a row starts a new line. The rows callback runs once per frame during layout; the text is
+only re-wrapped when it, the width, or the text height changes.
+
 ## Notes
 
 - `g_uiManager` is created by the framework before `onGameLoaded()`; mods never call `initUIManager()`.

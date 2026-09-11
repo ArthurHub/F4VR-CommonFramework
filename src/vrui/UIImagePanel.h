@@ -29,11 +29,25 @@ namespace f4cf::vrui
      *
      * Images that use different textures cannot share a draw call, so every distinct texture on
      * screen costs one.
+     *
+     * Built with a width alone, the panel takes its height from the image's proportions, so the image
+     * fills its content area with no empty bands and the fit makes no difference. The proportions are
+     * only known once the texture has loaded, which the panel asks for during layout; until then, and
+     * for good if the image cannot load, the panel is square. There is no fit-content sizing, since an
+     * image has proportions but no natural size in vrui units.
      */
     class UIImagePanel : public UIPanel
     {
     public:
         /**
+         * A panel of fixed width whose height follows the image's proportions.
+         * @param name identifies the element in logs.
+         * @param width size in vrui units, border and padding included.
+         */
+        UIImagePanel(const std::string& name, float width);
+
+        /**
+         * A panel of fixed size.
          * @param name identifies the element in logs.
          * @param width / height size in vrui units, border and padding included.
          */
@@ -69,6 +83,7 @@ namespace f4cf::vrui
         void setFit(UIImageFit fit);
 
     protected:
+        std::optional<UISize> measureContent(float availableWidth) override;
         void appendContent(render::PrimitiveDraw& frame, const UIPanelContentArea& area) const override;
 
         std::string_view typeName() const override

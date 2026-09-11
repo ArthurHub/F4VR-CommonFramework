@@ -4,6 +4,7 @@
 #include <array>
 #include <cmath>
 #include <format>
+#include <limits>
 #include <utility>
 #include <vector>
 
@@ -270,6 +271,57 @@ namespace f4cf::vrui
         _occluded = occluded;
     }
 
+    void UIPanel::setSizing(const UIPanelSizing sizing)
+    {
+        _sizing = sizing;
+    }
+
+    void UIPanel::setMaxWidth(const float units)
+    {
+        _maxWidthUnits = (std::max)(0.0f, units);
+    }
+
+    std::optional<UISize> UIPanel::measureContent(float)
+    {
+        return std::nullopt;
+    }
+
+    /**
+     * Measure the content and, for the dimensions that follow it, set the size to it plus the chrome.
+     *
+     * Runs before the parent container sums its children, which is what makes the container lay the
+     * panel out at this frame's size rather than last frame's. Sizes are in vrui units throughout, so
+     * the scale chain does not enter into it - the text and the chrome scale together at draw time.
+     *
+     * A hidden panel is skipped: its container leaves it out of the layout and nothing draws it, so
+     * measuring - which for a text panel means running its content callback - would be wasted.
+     */
+    void UIPanel::onLayoutUpdate(UIFrameUpdateContext*)
+    {
+        if (!calcVisibility()) {
+            return;
+        }
+
+        // the same insets appendTo takes off each side, so the content gets exactly the room measured
+        const UIPanelStyle style = resolveStyle();
+        const float chromeWidth = style.borderThicknessUnits * 2.0f + style.padding.left + style.padding.right;
+        const float chromeHeight = style.borderThicknessUnits * 2.0f + style.padding.top + style.padding.bottom;
+
+        float availableWidth = _size.width - chromeWidth;
+        if (_sizing == UIPanelSizing::FitContent) {
+            availableWidth = _maxWidthUnits > 0.0f ? _maxWidthUnits - chromeWidth : std::numeric_limits<float>::infinity();
+        }
+
+        const std::optional<UISize> content = measureContent((std::max)(0.0f, availableWidth));
+        if (!content || _sizing == UIPanelSizing::Fixed) {
+            return;
+        }
+        if (_sizing == UIPanelSizing::FitContent) {
+            _size.width = content->width + chromeWidth;
+        }
+        _size.height = content->height + chromeHeight;
+    }
+
     std::string UIPanel::toString() const
     {
         return std::format("{}({}): {}, Pos({:.2f}, {:.2f}, {:.2f}), Size({:.2f}, {:.2f})",
@@ -331,6 +383,12 @@ namespace f4cf::vrui
         const float areaWidth = worldWidth - insetLeft - insetRight;
         const float areaHeight = worldHeight - insetTop - insetBottom;
         if (areaWidth <= 0.0f || areaHeight <= 0.0f) {
+            // a panel sized to its content collapses to its chrome while it has none, which is not a
+            // mistake worth reporting; only a size the caller chose can be too small
+            const bool callerSizedTooSmall = _sizing == UIPanelSizing::Fixed || (_sizing == UIPanelSizing::FixedWidth && areaWidth <= 0.0f);
+            if (!callerSizedTooSmall) {
+                return;
+            }
             logger::sample(5000,
                 "Panel '{}' has no room for content inside its border and padding ({:.2f} x {:.2f} units); only its chrome is drawn",
                 _name,

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <string_view>
 
@@ -51,6 +52,20 @@ namespace f4cf::vrui
     };
 
     /**
+     * Which of a panel's dimensions are the caller's and which follow its content. The content is
+     * measured during layout, so the size a container lays the panel out with is this frame's.
+     */
+    enum class UIPanelSizing : std::uint8_t
+    {
+        // width and height as given; content that does not fit is clipped
+        Fixed,
+        // width as given, height grown or shrunk to hold the content at that width
+        FixedWidth,
+        // both follow the content, which wraps only past the max width when one is set
+        FitContent,
+    };
+
+    /**
      * Base of the vrui elements drawn by the framework's own primitive renderer rather than by
      * scene-graph geometry: a rectangle in a vrui layout whose chrome - background, border, rounding
      * and padding - is drawn here, and whose content is drawn by the subclass into what the chrome
@@ -67,6 +82,10 @@ namespace f4cf::vrui
      *
      * A panel is occluded by the world by default, so it sits in the scene like the widgets around
      * it rather than showing through walls; see setOccluded. It is not interactive.
+     *
+     * Its size is fixed unless the subclass measures its content (see UIPanelSizing): then, during
+     * layout, the dimensions that follow the content are set to it plus the border and padding, so
+     * the container around the panel lays it out at the size it is about to be drawn at.
      */
     class UIPanel : public UIElement
     {
@@ -155,10 +174,18 @@ namespace f4cf::vrui
             return _occluded;
         }
 
+        UIPanelSizing getSizing() const
+        {
+            return _sizing;
+        }
+
         std::string toString() const override;
 
-        // Internal: nothing to do during layout - the panel is drawn at frame end, once the whole
-        // tree has been laid out and its transform is final.
+        // Internal: size the panel to its content before its container lays it out.
+        void onLayoutUpdate(UIFrameUpdateContext* context) override;
+
+        // Internal: nothing to do per frame - the panel is drawn at frame end, once the whole tree has
+        // been laid out and its transform is final.
         void onFrameUpdate(UIFrameUpdateContext*) override
         {}
 
@@ -179,6 +206,29 @@ namespace f4cf::vrui
          * padding - so it may read game state freely.
          */
         virtual void appendContent(render::PrimitiveDraw& frame, const UIPanelContentArea& area) const = 0;
+
+        /**
+         * Size of the content in vrui units, border and padding excluded, when laid out no wider than
+         * `availableWidth` - infinite for a FitContent panel with no max width. Runs on the GAME thread
+         * during layout, every frame the panel is visible and whatever its sizing, so it is also where a
+         * subclass prepares what appendContent draws.
+         *
+         * The default, and nullopt from an override, leaves the size as it is: a panel whose content
+         * has no size to report yet, like an image that has not loaded.
+         */
+        virtual std::optional<UISize> measureContent(float availableWidth);
+
+        /**
+         * Which dimensions follow the content. Protected, so a subclass exposes only the modes its
+         * content can answer - an image has proportions but no natural size.
+         */
+        void setSizing(UIPanelSizing sizing);
+
+        /**
+         * The widest a FitContent panel grows before its content has to wrap, in vrui units, border
+         * and padding included. 0, the default, lets it grow without limit.
+         */
+        void setMaxWidth(float units);
 
         /**
          * The concrete class's name, for toString.
@@ -209,5 +259,7 @@ namespace f4cf::vrui
 
     private:
         bool _occluded = true;
+        UIPanelSizing _sizing = UIPanelSizing::Fixed;
+        float _maxWidthUnits = 0.0f;
     };
 }

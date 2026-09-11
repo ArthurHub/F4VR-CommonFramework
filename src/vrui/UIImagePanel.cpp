@@ -4,9 +4,34 @@
 
 namespace f4cf::vrui
 {
+    UIImagePanel::UIImagePanel(const std::string& name, const float width)
+        : UIPanel(name, width, width)
+    {
+        setSizing(UIPanelSizing::FixedWidth);
+    }
+
     UIImagePanel::UIImagePanel(const std::string& name, const float width, const float height)
         : UIPanel(name, width, height)
     {}
+
+    /**
+     * The content width it is given, at the image's proportions - loading the texture if this is the
+     * first time anything asked, since its size is not known before. Layout runs on the game thread,
+     * which loading requires. A fixed-size panel has no use for the answer, so it does not ask.
+     */
+    std::optional<UISize> UIImagePanel::measureContent(const float availableWidth)
+    {
+        if (getSizing() == UIPanelSizing::Fixed || !_texture) {
+            return std::nullopt;
+        }
+        if (_texture->width() == 0 && !_texture->view()) {
+            return std::nullopt;
+        }
+        if (_texture->width() == 0 || _texture->height() == 0) {
+            return std::nullopt;
+        }
+        return UISize(availableWidth, availableWidth * static_cast<float>(_texture->height()) / static_cast<float>(_texture->width()));
+    }
 
     void UIImagePanel::setImage(std::string path)
     {
