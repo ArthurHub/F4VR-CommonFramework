@@ -188,7 +188,9 @@ namespace f4cf::f4vr
      * it to the zone's world-space center/radius so the visual and the test always agree — even when
      * `attachParent` differs from `testNode` (the node the zone is measured from). This lets the zone be
      * measured off a raw, non-rendering tracking node (HMD / wand) while the sphere renders under a visible
-     * one. A null `attachParent` defaults to the world root node (always rendered).
+     * one. A null `attachParent` defaults to the VR primary-hand UI attach node: it renders, and it lives
+     * outside the player's 3D, which character creation rebuilds — a sphere attached inside that tree crashes
+     * the game.
      *
      * `nifName` selects the mesh (empty = the framework default sphere mesh); a change from the currently
      * cloned nif releases the cached clone so the new one is loaded on the next show. `sphereScale` shrinks
@@ -197,8 +199,8 @@ namespace f4cf::f4vr
     void WandActivationSphere::updateVisual(const RE::NiNode* testNode, RE::NiNode* attachParent, const RE::NiTransform& zone, const bool show, const std::string_view nifName,
         const float sphereScale)
     {
-        if (!attachParent) {
-            attachParent = getRootNode();
+        if (!attachParent && getPlayer()) {
+            attachParent = getPlayerNodes()->primaryUIAttachNode;
         }
 
         // Fast idle path: nothing shown and nothing cached, so there is no nif work to do (avoids resolving
@@ -253,6 +255,10 @@ namespace f4cf::f4vr
         RE::NiTransform visualZone = zone;
         visualZone.scale *= sphereScale;
         _sphereNode->local = common::MatrixUtils::reparentTransform(testNode->world, visualZone, attachParent->world, false);
+
+        // Push the placement to world ourselves rather than relying on the parent's subtree update to pick it up
+        // (under the skeleton, FRIK's per-frame skeleton update did); this also avoids a frame of lag.
+        updateTransformsDown(_sphereNode.get(), true);
     }
 
     /**

@@ -97,9 +97,11 @@ namespace f4cf::f4vr
      *
      * The zone is measured from `node`, but `node` need not be part of the rendered scene graph: the raw VR
      * tracking nodes (HMD / wand) give the most accurate hand/head position yet don't render their children.
-     * The sphere visual therefore hangs under `sphereAttachNode` — the world root node by default (always
-     * rendered), or any known-visible node the caller sets — and is relocated each frame to the zone's
-     * world-space center, so it still matches the test exactly.
+     * The sphere visual therefore hangs under `sphereAttachNode` — the VR primary-hand UI attach node by
+     * default, or any known-visible node the caller sets — and is relocated each frame to the zone's
+     * world-space center, so it still matches the test exactly. Don't attach it inside the player's 3D (the
+     * skeleton / world root node): character creation rebuilds that tree, and a sphere inside it crashes the
+     * game.
      *
      * Input suppression is owner-keyed (vrcf::VRControllersSuppress): every suppress/release this zone
      * issues is tagged with the key passed at construction, so independent zones never fight over a button.
@@ -123,7 +125,8 @@ namespace f4cf::f4vr
             // Optional known-visible node to attach the sphere visual under, for when `node` (the node the
             // zone is measured from) isn't part of the rendered scene graph — e.g. the raw HMD / wand tracking
             // nodes. The sphere is relocated to the zone's world-space center/radius regardless, so it still
-            // matches the hit test. Left null (the default), it hangs under the world root node (getRootNode()).
+            // matches the hit test. Left null (the default), it hangs under the VR primary-hand UI attach node
+            // (PlayerNodes::primaryUIAttachNode), which renders and is not rebuilt with the player's 3D.
             RE::NiNode* sphereAttachNode = nullptr;
             // The .nif cloned as the sphere visual. Empty = the framework's default sphere mesh
             // (vrui::UIUtils::getDebugSphereNifName()). A different value swaps the mesh; changing it between
