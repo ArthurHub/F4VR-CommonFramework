@@ -25,10 +25,22 @@ namespace f4cf::vrcf
 
         const auto now = getCurrentTimeSeconds();
 
-        _left.update(_left.index, now);
-        _right.update(_right.index, now);
+        _left.update(_left.index, now, vr::TrackedControllerRole_LeftHand, _controllerStateAdjuster);
+        _right.update(_right.index, now, vr::TrackedControllerRole_RightHand, _controllerStateAdjuster);
 
         _currentTime = now;
+    }
+
+    /**
+     * Set (or clear with an empty function) the adjuster applied to each controller's polled state before
+     * press tracking. For when the state read through the shared IVRSystem vtable doesn't reflect the physical
+     * hardware: another mod may rewrite it for every reader, which SelfControllerReadScope can't see past
+     * (e.g. remapping the trigger between hands), and the adjuster can restore the physical values from that
+     * mod's own API.
+     */
+    void VRControllersManager::setControllerStateAdjuster(ControllerStateAdjuster adjuster)
+    {
+        _controllerStateAdjuster = std::move(adjuster);
     }
 
     /**
@@ -414,7 +426,8 @@ namespace f4cf::vrcf
     }
 
     // Updates the controller state and tracks press transitions
-    void VRControllersManager::ControllerState::update(const vr::TrackedDeviceIndex_t newIndex, const float now)
+    void VRControllersManager::ControllerState::update(const vr::TrackedDeviceIndex_t newIndex, const float now, const vr::ETrackedControllerRole role,
+        const ControllerStateAdjuster& adjuster)
     {
         if (newIndex == vr::k_unTrackedDeviceIndexInvalid || !vr::VRSystem()) {
             valid = false;
@@ -430,6 +443,9 @@ namespace f4cf::vrcf
         }
         if (!valid) {
             return;
+        }
+        if (adjuster) {
+            adjuster(role, current);
         }
 
         // Update press start times for all button transitions

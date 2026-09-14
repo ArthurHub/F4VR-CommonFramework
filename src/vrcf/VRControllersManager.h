@@ -1,5 +1,6 @@
 #pragma once
 
+#include <functional>
 #include <optional>
 #include <unordered_map>
 
@@ -168,7 +169,15 @@ namespace f4cf::vrcf
             .type = ActivationType::Disabled,
         };
 
+        /**
+         * Adjusts a physical controller's freshly polled state before press/hold/tap tracking sees it.
+         * Called on the main thread from update(), once per controller per frame.
+         */
+        using ControllerStateAdjuster = std::function<void(vr::ETrackedControllerRole role, vr::VRControllerState_t& state)>;
+
         void update(bool isLeftHanded);
+
+        void setControllerStateAdjuster(ControllerStateAdjuster adjuster);
 
         void reset();
 
@@ -245,7 +254,7 @@ namespace f4cf::vrcf
             std::unordered_map<vr::EVRButtonId, bool> longPressHandled; // Track if long press was handled
             float axisLastPassedPressCheck[5] = { 0, 0, 0, 0, 0 };
 
-            void update(vr::TrackedDeviceIndex_t newIndex, float now);
+            void update(vr::TrackedDeviceIndex_t newIndex, float now, vr::ETrackedControllerRole role, const ControllerStateAdjuster& adjuster);
             void reset();
             bool isPressed(vr::EVRButtonId button) const;
             bool isTouching(vr::EVRButtonId button) const;
@@ -271,6 +280,7 @@ namespace f4cf::vrcf
         ControllerState _left;
         ControllerState _right;
         bool _leftHanded = false;
+        ControllerStateAdjuster _controllerStateAdjuster;
         float _currentTime = 0.0f;
         float _debounceCooldown = 0.1f; // default 100 ms
     };

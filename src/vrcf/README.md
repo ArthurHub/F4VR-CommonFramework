@@ -54,6 +54,12 @@ Press-state helpers (all debounced):
 Thumbstick/axis gestures: `isThumbstickPressed(hand, Direction)` and `getThumbstickPressedDirection`
 turn analog deflection into discrete up/down/left/right events with a threshold + cooldown.
 
+**When another mod rewrites the controller state.** The poll goes through the shared `IVRSystem` vtable,
+so a mod that rewrites the state for every reader (e.g. remapping the trigger from one hand to the other)
+is invisible to your own read too. `VRControllers.setControllerStateAdjuster(fn)` runs `fn(role, state)` on
+each physical controller's polled state, before press tracking, so you can restore the physical values
+from that mod's own API. One adjuster at a time; pass an empty function to clear it.
+
 ## Config-driven bindings
 
 When the *key binding itself* should be configurable (any hand, any button, any kind of press), don't
