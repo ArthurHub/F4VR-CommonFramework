@@ -8,6 +8,7 @@
 
 #include "../common/MatrixUtils.h"
 #include "../render/TextFont.h"
+#include "ModBase.h"
 #include "UIUtils.h"
 
 namespace f4cf::vrui
@@ -72,6 +73,11 @@ namespace f4cf::vrui
         _textOnlyHeightUnits = (std::max)(0.01f, units);
     }
 
+    void UIButtonPanel::setLineGapRatio(const float ratio)
+    {
+        _lineGapRatio = (std::max)(0.01f, ratio);
+    }
+
     void UIButtonPanel::setOnPressHandler(std::function<void(UIButtonPanel*)> handler)
     {
         _onPressHandler = std::move(handler);
@@ -97,12 +103,12 @@ namespace f4cf::vrui
 
     /**
      * The panel's fields, then the largest text heights as Text:(beside an image, text only) - what decides
-     * how large a label is drawn before it has to shrink.
+     * how large a label is drawn before it has to shrink - and the text-only line gap ratio as LineGap:(ratio).
      */
     void UIButtonPanel::writeDevLayoutFields(std::string& line) const
     {
         UIPanel::writeDevLayoutFields(line);
-        line += std::format(", Text:({:.2f},{:.2f})", _textHeightUnits, _textOnlyHeightUnits);
+        line += std::format(", Text:({:.2f},{:.2f}), LineGap:({:.2f})", _textHeightUnits, _textOnlyHeightUnits, _lineGapRatio);
     }
 
     void UIButtonPanel::readDevLayoutFields(const DevLayoutFields& fields)
@@ -111,6 +117,9 @@ namespace f4cf::vrui
         if (const auto text = fields.find("Text"); text != fields.end() && text->second.size() == 2) {
             setTextHeight(text->second[0]);
             setTextOnlyHeight(text->second[1]);
+        }
+        if (const auto lineGap = fields.find("LineGap"); lineGap != fields.end() && lineGap->second.size() == 1) {
+            setLineGapRatio(lineGap->second[0]);
         }
     }
 
@@ -301,7 +310,7 @@ namespace f4cf::vrui
      * bottom edge, each keeping the same space to the image, and the image takes what is left between
      * them; the middle line has no room and is not drawn. Without one, the lines - top, middle and
      * bottom, whichever are set - are centred with equal space above the first and below the last,
-     * measured from the border so the padding counts, and half that space between each pair, which
+     * measured from the border so the padding counts, and a fraction of that space (setLineGapRatio) between each pair, which
      * centres a single line. Both layouts measure on the capitals, so the two ends of a button mirror
      * each other.
      */
@@ -366,16 +375,17 @@ namespace f4cf::vrui
             descenderRoom *= shrink;
 
             // Spacing is judged from the border, where the eye measures it, so the padding counts toward
-            // the space above and below: the gap between lines is half the space from the border to the
-            // nearest line. With that space being padding + outer and the spare height being
-            // 2 * outer + gaps * gap, the gap works out to (spare + 2 * padding) / (gaps + 4). It takes
+            // the space above and below: the gap between lines is the line gap ratio of the space
+            // from the border to the nearest line. With that space being padding + outer and the spare
+            // height being 2 * outer + gaps * gap, the gap works out to
+            // (spare + 2 * padding) / (gaps + 2 / ratio). It takes
             // less when the text would have to leave the content area for it, but never less than the
             // descenders need.
             const float spare = area.height - textHeight;
             float gap = 0.0f;
             if (count > 1) {
                 const float padding = 0.5f * (style.padding.top + style.padding.bottom) * area.scale;
-                gap = (std::min)((std::max)((spare + 2.0f * padding) / (gaps + 4.0f), descenderRoom), spare / gaps);
+                gap = (std::min)((std::max)((spare + 2.0f * padding) / (gaps + 2.0f / _lineGapRatio), descenderRoom), spare / gaps);
             }
             const float outer = (spare - gaps * gap) * 0.5f;
 

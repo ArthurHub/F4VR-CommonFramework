@@ -67,7 +67,7 @@ namespace f4cf::vrui
         .borderColor = render::Color::rgba(10, 250, 120),
         .borderThicknessUnits = 0.05f,
         .cornerRadiusUnits = 0.2f,
-        .padding = UIPadding::all(0.3f),
+        .padding = UIPadding::all(0.15f),
     };
 
     /**

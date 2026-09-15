@@ -16,18 +16,25 @@ namespace f4cf::vrui
      * of a capital letter. A line too wide for the button at this size is shrunk until it fits;
      * setTextHeight overrides it.
      */
-    inline constexpr float BUTTON_PANEL_TEXT_HEIGHT_UNITS = 0.24f;
+    inline constexpr float BUTTON_PANEL_TEXT_HEIGHT_UNITS = 0.26f;
 
     /**
      * The same, for a button with no image: its text has the whole height to itself, so it can be
      * drawn larger. setTextOnlyHeight overrides it.
      */
-    inline constexpr float BUTTON_PANEL_TEXT_ONLY_HEIGHT_UNITS = 0.36f;
+    inline constexpr float BUTTON_PANEL_TEXT_ONLY_HEIGHT_UNITS = 0.30f;
 
     /**
      * Space between the image and a line of text, in vrui units.
      */
-    inline constexpr float BUTTON_PANEL_CONTENT_GAP_UNITS = 0.08f;
+    inline constexpr float BUTTON_PANEL_CONTENT_GAP_UNITS = 0.0f;
+
+    /**
+     * Space between lines of a button with no image, as a fraction of the space from the border to the
+     * first and last lines (padding included). 1 spaces them evenly; smaller packs them tighter.
+     * setLineGapRatio overrides it.
+     */
+    inline constexpr float BUTTON_PANEL_LINE_GAP_RATIO = 0.8f;
 
     /**
      * How much of a disabled button's border, text and image still shows, as a multiplier on their
@@ -54,7 +61,7 @@ namespace f4cf::vrui
      * With an image, the top line's capitals start at the top edge and the bottom line's end at the
      * bottom edge, so both sit the same distance from the border and from the image. Without one, the
      * lines are spread with equal space between the border and the first and last lines, padding
-     * included, and half that space between each pair, so a single line is centred. When the button is
+     * included, and a fraction of that space (setLineGapRatio) between each pair, so a single line is centred. When the button is
      * too short for that, the gaps between lines give way first. Everything is measured on the capitals, since labels
      * mostly are; descenders hang below their line.
      *
@@ -131,6 +138,13 @@ namespace f4cf::vrui
         void setTextOnlyHeight(float units);
 
         /**
+         * The space between lines when the button has no image, as a fraction of the space from the
+         * border to the first and last lines - see BUTTON_PANEL_LINE_GAP_RATIO. The lines still keep
+         * clear of each other's descenders, and the gap still gives way when the button is too short.
+         */
+        void setLineGapRatio(float ratio);
+
+        /**
          * Size the button's width to its content at its height, instead of shrinking the text to the width
          * it was given. Each line then keeps its full text height, and the image its proportions in the
          * height the lines leave. The button never gets narrower than it is tall, so a short label still
@@ -193,6 +207,7 @@ namespace f4cf::vrui
         render::Color _imageTint = render::colors::White;
         float _textHeightUnits = BUTTON_PANEL_TEXT_HEIGHT_UNITS;
         float _textOnlyHeightUnits = BUTTON_PANEL_TEXT_ONLY_HEIGHT_UNITS;
+        float _lineGapRatio = BUTTON_PANEL_LINE_GAP_RATIO;
         std::function<void(UIButtonPanel*)> _onPressHandler;
         bool _disabled = false;
 
