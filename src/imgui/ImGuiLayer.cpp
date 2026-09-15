@@ -303,9 +303,11 @@ namespace f4cf::imgui::internal
 
         ImGui_ImplDX11_NewFrame();
         ImGui::NewFrame();
+        // no scrollbar: the content child can be given more room than the window, and a scrollbar is what
+        // ImGui would otherwise answer that with
         constexpr ImGuiWindowFlags CANVAS_FLAGS = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse |
                                                   ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNav |
-                                                  ImGuiWindowFlags_NoBackground;
+                                                  ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoScrollbar;
 
         // ImGui's anti-aliasing fringe is one layout pixel; scaled by this it stays one atlas pixel
         // instead of softening every edge by the atlas scale
@@ -367,14 +369,40 @@ namespace f4cf::imgui::internal
                 // the window starts half a border in, so each side adds its padding plus the border's
                 // other half to clear the inner edge
                 const auto& padding = entry.canvas->padding();
+                const float contentX = windowX + padding.left + halfBorder;
+                const float contentY = windowY + padding.top + halfBorder;
                 const float contentWidth = (std::max)(1.0f, windowWidth - padding.left - padding.right - borderThickness);
                 const float contentHeight = (std::max)(1.0f, windowHeight - padding.top - padding.bottom - borderThickness);
+
+                // A canvas sized to its content lays it out in more room than it shows, so the content is
+                // measured against that room rather than against last frame's size - in which wrapped text
+                // would stay wrapped and a stretched item keep the width it had, so the canvas could never
+                // grow past the one or shrink past the other. The clip is the shown rectangle, and a child
+                // takes its clip from its parent's, so what runs past it stops at the padding instead of
+                // drawing over it. No scrollbar in that room either: one would take width from the content
+                // and change what was measured.
+                const CanvasSize& available = entry.canvas->availableContentSize();
+                const float roomWidth = available.width > 0.0f ? available.width : contentWidth;
+                const float roomHeight = available.height > 0.0f ? available.height : contentHeight;
+                const bool roomGiven = available.width > 0.0f || available.height > 0.0f;
+                ImGui::PushClipRect(ImVec2(contentX, contentY), ImVec2(contentX + contentWidth, contentY + contentHeight), true);
                 ImGui::SetCursorPos(ImVec2(padding.left + halfBorder, padding.top + halfBorder));
-                if (ImGui::BeginChild("content", ImVec2(contentWidth, contentHeight), ImGuiChildFlags_None, ImGuiWindowFlags_NoBackground)) {
+                if (ImGui::BeginChild("content",
+                        ImVec2(roomWidth, roomHeight),
+                        ImGuiChildFlags_None,
+                        ImGuiWindowFlags_NoBackground | (roomGiven ? ImGuiWindowFlags_NoScrollbar : 0))) {
                     ImGui::GetWindowDrawList()->_FringeScale = fringeScale;
+
+                    // the group's rectangle is everything the content laid out, which is what measures it;
+                    // rounded up so the size it is given back never clips its last column of pixels
+                    ImGui::BeginGroup();
                     entry.canvas->content()();
+                    ImGui::EndGroup();
+                    const ImVec2 measured = ImGui::GetItemRectSize();
+                    entry.canvas->setMeasuredContentSize(CanvasSize{ .width = std::ceil(measured.x), .height = std::ceil(measured.y) });
                 }
                 ImGui::EndChild(); // unconditional: ImGui asserts on an unmatched BeginChild
+                ImGui::PopClipRect();
             }
             ImGui::End();
             ImGui::PopStyleVar(2);
@@ -388,6 +416,9 @@ namespace f4cf::imgui::internal
         frame.drawData->scale(s_atlasScale);
         frame.quads.reserve(packed.size());
         for (const auto& entry : packed) {
+            if (!entry.placement.show) {
+                continue; // laid out to be measured, not to be seen
+            }
             frame.quads.push_back(buildQuad(entry.placement, entry.x, entry.y, entry.canvas->pixelWidth(), entry.canvas->pixelHeight(), viewer, entry.canvas->isOccluded()));
         }
 

@@ -36,16 +36,19 @@ namespace f4cf::imgui
      * element is special: hide it, hide a parent, or detach the tree and the canvas stops drawing
      * with it.
      *
-     *     auto readout = std::make_shared<imgui::UIImGuiPanel>("BeamReadout", 8.0f, 5.0f);
+     *     auto readout = std::make_shared<imgui::UIImGuiPanel>("BeamReadout", 8.0f);
      *     readout->setContent([this] { ImGui::Text("FOV: %.1f", beamFov()); });
      *     panel->addElement(readout);
      *
-     * Size is given once, in vrui units; the pixel resolution follows from CANVAS_PIXELS_PER_UNIT
-     * and the element's own size, never its containers' scale. The content is laid out and rendered
-     * at scale 1 and the quad stretches it with the rest of the layout, so text, widgets and chrome
-     * scale together like any other vrui element. The price is density: in a container scaled 1.6
-     * the panel has 1.6x fewer atlas pixels per world unit and reads correspondingly softer, which
-     * setSupersample buys back at a memory cost.
+     * Size is in vrui units, and which constructor builds the panel picks how it is sized, as for a
+     * vrui::UITextPanel (see vrui::UIPanelSizing): with no size it fits its content, with a width it
+     * grows to the height its content needs at that width, and with both it stays as given.
+     *
+     * The pixel resolution follows from CANVAS_PIXELS_PER_UNIT and the element's own size, never its
+     * containers' scale. The content is laid out and rendered at scale 1 and the quad stretches it with
+     * the rest of the layout, so text, widgets and chrome scale together like any other vrui element.
+     * The price is density: in a container scaled 1.6 the panel has 1.6x fewer atlas pixels per world
+     * unit and reads correspondingly softer, which setSupersample buys back at a memory cost.
      * A panel too large to fit the shared atlas is scaled down to fit, keeping its aspect, and says
      * so in the log - it never silently distorts.
      *
@@ -54,7 +57,7 @@ namespace f4cf::imgui
      * the scene's own draw order. It is not interactive: vrui's finger-collision press handling
      * does not apply, since the content is pixels rather than widgets (see the interactivity work in
      * the design docs). And it is not a vrui::UIPanel, whatever the name suggests: it takes the same
-     * vrui::UIPanelStyle, but ImGui draws its chrome, and it never sizes itself to its content.
+     * vrui::UIPanelStyle and sizing modes, but ImGui draws its chrome and lays out its content.
      *
      * Lives under imgui/ rather than vrui/ because it is the adapter BETWEEN the two: building it
      * with vrui would make every vrui consumer depend on Dear ImGui, and it has to disappear along
@@ -65,6 +68,20 @@ namespace f4cf::imgui
     {
     public:
         /**
+         * A panel as wide and as tall as its content, border and padding included.
+         * @param name identifies the element in logs and is the canvas's ImGui window id - unique.
+         */
+        explicit UIImGuiPanel(const std::string& name);
+
+        /**
+         * A panel of fixed width whose height follows its content laid out at that width.
+         * @param name identifies the element in logs and is the canvas's ImGui window id - unique.
+         * @param width size in vrui units, border and padding included.
+         */
+        UIImGuiPanel(const std::string& name, float width);
+
+        /**
+         * A panel of fixed size; content that does not fit is clipped.
          * @param name identifies the element in logs and is the canvas's ImGui window id - unique.
          * @param width / height size in vrui units, i.e. the slot it asks the layout for.
          */
@@ -75,6 +92,36 @@ namespace f4cf::imgui
          * ContentCallback.
          */
         void setContent(ContentCallback content);
+
+        /**
+         * Which dimensions follow the content - see vrui::UIPanelSizing, and the constructors, which
+         * pick the common ones.
+         *
+         * ImGui content can only be measured by drawing it, and it is drawn at frame end, after vrui has
+         * laid the frame out - so a panel that follows its content is laid out at the size the content
+         * took up the frame before. A change in the content reaches the layout one frame late, clipped
+         * or with room to spare for that frame; the first frame, with nothing measured yet, lays the
+         * content out without showing it.
+         *
+         * A dimension that follows the content lays it out in as much room as it may grow to - the max
+         * width, or the whole atlas (MAX_CANVAS_PIXEL_SIZE, about 21 units) - and never grows past it:
+         * content past that is clipped. Wrapped text (ImGui::TextWrapped) wraps at that room, so with a
+         * max width it wraps only past it. Content that fills whatever room it is given - a full-width
+         * progress bar, right-aligned text - sizes the panel out to that room; give it a width of its own.
+         */
+        void setSizing(vrui::UIPanelSizing sizing);
+
+        vrui::UIPanelSizing getSizing() const
+        {
+            return _sizing;
+        }
+
+        /**
+         * The widest a panel whose width follows its content (FitContent, FixedHeight) grows, in vrui
+         * units, border and padding included - the width wrapped text wraps at. 0, the default, lets it
+         * grow to the atlas.
+         */
+        void setMaxWidth(float units);
 
         /**
          * Whether the world hides the panel when something is in front of it. On by default, so it
@@ -136,16 +183,27 @@ namespace f4cf::imgui
 
         virtual std::string toString() const override;
 
+        // Internal: size the panel to what its content took up before its container lays it out.
+        virtual void onLayoutUpdate(vrui::UIFrameUpdateContext* context) override;
+
         // Internal: keep the canvas's resolution and chrome in step with what vrui laid out.
         virtual void onFrameUpdate(vrui::UIFrameUpdateContext* context) override;
+
+    protected:
+        void writeDevLayoutFields(std::string& line) const override;
+        void readDevLayoutFields(const DevLayoutFields& fields) override;
 
     private:
         bool resolvePlacement(CanvasPlacement& out) const;
         void refreshCanvas();
+        CanvasSize contentRoomPixels(float pixelsPerUnit) const;
 
         std::unique_ptr<Canvas> _canvas;
 
         // the look as asked for, in vrui units; converted into the canvas's pixels each frame
         vrui::UIPanelStyle _style;
+
+        vrui::UIPanelSizing _sizing = vrui::UIPanelSizing::Fixed;
+        float _maxWidthUnits = 0.0f;
     };
 }

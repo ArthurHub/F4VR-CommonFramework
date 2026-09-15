@@ -92,6 +92,17 @@ namespace f4cf::imgui
         setPadding(CanvasPadding{ side, side, side, side });
     }
 
+    void Canvas::setAvailableContentSize(const CanvasSize& size)
+    {
+        constexpr float limit = static_cast<float>(MAX_CANVAS_PIXEL_SIZE);
+        _availableContentSize = { .width = std::clamp(size.width, 0.0f, limit), .height = std::clamp(size.height, 0.0f, limit) };
+    }
+
+    void Canvas::setMeasuredContentSize(const CanvasSize& size)
+    {
+        _measuredContentSize = size;
+    }
+
     void Canvas::setVisible(const bool visible)
     {
         _visible = visible;

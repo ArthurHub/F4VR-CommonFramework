@@ -197,7 +197,17 @@ photo->setMaxWidth(4.0f);                                               // ...sc
 auto btn = std::make_shared<vrui::UIButtonPanel>("Tuning");              // buttons (and toggle / multi-state panels) too:
 btn->setFitWidth(true);                                                 // height as given, width fits the label (never narrower than tall)
 btn->setMaxWidth(6.0f);                                                 // ...and past this the label shrinks again
+
+auto gui = std::make_shared<imgui::UIImGuiPanel>("Readout", 8.0f);      // ImGui panels take the same constructors
+auto fitGui = std::make_shared<imgui::UIImGuiPanel>("Status");          // ...and max width
+fitGui->setMaxWidth(10.0f);
 ```
+
+An `imgui::UIImGuiPanel` can only measure its content by drawing it, which happens after layout, so
+it is laid out at the size its content took up the frame before - a change in the content reaches the
+layout one frame late - and its first frame is measured without being shown. A dimension that follows
+the content lays it out in all the room it may grow to (the max width, or the ~21-unit atlas): wrapped
+text wraps there, and a full-width item stretches the panel out to it.
 
 Text wraps at spaces to the width it has (a word too long for a line is broken inside it), and a
 `'\n'` in a row starts a new line. A `'\t'` moves to the next tab stop, measured from the line start

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <functional>
+#include <optional>
 #include <string>
 
 #include "../render/PrimitiveDraw.h"
@@ -42,6 +43,15 @@ namespace f4cf::imgui
     inline constexpr int MAX_CANVAS_PIXEL_SIZE = 1024;
 
     /**
+     * A width and height in layout pixels.
+     */
+    struct CanvasSize
+    {
+        float width = 0.0f;
+        float height = 0.0f;
+    };
+
+    /**
      * Where a canvas's quad sits in the world, resolved on the GAME thread each frame.
      *
      * `transform.rotate` defines the quad's plane using the game's own axes: local +X is the canvas's
@@ -54,6 +64,10 @@ namespace f4cf::imgui
         RE::NiTransform transform;
         float worldWidth = 30.0f;
         float worldHeight = 20.0f;
+
+        // false still lays the content out and measures it, but shows nothing this frame - how a canvas
+        // sized to its content stays out of sight until it knows that size
+        bool show = true;
     };
 
     /**
@@ -217,6 +231,33 @@ namespace f4cf::imgui
         }
 
         /**
+         * Room the content is laid out in, in layout pixels, border and padding excluded - for a canvas
+         * sized to its content, which has to lay the content out before it knows how big it is. A
+         * dimension of 0, the default, is the room the canvas's own size leaves. Clamped to
+         * MAX_CANVAS_PIXEL_SIZE.
+         *
+         * Only the room grows, not what is shown: content past the canvas's own rectangle is clipped at
+         * its padding. Content that fills the room it has - a full-width progress bar, right-aligned text,
+         * wrapped text - fills this, so a canvas that follows its content grows out to it.
+         */
+        void setAvailableContentSize(const CanvasSize& size);
+
+        const CanvasSize& availableContentSize() const
+        {
+            return _availableContentSize;
+        }
+
+        /**
+         * What the content took up the last time it was drawn, in layout pixels, border and padding
+         * excluded, laid out in availableContentSize. Nullopt until it has been drawn once; a hidden
+         * canvas keeps the last one.
+         */
+        const std::optional<CanvasSize>& measuredContentSize() const
+        {
+            return _measuredContentSize;
+        }
+
+        /**
          * Runtime show/hide on top of whatever the placement provider decides. A hidden canvas costs
          * nothing: it is not packed, not drawn, and does not run its content callback.
          */
@@ -230,6 +271,7 @@ namespace f4cf::imgui
         // Internal: used by the layer while building a frame.
         const ContentCallback& content() const;
         const PlacementProvider& placement() const;
+        void setMeasuredContentSize(const CanvasSize& size);
 
     private:
         std::string _name;
@@ -247,6 +289,11 @@ namespace f4cf::imgui
         float _borderThickness = 0.0f;
         float _cornerRadius = 0.0f;
         CanvasPadding _padding;
+
+        // zero in a dimension is what "the canvas's own room" means
+        CanvasSize _availableContentSize;
+        std::optional<CanvasSize> _measuredContentSize;
+
         ContentCallback _content;
         PlacementProvider _placement;
     };
