@@ -259,6 +259,10 @@ namespace f4cf::render
                     }
                 }
                 --s_hookDepth;
+            } else if (eye == vr::Eye_Left) {
+                // nothing draws against the next frame's depth, so it is not captured - which under an
+                // upscaler is a full-screen copy every frame
+                sceneDepth::setCaptureRequested(false);
             }
             return s_originalVRSubmit(compositor, eye, texture, bounds, flags);
         }

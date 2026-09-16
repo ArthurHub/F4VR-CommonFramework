@@ -5,11 +5,14 @@
 namespace f4cf::render
 {
     /**
-     * The engine's scene depth for the eye texture currently being submitted, as a READ-ONLY view.
+     * The engine's scene depth for the eye texture currently being submitted, as a READ-ONLY view
+     * lined up with that texture pixel for pixel.
      *
      * Read-only is the whole safety story. The buffer belongs to the engine and is still referenced
      * by it; a read-only depth view lets the overlay test against world depth while making it
-     * impossible to write into what the engine owns.
+     * impossible to write into what the engine owns. Under an upscaler the view is onto the
+     * framework's own copy instead, made during the frame (see acquireForSubmittedTexture), read-only
+     * all the same.
      *
      * The view is owned by the capture and stays valid only for the submit it was acquired in.
      */
@@ -17,8 +20,8 @@ namespace f4cf::render
     {
         ID3D11DepthStencilView* readOnlyView = nullptr;
 
-        // The comparison the engine itself was using when it drew the world, read from the bound
-        // depth-stencil state rather than assumed - FO4 need not use a conventional LESS.
+        // The comparison that hides an overlay behind the world, whose depth is conventional - near
+        // surfaces smaller; see WORLD_DEPTH_COMPARISON in SceneDepthCapture.cpp.
         D3D11_COMPARISON_FUNC comparison = D3D11_COMPARISON_LESS_EQUAL;
 
         bool isValid() const
@@ -46,6 +49,13 @@ namespace f4cf::render
      * renders the world into its own G-buffer at exactly the submitted resolution and only resolves
      * into the submitted texture, so pairing by identity - the obvious approach - never matches.
      *
+     * A matching size does not guarantee matching pixels, though. An upscaler driving the engine's
+     * dynamic resolution (DLSS, FSR) keeps the buffer at the submitted size but draws the world into
+     * a smaller viewport of it, top-left, upscales only the colour, and clears the buffer before the
+     * frame is submitted. So the capture also counts the viewports the frame's passes draw into the
+     * buffer with, and when the one most of them use does not cover the buffer, the world's depth is
+     * copied during the frame, at the last pass that draws with it, resampled to the submitted size.
+     *
      * Provenance: the technique and both addresses were studied from PrismaUI's FO4VR port
      * (F4VR reference library, framework-F4-Conversion). That project's license permits study but
      * not redistribution of derived code, so this is an independent implementation; the addresses
@@ -63,8 +73,9 @@ namespace f4cf::render
         bool isInstalled();
 
         /**
-         * Whether to capture at all. Capturing costs a few D3D queries per committed state, so it
-         * stays off until something actually wants to be occluded.
+         * Whether to capture the next frame's depth. Capturing costs a few D3D queries per committed
+         * state, and under an upscaler a full-screen copy per frame, so it is on only while something
+         * draws against it: turning it off also frees that copy. RENDER thread only.
          */
         void setCaptureRequested(bool requested);
 
@@ -75,8 +86,10 @@ namespace f4cf::render
         void setSubmittedTexture(ID3D11Texture2D* texture);
 
         /**
-         * The depth captured for this texture during the current frame, or an invalid SceneDepth if
-         * nothing matching was captured.
+         * The depth captured for this texture during the current frame, lined up with it, or an
+         * invalid SceneDepth if nothing matching was captured - or if the world was drawn into part of
+         * the buffer and no copy of it was made this frame or the last, since depth that does not line
+         * up hides the wrong things. RENDER thread only.
          *
          * The view is borrowed, not owned: it is good for this submit and must not be held past it.
          */

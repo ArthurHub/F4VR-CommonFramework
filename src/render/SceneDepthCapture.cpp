@@ -3,8 +3,11 @@
 #include <algorithm>
 #include <array>
 #include <atomic>
+#include <chrono>
+#include <cmath>
 #include <cstring>
 #include <mutex>
+#include <optional>
 #include <string>
 #include <string_view>
 
@@ -12,6 +15,7 @@
 #include <wrl/client.h>
 
 #include "RenderUtils.h"
+#include "SceneDepthResample.h"
 
 namespace f4cf::render::sceneDepth
 {
@@ -56,20 +60,142 @@ namespace f4cf::render::sceneDepth
 
         using CommitGraphicsStateFn = void (*)(std::uint8_t, std::uint8_t);
 
+        // Fallout 4 VR's world depth is conventional - near surfaces smaller, cleared to 1 - so an
+        // overlay is behind the world where the world's depth is less than its own. A constant rather
+        // than read from the engine's depth-stencil state: the hooked call site commits the image-space
+        // passes, never the geometry that writes depth, and those passes test in both directions, so
+        // none of them says which way the world's depth runs.
+        constexpr D3D11_COMPARISON_FUNC WORLD_DEPTH_COMPARISON = D3D11_COMPARISON_LESS_EQUAL;
+
         /**
-         * One frame's captured depth, with everything needed to prove it is still the right one.
+         * Where one frame's passes drew into the engine's depth buffer, counted per viewport - to find
+         * the world's viewport, and under an upscaler the pass to copy the world's depth at.
+         *
+         * An upscaler driving the engine's dynamic resolution (DLSS, FSR) keeps the depth buffer at the
+         * submitted size but draws the world into a smaller viewport of it - top-left, both eyes in one.
+         * Most of a frame's passes into the buffer draw with that viewport, while the first draws with
+         * the whole buffer, so the most-used viewport is the world's.
+         *
+         * The upscaler also clears the buffer before the frame is submitted, so the world's depth has to
+         * be copied during the frame, while its passes still draw against it - at the last of them, to
+         * miss nothing drawn late. Which pass is last is only known once the frame is over, so the copy
+         * is made at the last world pass of the shorter of the previous two frames: frames differ by a
+         * pass or two, and a count that alternates between two values still reaches that pass every
+         * frame. A frame that falls short makes no copy, and the previous frame's is used.
+         *
+         * Viewports within a few pixels count as one: passes that round the scaled size differently
+         * would otherwise trade places as the most-used from frame to frame.
          */
-        struct Capture
+        class WorldPassTally
         {
+        public:
+            static bool sameViewport(const D3D11_VIEWPORT& a, const D3D11_VIEWPORT& b)
+            {
+                return std::abs(a.TopLeftX - b.TopLeftX) <= SAME_VIEWPORT_PIXELS && std::abs(a.TopLeftY - b.TopLeftY) <= SAME_VIEWPORT_PIXELS &&
+                       std::abs(a.Width - b.Width) <= SAME_VIEWPORT_PIXELS && std::abs(a.Height - b.Height) <= SAME_VIEWPORT_PIXELS;
+            }
+
+            /**
+             * Count one pass into the buffer. When it is the pass to copy the world's depth at, returns the
+             * viewport to copy it from.
+             */
+            std::optional<D3D11_VIEWPORT> add(const std::uint64_t epoch, const D3D11_VIEWPORT& viewport)
+            {
+                if (_frameEpoch != epoch) {
+                    startFrame(epoch);
+                }
+
+                const auto end = _viewports.begin() + static_cast<std::ptrdiff_t>(_viewportCount);
+                const auto group = std::ranges::find_if(_viewports.begin(), end, [&](const ViewportCount& entry) {
+                    return sameViewport(entry.viewport, viewport);
+                });
+                if (group != end) {
+                    ++group->passes;
+                    // the widest of a group, so no pass's world is left out of the copy
+                    group->viewport.Width = (std::max)(group->viewport.Width, viewport.Width);
+                    group->viewport.Height = (std::max)(group->viewport.Height, viewport.Height);
+                } else if (_viewportCount < _viewports.size()) {
+                    _viewports[_viewportCount++] = ViewportCount{ .viewport = viewport, .passes = 1 };
+                }
+
+                if (_copyAtPass == 0 || !sameViewport(_copyViewport, viewport) || ++_worldPassesSoFar != _copyAtPass) {
+                    return std::nullopt;
+                }
+                return _copyViewport;
+            }
+
+            /**
+             * The viewport most of this frame's passes drew with, or nullopt when none was counted for it.
+             */
+            std::optional<D3D11_VIEWPORT> mostUsedViewport(const std::uint64_t epoch) const
+            {
+                const auto world = _frameEpoch == epoch ? mostUsed() : std::nullopt;
+                return world ? std::optional(world->viewport) : std::nullopt;
+            }
+
+        private:
+            // passes that round the same scaled size differently stay within this; upscaler qualities are
+            // hundreds of pixels apart
+            static constexpr float SAME_VIEWPORT_PIXELS = 8.0f;
+
+            struct ViewportCount
+            {
+                D3D11_VIEWPORT viewport{};
+                std::uint32_t passes = 0;
+            };
+
+            void startFrame(const std::uint64_t epoch)
+            {
+                const auto finished = mostUsed();
+                const bool sameWorld = finished && _lastFrameWorld && sameViewport(finished->viewport, _lastFrameWorld->viewport);
+                _copyAtPass = !finished ? 0 : sameWorld ? (std::min)(finished->passes, _lastFrameWorld->passes) : finished->passes;
+                _copyViewport = finished ? finished->viewport : D3D11_VIEWPORT{};
+                _lastFrameWorld = finished;
+
+                _frameEpoch = epoch;
+                _viewportCount = 0;
+                _worldPassesSoFar = 0;
+            }
+
+            std::optional<ViewportCount> mostUsed() const
+            {
+                if (_viewportCount == 0) {
+                    return std::nullopt;
+                }
+                return *std::ranges::max_element(_viewports.begin(), _viewports.begin() + static_cast<std::ptrdiff_t>(_viewportCount), {}, &ViewportCount::passes);
+            }
+
+            std::uint64_t _frameEpoch = 0;
+            std::array<ViewportCount, 4> _viewports{};
+            std::size_t _viewportCount = 0;
+
+            // the previous frame's world, which with this frame's picks the next frame's pass to copy at
+            std::optional<ViewportCount> _lastFrameWorld;
+            D3D11_VIEWPORT _copyViewport{};
+            std::uint32_t _copyAtPass = 0;
+            std::uint32_t _worldPassesSoFar = 0;
+        };
+
+        /**
+         * The engine's depth buffer, and the frame it was last seen bound in - which is what proves it
+         * holds this frame's world. The read-only view is made once per texture: the engine keeps its
+         * buffer from frame to frame.
+         */
+        struct EngineDepth
+        {
+            Microsoft::WRL::ComPtr<ID3D11Texture2D> texture;
             Microsoft::WRL::ComPtr<ID3D11DepthStencilView> readOnlyView;
-            D3D11_TEXTURE2D_DESC textureDesc{};
-            D3D11_COMPARISON_FUNC comparison = D3D11_COMPARISON_LESS_EQUAL;
+            D3D11_TEXTURE2D_DESC desc{};
             std::uint64_t frameEpoch = 0;
         };
 
         // The submit hook and the commit hook both run on the render thread, but nothing in the
-        // engine promises that, and the cost of being wrong is a torn COM pointer.
+        // engine promises that, and the cost of being wrong is a torn COM pointer. Guards the three below.
         std::mutex s_captureMutex;
+        EngineDepth s_engineDepth;
+        WorldPassTally s_worldPasses;
+        // the frame the world's depth was last copied in under an upscaler; 0 is never a frame
+        std::uint64_t s_copiedEpoch = 0;
 
         std::atomic<bool> s_installed = false;
         // a failed install is permanent: the addresses are not going to start matching later, and
@@ -78,11 +204,10 @@ namespace f4cf::render::sceneDepth
         std::atomic<bool> s_requested = false;
         std::atomic<std::uint64_t> s_frameEpoch = 1;
         CommitGraphicsStateFn s_original = nullptr;
-        Capture s_capture;
 
-        // Which frame we already have a capture for. Duplicated out of the Capture so the common
-        // path - the dozens of commits per frame that arrive after the one we kept - is an atomic
-        // read rather than a mutex acquisition.
+        // Which frame the engine's depth buffer was already seen in. Duplicated out of EngineDepth so
+        // the dozens of commits after it in a frame know they only count their pass from an atomic
+        // read, rather than a mutex acquisition.
         std::atomic<std::uint64_t> s_capturedEpoch = 0;
 
         // The size the overlay will draw into, published by the submit side and read by the capture
@@ -91,17 +216,14 @@ namespace f4cf::render::sceneDepth
         std::atomic<UINT> s_submittedWidth = 0;
         std::atomic<UINT> s_submittedHeight = 0;
 
-        /**
-         * COM identity: the same object can be handed out behind different interface pointers, so
-         * only the IUnknown a QueryInterface returns is safe to compare.
-         */
-        Microsoft::WRL::ComPtr<IUnknown> comIdentity(IUnknown* object)
+        D3D11_VIEWPORT wholeBuffer(const UINT width, const UINT height)
         {
-            Microsoft::WRL::ComPtr<IUnknown> identity;
-            if (object) {
-                object->QueryInterface(__uuidof(IUnknown), reinterpret_cast<void**>(identity.GetAddressOf()));
-            }
-            return identity;
+            return D3D11_VIEWPORT{ .TopLeftX = 0.0f,
+                .TopLeftY = 0.0f,
+                .Width = static_cast<float>(width),
+                .Height = static_cast<float>(height),
+                .MinDepth = 0.0f,
+                .MaxDepth = 1.0f };
         }
 
         /**
@@ -114,9 +236,6 @@ namespace f4cf::render::sceneDepth
         {
             Microsoft::WRL::ComPtr<ID3D11DepthStencilView> view;
             Microsoft::WRL::ComPtr<ID3D11Device> device;
-            if (!texture) {
-                return view;
-            }
             texture->GetDevice(device.GetAddressOf());
             if (!device) {
                 return view;
@@ -133,64 +252,8 @@ namespace f4cf::render::sceneDepth
         }
 
         /**
-         * The comparison the engine drew the world with, read rather than assumed: a reversed-Z
-         * pipeline uses GREATER, and testing overlay geometry with the wrong sense would hide
-         * exactly what should be visible.
-         */
-        D3D11_COMPARISON_FUNC boundDepthComparison(ID3D11DeviceContext* context)
-        {
-            Microsoft::WRL::ComPtr<ID3D11DepthStencilState> state;
-            UINT stencilRef = 0;
-            context->OMGetDepthStencilState(state.GetAddressOf(), &stencilRef);
-            if (!state) {
-                return D3D11_COMPARISON_LESS_EQUAL;
-            }
-            D3D11_DEPTH_STENCIL_DESC desc{};
-            state->GetDesc(&desc);
-            return desc.DepthFunc;
-        }
-
-        /**
-         * Report what the first capture found, and again whenever its shape changes. This is the
-         * whole diagnostic surface: one game session says whether the seam works on this build,
-         * what the depth buffer looks like, and which way its comparison runs.
-         */
-        void logCaptureOnce(const D3D11_TEXTURE2D_DESC& depthDesc, const D3D11_COMPARISON_FUNC comparison, const bool readOnlyViewCreated)
-        {
-            struct Shape
-            {
-                UINT width = 0;
-                UINT height = 0;
-                DXGI_FORMAT format = DXGI_FORMAT_UNKNOWN;
-                D3D11_COMPARISON_FUNC comparison = D3D11_COMPARISON_LESS_EQUAL;
-                bool readOnly = false;
-
-                bool operator==(const Shape&) const = default;
-            };
-
-            static Shape lastLogged;
-            static bool everLogged = false;
-
-            const Shape shape{ .width = depthDesc.Width, .height = depthDesc.Height, .format = depthDesc.Format, .comparison = comparison, .readOnly = readOnlyViewCreated };
-            if (everLogged && lastLogged == shape) {
-                return;
-            }
-            everLogged = true;
-            lastLogged = shape;
-
-            logger::info("scene depth captured: {}x{} format {} samples {} array {}, engine comparison {}, read-only view {}",
-                depthDesc.Width,
-                depthDesc.Height,
-                static_cast<int>(depthDesc.Format),
-                depthDesc.SampleDesc.Count,
-                depthDesc.ArraySize,
-                static_cast<int>(comparison),
-                readOnlyViewCreated ? "created" : "FAILED");
-        }
-
-        /**
-         * Name each distinct depth buffer bound at this seam, once, and say whether it is the size we
-         * can use. Several passes bind depth per frame; this is what says how many DISTINCT buffers
+         * Name each distinct depth buffer considered at this seam, once, and say whether it is the size
+         * we can use. Several passes bind depth per frame; this is what says how many DISTINCT buffers
          * are involved and whether the one we take is the only candidate.
          */
         void logDepthTargetOnce(const D3D11_TEXTURE2D_DESC& desc, const bool usable)
@@ -208,10 +271,7 @@ namespace f4cf::render::sceneDepth
             static std::size_t seenCount = 0;
 
             const Shape shape{ .width = desc.Width, .height = desc.Height, .format = desc.Format };
-            if (std::ranges::find(seen.begin(), seen.begin() + seenCount, shape) != seen.begin() + seenCount) {
-                return;
-            }
-            if (seenCount >= seen.size()) {
+            if (seenCount >= seen.size() || std::ranges::find(seen.begin(), seen.begin() + seenCount, shape) != seen.begin() + seenCount) {
                 return;
             }
             seen[seenCount++] = shape;
@@ -223,6 +283,76 @@ namespace f4cf::render::sceneDepth
                 usable ? "USABLE, matches the submitted size" : "wrong size, skipped");
         }
 
+        /**
+         * Report the depth buffer taken, whenever a different shape is taken. With the world line
+         * logWorldViewportChange writes, this is the whole diagnostic surface: one session says whether
+         * the seam works on this build, what the buffer looks like - and whether a shader can read it,
+         * which copying it under an upscaler needs - and where in it the world is drawn.
+         */
+        void logEngineDepthOnce(const D3D11_TEXTURE2D_DESC& desc, const bool readOnlyViewCreated)
+        {
+            struct Shape
+            {
+                UINT width = 0;
+                UINT height = 0;
+                DXGI_FORMAT format = DXGI_FORMAT_UNKNOWN;
+                bool readOnly = false;
+
+                bool operator==(const Shape&) const = default;
+            };
+
+            static std::optional<Shape> lastLogged;
+
+            const Shape shape{ .width = desc.Width, .height = desc.Height, .format = desc.Format, .readOnly = readOnlyViewCreated };
+            if (lastLogged == shape) {
+                return;
+            }
+            lastLogged = shape;
+
+            logger::info("scene depth captured: {}x{} format {} samples {} array {} bind flags 0x{:X} (shader-readable: {}), read-only view {}",
+                desc.Width,
+                desc.Height,
+                static_cast<int>(desc.Format),
+                desc.SampleDesc.Count,
+                desc.ArraySize,
+                desc.BindFlags,
+                (desc.BindFlags & D3D11_BIND_SHADER_RESOURCE) != 0 ? "yes" : "no",
+                readOnlyViewCreated ? "created" : "FAILED");
+        }
+
+        /**
+         * Say where the world is drawn whenever that changes - which is how an upscaler's mode, or the
+         * lack of one, shows up in the log. Changes within a few pixels are not changes (see
+         * WorldPassTally). At most once a second, but a change is never lost: it is compared again every
+         * frame, so the latest one is logged once the second is up.
+         */
+        void logWorldViewportChange(const D3D11_VIEWPORT& viewport, const UINT width, const UINT height)
+        {
+            static std::optional<D3D11_VIEWPORT> lastLogged;
+            static std::chrono::steady_clock::time_point lastLogTime;
+
+            if (lastLogged && WorldPassTally::sameViewport(*lastLogged, viewport)) {
+                return;
+            }
+            const auto now = std::chrono::steady_clock::now();
+            if (lastLogged && now - lastLogTime < std::chrono::seconds(1)) {
+                return;
+            }
+            lastLogged = viewport;
+            lastLogTime = now;
+
+            logger::info("scene depth: the world is drawn at {:.0f},{:.0f} size {:.0f}x{:.0f} of the {}x{} buffer ({:.1f}% x {:.1f}%) - {}",
+                viewport.TopLeftX,
+                viewport.TopLeftY,
+                viewport.Width,
+                viewport.Height,
+                width,
+                height,
+                width > 0 ? viewport.Width * 100.0f / static_cast<float>(width) : 0.0f,
+                height > 0 ? viewport.Height * 100.0f / static_cast<float>(height) : 0.0f,
+                WorldPassTally::sameViewport(viewport, wholeBuffer(width, height)) ? "tested against directly" : "upscaled, depth copied during the frame");
+        }
+
         void reportFailure(const char* reason)
         {
             // sampled: this runs per committed graphics state, which is many times a frame
@@ -230,21 +360,100 @@ namespace f4cf::render::sceneDepth
         }
 
         /**
-         * Read whatever depth is bound right now, and keep it if it belongs to a texture the game is
-         * submitting. Runs on the render thread, inside the engine's own frame.
+         * Take the depth buffer bound at this commit as the frame's engine depth, if it is the one
+         * already known or one of the submitted size.
+         *
+         * The engine renders the world into its own G-buffer and only resolves into the texture it hands
+         * the compositor, so the colour target here is never the submitted one - which makes matching by
+         * identity useless. Size is the criterion that actually matters: D3D requires a depth view to
+         * match the dimensions of the render target it is bound beside, and the world is rendered at
+         * exactly the submitted resolution.
          */
-        void captureBoundDepth()
+        bool takeBoundDepth(ID3D11DepthStencilView* depthView, const Microsoft::WRL::ComPtr<ID3D11Resource>& depthResource, const std::uint64_t epoch)
+        {
+            {
+                std::scoped_lock lock(s_captureMutex);
+                // single inheritance, so a texture and its ID3D11Resource are the same pointer
+                if (depthResource.Get() == static_cast<ID3D11Resource*>(s_engineDepth.texture.Get())) {
+                    s_engineDepth.frameEpoch = epoch;
+                    s_capturedEpoch.store(epoch, std::memory_order_release);
+                    return true;
+                }
+            }
+
+            Microsoft::WRL::ComPtr<ID3D11Texture2D> texture;
+            if (FAILED(depthResource.As(&texture))) {
+                reportFailure("the bound depth view is not a 2D texture");
+                return false;
+            }
+            D3D11_TEXTURE2D_DESC desc{};
+            texture->GetDesc(&desc);
+            const bool usable = desc.Width == s_submittedWidth.load(std::memory_order_acquire) && desc.Height == s_submittedHeight.load(std::memory_order_acquire);
+            logDepthTargetOnce(desc, usable);
+            if (!usable) {
+                return false;
+            }
+
+            D3D11_DEPTH_STENCIL_VIEW_DESC viewDesc{};
+            depthView->GetDesc(&viewDesc);
+            auto readOnlyView = makeReadOnlyView(texture.Get(), viewDesc);
+            logEngineDepthOnce(desc, readOnlyView != nullptr);
+            if (!readOnlyView) {
+                reportFailure("a read-only depth view could not be created");
+                return false;
+            }
+
+            std::scoped_lock lock(s_captureMutex);
+            s_engineDepth = EngineDepth{ .texture = std::move(texture), .readOnlyView = std::move(readOnlyView), .desc = desc, .frameEpoch = epoch };
+            s_capturedEpoch.store(epoch, std::memory_order_release);
+            return true;
+        }
+
+        /**
+         * Count this commit's pass, if it draws into the engine's depth buffer, and when it is the pass
+         * to copy the world's depth at under an upscaler, copy it now, while it is still there (see
+         * WorldPassTally). The copy is drawn outside the lock.
+         */
+        void countWorldPass(ID3D11DeviceContext* context, ID3D11Resource* depthResource, const std::uint64_t epoch)
+        {
+            D3D11_VIEWPORT viewport{};
+            UINT viewportCount = 1;
+            context->RSGetViewports(&viewportCount, &viewport);
+            if (viewportCount == 0 || viewport.Width <= 0.0f || viewport.Height <= 0.0f) {
+                return;
+            }
+
+            Microsoft::WRL::ComPtr<ID3D11Texture2D> texture;
+            D3D11_VIEWPORT worldViewport{};
+            {
+                std::scoped_lock lock(s_captureMutex);
+                if (depthResource != static_cast<ID3D11Resource*>(s_engineDepth.texture.Get())) {
+                    return;
+                }
+                const auto copyFrom = s_worldPasses.add(epoch, viewport);
+                if (!copyFrom || WorldPassTally::sameViewport(*copyFrom, wholeBuffer(s_engineDepth.desc.Width, s_engineDepth.desc.Height))) {
+                    return;
+                }
+                texture = s_engineDepth.texture;
+                worldViewport = *copyFrom;
+            }
+
+            if (internal::resampleWorldDepth(context, texture.Get(), worldViewport)) {
+                std::scoped_lock lock(s_captureMutex);
+                s_copiedEpoch = epoch;
+            }
+        }
+
+        /**
+         * Look at the targets the engine just committed. Runs on the render thread, inside the engine's
+         * own frame, for every commit at the hooked call site - dozens a frame - so a commit that binds
+         * no colour and depth target together costs one D3D read, and one that does a few more.
+         */
+        void onGraphicsStateCommitted()
         {
             if (!s_requested.load(std::memory_order_acquire)) {
                 return;
             }
-            // One capture per frame is enough, and this runs on dozens of commits per frame, so the
-            // early-out has to be cheaper than a lock.
-            const auto epoch = s_frameEpoch.load(std::memory_order_acquire);
-            if (s_capturedEpoch.load(std::memory_order_acquire) == epoch) {
-                return;
-            }
-
             auto* context = getContext();
             if (!context) {
                 return;
@@ -257,47 +466,17 @@ namespace f4cf::render::sceneDepth
             if (!colorView || !depthView) {
                 return; // far too common to be worth logging
             }
-
             Microsoft::WRL::ComPtr<ID3D11Resource> depthResource;
             depthView->GetResource(depthResource.GetAddressOf());
-            Microsoft::WRL::ComPtr<ID3D11Texture2D> depthTexture;
-            if (!depthResource || FAILED(depthResource.As(&depthTexture)) || !depthTexture) {
-                reportFailure("the bound depth view is not a 2D texture");
+            if (!depthResource) {
                 return;
             }
 
-            D3D11_TEXTURE2D_DESC depthDesc{};
-            depthTexture->GetDesc(&depthDesc);
-
-            // The engine renders the world into its own G-buffer and only resolves into the texture
-            // it hands the compositor, so the colour target here is never the submitted one - which
-            // makes matching by identity useless. Size is the criterion that actually matters: D3D
-            // requires a depth view to match the dimensions of the render target it is bound beside,
-            // and the world is rendered at exactly the submitted resolution.
-            const bool usable = depthDesc.Width == s_submittedWidth.load(std::memory_order_acquire) && depthDesc.Height == s_submittedHeight.load(std::memory_order_acquire);
-            logDepthTargetOnce(depthDesc, usable);
-            if (!usable) {
+            const auto epoch = s_frameEpoch.load(std::memory_order_acquire);
+            if (s_capturedEpoch.load(std::memory_order_acquire) != epoch && !takeBoundDepth(depthView.Get(), depthResource, epoch)) {
                 return;
             }
-            D3D11_DEPTH_STENCIL_VIEW_DESC viewDesc{};
-            depthView->GetDesc(&viewDesc);
-
-            auto readOnlyView = makeReadOnlyView(depthTexture.Get(), viewDesc);
-            const auto comparison = boundDepthComparison(context);
-            logCaptureOnce(depthDesc, comparison, readOnlyView != nullptr);
-            if (!readOnlyView) {
-                reportFailure("a read-only depth view could not be created");
-                return;
-            }
-
-            std::scoped_lock lock(s_captureMutex);
-            // no separate reference to the texture: a view AddRefs its resource, so the read-only
-            // view is what keeps the engine buffer alive for as long as we hold it
-            s_capture.readOnlyView = std::move(readOnlyView);
-            s_capture.textureDesc = depthDesc;
-            s_capture.comparison = comparison;
-            s_capture.frameEpoch = epoch;
-            s_capturedEpoch.store(epoch, std::memory_order_release);
+            countWorldPass(context, depthResource.Get(), epoch);
         }
 
         /**
@@ -309,7 +488,7 @@ namespace f4cf::render::sceneDepth
             if (s_original) {
                 s_original(firstMode, secondMode);
             }
-            captureBoundDepth();
+            onGraphicsStateCommitted();
         }
 
         /**
@@ -469,9 +648,15 @@ namespace f4cf::render::sceneDepth
         return s_installed.load(std::memory_order_acquire);
     }
 
+    /**
+     * Turn the capture on or off. Turning it off also frees the upscaler's depth copy, which is as
+     * large as the eye texture - so the submit hook turns it off on frames with nothing to draw.
+     */
     void setCaptureRequested(const bool requested)
     {
-        s_requested.store(requested, std::memory_order_release);
+        if (s_requested.exchange(requested, std::memory_order_acq_rel) && !requested) {
+            internal::releaseResampledWorldDepth();
+        }
     }
 
     void setSubmittedTexture(ID3D11Texture2D* texture)
@@ -485,6 +670,16 @@ namespace f4cf::render::sceneDepth
         s_submittedHeight.store(desc.Height, std::memory_order_release);
     }
 
+    /**
+     * Hand out this frame's depth lined up with the submitted texture: the engine's own buffer when the
+     * world was drawn over all of it, or, when an upscaler drew the world into part of it, the copy made
+     * during the frame (see WorldPassTally) - by now the engine's buffer is cleared.
+     *
+     * The copy may be the previous frame's, when this frame fell short of the pass it is made at; a
+     * frame's lag goes unseen where overlays blinking to the top would not. With no copy that recent,
+     * nothing is handed out, and overlays draw on top rather than being hidden by depth that does not
+     * line up with them.
+     */
     SceneDepth acquireForSubmittedTexture(ID3D11Texture2D* texture)
     {
         if (!texture) {
@@ -493,18 +688,41 @@ namespace f4cf::render::sceneDepth
         D3D11_TEXTURE2D_DESC desc{};
         texture->GetDesc(&desc);
 
-        std::scoped_lock lock(s_captureMutex);
-        if (!s_capture.readOnlyView) {
+        ID3D11DepthStencilView* engineView = nullptr;
+        std::optional<D3D11_VIEWPORT> worldViewport;
+        std::uint64_t epoch = 0;
+        std::uint64_t copiedEpoch = 0;
+        {
+            std::scoped_lock lock(s_captureMutex);
+            epoch = s_frameEpoch.load(std::memory_order_acquire);
+            if (!s_engineDepth.readOnlyView || s_engineDepth.frameEpoch != epoch) {
+                return {}; // not seen this frame; occluding against it would lag the world
+            }
+            // re-checked here rather than trusted: binding a mismatched depth view is a device error
+            if (s_engineDepth.desc.Width != desc.Width || s_engineDepth.desc.Height != desc.Height) {
+                return {};
+            }
+            // borrowed: EngineDepth keeps its reference until a different buffer replaces it
+            engineView = s_engineDepth.readOnlyView.Get();
+            worldViewport = s_worldPasses.mostUsedViewport(epoch);
+            copiedEpoch = s_copiedEpoch;
+        }
+
+        const D3D11_VIEWPORT whole = wholeBuffer(desc.Width, desc.Height);
+        const D3D11_VIEWPORT viewport = worldViewport.value_or(whole);
+        logWorldViewportChange(viewport, desc.Width, desc.Height);
+
+        if (WorldPassTally::sameViewport(viewport, whole)) {
+            internal::releaseResampledWorldDepth(); // no upscaler, or no longer: the copy is not needed
+            return SceneDepth{ .readOnlyView = engineView, .comparison = WORLD_DEPTH_COMPARISON };
+        }
+
+        const bool copyRecent = copiedEpoch != 0 && copiedEpoch + 1 >= epoch;
+        auto* copy = copyRecent ? internal::resampledWorldDepth(desc.Width, desc.Height) : nullptr;
+        if (!copy) {
             return {};
         }
-        if (s_capture.frameEpoch != s_frameEpoch.load(std::memory_order_acquire)) {
-            return {}; // captured for an earlier frame; occluding against it would lag the world
-        }
-        // re-checked here rather than trusted: binding a mismatched depth view is a device error
-        if (s_capture.textureDesc.Width != desc.Width || s_capture.textureDesc.Height != desc.Height) {
-            return {};
-        }
-        return SceneDepth{ .readOnlyView = s_capture.readOnlyView.Get(), .comparison = s_capture.comparison };
+        return SceneDepth{ .readOnlyView = copy, .comparison = WORLD_DEPTH_COMPARISON };
     }
 
     void advanceFrame()
