@@ -212,9 +212,20 @@ text wraps there, and a full-width item stretches the panel out to it.
 Text wraps at spaces to the width it has (a word too long for a line is broken inside it), and a
 `'\n'` in a row starts a new line. A `'\t'` moves to the next tab stop, measured from the line start
 (`setTabWidth`), so columns line up across rows. A row can name its own `textHeight`, and can be
-given `spans` - pieces in colors of their own - instead of one `text`. The rows callback runs once per
-frame during layout; the text is only re-laid-out when a row's text, spans or height, the width, the
-text height or the tab width changes.
+given `spans` - pieces in colors of their own - instead of one `text`. A span can be an image instead
+of text, for a button prompt inside a sentence: it is sized from the text height (`imageHeight`, 1.5x
+by default), centred on the capitals, and wraps like a word that can't be broken:
+
+```cpp
+rows.push_back({ .spans = { { "PRESS " }, { .image = "vrui\\bindings\\right-trigger.dds", .tintWithText = true }, { " TO FIRE" } } });
+```
+
+An image draws in its own colours; the span's `color` tints it, and `tintWithText` tints it with the
+colour its row's text is drawn in - what a white icon meant to match its text wants.
+
+The rows callback runs once per frame during layout; the text is only re-laid-out when a row's text,
+spans or height, the width, the text height or the tab width changes (or an image's texture finishes
+loading).
 
 ## Notes
 

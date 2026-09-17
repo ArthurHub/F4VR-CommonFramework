@@ -1,25 +1,61 @@
 #pragma once
 
 #include <functional>
+#include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
+#include <unordered_map>
 #include <vector>
 
+#include "../render/Texture.h"
 #include "UIPanel.h"
 
 namespace f4cf::vrui
 {
     /**
-     * A piece of a row in a colour of its own. Spans follow one another with nothing added between them,
-     * so the spaces between words belong to one span or the other.
+     * Height of an image in a row, as a multiple of the row's text height, until the span names its own.
+     * The image is centred on the capitals, so at 1.5 it reaches a quarter of the text height above them
+     * and as far below the baseline - about as deep as the descenders, and within the gap the default line
+     * spacing leaves, so an icon in a row does not push the rows apart.
+     */
+    inline constexpr float TEXT_PANEL_IMAGE_HEIGHT = 1.5f;
+
+    /**
+     * A piece of a row in a colour of its own, or an image. Spans follow one another with nothing added
+     * between them, so the spaces between words belong to one span or the other.
+     *
+     * A span with an image draws it in place of its text, as wide as its proportions make it at its
+     * height, centred on the capitals - a button prompt inside a sentence:
+     *
+     *     rows.push_back({ .spans = { { "PRESS " }, { .image = "vrui\\bindings\\right-trigger.dds" }, { " TO FIRE" } } });
+     *
+     * An image wraps like a word that cannot be broken, and joins the text on either side into one word
+     * when no space separates them. An underline skips it.
+     *
+     * The image is drawn in its own colours, tinted by the span's colour when it names one. It does NOT
+     * take the row's or the panel's colour by itself - those are text colours, and a house style's would
+     * dye every image (see UIImagePanel) - but tintWithText asks for exactly that, which is what white
+     * icons drawn to match their text want:
+     *
+     *     rows.push_back({ .spans = { { "PRESS " }, { .image = "…", .tintWithText = true }, { " TO FIRE" } } });
      */
     struct TextSpan
     {
         std::string text;
 
-        // the row's colour when unset
+        // the row's colour when unset; for an image, a tint, and no tint when unset
         std::optional<render::Color> color;
+
+        // when not empty, the span is this image instead of its text: a texture path as
+        // UIImagePanel::setImage takes it, so a partial path resolves under the mod's own textures
+        std::string image;
+
+        // the image's height as a multiple of the row's text height
+        float imageHeight = TEXT_PANEL_IMAGE_HEIGHT;
+
+        // tints an image that names no colour of its own with the colour its row's text is drawn in
+        bool tintWithText = false;
     };
 
     /**
@@ -124,6 +160,10 @@ namespace f4cf::vrui
      * size and viewing distance. What you give up against UIImGuiPanel is layout: no scrolling, and no mixing
      * sizes within a row.
      *
+     * A span can be an image instead of text (see TextSpan). Its texture is loaded during layout, and the
+     * row is laid out again once the size is known, so an icon that loads a frame late takes its place
+     * then. A path that does not load takes no room.
+     *
      * The content callback runs every frame, but the text is only re-wrapped and re-measured when a row's
      * text, spans or height changes, or the width, text height or tab width it is laid out against does.
      *
@@ -220,6 +260,10 @@ namespace f4cf::vrui
             // there, in vrui units
             float penX;
             float inkLeft;
+
+            // the size an image span is drawn at, in vrui units; both 0 for text
+            float imageWidth = 0.0f;
+            float imageHeight = 0.0f;
         };
 
         /**
@@ -237,6 +281,10 @@ namespace f4cf::vrui
             float bearing;
             float inkRight;
 
+            // how far the line's tallest image reaches above its capitals, and equally below its baseline,
+            // in vrui units
+            float imageOverhang = 0.0f;
+
             float width() const
             {
                 return pieceCount > 0 ? inkRight - bearing : 0.0f;
@@ -247,9 +295,12 @@ namespace f4cf::vrui
 
         static std::size_t spanCount(const TextRow& row);
         static std::string_view spanText(const TextRow& row, std::size_t span);
+        static const TextSpan* imageSpan(const TextRow& row, std::size_t span);
         float rowTextHeight(const TextRow& row) const;
         float resolveTabWidth() const;
         float lineStep(std::size_t line) const;
+        float imageAspect(const std::string& path);
+        bool awaitedImageLoaded() const;
         void wrapRows(float wrapWidth);
 
         TextRowsCallback _content;
@@ -272,5 +323,16 @@ namespace f4cf::vrui
         float _linesTextHeight = 0.0f;
         float _linesTabWidth = 0.0f;
         float _linesWidestUnits = 0.0f;
+
+        // the textures the laid-out rows show, by path, held so they stay loaded while shown
+        std::unordered_map<std::string, std::shared_ptr<render::Texture>> _textures;
+
+        // what _textures held before the layout in progress, so a path shown again reuses its texture and
+        // one no longer shown is let go; empty outside wrapRows
+        std::unordered_map<std::string, std::shared_ptr<render::Texture>> _previousTextures;
+
+        // the textures whose size was not known when the rows were laid out, which lay them out again
+        // once it is
+        std::vector<std::shared_ptr<render::Texture>> _awaitedTextures;
     };
 }

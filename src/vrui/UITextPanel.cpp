@@ -33,12 +33,20 @@ namespace f4cf::vrui
         }
 
         /**
+         * Whether two spans lay out the same: equal text, or the same image at the same height.
+         */
+        bool sameSpanLayout(const TextSpan& a, const TextSpan& b)
+        {
+            return a.text == b.text && a.image == b.image && (a.image.empty() || a.imageHeight == b.imageHeight);
+        }
+
+        /**
          * Whether two rows lay out the same: equal text, spans and height. Colours and decoration change
          * only how the lines are drawn, not where they break.
          */
         bool sameLayout(const TextRow& a, const TextRow& b)
         {
-            return a.text == b.text && a.textHeight == b.textHeight && std::ranges::equal(a.spans, b.spans, {}, &TextSpan::text, &TextSpan::text);
+            return a.text == b.text && a.textHeight == b.textHeight && std::ranges::equal(a.spans, b.spans, sameSpanLayout);
         }
     }
 
@@ -58,13 +66,17 @@ namespace f4cf::vrui
      *
      * Consecutive text of one span is merged into one piece, the spaces between included, so a run of one
      * colour goes out as a single run of text: kerned throughout, and underlined across its spaces.
+     *
+     * An image span is a word part of its own that is never cut: inked across its whole width, a piece of
+     * its own, and moved whole onto the next line when it does not fit.
      */
     class UITextPanel::LineWrapper
     {
     public:
-        LineWrapper(std::vector<TextLine>& lines, std::vector<TextPiece>& pieces, const float wrapWidth, const float tabWidth)
-            : _lines(lines),
-              _pieces(pieces),
+        LineWrapper(UITextPanel& panel, const float wrapWidth, const float tabWidth)
+            : _panel(panel),
+              _lines(panel._lines),
+              _pieces(panel._pieces),
               _wrapWidth(wrapWidth),
               _tabWidth(tabWidth)
         {}
@@ -80,6 +92,10 @@ namespace f4cf::vrui
             startLine(true);
 
             for (std::size_t span = 0; span < spanCount(row); ++span) {
+                if (const TextSpan* image = imageSpan(row, span)) {
+                    addImage(span, *image);
+                    continue;
+                }
                 const std::string_view text = spanText(row, span);
                 std::size_t pos = 0;
                 while (pos < text.size()) {
@@ -116,7 +132,8 @@ namespace f4cf::vrui
 
     private:
         /**
-         * The part of a word that lies in one span.
+         * The part of a word that lies in one span. An image's part has no text, and metrics spanning the
+         * image's width.
          */
         struct WordPart
         {
@@ -124,7 +141,25 @@ namespace f4cf::vrui
             std::size_t begin;
             std::size_t length;
             render::TextRunMetrics metrics;
+            bool image = false;
+            float imageHeight = 0.0f;
         };
+
+        /**
+         * Add an image span to the word being gathered, at its height and as wide as its proportions make
+         * it. One whose size is not known - not loaded yet, or never will be - takes no room.
+         */
+        void addImage(const std::size_t span, const TextSpan& image)
+        {
+            const float height = (std::max)(0.0f, image.imageHeight) * _textHeight;
+            const float width = height * _panel.imageAspect(image.image);
+            _word.push_back({ .span = span,
+                .begin = 0,
+                .length = 0,
+                .metrics = { .advance = width, .inkLeft = 0.0f, .inkRight = width, .hasInk = width > 0.0f },
+                .image = true,
+                .imageHeight = height });
+        }
 
         void startLine(const bool paragraphStart)
         {
@@ -229,7 +264,11 @@ namespace f4cf::vrui
             if (fits) {
                 _penX = startX;
                 for (const WordPart& part : _word) {
-                    placeRun(part.span, part.begin, part.length, part.metrics);
+                    if (part.image) {
+                        placeImage(part);
+                    } else {
+                        placeRun(part.span, part.begin, part.length, part.metrics);
+                    }
                 }
             } else {
                 breakWord();
@@ -244,6 +283,18 @@ namespace f4cf::vrui
         void breakWord()
         {
             for (const WordPart& part : _word) {
+                if (part.image) {
+                    // an image cannot be cut: it moves to the next line whole, and one too wide for a line
+                    // of its own stays there, for the draw to leave out
+                    const float bearing = _line.pieceCount > 0 ? _line.bearing : 0.0f;
+                    if (part.metrics.hasInk && _penX + _pendingAdvance + part.metrics.inkRight - bearing > _wrapWidth && !lineAtStart()) {
+                        finishLine();
+                        startLine(false);
+                    }
+                    _penX += _pendingAdvance;
+                    placeImage(part);
+                    continue;
+                }
                 const std::string_view text = spanText(*_row, part.span);
                 std::size_t begin = part.begin;
                 std::size_t length = part.length;
@@ -312,6 +363,29 @@ namespace f4cf::vrui
             _penX += metrics.advance;
         }
 
+        /**
+         * Put an image at the pen as a piece of its own, note how far it reaches past the line's capitals,
+         * and move the pen past it.
+         */
+        void placeImage(const WordPart& part)
+        {
+            clearPending();
+            _pieceBreak = false;
+            if (!part.metrics.hasInk) {
+                return;
+            }
+
+            if (lineAtStart()) {
+                _line.bearing = 0.0f;
+            }
+            _pieces.push_back({ .span = part.span, .begin = 0, .length = 0, .penX = _penX, .inkLeft = 0.0f, .imageWidth = part.metrics.advance, .imageHeight = part.imageHeight });
+            ++_line.pieceCount;
+            _line.inkRight = (std::max)(_line.inkRight, _penX + part.metrics.advance);
+            _line.imageOverhang = (std::max)(_line.imageOverhang, (part.imageHeight - _textHeight) * 0.5f);
+            _penX += part.metrics.advance;
+        }
+
+        UITextPanel& _panel;
         std::vector<TextLine>& _lines;
         std::vector<TextPiece>& _pieces;
         float _wrapWidth;
@@ -359,6 +433,8 @@ namespace f4cf::vrui
         _rows.clear();
         _lines.clear();
         _pieces.clear();
+        _textures.clear();
+        _awaitedTextures.clear();
         _linesValid = false;
     }
 
@@ -418,6 +494,56 @@ namespace f4cf::vrui
         return row.spans.empty() ? std::string_view(row.text) : std::string_view(row.spans[span].text);
     }
 
+    const TextSpan* UITextPanel::imageSpan(const TextRow& row, const std::size_t span)
+    {
+        return row.spans.empty() || row.spans[span].image.empty() ? nullptr : &row.spans[span];
+    }
+
+    /**
+     * Width over height of the image at a path, loading its texture if this layout is the first to show
+     * it, and holding it for as long as the rows keep showing it.
+     *
+     * 0 while the size is not known, which lays the image out with no room: a texture whose GPU view has
+     * not arrived yet is noted, so the rows are laid out again once it has (see awaitedImageLoaded), and
+     * the engine's 1x1 missing-file placeholder is taken as no image at all.
+     */
+    float UITextPanel::imageAspect(const std::string& path)
+    {
+        auto& texture = _textures[path];
+        if (!texture) {
+            const auto previous = _previousTextures.find(path);
+            texture = previous != _previousTextures.end() ? previous->second : render::Texture::load(path);
+        }
+        if (!texture) {
+            return 0.0f;
+        }
+        if (texture->width() == 0) {
+            texture->view(); // loads on first use; layout runs on the game thread, which that requires
+        }
+        if (texture->width() == 0) {
+            if (std::ranges::find(_awaitedTextures, texture) == _awaitedTextures.end()) {
+                _awaitedTextures.push_back(texture);
+            }
+            return 0.0f;
+        }
+        if (texture->width() <= 1 && texture->height() <= 1) {
+            return 0.0f;
+        }
+        return static_cast<float>(texture->width()) / static_cast<float>(texture->height());
+    }
+
+    /**
+     * Whether a texture the rows were laid out without has its size now. Asks each for its view, which
+     * is what moves a load along; a path that failed to load never answers, and costs only that.
+     */
+    bool UITextPanel::awaitedImageLoaded() const
+    {
+        return std::ranges::any_of(_awaitedTextures, [](const std::shared_ptr<render::Texture>& texture) {
+            texture->view();
+            return texture->width() > 0;
+        });
+    }
+
     float UITextPanel::rowTextHeight(const TextRow& row) const
     {
         return row.textHeight ? (std::max)(0.01f, *row.textHeight) : _textHeightUnits;
@@ -433,12 +559,14 @@ namespace f4cf::vrui
     /**
      * From one line's capitals to the next's, in vrui units: the line's own height, plus the spacing's
      * extra room scaled by the taller of the two, so a small line under a large one still clears its
-     * descenders. Equal heights give the plain text height x line spacing.
+     * descenders. Equal heights give the plain text height x line spacing. Images that reach further past
+     * their lines than that room holds widen it until they no longer overlap.
      */
     float UITextPanel::lineStep(const std::size_t line) const
     {
         const float height = _lines[line].textHeight;
-        return height + (_lineSpacing - 1.0f) * (std::max)(height, _lines[line + 1].textHeight);
+        const float spacing = (_lineSpacing - 1.0f) * (std::max)(height, _lines[line + 1].textHeight);
+        return height + (std::max)(spacing, _lines[line].imageOverhang + _lines[line + 1].imageOverhang);
     }
 
     /**
@@ -447,8 +575,11 @@ namespace f4cf::vrui
      *
      * The callback runs every frame, but it usually produces the same rows as last frame, so only what
      * affects the layout is compared - texts, spans and heights - and the layout is redone only when one
-     * differs, or the width, text height or tab width does. The rows are taken either way, so a colour
-     * or decoration change still reaches the draw.
+     * differs, or the width, text height or tab width does, or an image laid out without its size has
+     * loaded. The rows are taken either way, so a colour or decoration change still reaches the draw.
+     *
+     * An image reaching above the first line's capitals or below the last line's descenders makes the
+     * block that much taller.
      */
     std::optional<UISize> UITextPanel::measureContent(const float availableWidth, float)
     {
@@ -461,7 +592,8 @@ namespace f4cf::vrui
         const bool layoutChanged = !std::ranges::equal(_rows, _scratchRows, sameLayout);
         std::swap(_rows, _scratchRows);
 
-        if (layoutChanged || !_linesValid || availableWidth != _linesWrapWidth || _textHeightUnits != _linesTextHeight || _tabWidthUnits != _linesTabWidth) {
+        if (layoutChanged || !_linesValid || availableWidth != _linesWrapWidth || _textHeightUnits != _linesTextHeight || _tabWidthUnits != _linesTabWidth ||
+            awaitedImageLoaded()) {
             wrapRows(availableWidth);
         }
 
@@ -469,12 +601,12 @@ namespace f4cf::vrui
             return UISize(0.0f, 0.0f);
         }
         // every line but the last steps down to the next; the last needs its capitals and its descenders
-        float height = 0.0f;
+        float height = _lines.front().imageOverhang;
         for (std::size_t line = 0; line + 1 < _lines.size(); ++line) {
             height += lineStep(line);
         }
         const float lastHeight = _lines.back().textHeight;
-        height += lastHeight + render::textDescent(lastHeight);
+        height += lastHeight + (std::max)(render::textDescent(lastHeight), _lines.back().imageOverhang);
         return UISize(_linesWidestUnits, height);
     }
 
@@ -495,10 +627,16 @@ namespace f4cf::vrui
         _linesTabWidth = _tabWidthUnits;
         _linesValid = true;
 
-        LineWrapper wrapper(_lines, _pieces, wrapWidth, resolveTabWidth());
+        // the images are gathered afresh, reusing the textures the last layout held
+        std::swap(_previousTextures, _textures);
+        _textures.clear();
+        _awaitedTextures.clear();
+
+        LineWrapper wrapper(*this, wrapWidth, resolveTabWidth());
         for (std::size_t row = 0; row < _rows.size(); ++row) {
             wrapper.wrapRow(row, _rows[row], rowTextHeight(_rows[row]));
         }
+        _previousTextures.clear();
         for (const TextLine& line : _lines) {
             _linesWidestUnits = (std::max)(_linesWidestUnits, line.width());
         }
@@ -511,6 +649,9 @@ namespace f4cf::vrui
      * The lines already fit the width they were wrapped to; each piece is still cut to the area in case the
      * panel's size was changed after layout. Lines past the bottom are dropped, since spilling over the edge
      * would cover the neighbouring widgets.
+     *
+     * An image is drawn centred on its line's capitals, stretched to the size it was laid out at, and left
+     * out when it does not fit the width whole.
      */
     void UITextPanel::appendContent(render::PrimitiveDraw& frame, const UIPanelContentArea& area) const
     {
@@ -523,12 +664,13 @@ namespace f4cf::vrui
         const float bottomEdge = area.height * -0.5f - slack;
 
         // the first line's capitals start ON the top edge of the content area, so the space above them
-        // is the padding and nothing else - matching the space left of the first letter's ink
-        float capitalsTop = area.height * 0.5f;
+        // is the padding and nothing else - matching the space left of the first letter's ink - unless an
+        // image on it reaches higher, which then starts on the edge instead
+        float capitalsTop = area.height * 0.5f - _lines.front().imageOverhang * area.scale;
         for (std::size_t index = 0; index < _lines.size(); ++index) {
             const TextLine& line = _lines[index];
             const float textHeight = line.textHeight * area.scale;
-            if (capitalsTop - textHeight - render::textDescent(textHeight) < bottomEdge) {
+            if (capitalsTop - textHeight - (std::max)(render::textDescent(textHeight), line.imageOverhang * area.scale) < bottomEdge) {
                 if (index == 0) {
                     logger::sample(5000,
                         "Text panel '{}' has no room for a row of text inside its border and padding ({:.2f} units tall, a row needs {:.2f}); no rows drawn",
@@ -550,13 +692,33 @@ namespace f4cf::vrui
                 if (room <= 0.0f) {
                     break;
                 }
+                const render::Color rowColor = row.color.value_or(_style.color);
+                if (piece.imageWidth > 0.0f) {
+                    const float width = piece.imageWidth * area.scale;
+                    if (width > room) {
+                        break;
+                    }
+                    const TextSpan& span = row.spans[piece.span];
+                    if (const auto texture = _textures.find(span.image); texture != _textures.end()) {
+                        const RE::NiPoint3 center = area.center + area.right * (leftEdge + inkX + width * 0.5f) + area.up * (capitalsTop - textHeight * 0.5f);
+                        appendImage(frame,
+                            *texture->second,
+                            center,
+                            area.right,
+                            area.up,
+                            width,
+                            piece.imageHeight * area.scale,
+                            UIImageFit::Stretch,
+                            span.color.value_or(span.tintWithText ? rowColor : render::colors::White));
+                    }
+                    continue;
+                }
                 std::string_view text = spanText(row, piece.span).substr(piece.begin, piece.length);
                 text = text.substr(0, render::fitText(text, textHeight, room));
                 if (text.empty()) {
                     break;
                 }
 
-                const render::Color rowColor = row.color.value_or(_style.color);
                 const render::Color color = row.spans.empty() ? rowColor : row.spans[piece.span].color.value_or(rowColor);
                 const RE::NiPoint3 anchor = area.center + area.right * (leftEdge + inkX) + area.up * capitalsTop;
                 frame.addOrientedText(text, anchor, area.right, area.up, textHeight, color, render::TextAlign::Left, 0.0f, 0.0f, row.decoration);
