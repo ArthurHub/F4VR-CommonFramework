@@ -223,6 +223,20 @@ rows.push_back({ .spans = { { "PRESS " }, { .image = "vrui\\bindings\\right-trig
 An image draws in its own colours; the span's `color` tints it, and `tintWithText` tints it with the
 colour its row's text is drawn in - what a white icon meant to match its text wants.
 
+For a controller prompt, [`BindingPrompt`](BindingPrompt.h) turns an `InputBinding` straight into a
+span, so a prompt says what is actually bound rather than a hard-coded key:
+
+```cpp
+rows.push_back({ .spans = { { "TURN ON/OFF BY " } } });
+appendBindingPrompt(rows.back().spans, config.headActivation.primary);
+```
+
+It resolves primary/offhand to the left or right controller by the player's handedness and names
+buttons as the controller prints them (the runtime's `A` is `X` on the left one), drawing the icons
+mod-template ships in `Textures\<ModName>\vrui\bindings`. A binding no icon covers - a chord, a touch,
+the system button - falls back to words (`bindingLabel`), and `samePrompt` tells whether two bindings
+read the same, for a caller listing several at once.
+
 The rows callback runs once per frame during layout; the text is only re-laid-out when a row's text,
 spans or height, the width, the text height or the tab width changes (or an image's texture finishes
 loading).
