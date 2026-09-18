@@ -289,6 +289,22 @@ namespace f4cf::common
             return getIdentityMatrix();
         }
 
+        if (dotP <= -0.99999f) {
+            // antiparallel: the cross product below is ~zero so it gives no usable axis. Any axis perpendicular to the
+            // vectors is a valid 180-degree rotation, R = 2*a*a^T - I, which is symmetric so the storage convention doesn't matter.
+            const auto helper = abs(fromVecNorm.x) < 0.9f ? RE::NiPoint3(1, 0, 0) : RE::NiPoint3(0, 1, 0);
+            const auto perp = vec3Norm(vec3Cross(fromVecNorm, helper));
+            const float axis[3] = { perp.x, perp.y, perp.z };
+
+            RE::NiMatrix3 result;
+            for (int i = 0; i < 3; ++i) {
+                for (int j = 0; j < 3; ++j) {
+                    result.entry[i][j] = 2.0f * axis[i] * axis[j] - (i == j ? 1.0f : 0.0f);
+                }
+            }
+            return result;
+        }
+
         const auto crossP = vec3Norm(vec3Cross(toVecNorm, fromVecNorm));
         const float phi = acosf(dotP);
         const float rCos = cos(phi);
