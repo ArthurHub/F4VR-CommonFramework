@@ -36,6 +36,17 @@ namespace f4cf::common
         return v1;
     }
 
+    bool MatrixUtils::tryVec3Norm(const RE::NiPoint3& v, RE::NiPoint3& out, const float epsilon)
+    {
+        const float mag = vec3Len(v);
+        // negated so a NaN length is rejected as well
+        if (!(mag >= epsilon)) {
+            return false;
+        }
+        out = RE::NiPoint3(v.x / mag, v.y / mag, v.z / mag);
+        return true;
+    }
+
     float MatrixUtils::vec3Dot(const RE::NiPoint3& v1, const RE::NiPoint3& v2)
     {
         return v1.x * v2.x + v1.y * v2.y + v1.z * v2.z;
