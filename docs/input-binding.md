@@ -186,18 +186,24 @@ hand's wand, the HMD, or a prop attached to the body — and, while a bound hand
 A mod groups each sphere into **its own INI section**. The section name is chosen by the mod (check its
 INI); the keys inside are always these:
 
-| Key                 | What it sets                                                                                                                                                                                                                                                   |
-| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `tZone`             | The zone as a transform `x,y,z;heading,roll,attitude;scale`. Only **translate + scale** matter — the zone is a sphere, so rotation is ignored and `scale` is its **diameter**.                                                                                 |
-| `tZonePA`           | Optional **power-armor variant** of `tZone` (for a zone whose anchor moves in PA). Omit to reuse `tZone`.                                                                                                                                                      |
-| `sPrimaryBinding`   | The main [binding line](#the-binding-line). Append `suppress` to hide its button while the hand is in the zone.                                                                                                                                                |
-| `sSecondaryBinding` | An optional second binding line (e.g. a `longpress` variant of the same button). `none` to omit.                                                                                                                                                               |
-| `sEntryHaptic`      | Haptic played **once** when a hand enters the zone. `none` = silent.                                                                                                                                                                                           |
-| `sPrimaryHaptic`    | Haptic played when `sPrimaryBinding` fires. `none` = silent.                                                                                                                                                                                                   |
-| `sSecondaryHaptic`  | Haptic played when `sSecondaryBinding` fires. `none` = silent.                                                                                                                                                                                                 |
-| `sShowSphere`       | When the zone's visual is drawn: `never`, `always`, or `wheninside` (only while a bound hand is in it — a proximity hint).                                                                                                                                     |
-| `sSphereNif`        | The `.nif` mesh drawn as the zone's visual (a mesh path resolved like any prop nif). Empty uses the framework's default sphere mesh. Changing it at runtime releases the old mesh and loads the new one.                                                       |
-| `fSphereScale`      | Scale multiplier for the drawn visual **only** — the proximity hit test always uses the full `tZone` scale. `< 1` draws the sphere smaller than the interaction radius (e.g. an "inside the zone" hint with `sShowSphere = wheninside`); `1` matches the zone. |
+| Key                  | What it sets                                                                                                                                                                                                                                                      |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `tZone`              | The zone as a transform `x,y,z;heading,roll,attitude;scale`. Only **translate + scale** matter — the zone is a sphere, so rotation is ignored and `scale` is its **diameter**.                                                                                    |
+| `tZonePA`            | Optional **power-armor variant** of `tZone` (for a zone whose anchor moves in PA). Omit to reuse `tZone`.                                                                                                                                                         |
+| `sPrimaryBinding`    | The main [binding line](#the-binding-line). Append `suppress` to hide its button while the hand is in the zone.                                                                                                                                                   |
+| `sSecondaryBinding`  | An optional second binding line (e.g. a `longpress` variant of the same button). `none` to omit.                                                                                                                                                                  |
+| `sEntryHaptic`       | Haptic played **once** when a hand enters the zone. `none` = silent.                                                                                                                                                                                              |
+| `sPrimaryHaptic`     | Haptic played when `sPrimaryBinding` fires. `none` = silent.                                                                                                                                                                                                      |
+| `sSecondaryHaptic`   | Haptic played when `sSecondaryBinding` fires. `none` = silent.                                                                                                                                                                                                    |
+| `sShowSphere`        | When the zone's visual is drawn: `never`, `always`, or `wheninside` (only while a bound hand is in it — a proximity hint).                                                                                                                                        |
+| `sSphereStyle`       | How the zone's visual looks: a [preset](#controlling-the-visual-sphere) such as `cyan-subtle`. The `sSphere*` / `fSphere*` keys below override single values of it.                                                                                               |
+| `sSphereNif`         | Override: the `.nif` mesh drawn as the visual (resolved like any prop nif).                                                                                                                                                                                       |
+| `sSphereTexture`     | Override: the texture set on that mesh (a `.dds` path resolved the same way). `none` keeps the texture the mesh itself names.                                                                                                                                     |
+| `sSphereColor`       | Override: the color as `r,g,b` or `r,g,b,a`, each a whole number in `0..255` (e.g. `255,51,51`). The optional `a` is the overall opacity (the activation presets draw at `27`-`40`); leave it off to keep the preset's.                                           |
+| `fSphereGlow`        | Override: brightness, `0..1`. `1` is as bright as the `debug` sphere; the activation presets sit at `0.4`-`0.5`.                                                                                                                                                  |
+| `sSphereFalloff`     | Override: how the opacity fades from the middle of the sphere to its edge, as `center,rim` (e.g. `0.045,1`). The activation mesh keeps its middle faint so it reads as a glowing rim; equal values draw it evenly.                                                |
+| `fSphereScale`       | Scale multiplier for the drawn visual **only** — the proximity hit test always uses the full `tZone` scale. `< 1` draws the sphere smaller than the interaction radius (e.g. an "inside the zone" hint with `sShowSphere = wheninside`); `1` matches the zone.    |
+| `sSphereOrientation` | Which way the drawn visual faces: `body` (default — turns with the direction your body faces, kept upright), `hmd` (turns with the direction your head faces), or `world` (holds still in the world). Only a patterned look such as `debug` shows the difference. |
 
 Any key you leave out keeps the mod's built-in default for that sphere.
 
@@ -213,35 +219,30 @@ Any key you leave out keeps the mod's built-in default for that sphere.
 ## Controlling the visual sphere
 
 The sphere you see is **purely cosmetic** and separate from the interaction zone: the proximity hit test
-always uses the full `tZone`, so tuning the visual never changes where the gesture actually fires. Three
-keys control it independently:
+always uses the full `tZone`, so tuning the visual never changes where the gesture actually fires. Four
+things control it independently:
 
 - **Whether it shows** — `sShowSphere`: `never` (invisible — the default for most spheres), `always` (a
   fixed marker, handy while tuning placement), or `wheninside` (appears only while a bound hand is in the
   zone — a "you're in range" hint).
-- **Which mesh** — `sSphereNif`: point it at any `.nif` to change the look (or pick one of the built-in
-  meshes below); empty falls back to the framework's default sphere. Editing this while the game runs
-  hot-swaps the mesh (the old one is released and the new one loaded on the next frame it's shown).
+- **How it looks** — `sSphereStyle` picks a preset; the override keys (`sSphereColor`, `fSphereGlow`, …)
+  change single values on top of it. Editing any of them while the game runs redraws the sphere with the
+  new look the next frame it's shown.
 - **How big** — `fSphereScale`: multiplies the drawn size **only**. Use `< 1` to draw a small marker inside
   the real (larger) zone so the hint doesn't fill your whole reach; `1` matches the zone exactly.
+- **Which way it faces** — `sSphereOrientation`: `body` (the default) turns it with the direction your body
+  faces (so a sphere on your body looks still as you turn), `hmd` with the direction your head faces, and
+  `world` holds it still in the world.
 
-**Built-in meshes** shipped under `ui-common\`:
+**Presets** for `sSphereStyle`:
 
-- `ui-common\activation-sphere@white-full.nif`
-- `ui-common\activation-sphere@white-medium.nif`
-- `ui-common\activation-sphere@white-subtle.nif`
-- `ui-common\activation-sphere@cyan-full.nif`
-- `ui-common\activation-sphere@cyan-medium.nif`
-- `ui-common\activation-sphere@cyan-subtle.nif`
-- `ui-common\activation-sphere@green-medium.nif`
-- `ui-common\activation-sphere@green-subtle.nif`
-- `ui-common\activation-sphere@purple-medium.nif`
-- `ui-common\activation-sphere@purple-subtle.nif`
-- `ui-common\activation-sphere@amber-medium.nif`
-- `ui-common\activation-sphere@amber-subtle.nif`
-- `ui-common\activation-sphere@gold-subtle.nif`
-- `ui-common\debug-sphere.nif`
-- `ui-common\debug-sphere@strong.nif`
+- `<color>-<strength>` — the glowing-rim activation sphere. Colors: `white`, `gray`, `cyan`, `green`,
+  `purple`, `red`, `amber`, `gold`. Strengths: `full`, `medium`, `subtle`, `low`. For example `cyan-subtle`; `white-subtle` is the
+  default.
+- `debug` — the evenly lit, two-sided debug sphere: a light grid.
+
+To go beyond the presets, start from the closest one and override values, e.g. `sSphereStyle = white-subtle`
+with `sSphereColor = 255,105,180` for a subtle pink sphere.
 
 A common recipe is a small proximity dot — `sShowSphere = wheninside` with `fSphereScale = 0.5` — that
 appears only as your hand nears the zone. To hide the visual entirely, set `sShowSphere = never`.
@@ -257,7 +258,7 @@ sEntryHaptic = Tick
 sPrimaryHaptic = DoubleClick
 sSecondaryHaptic = Click
 sShowSphere = wheninside
-sSphereNif = ui-common\activation-sphere@white-medium.nif
+sSphereStyle = cyan-subtle
 ```
 
 A tap of the off-hand trigger while it's near the HMD fires the primary gesture (its trigger hidden
@@ -276,11 +277,19 @@ parse a string directly with `parseInputBinding(...)`. The `suppress` flag rides
 
 **An activation sphere** is two types:
 
-- `f4cf::f4vr::WandActivationConfig` — the authored bundle (zone + bindings + haptics + visibility + visual mesh/scale).
+- `f4cf::f4vr::WandActivationConfig` — the authored bundle (zone + bindings + haptics + visibility + visual style/scale).
   Load one whole INI section with `ConfigBase::loadWandActivationConfig(ini, "SectionName", defaults)`.
 - `f4cf::f4vr::WandActivationSphere` — the runtime zone. Drive it each frame with `onFrameUpdate(frame,
 onActivated)`, composing the per-frame `Frame` from your `WandActivationConfig` (gating a binding off
   for the frame by passing the disabled binding, and re-anchoring the zone if needed). It handles the
   proximity test, owner-keyed suppression, haptics, cooldown, and the debug/proximity visual.
+
+The visual's look is an `f4cf::f4vr::SphereStyle` (`src/f4vr/SphereStyle.h`): a mesh plus the values set
+at runtime on its effect shader — color, alpha, glow, falloff opacities, and the texture. Because the
+texture is set by code, the meshes name no mod, and **every mod ships the same files** from the
+framework's `mod-template` under its own folder:
+
+- `Meshes\<ModName>\f4cf\activation-sphere.nif` (the one mesh every preset draws on)
+- `Textures\<ModName>\f4cf\activation-sphere.dds`, `debug-sphere.dds`
 
 See [`src/f4vr/README.md`](../src/f4vr/README.md) for the `WandActivationSphere` API and an example.

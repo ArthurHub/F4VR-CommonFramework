@@ -8,14 +8,14 @@
 #include <vector>
 
 #include "F4VRUtils.h"
+#include "SphereStyle.h"
 #include "vrcf/VRControllersHaptic.h"
 #include "vrcf/VRControllersManager.h"
 
 namespace f4cf::f4vr
 {
     /**
-     * When the activation sphere's visual (the sphere mesh — Frame::sphereNif or the framework default) is
-     * drawn.
+     * When the activation sphere's visual (the mesh of Frame::sphereStyle, or the default style's) is drawn.
      */
     enum class ActivationSphereVisibility : std::uint8_t
     {
@@ -32,9 +32,27 @@ namespace f4cf::f4vr
     ActivationSphereVisibility parseActivationSphereVisibility(std::string_view text, ActivationSphereVisibility fallback);
 
     /**
+     * Which way the activation sphere's visual faces. The zone is a sphere, so only a patterned look (the debug
+     * grid) shows the difference.
+     */
+    enum class ActivationSphereOrientation : std::uint8_t
+    {
+        Hmd = 0, // turn with the HMD's heading (kept upright), so it holds still in the player's view
+        Body, // turn with the body's heading (the rendered skeleton's, kept upright)
+        World, // hold still in the world
+    };
+
+    /**
+     * Parse an ActivationSphereOrientation from config (INI) text, case-insensitively: "hmd"/"head" -> Hmd;
+     * "body"/"skeleton" -> Body; "world" -> World. Empty or unrecognized text returns `fallback` (unrecognized is
+     * logged).
+     */
+    ActivationSphereOrientation parseActivationSphereOrientation(std::string_view text, ActivationSphereOrientation fallback);
+
+    /**
      * Authored, config-loadable description of one activation sphere: its zone (+ optional PA variant), its
      * two bindings (each carrying its own suppress flag), the entry haptic plus a per-binding activation
-     * haptic, and when the sphere visual is shown. A mod parses one INI section into this
+     * haptic, when the sphere visual is shown and how it looks. A mod parses one INI section into this
      * (ConfigBase::loadWandActivationConfig); the per-frame WandActivationSphere::Frame is composed from it
      * with live gating (real binding vs the disabled binding) and any runtime zone re-anchor on top. The
      * sphere only uses the zone's translate + scale (it is rotation-invariant). `secondary` defaults to
@@ -53,8 +71,9 @@ namespace f4cf::f4vr
         std::optional<vrcf::HapticPattern> primaryHaptic = vrcf::HapticPattern::DoubleClick;
         std::optional<vrcf::HapticPattern> secondaryHaptic = vrcf::HapticPattern::DoubleClick;
         ActivationSphereVisibility showSphere = ActivationSphereVisibility::Never;
-        std::string sphereNif;
+        SphereStyle sphereStyle = getDefaultSphereStyle();
         float sphereScale = 1.0f;
+        ActivationSphereOrientation sphereOrientation = ActivationSphereOrientation::Body;
 
         /**
          * The zone to use for the given power-armor state: the PA variant when one was configured, otherwise
@@ -80,7 +99,7 @@ namespace f4cf::f4vr
      * Reusable proximity interaction zone: a sphere around a parent node that, when the player's hand
      * enters it, suppresses that hand's button (so it can't also fire its normal action) and pulses a
      * one-shot entry haptic, plus renders a sphere mesh at the zone's world-space center (per
-     * Frame::showSphere, using Frame::sphereNif or the framework default) so any visual always matches the
+     * Frame::showSphere, styled by Frame::sphereStyle or the default style) so any visual always matches the
      * test.
      *
      * Suppression is opt-in per binding (InputBinding::suppress): a binding inside the zone is hidden from
@@ -128,14 +147,16 @@ namespace f4cf::f4vr
             // matches the hit test. Left null (the default), it hangs under the VR primary-hand UI attach node
             // (PlayerNodes::primaryUIAttachNode), which renders and is not rebuilt with the player's 3D.
             RE::NiNode* sphereAttachNode = nullptr;
-            // The .nif cloned as the sphere visual. Empty = the framework's default sphere mesh
-            // (vrui::UIUtils::getDebugSphereNifName()). A different value swaps the mesh; changing it between
-            // frames releases the previous clone and loads the new one on the next show.
-            std::string_view sphereNif = {};
+            // How the sphere visual looks: its mesh and the values set on the mesh's shader (see SphereStyle).
+            // Null = getDefaultSphereStyle(). A style that differs from the one on screen releases the clone and
+            // loads a freshly styled one on the next show; point this at config that outlives the frame.
+            const SphereStyle* sphereStyle = nullptr;
             // Scale multiplier applied to the zone scale for the visual sphere only — the proximity hit test
             // always uses the full zone scale. < 1 draws the sphere smaller than the interaction radius (a
             // "hand is inside" indicator that sits within the real zone); 1 = the visual matches the zone.
             float sphereScale = 1.0f;
+            // Which way the sphere visual faces (the player's heading or the world axes); the hit test ignores it.
+            ActivationSphereOrientation sphereOrientation = ActivationSphereOrientation::Body;
         };
 
         explicit WandActivationSphere(const char* key, const std::uint64_t cooldownMs = 400)
@@ -174,8 +195,9 @@ namespace f4cf::f4vr
                     .entryHaptic = config.entryHaptic,
                     .showSphere = config.showSphere,
                     .sphereAttachNode = sphereAttachNode,
-                    .sphereNif = config.sphereNif,
+                    .sphereStyle = &config.sphereStyle,
                     .sphereScale = config.sphereScale,
+                    .sphereOrientation = config.sphereOrientation,
                 },
                 std::forward<OnActivated>(onActivated));
         }
@@ -191,7 +213,7 @@ namespace f4cf::f4vr
         bool onFrameUpdate(const Frame& frame, OnActivated&& onActivated)
         {
             if (!frame.enabled || !frame.node) {
-                updateVisual(frame.node, frame.sphereAttachNode, frame.zone, false, frame.sphereNif, frame.sphereScale);
+                updateVisual(frame, false);
                 resetInteraction();
                 return false;
             }
@@ -229,7 +251,7 @@ namespace f4cf::f4vr
 
             // Resolve the sphere visual after the proximity test so WhenInside can react to it.
             const bool show = frame.showSphere == ActivationSphereVisibility::Always || (frame.showSphere == ActivationSphereVisibility::WhenInside && anyInside);
-            updateVisual(frame.node, frame.sphereAttachNode, frame.zone, show, frame.sphereNif, frame.sphereScale);
+            updateVisual(frame, show);
 
             return handled;
         }
@@ -272,7 +294,7 @@ namespace f4cf::f4vr
         void triggerActivation(vrcf::Hand hand, std::optional<vrcf::HapticPattern> pattern);
 
         // --- Sphere visual. ---
-        void updateVisual(const RE::NiNode* testNode, RE::NiNode* attachParent, const RE::NiTransform& zone, bool show, std::string_view nifName, float sphereScale);
+        void updateVisual(const Frame& frame, bool show);
 
         bool isCoolingDown() const;
         static bool containsSuppression(std::span<const vrcf::InputBinding> bindings, const vrcf::InputBinding& binding);
@@ -282,7 +304,7 @@ namespace f4cf::f4vr
         std::uint64_t _cooldownMs;
         std::uint64_t _lastActivationTime = 0;
         RE::NiPointer<RE::NiNode> _sphereNode; // sphere visual only; null until the visual is first shown
-        std::string _sphereNifName; // the .nif last loaded into _sphereNode (or last attempted); detects a runtime swap
+        std::optional<SphereStyle> _sphereStyle; // the style last loaded into _sphereNode (or last attempted); detects a runtime change
         std::vector<vrcf::InputBinding> _suppressedBindings; // bindings currently suppressed under _sphereKey
         bool _hapticFired = false;
 

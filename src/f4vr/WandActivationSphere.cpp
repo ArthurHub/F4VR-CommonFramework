@@ -8,7 +8,6 @@
 #include "f4vr/PlayerNodes.h"
 #include "vrcf/VRControllersHaptic.h"
 #include "vrcf/VRControllersSuppressor.h"
-#include "vrui/UIUtils.h"
 
 namespace f4cf::f4vr
 {
@@ -46,6 +45,88 @@ namespace f4cf::f4vr
         }
         logger::warn("parseActivationSphereVisibility: unrecognized value '{}' - using fallback", key);
         return fallback;
+    }
+
+    /**
+     * Case-insensitive name -> ActivationSphereOrientation, tolerating separators. Empty or unknown returns
+     * `fallback` (unknown is logged).
+     */
+    ActivationSphereOrientation parseActivationSphereOrientation(const std::string_view text, const ActivationSphereOrientation fallback)
+    {
+        const std::string key = common::normalizeConfigToken(text);
+
+        if (key.empty()) {
+            return fallback;
+        }
+        if (key == "hmd" || key == "head") {
+            return ActivationSphereOrientation::Hmd;
+        }
+        if (key == "body" || key == "skeleton") {
+            return ActivationSphereOrientation::Body;
+        }
+        if (key == "world") {
+            return ActivationSphereOrientation::World;
+        }
+        logger::warn("parseActivationSphereOrientation: unrecognized value '{}' - using fallback", key);
+        return fallback;
+    }
+
+    namespace
+    {
+        /**
+         * A world rotation turned about world up to `node`'s heading. The heading is the node's forward (local +Y,
+         * which the HMD and the skeleton share) flattened onto the ground, plus its up axis (local +Z) weighted by
+         * how far it is pitched — looking straight down or up, the forward axis has no horizontal part left but the
+         * up axis points along the heading, so the sphere never spins there. The world axes while `node` is null.
+         */
+        RE::NiMatrix3 getHeadingRotation(const RE::NiAVObject* node)
+        {
+            if (!node) {
+                return common::MatrixUtils::getIdentityMatrix();
+            }
+
+            // this codebase keeps world rotations transposed: row i of `rotate` is where local axis i points
+            const RE::NiMatrix3& rotation = node->world.rotate;
+            const RE::NiPoint3 forward(rotation.entry[1][0], rotation.entry[1][1], rotation.entry[1][2]);
+            const RE::NiPoint3 up(rotation.entry[2][0], rotation.entry[2][1], rotation.entry[2][2]);
+            const float x = forward.x - forward.z * up.x;
+            const float y = forward.y - forward.z * up.y;
+            const float length = std::sqrt(x * x + y * y);
+            if (length < 0.0001f) {
+                return common::MatrixUtils::getIdentityMatrix();
+            }
+            const float dx = x / length;
+            const float dy = y / length;
+
+            // local +Y along the heading, +Z world up, +X to its right
+            RE::NiMatrix3 rotate = common::MatrixUtils::getIdentityMatrix();
+            rotate.entry[0][0] = dy;
+            rotate.entry[0][1] = -dx;
+            rotate.entry[1][0] = dx;
+            rotate.entry[1][1] = dy;
+            return rotate;
+        }
+
+        /**
+         * World rotation of a sphere visual oriented per `orientation`: the HMD's heading, the body's (the rendered
+         * third-person skeleton root, which FRIK turns with the body), or the world axes. The world axes while the
+         * chosen node isn't loaded.
+         */
+        RE::NiMatrix3 getSphereWorldRotation(const ActivationSphereOrientation orientation)
+        {
+            if (!getPlayer()) {
+                return common::MatrixUtils::getIdentityMatrix();
+            }
+            switch (orientation) {
+            case ActivationSphereOrientation::Hmd:
+                return getHeadingRotation(getPlayerNodes()->HmdNode);
+            case ActivationSphereOrientation::Body:
+                return getHeadingRotation(getRootNode());
+            case ActivationSphereOrientation::World:
+            default:
+                return common::MatrixUtils::getIdentityMatrix();
+            }
+        }
     }
 
     /**
@@ -184,35 +265,37 @@ namespace f4cf::f4vr
 
     /**
      * Keeps the optional sphere visual in sync with the zone: detaches it when hidden, lazily clones it on
-     * first show (cached for reuse, collision stripped), (re)attaches it under `attachParent`, and relocates
-     * it to the zone's world-space center/radius so the visual and the test always agree — even when
-     * `attachParent` differs from `testNode` (the node the zone is measured from). This lets the zone be
-     * measured off a raw, non-rendering tracking node (HMD / wand) while the sphere renders under a visible
-     * one. A null `attachParent` defaults to the VR primary-hand UI attach node: it renders, and it lives
-     * outside the player's 3D, which character creation rebuilds — a sphere attached inside that tree crashes
-     * the game.
+     * first show (cached for reuse, collision stripped), (re)attaches it under the frame's sphereAttachNode, and
+     * relocates it to the zone's world-space center/radius, facing per the frame's sphereOrientation, so the visual
+     * and the test always agree — even when the attach node differs from `frame.node` (the node the zone is
+     * measured from). This lets the zone be measured off a raw, non-rendering tracking node (HMD / wand) while the
+     * sphere renders under a visible one. A null attach node defaults to the VR primary-hand UI attach node: it
+     * renders, and it lives outside the player's 3D, which character creation rebuilds — a sphere attached inside
+     * that tree crashes the game.
      *
-     * `nifName` selects the mesh (empty = the framework default sphere mesh); a change from the currently
-     * cloned nif releases the cached clone so the new one is loaded on the next show. `sphereScale` shrinks
-     * (or grows) the *visual* relative to the zone — the hit test always uses the unscaled zone.
+     * The frame's sphereStyle selects the mesh and the values set on its shader (null = the default style); a style
+     * that differs from the cloned one releases the cached clone so a freshly styled one is loaded on the next show
+     * (a style is applied only to a clone the renderer hasn't seen yet). sphereScale shrinks (or grows) the
+     * *visual* relative to the zone — the hit test always uses the unscaled zone.
      */
-    void WandActivationSphere::updateVisual(const RE::NiNode* testNode, RE::NiNode* attachParent, const RE::NiTransform& zone, const bool show, const std::string_view nifName,
-        const float sphereScale)
+    void WandActivationSphere::updateVisual(const Frame& frame, const bool show)
     {
+        const RE::NiNode* testNode = frame.node;
+        RE::NiNode* attachParent = frame.sphereAttachNode;
         if (!attachParent && getPlayer()) {
             attachParent = getPlayerNodes()->primaryUIAttachNode;
         }
 
-        // Fast idle path: nothing shown and nothing cached, so there is no nif work to do (avoids resolving
-        // the default name every frame while the sphere is hidden — the common case).
+        // Fast idle path: nothing shown and nothing cached, so there is no style to compare while the sphere is
+        // hidden — the common case.
         if (!_sphereNode && (!show || !testNode || !attachParent)) {
             return;
         }
 
-        const std::string desiredNif = nifName.empty() ? vrui::UIUtils::getDefaultSphereNifName() : std::string(nifName);
+        const SphereStyle& desiredStyle = frame.sphereStyle ? *frame.sphereStyle : getDefaultSphereStyle();
 
-        // Runtime nif swap: the configured mesh changed, so drop the stale clone; it is re-loaded below.
-        if (_sphereNode && _sphereNifName != desiredNif) {
+        // Runtime restyle: the configured style changed, so drop the stale clone; it is re-loaded below.
+        if (_sphereNode && _sphereStyle != desiredStyle) {
             detachVisual();
             _sphereNode.reset();
         }
@@ -222,20 +305,22 @@ namespace f4cf::f4vr
             return;
         }
 
-        // Lazily (re)load the mesh once per distinct name. _sphereNifName records the last *attempted* name
-        // (set before the load) so a bad/mistyped path — which throws out of the loader — is tried only once,
-        // not re-thrown every shown frame; changing the path to another value retries. A load failure leaves
-        // the visual off while the interaction/haptics keep running.
-        if (!_sphereNode && _sphereNifName != desiredNif) {
-            _sphereNifName = desiredNif;
+        // Lazily (re)load the mesh once per distinct style. _sphereStyle records the last *attempted* style
+        // (set before the load) so a bad/mistyped mesh path — which throws out of the loader — is tried only once,
+        // not re-thrown every shown frame; changing the style retries. A load failure leaves the visual off while
+        // the interaction/haptics keep running.
+        if (!_sphereNode && _sphereStyle != desiredStyle) {
+            _sphereStyle = desiredStyle;
+            const auto& nif = desiredStyle.nifOrDefault();
             try {
-                _sphereNode.reset(getClonedNiNodeForNifFileSetName(desiredNif, _sphereKey));
+                _sphereNode.reset(getClonedNiNodeForNifFileSetName(nif, _sphereKey));
             } catch (const std::exception& ex) {
-                logger::warn("WandActivationSphere: failed to load sphere NIF '{}': {}", desiredNif, ex.what());
+                logger::error("WandActivationSphere: failed to load sphere NIF '{}': {}", nif, ex.what());
             }
             if (_sphereNode) {
                 _sphereNode->collisionObject.reset();
-                logger::info("WandActivationSphere: loaded sphere NIF '{}' ({})", desiredNif, _sphereKey);
+                applySphereStyle(_sphereNode.get(), desiredStyle);
+                logger::info("WandActivationSphere: loaded sphere NIF '{}' with texture '{}' ({})", nif, desiredStyle.texture, _sphereKey);
             }
         }
 
@@ -247,14 +332,17 @@ namespace f4cf::f4vr
             attachParent->AttachChild(_sphereNode.get(), true);
         }
 
-        // Re-express the zone (local to testNode) as a local transform under attachParent, keeping its world
-        // placement, so the sphere renders exactly where the hit test measures even when it hangs under a
-        // different node. Rotation is dropped (irrelevant for a sphere); when attachParent == testNode this
-        // round-trips back to the zone's translate/scale. sphereScale shrinks/grows only the visual radius
-        // (the zone center is unchanged), so the drawn sphere can sit inside the unscaled interaction zone.
-        RE::NiTransform visualZone = zone;
-        visualZone.scale *= sphereScale;
-        _sphereNode->local = common::MatrixUtils::reparentTransform(testNode->world, visualZone, attachParent->world, false);
+        // Place the zone (local to testNode) in world space, then re-express it as a local transform under
+        // attachParent, so the sphere renders exactly where the hit test measures even when it hangs under a
+        // different node. Its orientation comes from sphereOrientation, not the parent: under a moving parent (the
+        // primary-hand UI node) a sphere with a patterned texture, like the debug grid, would otherwise turn with
+        // the hand. sphereScale shrinks/grows only the visual radius (the zone center is unchanged), so the drawn
+        // sphere can sit inside the unscaled interaction zone.
+        RE::NiTransform visualZone = frame.zone;
+        visualZone.scale *= frame.sphereScale;
+        RE::NiTransform visualWorld = common::MatrixUtils::localToWorldTransform(testNode->world, visualZone);
+        visualWorld.rotate = getSphereWorldRotation(frame.sphereOrientation);
+        _sphereNode->local = common::MatrixUtils::worldToLocalTransform(attachParent->world, visualWorld);
 
         // Push the placement to world ourselves rather than relying on the parent's subtree update to pick it up
         // (under the skeleton, FRIK's per-frame skeleton update did); this also avoids a frame of lag.

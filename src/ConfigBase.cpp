@@ -1,5 +1,7 @@
 #include "ConfigBase.h"
 
+#include <array>
+#include <charconv>
 #include <nlohmann/json.hpp>
 
 #include "common/MatrixUtils.h"
@@ -52,6 +54,83 @@ namespace
         } catch (std::exception& ex) {
             std::throw_with_nested(std::runtime_error(fmt::format("Failed to load offset json:\n\t{}", ex.what())));
         }
+    }
+
+    /**
+     * Parse "r,g,b" or "r,g,b,a", each channel a whole number in 0..255, into `color`'s 0..1 channels. Without the
+     * alpha, `color`'s own alpha stays. Anything else returns false and leaves `color` untouched.
+     */
+    bool parseSphereColor(const std::string& text, std::array<float, 4>& color)
+    {
+        const auto tokens = f4cf::common::splitTrimmed(text, ',');
+        if (tokens.size() != 3 && tokens.size() != 4) {
+            return false;
+        }
+
+        auto parsed = color;
+        for (std::size_t i = 0; i < tokens.size(); ++i) {
+            const auto& token = tokens[i];
+            int channel = -1;
+            const auto [end, error] = std::from_chars(token.data(), token.data() + token.size(), channel);
+            if (error != std::errc{} || end != token.data() + token.size() || channel < 0 || channel > 255) {
+                return false;
+            }
+            parsed[i] = static_cast<float>(channel) / 255.0f;
+        }
+        color = parsed;
+        return true;
+    }
+
+    /**
+     * Read how an activation sphere's visual looks from its INI section: a named preset (sSphereStyle) replaces
+     * `fallback` whole, then each per-value key that is present overrides that one value — the mesh (sSphereNif),
+     * the texture (sSphereTexture; "none" keeps the texture the mesh itself names), the color (sSphereColor as
+     * "r,g,b" or "r,g,b,a" in 0..255 — without the alpha the preset's opacity stays), the brightness (fSphereGlow,
+     * 0..1), and the middle-to-edge opacity fade (sSphereFalloff as "center,rim"). An empty value keeps what the
+     * preset set; a malformed or out-of-range one is logged and ignored.
+     */
+    f4cf::f4vr::SphereStyle readSphereStyle(const CSimpleIniA& ini, const char* section, const f4cf::f4vr::SphereStyle& fallback)
+    {
+        auto style = fallback;
+
+        const std::string presetName = ini.GetValue(section, "sSphereStyle", "");
+        if (!presetName.empty()) {
+            if (const auto preset = f4cf::f4vr::findSphereStylePreset(presetName)) {
+                style = *preset;
+            } else {
+                logger::warn("Config: unknown sphere style '{}.sSphereStyle' = '{}'. Using default.", section, presetName);
+            }
+        }
+
+        if (const std::string nif = ini.GetValue(section, "sSphereNif", ""); !nif.empty()) {
+            style.nif = nif;
+        }
+        if (const std::string texture = ini.GetValue(section, "sSphereTexture", ""); !texture.empty()) {
+            style.texture = f4cf::common::normalizeConfigToken(texture) == "none" ? "" : texture;
+        }
+        if (const char* rawColor = ini.GetValue(section, "sSphereColor", nullptr); rawColor && *rawColor) {
+            if (!parseSphereColor(rawColor, style.color)) {
+                logger::warn("Config: malformed sphere color for '{}.sSphereColor' = '{}' (expected 'r,g,b' or 'r,g,b,a' in 0..255). Ignored.", section, rawColor);
+            }
+        }
+        if (const char* rawGlow = ini.GetValue(section, "fSphereGlow", nullptr); rawGlow && *rawGlow) {
+            const auto glow = static_cast<float>(ini.GetDoubleValue(section, "fSphereGlow", -1.0));
+            if (glow >= 0.0f && glow <= 1.0f) {
+                style.glow = glow;
+            } else {
+                logger::warn("Config: sphere glow '{}.fSphereGlow' = '{}' is out of range (expected 0..1). Ignored.", section, rawGlow);
+            }
+        }
+        if (const char* rawFalloff = ini.GetValue(section, "sSphereFalloff", nullptr); rawFalloff && *rawFalloff) {
+            float center, rim;
+            if (std::sscanf(rawFalloff, " %f , %f", &center, &rim) == 2) {
+                style.centerOpacity = center;
+                style.rimOpacity = rim;
+            } else {
+                logger::warn("Config: malformed sphere falloff for '{}.sSphereFalloff' = '{}' (expected 'center,rim' opacities in 0..1). Ignored.", section, rawFalloff);
+            }
+        }
+        return style;
     }
 }
 
@@ -657,9 +736,9 @@ namespace f4cf
      * two bindings (sPrimaryBinding / sSecondaryBinding — suppress is a token in the binding string, see
      * InputBindingParser), the entry + per-binding activation haptics (sEntryHaptic / sPrimaryHaptic
      * / sSecondaryHaptic — "none"/empty = silent; absent keeps the default), when the sphere
-     * visual is drawn (sShowSphere — never / always / wheninside), the sphere visual's mesh
-     * (sSphereNif — empty/absent keeps the default, which the sphere resolves to the framework debug sphere),
-     * and its visual-only scale multiplier (fSphereScale — < 1 draws it smaller than the interaction zone).
+     * visual is drawn (sShowSphere — never / always / wheninside), how it looks (sSphereStyle preset + per-value
+     * overrides, see readSphereStyle), its visual-only scale multiplier (fSphereScale — < 1 draws it smaller
+     * than the interaction zone), and which way it faces (sSphereOrientation — hmd / body / world).
      */
     f4vr::WandActivationConfig ConfigBase::loadWandActivationConfig(const CSimpleIniA& ini, const char* section, const f4vr::WandActivationConfig& defaults)
     {
@@ -678,9 +757,9 @@ namespace f4cf
 
         cfg.showSphere = f4vr::parseActivationSphereVisibility(ini.GetValue(section, "sShowSphere", ""), defaults.showSphere);
 
-        const char* rawSphereNif = ini.GetValue(section, "sSphereNif", nullptr);
-        cfg.sphereNif = rawSphereNif ? rawSphereNif : defaults.sphereNif;
+        cfg.sphereStyle = readSphereStyle(ini, section, defaults.sphereStyle);
         cfg.sphereScale = static_cast<float>(ini.GetDoubleValue(section, "fSphereScale", defaults.sphereScale));
+        cfg.sphereOrientation = f4vr::parseActivationSphereOrientation(ini.GetValue(section, "sSphereOrientation", ""), defaults.sphereOrientation);
         return cfg;
     }
 

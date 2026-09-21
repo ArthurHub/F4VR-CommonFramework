@@ -28,16 +28,6 @@ namespace
 
 namespace f4cf::vrui
 {
-    std::string UIUtils::getDebugSphereNifName()
-    {
-        return "ui-common\\debug-sphere.nif";
-    }
-
-    std::string UIUtils::getDefaultSphereNifName()
-    {
-        return "ui-common\\activation-sphere@white-medium.nif";
-    }
-
     std::string UIUtils::getEmptyButtonFrameNifName()
     {
         return "ui-common\\btn-empty.nif";

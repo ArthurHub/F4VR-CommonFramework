@@ -76,7 +76,7 @@ Options (all have sensible defaults):
 ### Custom mesh override
 
 By default every sprite becomes a flat quad. To use a **hand-authored mesh** instead — e.g.
-the sphere the activation-sphere visuals clone — drop that `.nif` beside the images. `pack`
+a sphere — drop that `.nif` beside the images. `pack`
 reuses the mesh: it keeps the geometry and root name untouched, repoints the texture at the
 atlas, and **remaps the mesh's `0..1` UVs into its paired texture's atlas region** (so the
 mesh samples only that region, not the whole atlas). Output nifs still land in
