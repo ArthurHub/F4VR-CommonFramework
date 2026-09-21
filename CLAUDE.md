@@ -205,12 +205,15 @@ void onFrameUpdate()        // fires every frame while PlayerCharacter is initia
 
 The file watcher in `ConfigBase` calls `loadIniConfigInternal()` automatically when the INI changes on disk — no restart needed.
 
-### 7. VR UI assets
+### 7. Framework assets (`f4cf\`)
 
-Pre-built `.nif` mesh files and `.DDS` textures live in `data/vrui/`. Button meshes come in grid sizes `ui_btn_NxM.nif` (up to 5×5); message meshes `ui_msg_NxM.nif` (up to 6×2). To customize:
-- Replace or edit textures in `data/vrui/Textures/MyMod/` (DDS format)
-- Adjust UV offsets in NifSkope (edit `BDEffectShaderProperty`) to pick a different cell from the grid
-- Modify vertex positions for non-standard aspect ratios
+`data/mod/` is the mod's Data folder. Everything the framework ships and loads by path sits in an `f4cf` folder inside the mod's own folders, so what came from the framework stays apart from what the mod added:
+
+- `Meshes\MyMod\f4cf\activation-sphere.nif`, `Textures\MyMod\f4cf\activation-sphere.dds` / `debug-sphere.dds` — the sphere visuals (`f4vr::SphereStyle`)
+- `Textures\MyMod\f4cf\bindings\` — the controller icons binding prompts draw (`vrui::BINDING_ICONS_DIR`)
+- `Textures\MyMod\f4cf\vrui\` — shared VR UI icons (save, reset, exit, config, wiki, debug spheres) for `UIButtonPanel::setImage("f4cf\\vrui\\save.DDS")`
+
+Ship `f4cf\` as the template has it and refresh it from the template when updating the framework. The mod's own assets go beside it, e.g. its own icons in `Textures\MyMod\vrui\`.
 
 ## Modding Reference Library
 

@@ -28,7 +28,7 @@ namespace f4cf::vrui
      * A span with an image draws it in place of its text, as wide as its proportions make it at its
      * height, centred on the capitals - a button prompt inside a sentence:
      *
-     *     rows.push_back({ .spans = { { "PRESS " }, { .image = "vrui\\bindings\\right-trigger.dds" }, { " TO FIRE" } } });
+     *     rows.push_back({ .spans = { { "PRESS " }, { .image = "f4cf\\bindings\\right-trigger.dds" }, { " TO FIRE" } } });
      *
      * An image wraps like a word that cannot be broken, and joins the text on either side into one word
      * when no space separates them. An underline skips it.

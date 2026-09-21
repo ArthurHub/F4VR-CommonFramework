@@ -11,10 +11,10 @@ namespace f4cf::vrui
 {
     /**
      * Where the binding icons live, under a mod's own textures: the folder mod-template ships as
-     * Textures\<ModName>\vrui\bindings. A mod that did not copy it simply has no icons, and the prompts
+     * Textures\<ModName>\f4cf\bindings. A mod that did not copy it simply has no icons, and the prompts
      * fall back to text.
      */
-    inline constexpr std::string_view BINDING_ICONS_DIR = "vrui\\bindings\\";
+    inline constexpr std::string_view BINDING_ICONS_DIR = "f4cf\\bindings\\";
 
     /**
      * The icon showing a binding - the path of a texture under BINDING_ICONS_DIR - or an empty string when
