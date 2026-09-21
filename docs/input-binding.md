@@ -181,7 +181,8 @@ hand's wand, the HMD, or a prop attached to the body — and, while a bound hand
   its normal action),
 - plays a one-shot **entry haptic** when the hand first enters,
 - **fires** whichever of its (up to two) bindings is pressed, with a per-binding **activation haptic**,
-- and optionally **draws the zone** as a translucent sphere so you can see where to reach.
+- and optionally **marks the zone** — with a small icon at its center, a translucent sphere, or both — so
+  you can see where to reach.
 
 A mod groups each sphere into **its own INI section**. The section name is chosen by the mod (check its
 INI); the keys inside are always these:
@@ -195,8 +196,12 @@ INI); the keys inside are always these:
 | `sEntryHaptic`       | Haptic played **once** when a hand enters the zone. `none` = silent.                                                                                                                                                                                              |
 | `sPrimaryHaptic`     | Haptic played when `sPrimaryBinding` fires. `none` = silent.                                                                                                                                                                                                      |
 | `sSecondaryHaptic`   | Haptic played when `sSecondaryBinding` fires. `none` = silent.                                                                                                                                                                                                    |
-| `sShowSphere`        | When the zone's visual is drawn: `never`, `always`, or `wheninside` (only while a bound hand is in it — a proximity hint).                                                                                                                                        |
-| `sSphereStyle`       | How the zone's visual looks: a [preset](#controlling-the-visual-sphere) such as `cyan-subtle`. The `sSphere*` / `fSphere*` keys below override single values of it.                                                                                               |
+| `sShowIcon`          | When the icon is drawn: `never`, `always`, `wheninside` (only while a bound hand is in the zone — a proximity hint), or `whenavailable` (while the gesture can fire). See [Controlling the visuals](#controlling-the-visuals).                                        |
+| `sIcon`              | The icon's image: a `.dds` path, resolved like the other textures (e.g. `f4cf\activation-icon-ring.dds`). Leave it out for the framework's hand icon.                                                                                                                  |
+| `sIconColor`         | The icon's tint as `r,g,b` or `r,g,b,a`, each a whole number in `0..255`; the optional `a` is its opacity.                                                                                                                                                        |
+| `fIconSize`          | The icon's size (its longer side) in game units.                                                                                                                                                                                                                  |
+| `sShowSphere`        | When the sphere is drawn: the same `never` / `always` / `wheninside` / `whenavailable` as `sShowIcon`.                                                                                                                                                           |
+| `sSphereStyle`       | How the sphere looks: a [preset](#controlling-the-visuals) such as `cyan-subtle`. The `sSphere*` / `fSphere*` keys below override single values of it.                                                                                                           |
 | `sSphereNif`         | Override: the `.nif` mesh drawn as the visual (resolved like any prop nif).                                                                                                                                                                                       |
 | `sSphereTexture`     | Override: the texture set on that mesh (a `.dds` path resolved the same way). `none` keeps the texture the mesh itself names.                                                                                                                                     |
 | `sSphereColor`       | Override: the color as `r,g,b` or `r,g,b,a`, each a whole number in `0..255` (e.g. `255,51,51`). The optional `a` is the overall opacity (the activation presets draw at `27`-`40`); leave it off to keep the preset's.                                           |
@@ -216,15 +221,42 @@ Any key you leave out keeps the mod's built-in default for that sphere.
 `Start`, `Stop`, `RampUp`, `RampDown`, `Heartbeat1`, `Heartbeat2`, `Heartbeat3`, `Buzz`, `MidBuzz`,
 `LongBuzz`.
 
-## Controlling the visual sphere
+## Controlling the visuals
 
-The sphere you see is **purely cosmetic** and separate from the interaction zone: the proximity hit test
-always uses the full `tZone`, so tuning the visual never changes where the gesture actually fires. Four
-things control it independently:
+A zone can be marked two ways, each shown on its own schedule: a small **icon** at its center and a
+translucent **sphere**. Both are **purely cosmetic** and separate from the interaction zone: the proximity
+hit test always uses the full `tZone`, so tuning a visual never changes where the gesture actually fires.
 
-- **Whether it shows** — `sShowSphere`: `never` (invisible — the default for most spheres), `always` (a
-  fixed marker, handy while tuning placement), or `wheninside` (appears only while a bound hand is in the
-  zone — a "you're in range" hint).
+**When each shows** — `sShowIcon` / `sShowSphere`, each one of:
+
+- `never` — not drawn.
+- `always` — a fixed marker, handy while tuning placement.
+- `wheninside` — only while a bound hand is in the zone: a "you're in range" hint. The default for the
+  icon.
+- `whenavailable` — whenever the gesture can fire, i.e. while the mod has at least one of its bindings
+  enabled. A mod turns a binding off in states where it has no action (e.g. "put the light on the gun"
+  with no gun drawn), so an icon set this way only advertises gestures that will work.
+
+Each visual gets its own setting so they can combine, e.g. the icon `always` marking where to reach and the
+sphere `wheninside` lighting up once your hand arrives.
+
+### The icon
+
+A small image at the zone's center that always turns to face you and is drawn on top of the world (it sits
+inside your body or on a held prop, where the world would otherwise hide it). It fades in and out rather
+than popping.
+
+- **Which image** — `sIcon`: a `.dds` path. The framework ships `f4cf\activation-icon-hand.dds` (the default: an
+  open hand, "reach here"), `f4cf\activation-icon-ring.dds` (a plain ring) and `f4cf\activation-icon-circle.dds` (a
+  filled dot); a mod may ship its own. A white
+  glyph on a transparent background works best, since the tint colors it.
+- **Color and opacity** — `sIconColor`, multiplied into the image.
+- **How big** — `fIconSize`, the image's longer side in game units.
+
+### The sphere
+
+Four things control it independently:
+
 - **How it looks** — `sSphereStyle` picks a preset; the override keys (`sSphereColor`, `fSphereGlow`, …)
   change single values on top of it. Editing any of them while the game runs redraws the sphere with the
   new look the next frame it's shown.
@@ -245,7 +277,8 @@ To go beyond the presets, start from the closest one and override values, e.g. `
 with `sSphereColor = 255,105,180` for a subtle pink sphere.
 
 A common recipe is a small proximity dot — `sShowSphere = wheninside` with `fSphereScale = 0.5` — that
-appears only as your hand nears the zone. To hide the visual entirely, set `sShowSphere = never`.
+appears only as your hand nears the zone. To hide the visuals entirely, set `sShowIcon` and `sShowSphere`
+to `never`.
 
 ## Example
 
@@ -257,12 +290,15 @@ sSecondaryBinding = offhand longpress trigger suppress
 sEntryHaptic = Tick
 sPrimaryHaptic = DoubleClick
 sSecondaryHaptic = Click
+sShowIcon = whenavailable
+sIcon = f4cf\activation-icon-ring.dds
 sShowSphere = wheninside
 sSphereStyle = cyan-subtle
 ```
 
 A tap of the off-hand trigger while it's near the HMD fires the primary gesture (its trigger hidden
-from the game); a long-press fires the secondary; the zone shows only while your hand is near it.
+from the game); a long-press fires the secondary. A ring marks the zone whenever the gesture can fire, and
+the sphere lights up once your hand is in it.
 
 ---
 
@@ -277,19 +313,24 @@ parse a string directly with `parseInputBinding(...)`. The `suppress` flag rides
 
 **An activation sphere** is two types:
 
-- `f4cf::f4vr::WandActivationConfig` — the authored bundle (zone + bindings + haptics + visibility + visual style/scale).
+- `f4cf::f4vr::WandActivationConfig` — the authored bundle (zone + bindings + haptics + when each visual shows + the icon and sphere styles).
   Load one whole INI section with `ConfigBase::loadWandActivationConfig(ini, "SectionName", defaults)`.
 - `f4cf::f4vr::WandActivationSphere` — the runtime zone. Drive it each frame with `onFrameUpdate(frame,
 onActivated)`, composing the per-frame `Frame` from your `WandActivationConfig` (gating a binding off
   for the frame by passing the disabled binding, and re-anchoring the zone if needed). It handles the
-  proximity test, owner-keyed suppression, haptics, cooldown, and the debug/proximity visual.
+  proximity test, owner-keyed suppression, haptics, cooldown, and the visuals. `Frame::showZone` is a
+  tuning override that draws the sphere at the zone's true size whatever the config says.
 
-The visual's look is an `f4cf::f4vr::SphereStyle` (`src/f4vr/SphereStyle.h`): a mesh plus the values set
+The icon's look is an `f4cf::f4vr::ActivationIconStyle` (texture, tint, size). Icons are drawn by the
+framework's primitive overlay (`src/render`), on one layer shared by every sphere, so they need no mesh.
+
+The sphere's look is an `f4cf::f4vr::SphereStyle` (`src/f4vr/SphereStyle.h`): a mesh plus the values set
 at runtime on its effect shader — color, alpha, glow, falloff opacities, and the texture. Because the
 texture is set by code, the meshes name no mod, and **every mod ships the same files** from the
 framework's `mod-template` under its own folder:
 
 - `Meshes\<ModName>\f4cf\activation-sphere.nif` (the one mesh every preset draws on)
 - `Textures\<ModName>\f4cf\activation-sphere.dds`, `debug-sphere.dds`
+- `Textures\<ModName>\f4cf\activation-icon-hand.dds` (the default icon), `activation-icon-ring.dds`, `activation-icon-circle.dds`
 
 See [`src/f4vr/README.md`](../src/f4vr/README.md) for the `WandActivationSphere` API and an example.

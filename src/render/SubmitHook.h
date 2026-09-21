@@ -57,6 +57,9 @@ namespace f4cf::render
      * is lazy - each overlay registers the first time it actually draws - which would otherwise make
      * the layering depend on which one the player happened to trigger first in a session.
      */
+    // world-anchored hints (the activation sphere icons): under the panels, so an open panel is never painted over
+    // by a hint that sits behind it
+    inline constexpr int DRAW_ORDER_HINTS = 50;
     inline constexpr int DRAW_ORDER_PANELS = 100;
     inline constexpr int DRAW_ORDER_DEFAULT = 500;
     // deliberately last, i.e. on top: diagnostics must never end up hidden behind a mod's UI

@@ -8,8 +8,8 @@
 namespace f4cf::f4vr
 {
     /**
-     * How a sphere visual (an activation sphere's zone, a vrui debug marker) looks: the mesh cloned for it plus the
-     * values set at runtime on that mesh's effect shader. One neutral mesh serves every preset, and neither
+     * How a sphere visual (an activation sphere's zone, a vrui debug marker) looks: the mesh cloned for it, the
+     * values set at runtime on that mesh's effect shader, and its size. One neutral mesh serves every preset, and neither
      * the mesh nor the texture path inside it names a mod, so any mod ships the same files. Start from a named preset
      * (findSphereStylePreset) and override single values on top.
      *
@@ -33,6 +33,10 @@ namespace f4cf::f4vr
         // values draw the surface evenly.
         float centerOpacity = 1.0f;
         float rimOpacity = 1.0f;
+        // Drawn size relative to the zone the sphere marks: < 1 draws it inside the real (unscaled) zone, as a "hand is
+        // inside" hint. Sizes the placed node rather than the shader, so it is honored by whoever places the mesh (the
+        // activation sphere) and ignored by applySphereStyle; presets leave it at 1.
+        float scale = 1.0f;
 
         /**
          * The mesh to clone: `nif`, or the framework's activation-sphere mesh when it is empty.

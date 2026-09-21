@@ -60,7 +60,7 @@ namespace
      * Parse "r,g,b" or "r,g,b,a", each channel a whole number in 0..255, into `color`'s 0..1 channels. Without the
      * alpha, `color`'s own alpha stays. Anything else returns false and leaves `color` untouched.
      */
-    bool parseSphereColor(const std::string& text, std::array<float, 4>& color)
+    bool parseColor255(const std::string& text, std::array<float, 4>& color)
     {
         const auto tokens = f4cf::common::splitTrimmed(text, ',');
         if (tokens.size() != 3 && tokens.size() != 4) {
@@ -83,11 +83,12 @@ namespace
 
     /**
      * Read how an activation sphere's visual looks from its INI section: a named preset (sSphereStyle) replaces
-     * `fallback` whole, then each per-value key that is present overrides that one value — the mesh (sSphereNif),
-     * the texture (sSphereTexture; "none" keeps the texture the mesh itself names), the color (sSphereColor as
-     * "r,g,b" or "r,g,b,a" in 0..255 — without the alpha the preset's opacity stays), the brightness (fSphereGlow,
-     * 0..1), and the middle-to-edge opacity fade (sSphereFalloff as "center,rim"). An empty value keeps what the
-     * preset set; a malformed or out-of-range one is logged and ignored.
+     * `fallback`'s look (everything but its size), then each per-value key that is present overrides that one value —
+     * the mesh (sSphereNif), the texture (sSphereTexture; "none" keeps the texture the mesh itself names), the color
+     * (sSphereColor as "r,g,b" or "r,g,b,a" in 0..255 — without the alpha the preset's opacity stays), the brightness
+     * (fSphereGlow, 0..1), the middle-to-edge opacity fade (sSphereFalloff as "center,rim"), and the drawn size
+     * relative to the zone (fSphereScale, > 0). An empty value keeps what the preset set; a malformed or out-of-range
+     * one is logged and ignored.
      */
     f4cf::f4vr::SphereStyle readSphereStyle(const CSimpleIniA& ini, const char* section, const f4cf::f4vr::SphereStyle& fallback)
     {
@@ -97,6 +98,7 @@ namespace
         if (!presetName.empty()) {
             if (const auto preset = f4cf::f4vr::findSphereStylePreset(presetName)) {
                 style = *preset;
+                style.scale = fallback.scale;
             } else {
                 logger::warn("Config: unknown sphere style '{}.sSphereStyle' = '{}'. Using default.", section, presetName);
             }
@@ -109,7 +111,7 @@ namespace
             style.texture = f4cf::common::normalizeConfigToken(texture) == "none" ? "" : texture;
         }
         if (const char* rawColor = ini.GetValue(section, "sSphereColor", nullptr); rawColor && *rawColor) {
-            if (!parseSphereColor(rawColor, style.color)) {
+            if (!parseColor255(rawColor, style.color)) {
                 logger::warn("Config: malformed sphere color for '{}.sSphereColor' = '{}' (expected 'r,g,b' or 'r,g,b,a' in 0..255). Ignored.", section, rawColor);
             }
         }
@@ -128,6 +130,43 @@ namespace
                 style.rimOpacity = rim;
             } else {
                 logger::warn("Config: malformed sphere falloff for '{}.sSphereFalloff' = '{}' (expected 'center,rim' opacities in 0..1). Ignored.", section, rawFalloff);
+            }
+        }
+        if (const char* rawScale = ini.GetValue(section, "fSphereScale", nullptr); rawScale && *rawScale) {
+            const auto scale = static_cast<float>(ini.GetDoubleValue(section, "fSphereScale", -1.0));
+            if (scale > 0.0f) {
+                style.scale = scale;
+            } else {
+                logger::warn("Config: sphere scale '{}.fSphereScale' = '{}' is out of range (expected > 0). Ignored.", section, rawScale);
+            }
+        }
+        return style;
+    }
+
+    /**
+     * Read how an activation sphere's icon looks from its INI section, each key that is present overriding that one
+     * value of `fallback`: the image (sIcon, a .dds path; empty keeps the fallback's), the tint (sIconColor as "r,g,b"
+     * or "r,g,b,a" in 0..255 — without the alpha the fallback's opacity stays), and the size of its longer side in
+     * game units (fIconSize, > 0). A malformed or out-of-range value is logged and ignored.
+     */
+    f4cf::f4vr::ActivationIconStyle readIconStyle(const CSimpleIniA& ini, const char* section, const f4cf::f4vr::ActivationIconStyle& fallback)
+    {
+        auto style = fallback;
+
+        if (const std::string texture = ini.GetValue(section, "sIcon", ""); !texture.empty()) {
+            style.texture = texture;
+        }
+        if (const char* rawColor = ini.GetValue(section, "sIconColor", nullptr); rawColor && *rawColor) {
+            if (!parseColor255(rawColor, style.color)) {
+                logger::warn("Config: malformed icon color for '{}.sIconColor' = '{}' (expected 'r,g,b' or 'r,g,b,a' in 0..255). Ignored.", section, rawColor);
+            }
+        }
+        if (const char* rawSize = ini.GetValue(section, "fIconSize", nullptr); rawSize && *rawSize) {
+            const auto size = static_cast<float>(ini.GetDoubleValue(section, "fIconSize", -1.0));
+            if (size > 0.0f) {
+                style.size = size;
+            } else {
+                logger::warn("Config: icon size '{}.fIconSize' = '{}' is out of range (expected > 0). Ignored.", section, rawSize);
             }
         }
         return style;
@@ -736,9 +775,10 @@ namespace f4cf
      * two bindings (sPrimaryBinding / sSecondaryBinding — suppress is a token in the binding string, see
      * InputBindingParser), the entry + per-binding activation haptics (sEntryHaptic / sPrimaryHaptic
      * / sSecondaryHaptic — "none"/empty = silent; absent keeps the default), when the sphere
-     * visual is drawn (sShowSphere — never / always / wheninside), how it looks (sSphereStyle preset + per-value
-     * overrides, see readSphereStyle), its visual-only scale multiplier (fSphereScale — < 1 draws it smaller
-     * than the interaction zone), and which way it faces (sSphereOrientation — hmd / body / world).
+     * visual is drawn (sShowSphere — never / always / wheninside / whenavailable), how it looks and how big it is drawn
+     * (sSphereStyle preset + per-value overrides incl. fSphereScale, see readSphereStyle), which way it faces
+     * (sSphereOrientation — hmd / body / world), and the same for the icon: when (sShowIcon) and how it looks (sIcon,
+     * sIconColor, fIconSize, see readIconStyle).
      */
     f4vr::WandActivationConfig ConfigBase::loadWandActivationConfig(const CSimpleIniA& ini, const char* section, const f4vr::WandActivationConfig& defaults)
     {
@@ -758,8 +798,10 @@ namespace f4cf
         cfg.showSphere = f4vr::parseActivationSphereVisibility(ini.GetValue(section, "sShowSphere", ""), defaults.showSphere);
 
         cfg.sphereStyle = readSphereStyle(ini, section, defaults.sphereStyle);
-        cfg.sphereScale = static_cast<float>(ini.GetDoubleValue(section, "fSphereScale", defaults.sphereScale));
         cfg.sphereOrientation = f4vr::parseActivationSphereOrientation(ini.GetValue(section, "sSphereOrientation", ""), defaults.sphereOrientation);
+
+        cfg.showIcon = f4vr::parseActivationSphereVisibility(ini.GetValue(section, "sShowIcon", ""), defaults.showIcon);
+        cfg.iconStyle = readIconStyle(ini, section, defaults.iconStyle);
         return cfg;
     }
 
