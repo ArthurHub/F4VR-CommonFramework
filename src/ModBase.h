@@ -13,6 +13,9 @@ namespace f4cf
      * object files, so it pays neither the code size nor the frame cost. The subsystem registers
      * itself the first time the mod uses it - the ImGui UI layer does so when the first panel is
      * constructed - which is also why callbacks are never removed.
+     *
+     * Safe to call from inside a callback (a subsystem installing lazily from its own pump); the one
+     * registered that way runs in the same frame. GAME thread only, like the callbacks themselves.
      */
     void registerFrameEndCallback(void (*callback)());
 

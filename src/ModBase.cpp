@@ -199,10 +199,11 @@ namespace f4cf
 
             DebugAdjuster::onFrameUpdate(*_settings.config);
 
-            // optional subsystems that self-registered (see registerFrameEndCallback); empty unless
-            // the mod actually uses one, which is what keeps them out of binaries that do not
-            for (const auto& callback : frameEndCallbacks()) {
-                callback();
+            // Optional subsystems that self-registered (see registerFrameEndCallback); empty unless
+            // the mod actually uses one, which is what keeps them out of binaries that do not.
+            auto& callbacks = frameEndCallbacks();
+            for (std::size_t i = 0; i < callbacks.size(); ++i) {
+                callbacks[i]();
             }
 
             debug::DebugDraw::onFrameEnd();

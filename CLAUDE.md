@@ -256,5 +256,6 @@ F4VR/
 | `src/f4sevr/` | Papyrus native function registration helpers |
 | `src/vrcf/VRControllersManager.h` | Controller button/trigger state |
 | `src/vrui/` | VR widget system |
+| `src/render/` | Shared OpenVR Submit hook, primitive/text renderers, and the scene-depth capture that occludes overlays behind the world (design + the `sSceneDepthStrategy` key: [`docs/tech/scene-depth-occlusion.md`](docs/tech/scene-depth-occlusion.md)) |
 | `CMakePresets.json` | VS2022/VS2026 preset definitions |
 | `vcpkg.json` | Dependency manifest (spdlog, xbyak, nlohmann-json, simpleini, filewatch, cpptrace) |

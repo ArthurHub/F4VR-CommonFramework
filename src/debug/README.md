@@ -86,6 +86,10 @@ The channels tagged this frame show up automatically as the watch table's first 
 `channels: npc-detection physics(off)` — so you can see at a glance what is drawing and what a
 config toggle is muting.
 
+Channels are not only a mod's own: the framework tags its scene-depth readout `SCENE-DEPTH`, so
+`sDebugDrawDisabledChannels` mutes it like any other. That readout is off unless asked for — see
+[`bSceneDepthDiagnostics`](../../docs/debug-config.md#scene-depth-occlusion).
+
 ## `[Debug]` INI keys (all mods get these via `ConfigBase`, hot-reloadable)
 
 | Key                          | Default | Meaning                                                                    |

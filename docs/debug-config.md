@@ -21,6 +21,7 @@ in, and it's active.
 | [`sAddItemsOnceNames`](#sadditemsoncenames)            | Bulk-add or preview game items, once                               |
 | [`sLogPattern`](#slogpattern)                          | Format of each log line                                            |
 | [`fFlowFlag1/2/3`, `sFlowText1/2`](#flow-values)       | Mod-defined scratch values read by mod code                        |
+| [`sSceneDepthStrategy`, `bSceneDepthDiagnostics`](#scene-depth-occlusion) | Overlay-occlusion support switches                |
 | [`iVersion`](#iversion)                                | Internal schema version — don't touch                              |
 
 ---
@@ -285,6 +286,33 @@ sLogPattern = %H:%M:%S.%e %l: %v
 # Source file + line, fixed-width columns
 sLogPattern = %H:%M:%S.%e %L [%-25s:%-4#]: %v
 ```
+
+## Scene-depth occlusion
+
+Two support switches for the capture that hides overlay panels behind the world. Both default to the
+right thing, so you only touch them when an overlay draws where it should not.
+
+```ini
+[Debug]
+# auto (shipped) | depthpass | direct | off
+sSceneDepthStrategy = auto
+
+# adds the capture's rows to the debug-draw overlay and re-runs its internal A/B comparison
+bSceneDepthDiagnostics = false
+```
+
+`sSceneDepthStrategy` picks which implementation resolves the world's depth. `direct` keeps the
+capture but never resamples — correct without an upscaler, wrong with one — and `off` drops occlusion
+entirely, so overlays draw on top as they did before it existed. Between them they say whether a
+misdrawn overlay is the capture, the resample, or neither. `depthpass` is an alternative election kept
+for re-testing.
+
+`bSceneDepthDiagnostics` is for whoever came to look at the capture rather than for everyone who opens
+the debug overlay. The capture reports itself to the log either way, whenever something changes, at
+the default log level — so a log is usually enough and neither key needs touching.
+
+Design, measurements and the failure modes they address:
+[`docs/tech/scene-depth-occlusion.md`](tech/scene-depth-occlusion.md).
 
 ## `iVersion`
 

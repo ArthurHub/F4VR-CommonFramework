@@ -277,6 +277,8 @@ namespace f4cf
         debug.drawDisabledChannels = ini.GetValue(INI_SECTION_DEBUG, "sDebugDrawDisabledChannels", "");
         debug.drawToggleBinding = ini.GetValue(INI_SECTION_DEBUG, "sDebugDrawToggleBinding", "");
         debug.drawHudPlacement = ini.GetValue(INI_SECTION_DEBUG, "sDebugDrawHudPlacement", "center");
+        debug.sceneDepthStrategy = ini.GetValue(INI_SECTION_DEBUG, "sSceneDepthStrategy", "auto");
+        debug.sceneDepthDiagnostics = ini.GetBoolValue(INI_SECTION_DEBUG, "bSceneDepthDiagnostics", false);
     }
 
     void ConfigBase::loadVRUISection(const CSimpleIniA& ini)

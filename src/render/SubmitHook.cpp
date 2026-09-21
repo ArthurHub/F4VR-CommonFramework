@@ -8,7 +8,9 @@
 #include <wrl/client.h>
 
 #include "../../external/openvr/openvr.h"
+#include "../ModBase.h"
 #include "SceneDepthCapture.h"
+#include "SceneDepthDiagnostics.h"
 
 // The OpenVR IVRCompositor::Submit vtable hook every framework overlay draws through. Extracted
 // from the debug-draw overlay (a port of ROCK's DebugBodyOverlay, see
@@ -148,6 +150,10 @@ namespace f4cf::render
             sceneDepth::setSubmittedTexture(submittedTexture);
             sceneDepth::setCaptureRequested(true);
 
+            // Closes the capture frame however this function leaves - the early returns below among
+            // them. A frame that never closes is one whose commits are counted into the last one.
+            const sceneDepth::FrameScope depthFrame;
+
             ID3D11RenderTargetView* rtv = getSubmittedTextureRtv(device, submittedTexture, textureDesc);
             if (!rtv) {
                 return;
@@ -194,8 +200,6 @@ namespace f4cf::render
             // Collect the active callbacks in painter order. Sorted here, on a stack array of at
             // most 32 entries, rather than keeping the table itself sorted: registration only ever
             // appends, so the table is never reordered under the render thread's feet.
-            sceneDepth::advanceFrame();
-
             const std::uint32_t activeMask = s_activeMask.load(std::memory_order_relaxed);
             const std::size_t count = s_callbackCount.load(std::memory_order_acquire);
             std::array<std::size_t, MAX_DRAW_CALLBACKS> ordered{};
@@ -260,8 +264,10 @@ namespace f4cf::render
                 }
                 --s_hookDepth;
             } else if (eye == vr::Eye_Left) {
-                // nothing draws against the next frame's depth, so it is not captured - which under an
-                // upscaler is a full-screen copy every frame
+                // Nothing draws against the next frame's depth, so it is not captured - which under an
+                // upscaler is a full-screen copy every frame. The capture frame is still closed, or
+                // the first frame after drawing resumes would be counted into the last one that drew.
+                const sceneDepth::FrameScope depthFrame;
                 sceneDepth::setCaptureRequested(false);
             }
             return s_originalVRSubmit(compositor, eye, texture, bounds, flags);
@@ -457,6 +463,11 @@ namespace f4cf::render
         if (!installSubmitHook()) {
             return false;
         }
+
+        // The scene-depth readout and its strategy key are read on the game thread, and this is the
+        // game-thread call that brings the whole overlay up - so a mod that draws none never
+        // registers the pump and never pays for it.
+        registerFrameEndCallback(&sceneDepth::internal::onGameFrameEnd);
 
         s_installed = true;
         logger::info("OpenVR Submit hook installed");

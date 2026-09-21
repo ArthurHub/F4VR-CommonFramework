@@ -96,9 +96,24 @@ namespace f4cf::render
         SceneDepth acquireForSubmittedTexture(ID3D11Texture2D* texture);
 
         /**
-         * Close the current frame. Captures are keyed to a frame counter so a stale one is never
-         * handed to the next frame's submit.
+         * Closes the capture frame on scope exit. Captures are keyed to a frame counter so a stale one
+         * is never handed to the next frame submit.
+         *
+         * A destructor rather than a call once the drawing is done: an early return out of the submit
+         * path, or a throw out of an overlay, would otherwise leave the counter where it was - and
+         * every commit of the next frame would then be counted into this one and hand out depth that
+         * is a frame old, with nothing to say so. Construct one for the whole of a submit.
          */
-        void advanceFrame();
+        class FrameScope
+        {
+        public:
+            FrameScope() = default;
+            ~FrameScope();
+
+            FrameScope(const FrameScope&) = delete;
+            FrameScope& operator=(const FrameScope&) = delete;
+            FrameScope(FrameScope&&) = delete;
+            FrameScope& operator=(FrameScope&&) = delete;
+        };
     }
 }
