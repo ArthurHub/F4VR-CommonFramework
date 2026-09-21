@@ -2,14 +2,12 @@
 
 #include <algorithm>
 #include <cctype>
-#include <filesystem>
 #include <string>
-#include <system_error>
 #include <unordered_map>
 #include <unordered_set>
 
-#include "../ModBase.h"
 #include "../f4vr/F4VROffsets.h"
+#include "../f4vr/F4VRUtils.h"
 #include "RE/Bethesda/BSGraphics.h"
 
 namespace f4cf::render
@@ -47,28 +45,6 @@ namespace f4cf::render
             static std::unordered_set<std::string> described;
             return described.insert(path).second;
         }
-
-        /**
-         * Resolve a texture path the way vrui resolves a NIF path: as given, then under Data\Textures\,
-         * then under the mod's own Data\Textures\<ModName>\, taking the first loose file that exists. The
-         * path comes back unchanged when none does - a texture packed in a BA2 archive, or one that is
-         * simply missing, which the load then reports.
-         */
-        std::string resolveTexturePath(const std::string_view path)
-        {
-            const std::string given(path);
-            // a leading separator would leave the prefixed candidates with a doubled one
-            const auto firstReal = given.find_first_not_of("/\\");
-            const std::string relative = firstReal == std::string::npos ? given : given.substr(firstReal);
-
-            for (const auto& candidate : { given, "Data\\Textures\\" + relative, "Data\\Textures\\" + g_mod->getName() + "\\" + relative }) {
-                std::error_code error;
-                if (std::filesystem::exists(candidate, error)) {
-                    return candidate;
-                }
-            }
-            return given;
-        }
     }
 
     Texture::Texture(std::string path)
@@ -87,7 +63,7 @@ namespace f4cf::render
      */
     std::shared_ptr<Texture> Texture::load(const std::string_view path)
     {
-        const std::string resolved = resolveTexturePath(path);
+        const std::string resolved = f4vr::resolveTexturePath(path);
         std::string key(resolved);
         std::ranges::transform(key, key.begin(), [](const unsigned char c) {
             return c == '/' ? '\\' : static_cast<char>(std::tolower(c));

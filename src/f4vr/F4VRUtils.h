@@ -96,6 +96,7 @@ namespace f4cf::f4vr
     void registerPapyrusNativeFunctions(F4SE::PapyrusInterface::RegisterFunctions callback);
 
     // CommonLib migration
+    std::string resolveTexturePath(std::string_view path);
     RE::NiNode* loadNifFromFile(const std::string& path);
     RE::NiNode* getClonedNiNodeForNifFile(const std::string& path);
     RE::NiNode* getClonedNiNodeForNifFileSetName(const std::string& path, const std::string& name = "");
