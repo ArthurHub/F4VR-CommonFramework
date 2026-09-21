@@ -524,10 +524,6 @@ float4 main(PS_INPUT input) : SV_Target {
             }
         }
 
-        // Screen and WorldAnchored text sizes go in steps of this many pixels of capital height, so the
-        // default size 2 draws 14px capitals.
-        constexpr float TEXT_PIXELS_PER_SIZE = 7.0f;
-
         float screenTextHeight(const TextEntry& entry)
         {
             return TEXT_PIXELS_PER_SIZE * (std::max)(1.0f, entry.size);

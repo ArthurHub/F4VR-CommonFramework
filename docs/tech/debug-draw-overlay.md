@@ -150,9 +150,13 @@ after a game/runtime change, suspect it first.
    `watchAnchor()` / `watchAnchorNode()` (e.g. offhand controller = wrist display). Both give correct
    stereo depth for free. Plain `text()` is really only useful on flat FO4 or a mirror/2D capture. The
    head local axes are `rotate.Transpose() * (0,1,0)` forward / `(0,0,1)` up / `(1,0,0)` right — if the
-   default HUD lands off-centre, adjust those in `defaultHudAnchor()`. HUD rows are `TextAlign`-ed
-   (left/right for the side placements, else centred) so they keep a clean edge on their side of the
-   view. The HUD rides `HmdNode`, so it tracks head yaw/pitch/roll; that's fine for a head-locked
+   default HUD lands off-centre, adjust those in `defaultHudAnchor()`. The table is laid out on the
+   game thread (`layoutWatchTable()`) as two columns measured with `render::measureText` at
+   `TEXT_PIXELS_PER_SIZE` — the font is proportional, so tabs or space padding can't align it — with
+   rows grouped under a header per channel. The columns hang off the gap between them, placed per
+   side (after the widest name for the left placements, on the anchor when centred, before the widest
+   recent value for the right placements) so the table keeps a clean edge on its side of the view and
+   never slides as values change width. The HUD rides `HmdNode`, so it tracks head yaw/pitch/roll; that's fine for a head-locked
    readout, and world `label()`s use the billboard path instead when a truly world-stuck tag is needed.
 
 ## 8. Configuration

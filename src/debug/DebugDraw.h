@@ -114,17 +114,19 @@ namespace f4cf::debug
         // --- HUD ---
         void text(std::string_view str, float x, float y, const Color& color = colors::White, float size = 2.0f);
         void label(std::string_view str, const RE::NiPoint3& worldPos, const Color& color = colors::White, float size = 2.0f);
-        void watch(std::string_view name, std::string_view value);
+        void watch(std::string_view name, std::string_view value, const Color& color = colors::White);
 
         /**
-         * Watch any formattable value ("name: value" table, auto-laid-out). By default the table
+         * Watch any formattable value in the HUD table, auto-laid-out as a name column and a value
+         * column, with rows grouped under a header for the channel they were watched on. color tints
+         * the value only (e.g. red for a failing state); names are always dim. By default the table
          * floats a short distance in front of the HMD (horizontally centred, a little below the look
          * axis) so it reads in VR; watchAnchor / watchAnchorNode re-home it to any world point.
          */
         template <class T>
-        void watch(const std::string_view name, const T& value)
+        void watch(const std::string_view name, const T& value, const Color& color = colors::White)
         {
-            watch(name, std::string_view(std::format("{}", value)));
+            watch(name, std::string_view(std::format("{}", value)), color);
         }
 
         /**
@@ -180,7 +182,7 @@ namespace f4cf::debug
         float distanceScale(const RE::NiPoint3& p) const;
         void handleToggleHotkey(const std::string& configToggleBinding);
         void layoutWatchTable();
-        std::string channelStatusText() const;
+        bool isChannelEnabled(const std::string& channel) const;
         static HudPlacement parseHudPlacement(const std::string& text);
         // World point in front of the HMD for the default HUD, placed per _hudPlacement, when no
         // explicit watchAnchor is set; nullopt while the HMD node isn't available.
@@ -195,14 +197,31 @@ namespace f4cf::debug
             uint64_t expiryMs = 0;
         };
 
+        /**
+         * One watch-table row, keyed by channel + name: the same name watched on two channels is two
+         * rows, each under its own channel's header.
+         */
+        struct WatchRow
+        {
+            std::string channel;
+            std::string name;
+            std::string value;
+            Color color;
+        };
+
         // set on the first draw/watch call ever; gates all per-frame work (the zero-cost guarantee)
         inline static std::atomic<bool> s_everUsed{ false };
 
         render::PrimitiveDraw _building;
         std::vector<TimedLine> _persist;
-        std::vector<std::pair<std::string, std::string>> _watch;
+        std::vector<WatchRow> _watch;
         std::optional<RE::NiPoint3> _watchAnchor; // explicit world-anchor for the watch table; reset each frame
-        std::set<std::string> _channelsSeen; // channels tagged onto draws this frame (for the watch header); reset each frame
+        std::set<std::string> _channelsSeen; // channels tagged onto draws this frame (one watch-table header each); reset each frame
+
+        // widest watch value since the table's rows last changed (_watchLayoutKey), so a
+        // right-aligned table holds still while its values change width; kept across frames
+        float _watchValueColumnWidth = 0.0f;
+        std::string _watchLayoutKey;
         RE::NiPoint3 _cameraPos{}; // head position captured this frame; drives distance-scaled markers + billboard labels
         std::size_t _rejectedLines = 0;
 

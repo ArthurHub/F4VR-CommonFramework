@@ -51,6 +51,11 @@ namespace f4cf::render
         inline constexpr Color Grey{ 0.6f, 0.6f, 0.6f };
     }
 
+    // Screen and WorldAnchored text sizes go in steps of this many pixels of capital height, so the
+    // default size 2 draws 14px capitals. Public so a producer laying text out can measure it
+    // (render::measureText) in the same pixels the renderer draws it in.
+    inline constexpr float TEXT_PIXELS_PER_SIZE = 7.0f;
+
     // Hard budgets so a runaway producer degrades gracefully instead of ballooning GPU buffers.
     constexpr std::size_t MAX_LINE_VERTICES = 65536;
     constexpr std::uint32_t TEXT_VERTEX_CAPACITY = 131072;

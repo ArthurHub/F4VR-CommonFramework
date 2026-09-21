@@ -33,6 +33,7 @@ void MyMod::onFrameUpdate()
 
     // HUD: watch table (auto-laid-out) + world-anchored label at a point
     dd().watch("grip angle", angleDeg);          // any std::format-able value
+    dd().watch("grip", "lost", colors::Red);     // optional color tints the value (flag a state)
     dd().label("event", eventPos, colors::White);
     // (optional) re-home the watch table from the default head HUD to the offhand controller:
     // dd().watchAnchorNode(f4vr::getOffhandWandNode());
@@ -45,8 +46,14 @@ void MyMod::onFrameUpdate()
 > not visible. Re-home the table with `watchAnchorNode(node)` / `watchAnchor(pos)` (e.g. the offhand
 > controller, for a wrist display). `label()` is a **world-space billboard** welded to its point (it
 > tilts with the world instead of staying screen-upright, so it doesn't appear to rotate as you move
-> your head, and scales with distance for a depth cue). The watch table's first row is an auto
-> `channels: …` line naming the channels drawn this frame (with `(off)` on any the config is muting).
+> your head, and scales with distance for a depth cue).
+
+**Watch table layout:** two columns — a dim name column right-aligned against the value column — so
+values line up at a glance. Rows are grouped under an underlined header for the channel they were
+watched on (untagged rows first, headerless); see [Channels](#channels). The columns are placed so a
+value changing width never shifts the table: for the centred HUD the gap between them sits on the
+anchor, for a left table after the widest name, for a right table before the widest value seen since
+the rows last changed.
 
 **Zero cost until used:** no hook is installed and the per-frame driver is a single atomic read
 until the first draw/watch call of the session. The Submit hook + D3D resources install lazily on
@@ -82,9 +89,10 @@ Tag draws so independent systems can be toggled separately:
 dd().setChannelEnabled("npc-detection", false);              // runtime kill-switch
 ```
 
-The channels tagged this frame show up automatically as the watch table's first row —
-`channels: npc-detection physics(off)` — so you can see at a glance what is drawing and what a
-config toggle is muting.
+Every channel tagged this frame gets a header in the watch table with the rows watched on it
+underneath, so there's no need to prefix row names with the system's name. A channel that only drew
+shapes still gets a bare header, and a muted one shows as a grey `physics (off)` with no rows — so you
+can see at a glance what is drawing and what a config toggle is muting.
 
 Channels are not only a mod's own: the framework tags its scene-depth readout `SCENE-DEPTH`, so
 `sDebugDrawDisabledChannels` mutes it like any other. That readout is off unless asked for — see
