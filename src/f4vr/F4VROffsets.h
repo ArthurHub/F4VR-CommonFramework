@@ -306,6 +306,13 @@ namespace f4cf::f4vr
     using _isPipboyLightOn = bool* (*)(RE::Actor* a_actor);
     inline REL::Relocation<_isPipboyLightOn> isPipboyLightOn(REL::Offset(0xf27790));
 
+    // The `call PlayerCharacter::IsPipboyLightOn` in PipboyManager::InitPipboy (VR 0x140c34780), which runs as the
+    // Pip-Boy opens: bytes E8 DA 2C 2F 00. InitPipboy saves the result as PipboyManager::wasPipboyLightActive (VR +0x1F5,
+    // flat +0x1E5) and, when it's set, hides the light with ShowPipboyLight(false, true); closing the
+    // Pip-Boy (VR 0x140c337a0) shows it again when the flag is set. In power armor InitPipboy stores false without
+    // making the call, which is why the light stays on there: an `xor eax, eax` in its place does the same outside.
+    inline REL::Relocation<std::uintptr_t> PipboyManager_InitPipboy_IsPipboyLightOnCall(REL::Offset(0xc34ab1));
+
     using _isPlayerRadioEnabled = uint64_t (*)();
     inline REL::Relocation<_isPlayerRadioEnabled> isPlayerRadioEnabled(REL::Offset(0xd0a9d0));
 
