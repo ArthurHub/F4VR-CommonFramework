@@ -306,12 +306,42 @@ namespace f4cf::f4vr
     using _isPipboyLightOn = bool* (*)(RE::Actor* a_actor);
     inline REL::Relocation<_isPipboyLightOn> isPipboyLightOn(REL::Offset(0xf27790));
 
+    // PlayerCharacter::ShowPipboyLight(bool show, bool skipGlowEffects) — AddressLib 1304102, VR 0x140f277b0. The
+    // worker behind togglePipboyLight, which adds the UIPipBoyLightOn/Off menu sound and the controller light-bar state
+    // around it; this plays no sound. Showing builds a new NiLight + BSLight from the light form
+    // (TESObjectLIGH::GenDynamic) into PlayerCharacter::niPipboyLight / pipboyLight, hiding removes them
+    // (ShadowSceneNode::RemoveLight). a_skipGlowEffects leaves the glow meshes of the wrist / headlamp light as they are.
+    using _PlayerCharacter_ShowPipboyLight = void (*)(RE::PlayerCharacter* a_player, bool a_show, bool a_skipGlowEffects);
+    inline REL::Relocation<_PlayerCharacter_ShowPipboyLight> PlayerCharacter_ShowPipboyLight(REL::Offset(0xf277b0));
+
     // The `call PlayerCharacter::IsPipboyLightOn` in PipboyManager::InitPipboy (VR 0x140c34780), which runs as the
     // Pip-Boy opens: bytes E8 DA 2C 2F 00. InitPipboy saves the result as PipboyManager::wasPipboyLightActive (VR +0x1F5,
     // flat +0x1E5) and, when it's set, hides the light with ShowPipboyLight(false, true); closing the
     // Pip-Boy (VR 0x140c337a0) shows it again when the flag is set. In power armor InitPipboy stores false without
     // making the call, which is why the light stays on there: an `xor eax, eax` in its place does the same outside.
     inline REL::Relocation<std::uintptr_t> PipboyManager_InitPipboy_IsPipboyLightOnCall(REL::Offset(0xc34ab1));
+
+    // BSLight::SetShape — VR 0x14286f9b0, no address-library name (named here for what it does). Sets the light type
+    // (BSLight +0x180; 6 = spot) and the light-volume geometry the deferred renderer draws the light with
+    // (NiPointer<BSGeometry> at +0x148). A spot gets a cone, BSShaderUtil::GenerateCone(a_width, a_baseRadius,
+    // a_height, 18 sides), made under BSGraphics::Renderer::TryLock (no new cone when the lock is busy), and the
+    // cone's bound is copied onto the NiLight. The light factory (VR 0x1427e9cd0) calls it for a spot with
+    // a_width = sqrt(2 * tan^2(FOV / 2)) * 1.22077 (the half FOV clamped to [1°, 160°]), a_baseRadius = a_width * radius,
+    // a_height = radius, and 1, 1, 1 (read by the area-light type only). Returns early when the type is unchanged, so
+    // rebuilding the cone of a live light means clearing +0x180 first.
+    using _BSLight_SetShape = void (*)(RE::BSLight* a_light, std::int32_t a_type, float a_width, float a_baseRadius, float a_height, float a_x, float a_y, float a_z);
+    inline REL::Relocation<_BSLight_SetShape> BSLight_SetShape(REL::Offset(0x286f9b0));
+
+    // BSLight::SetCameraFrustum — VR 0x14286f180, no address-library name (named here for what it does). Applies a
+    // perspective frustum to the camera (NiCamera::SetViewFrustum): ±tan of the half FOVs (radians, each clamped to
+    // [1°, 160°]), a_near, and the light's NiLight radius as far (a_far only while the light has no NiLight). Sets up
+    // a BSShadowFrustumLight's shadow camera, and the gobo projection camera of a light without shadows.
+    using _BSLight_SetCameraFrustum = void (*)(RE::BSLight* a_light, float a_fovX, float a_fovY, RE::NiCamera* a_camera, float a_near, float a_far);
+    inline REL::Relocation<_BSLight_SetCameraFrustum> BSLight_SetCameraFrustum(REL::Offset(0x286f180));
+
+    // vtables of the classes a TESObjectLIGH spot light is built as: BSLight without shadows, BSShadowFrustumLight with.
+    inline REL::Relocation<std::uintptr_t> BSLight_vtbl(REL::Offset(0x30b8a40));
+    inline REL::Relocation<std::uintptr_t> BSShadowFrustumLight_vtbl(REL::Offset(0x30beed8));
 
     using _isPlayerRadioEnabled = uint64_t (*)();
     inline REL::Relocation<_isPlayerRadioEnabled> isPlayerRadioEnabled(REL::Offset(0xd0a9d0));
