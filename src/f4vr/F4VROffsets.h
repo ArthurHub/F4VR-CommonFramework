@@ -343,6 +343,39 @@ namespace f4cf::f4vr
     inline REL::Relocation<std::uintptr_t> BSLight_vtbl(REL::Offset(0x30b8a40));
     inline REL::Relocation<std::uintptr_t> BSShadowFrustumLight_vtbl(REL::Offset(0x30beed8));
 
+    // VR player turning. The game turns the player by rotating the VR world (room) transform rather than the
+    // actor: the actor's heading follows the HMD. The three entries below are the get/set pair the engine's own
+    // turn code uses plus the global it works on — all raw VR offsets, none of them has a row in the VR address
+    // library, read off the turn handler (VR 0x140fcf5e0) of Fallout4VR.exe 1.2.72. See PlayerRotation.h.
+
+    // The VR world-space data the game rotates when the player turns; other VR mods call it `vrDataStruct`. The
+    // room rotation sits at +0x210 as a SIMD-padded 3x3 matrix (three rows of four floats).
+    inline REL::Relocation<void**> g_vrWorldData(REL::Offset(0x59429c0));
+    inline constexpr std::ptrdiff_t VR_WORLD_DATA_ROTATION_OFFSET = 0x210;
+
+    // Euler decomposition of the VR world rotation matrix (pass g_vrWorldData + 0x210): the yaw the game turns
+    // with lands in a_outYaw, in radians. The two other out-params are the remaining Euler angles, written in
+    // every path; the return says whether the matrix was outside the gimbal-lock branch. VR 0x141c11b00.
+    //
+    // Pair it with VRWorld_SetYaw and nothing else: that is the pair the engine's own smooth turn uses, so a
+    // get -> add -> set round trip is sign-convention safe. (A second decomposition exists at 0x141c0fed0, used
+    // by the snap path, with a different Euler convention.)
+    using _VRWorld_GetEulerAngles = bool (*)(const void* a_rotationMatrix, float* a_outYaw, float* a_outB, float* a_outC);
+    inline REL::Relocation<_VRWorld_GetEulerAngles> VRWorld_GetEulerAngles(REL::Offset(0x1c11b00));
+
+    // Rebuild the VR world rotation from a single yaw (radians, taken by pointer) and write it back — what both
+    // the engine's smooth turn and its instant snap call to actually move the player. VR 0x141ba7780.
+    using _VRWorld_SetYaw = void (*)(void* a_vrWorldData, const float* a_yawRadians);
+    inline REL::Relocation<_VRWorld_SetYaw> VRWorld_SetYaw(REL::Offset(0x1ba7780));
+
+    // NOT declared here on purpose: the engine's own snap entry points, PlayerCharacter "start smoothed snap"
+    // (VR 0x140efa920) and "snap now, with the comfort fade" (VR 0x140efa980). Both only park a target angle in
+    // PlayerCharacter +0x8C8 behind the latch flags at +0x12A4: bit 0x20 is handed to the per-frame applier
+    // (VR 0x140ef7180, called from the player update) and bit 0x40 is cleared *only* by the vanilla thumbstick
+    // handler when the stick re-centres. Called while that handler is out of the loop — which is exactly the
+    // case a mod turns the player for, a menu that blocks turning — the first call latches 0x40 and every later
+    // one is silently dropped. PlayerRotation drives the transform itself instead.
+
     using _isPlayerRadioEnabled = uint64_t (*)();
     inline REL::Relocation<_isPlayerRadioEnabled> isPlayerRadioEnabled(REL::Offset(0xd0a9d0));
 
