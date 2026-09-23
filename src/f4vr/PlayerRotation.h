@@ -48,12 +48,21 @@ namespace f4cf::f4vr
          * nothing at all when turning is off. `threshold` is how far the stick must be pushed; the vanilla
          * handler asks for 0.5. Also advances an in-progress smoothed snap, so this is the only per-frame call
          * a caller needs.
+         *
+         * Vanilla itself doesn't read an axis here. Its handler (VR 0x140FC8730, worker at 0x140FCF5E0) works
+         * off the direction the game has already put on the ThumbstickEvent with the player's deadzones
+         * applied - 2 for right, 4 for left - and turns only for those two: a direction the stick wasn't
+         * already in is one snap, holding it there is the smooth turn, and a diagonal the game reads as up or
+         * down doesn't turn at all. A caller that has the event rather than raw axes can match the game
+         * exactly by passing 1 or -1 for those two directions, 0 otherwise, and gets the player's own deadzone
+         * settings for free.
          */
         static void turnByThumbstick(float axisX, float threshold = 0.5f);
 
         /**
          * Advance an in-progress smoothed snap. Only needed when turning is driven by something other than
-         * `turnByThumbstick()`, which does it already.
+         * `turnByThumbstick()`, which does it already - though calling both is safe, since the two keep
+         * separate clocks and neither takes frame time from the other.
          */
         static void onFrameUpdate();
 
@@ -78,7 +87,7 @@ namespace f4cf::f4vr
 
     private:
         static void stepPendingSnap(float deltaSeconds);
-        static float frameDeltaSeconds();
+        static float elapsedSeconds(std::chrono::steady_clock::time_point& lastTime);
 
         // Radians still owed by a smoothed snap, signed; 0 = none in progress.
         inline static float _pendingSnap = 0.0f;
@@ -86,6 +95,10 @@ namespace f4cf::f4vr
         // Set while the stick is held past the threshold, so one flick is one snap.
         inline static bool _turnLatched = false;
 
-        inline static std::chrono::steady_clock::time_point _lastFrameTime{};
+        // The turn and the snap interpolation keep their own clocks on purpose: they are driven from different
+        // places - the stick, and whatever per-frame tick a mod has - and a shared clock would hand each of
+        // them only the slice of the frame since the other one last ran.
+        inline static std::chrono::steady_clock::time_point _lastTurnTime{};
+        inline static std::chrono::steady_clock::time_point _lastSnapStepTime{};
     };
 }

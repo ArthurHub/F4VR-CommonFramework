@@ -78,8 +78,12 @@ namespace f4cf::f4vr
      */
     void PlayerRotation::turnByThumbstick(const float axisX, const float threshold)
     {
-        const auto deltaSeconds = frameDeltaSeconds();
-        stepPendingSnap(deltaSeconds);
+        // Two clocks: this one times the turn from the previous stick reading, leaving the snap interpolation
+        // its own, which onFrameUpdate() shares. One clock between them would hand each caller only the slice
+        // of the frame since the other last ran, and a smooth turn driven alongside onFrameUpdate() would come
+        // out slower than the vanilla one by however much of the frame sat between the two calls.
+        const auto deltaSeconds = elapsedSeconds(_lastTurnTime);
+        stepPendingSnap(elapsedSeconds(_lastSnapStepTime));
 
         const auto type = getRotationType();
         if (type == VRRotationType::None) {
@@ -105,7 +109,7 @@ namespace f4cf::f4vr
 
     void PlayerRotation::onFrameUpdate()
     {
-        stepPendingSnap(frameDeltaSeconds());
+        stepPendingSnap(elapsedSeconds(_lastSnapStepTime));
     }
 
     /**
@@ -122,6 +126,8 @@ namespace f4cf::f4vr
         }
     }
 
+    // Same as the engine's own: fRotationSpeed:VR, converted to radians, times the frame time - read off the
+    // smooth branch of the vanilla turn worker, which multiplies by the same constant 0.017453292.
     void PlayerRotation::smoothTurn(const bool right, const float deltaSeconds)
     {
         rotateBy(getSmoothSpeedDegreesPerSec() * DEG_TO_RAD * deltaSeconds * (right ? 1.0f : -1.0f));
@@ -189,19 +195,19 @@ namespace f4cf::f4vr
     }
 
     /**
-     * Seconds since the previous call, measured here rather than taken from the engine: the global the engine's
-     * own smooth turn multiplies by is unidentified, and a wrong guess would come out as a wrong turn speed.
-     * The first call and any hitch yield no turning rather than a jump.
+     * Seconds since the given clock last ran, re-arming it. Measured here rather than taken from the engine:
+     * the global the engine's own smooth turn multiplies by is unidentified, and a wrong guess would come out
+     * as a wrong turn speed. The first call and any hitch yield no turning rather than a jump.
      */
-    float PlayerRotation::frameDeltaSeconds()
+    float PlayerRotation::elapsedSeconds(std::chrono::steady_clock::time_point& lastTime)
     {
         const auto now = std::chrono::steady_clock::now();
-        if (_lastFrameTime == std::chrono::steady_clock::time_point{}) {
-            _lastFrameTime = now;
+        if (lastTime == std::chrono::steady_clock::time_point{}) {
+            lastTime = now;
             return 0;
         }
-        const auto delta = std::chrono::duration<float>(now - _lastFrameTime).count();
-        _lastFrameTime = now;
+        const auto delta = std::chrono::duration<float>(now - lastTime).count();
+        lastTime = now;
         return delta > MAX_FRAME_DELTA_SEC ? 0 : delta;
     }
 }
