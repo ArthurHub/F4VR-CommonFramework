@@ -7,8 +7,8 @@
 
 F4VR Common Framework gives Fallout 4 VR mod authors a ready-made foundation so they can focus on
 their mod instead of the plumbing: plugin lifecycle management, VR controller input, an in-world VR
-UI widget system, INI config with hot-reload, and a large set of game-state utilities. Mods link it
-as a static library and start from the included `mod-template/`.
+UI widget system with its own overlay renderer, INI config with hot-reload, and a large set of
+game-state utilities. Mods link it as a static library and start from the included `mod-template/`.
 
 ## Table of Contents
 
@@ -33,7 +33,10 @@ What it provides:
 - **Plugin lifecycle** — a `ModBase` class with `onModLoaded` / `onGameLoaded` / `onGameSessionLoaded` / `onFrameUpdate` hooks.
 - **Config** — `ConfigBase`: INI loading, embedded defaults, version migration, and file-watch hot-reload.
 - **VR controller input** — debounced button/trigger/thumbstick reads, plus owner-keyed input suppression.
-- **VR UI** — a widget/button/container hierarchy rendered as in-world meshes with finger-collision interaction.
+- **VR UI** — a widget/button/container hierarchy with finger-collision interaction, rendered as in-world meshes or drawn from text and images at runtime.
+- **Overlay rendering** — world-space lines, panels, images and text drawn over the VR view through one shared compositor hook, hidden behind the world where you want them to be.
+- **Dear ImGui in VR** — the full immediate-mode widget set on world-space quads, standalone or as an element in a VR UI layout.
+- **Debug draw** — immediate-mode wire primitives, world labels and a watch table, at zero cost until the first call.
 - **Game utilities** — node/skeleton manipulation, player/weapon/menu state, Scaleform/HUD access, and math.
 
 ### Mods built on the framework
@@ -80,6 +83,7 @@ This generates a Visual Studio solution in `build/`. Open `build/F4VRCommonFrame
 and debug as usual. All project configuration changes go in `CMakeLists.txt`, not the VS project.
 
 Build options: `F4VR_BUILD_SHARED=ON` builds a DLL instead of a static lib (default `OFF`);
+`F4CF_WITH_IMGUI_UI=OFF` drops the Dear ImGui UI layer and its vcpkg port (default `ON`);
 `COMMON_LIB_F4VR_PATH` overrides the path to CommonLibF4VR.
 
 ## Usage
@@ -117,6 +121,9 @@ Each source subsystem has its own README with usage details and examples:
 | [`f4sevr/`](src/f4sevr/README.md) | Ported F4SE VR SDK: Papyrus VM interop and native-function registration. |
 | [`vrcf/`](src/vrcf/README.md)     | VR Controller Framework: OpenVR input and input suppression.             |
 | [`vrui/`](src/vrui/README.md)     | VR UI widget system: panels, buttons, toggles, containers.               |
+| [`imgui/`](src/imgui/README.md)   | Dear ImGui panels as world-space quads, standalone or inside a vrui layout. |
+| [`render/`](src/render/README.md) | Overlay rendering: lines, fills, images and text over the VR view; scene-depth occlusion. |
+| [`debug/`](src/debug/README.md)   | In-world debug draw: wire primitives, HUD text, world labels, watch table. |
 
 ## Maintainers
 

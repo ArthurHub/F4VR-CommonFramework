@@ -6,7 +6,13 @@ reuse (`btn-empty` for plain buttons, `btn-border` / `btn-border-2` for toggles)
 config-menu buttons (advanced/misc config, misc options). Re-skin any of them by editing
 the PNG and re-running the pack command below.
 
-The activation / debug sphere visuals are not in this atlas: they are standalone meshes and
+These are the sprites for **NIF** buttons (`UIButton` / `UIToggleButton`). A panel button
+(`UIButtonPanel`) takes a loose `.dds` instead, and the same standard actions ship as one under
+`Textures\MyMod\f4cf\vrui\` — so a UI built from panels uses those and needs no atlas at all.
+Those are uncompressed 32-bit BGRA with no mipmaps, which is the format to match for a loose icon;
+see [the vrui README](../../../../src/vrui/README.md#assets). The atlas below is BC3.
+
+The activation / debug sphere visuals are not in this atlas either: they are standalone meshes and
 textures under `Meshes\MyMod\f4cf\` and `Textures\MyMod\f4cf\`, shipped as-is (the
 texture is set by code at runtime, so nothing in them names the mod). See
 [`SphereStyle`](../../../../src/f4vr/SphereStyle.h).

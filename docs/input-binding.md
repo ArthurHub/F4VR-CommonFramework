@@ -409,3 +409,14 @@ framework's `mod-template` under its own folder:
 - `Textures\<ModName>\f4cf\activation-icon-hand.dds` (the default icon), `activation-icon-ring.dds`, `activation-icon-circle.dds`
 
 See [`src/f4vr/README.md`](../src/f4vr/README.md) for the `WandActivationSphere` API and an example.
+
+**Telling the player what is bound.** Do not hard-code a button name in your UI - it goes stale the
+moment someone edits the INI. `f4cf::vrui::appendBindingPrompt(spans, binding)`
+([`src/vrui/BindingPrompt.h`](../src/vrui/BindingPrompt.h)) turns an `InputBinding` into a text span
+for a `UITextPanel` row, drawing the controller icon the binding actually resolves to - primary and
+offhand mapped to the left or right controller by the player's handedness, and buttons named the way
+the controller prints them (the runtime's `A` is `X` on the left one). A binding no shipped icon
+covers - a chord, a touch, the system button - falls back to words (`bindingLabel`), and
+`samePrompt(a, b)` tells whether two bindings read the same, for a caller listing several at once.
+The icons are the `Textures\<ModName>\f4cf\bindings\` set that `mod-template` ships; a mod that
+did not copy them simply gets the words.

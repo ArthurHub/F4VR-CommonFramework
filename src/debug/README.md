@@ -4,9 +4,12 @@ Immediate-mode debug drawing anywhere in the VR world: boxes, spheres, lines, ar
 capsules, grids, arbitrary polylines/meshes, screen-space HUD text, world-anchored labels, and a
 "name: value" watch table. Namespace `f4cf::debug`.
 
-Rendering is a D3D11 wire/text renderer injected at the OpenVR `IVRCompositor::Submit` vtable hook,
-reusing the engine's own per-eye camera matrices, so shapes land exactly where the game renders that
-frame. Shapes draw **on top** of everything (no depth occlusion — usually wanted for debugging).
+Drawing goes through [`render/`](../render/README.md), the framework's shared overlay path: the
+producer here fills a `render::PrimitiveDraw` and publishes it to its own layer, which replays it on
+the render thread through the engine's own per-eye camera matrices, so shapes land exactly where the
+game renders that frame. The layer is registered at `DRAW_ORDER_DEBUG` and is **not** occluded by the
+world, so shapes draw on top of everything, mod UI included — which for debugging is what you want
+(x-ray visibility of colliders and zones through geometry).
 
 Design doc: [`docs/tech/debug-draw-overlay.md`](../../docs/tech/debug-draw-overlay.md).
 
@@ -115,7 +118,7 @@ Channels are not only a mod's own: the framework tags its scene-depth readout `S
 
 The actual drawing is not here: `DebugDraw` fills a [`render::PrimitiveDraw`](../render/PrimitiveDraw.h)
 buffer and hands it to a [`render::PrimitiveDrawRenderer`](../render/PrimitiveDrawRenderer.h) layer,
-which owns the shaders, the 5×7 bitmap font and the draw callback on the shared
+which owns the shaders, the text font and the draw callback on the shared
 [`render::SubmitHook`](../render/SubmitHook.h).
 
 ## Provenance

@@ -30,7 +30,10 @@ HelloVR/
 ├── cmake/                        # version + resource templates (from the template)
 ├── data/
 │   ├── config/HelloVR.ini        # shipped INI (also embedded in the DLL as the default)
-│   └── mod/                      # meshes/textures that ship next to the DLL
+│   ├── resources/                # source PNGs for the UI atlases (not shipped)
+│   └── mod/                      # a ready-made game Data tree, shipped beside the DLL
+│       ├── Meshes/HelloVR/       #   f4cf/ (framework) + one .nif per UI sprite
+│       └── Textures/HelloVR/     #   f4cf/ (framework) + the packed UI atlases
 ├── src/
 │   ├── HelloVR.h / HelloVR.cpp   # your mod class + F4SE entry points
 │   ├── Config.h / Config.cpp     # your INI-backed settings
@@ -154,6 +157,54 @@ knowing):
 
 The version at the top of `CMakeLists.txt` flows automatically into the DLL metadata and the packaged
 release name — bump it there, nowhere else.
+
+### The UI assets that came with the template
+
+`MyMod` is in `data/mod/`'s **folder names** too, and a find-and-replace over source files does not
+touch those. Two kinds of asset live there, and they are renamed differently.
+
+**Framework assets, under `f4cf\`** — the shared mesh and textures the framework itself loads:
+
+| Path | What it is |
+| ---- | ---------- |
+| `Meshes\MyMod\f4cf\activation-sphere.nif` | the one sphere mesh every activation zone draws on … |
+| `Textures\MyMod\f4cf\activation-sphere.dds`, `debug-sphere.dds` | … and the textures its styles pick from (`f4vr::SphereStyle`) |
+| `Textures\MyMod\f4cf\activation-icon-{hand,ring,circle}.dds` | the icons an activation zone can be marked with (`sIcon` in the INI) |
+| `Textures\MyMod\f4cf\bindings\` | the controller icons a binding prompt draws, so a prompt names the button actually bound |
+| `Textures\MyMod\f4cf\vrui\` | shared button icons — save, reset, exit, config, wiki, debug spheres |
+
+Nothing inside them names the mod: the framework resolves a partial path under **your** mod's folders
+(`"f4cf\activation-sphere.nif"` → `Data\Meshes\HelloVR\f4cf\activation-sphere.nif`) and sets the
+sphere's texture at runtime. So renaming the two `MyMod` folders is all they need:
+
+```sh
+mv data/mod/Meshes/MyMod   data/mod/Meshes/HelloVR
+mv data/mod/Textures/MyMod data/mod/Textures/HelloVR
+```
+
+Ship `f4cf\` as it came and refresh it from `mod-template/` when you update the framework. Your own
+assets go beside it, e.g. `Textures\HelloVR\vrui\`.
+
+**The NIF button atlases** — `Meshes\MyMod\ui-common\*.nif` with `Textures\MyMod\ui-common.DDS`
+(the standard back/exit/save/reset buttons and the toggle frames), and `ui-example` beside them (a
+demo — replace it with your own art or delete it). Moving these is **not** enough: each `.nif` has
+its texture path baked in, so they still point at `Textures\MyMod\`. Re-pack them under your name
+from the source PNGs the template also brought, in `data/resources/`:
+
+```sh
+python external/F4VR-CommonFramework/nif-tools/vrui_atlas.py pack \
+  --name ui-common --texture-subpath HelloVR \
+  data/resources/common --output data/mod
+```
+
+Run it **after** the two `mv`s above and it overwrites the copies in place — same paths, now with
+the right texture baked in. Do the same with `--name ui-example data/resources/example` if you keep
+the demo. Each PNG's file name becomes the `.nif` name you pass to `UIButton` / `UIWidget` in code.
+Full options (and the reverse, `unpack`) are in the [nif-tools README](../nif-tools/README.md).
+
+> **You may not need an atlas at all.** A `vrui::UIButtonPanel` composes its face from text and a
+> loose `.dds` at runtime, so a UI built from panels needs no NIF and no packing step — only the
+> `f4cf\` folders above. See [`vrui/`](../src/vrui/README.md#assets).
 
 ---
 
@@ -359,8 +410,11 @@ hand so the final layout is:
 <Fallout 4 VR>/Data/F4SE/Plugins/HelloVR.pdb      (optional, for crash symbols)
 ```
 
-Ship the contents of `data/mod/` alongside (meshes/textures) — for HelloVR there aren't any required,
-but real mods put their `.nif`/`.dds` assets there.
+Ship the contents of `data/mod/` alongside, as a `Data` tree: `Meshes\HelloVR\` and
+`Textures\HelloVR\`. HelloVR itself draws no UI, but the framework's `f4cf\` assets are what the
+activation spheres, their icons and the binding prompts load from — leave them out and those draw
+nothing (a missing file is logged, not fatal). See
+[the UI assets](#the-ui-assets-that-came-with-the-template).
 
 **Confirm it loaded.** F4SE writes a per-plugin log to:
 
@@ -400,8 +454,14 @@ with examples:
   haptics) and input suppression.
 - **[`f4vr/`](../src/f4vr/README.md)** — game-state utilities: nodes, skeleton, weapon/menu state,
   Scaleform/HUD.
-- **[`vrui/`](../src/vrui/README.md)** — build an in-world VR UI (buttons/panels rendered as meshes)
-  and wire it into FRIK's config menu.
+- **[`vrui/`](../src/vrui/README.md)** — build an in-world VR UI (buttons and panels, from meshes or
+  composed at runtime from text and images) and wire it into FRIK's config menu.
+- **[`imgui/`](../src/imgui/README.md)** — put Dear ImGui content on a world-space quad, standalone
+  or as an element inside that VR UI.
+- **[`render/`](../src/render/README.md)** — draw your own lines, images and text over the VR view,
+  occluded by the world or on top of it.
+- **[`debug/`](../src/debug/README.md)** — wire primitives, world labels and a watch table for
+  working out why something is where it is.
 - **[`f4sevr/`](../src/f4sevr/README.md)** — register Papyrus native functions to talk to scripts.
 - **[Debug & logging config](debug-config.md)** — the `[Debug]` INI keys: log patterns, flow flags,
   data dumps, live tuning.

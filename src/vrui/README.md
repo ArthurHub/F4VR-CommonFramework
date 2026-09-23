@@ -2,28 +2,63 @@
 
 Namespace: `f4cf::vrui`
 
-A 3D, in-world UI toolkit: panels and buttons rendered as `.nif` meshes attached to game nodes
-(a wand, the HMD, etc.), with finger-collision interaction instead of a mouse cursor. A single
-`UIManager` owns the scene graph and drives input + rendering each frame.
+A 3D, in-world UI toolkit: panels and buttons attached to game nodes (a wand, the HMD, etc.), with
+finger-collision interaction instead of a mouse cursor. A single `UIManager` owns the scene graph
+and drives input + rendering each frame.
+
+An element is drawn one of two ways, and they mix freely in the same layout:
+
+- **NIF widgets** - a `.nif` mesh per button, its face baked into a texture atlas
+  ([`vrui_atlas.py`](../../nif-tools/vrui_atlas.py) builds both). Part of the game scene graph.
+- **Panels** - no mesh: text, images and chrome composed at runtime and drawn by
+  [`render/`](../render/README.md) over the VR view. They can size themselves to their content and
+  change their text every frame, which a baked NIF cannot.
 
 > Part of the [F4VR Common Framework](../README.md) source tree.
 
 ## Widget hierarchy
 
+**Scene graph and layout**
+
 | Class | Extends | Description |
 |-------|---------|-------------|
-| [`UIElement`](UIElement.h) | — | Base node: position/scale/visibility, parent/child transform, frame-update hook. |
-| [`UIWidget`](UIWidget.h) | `UIElement` | A 2D panel built from a `.nif` mesh, with collision detection. Supports a disabled state (`setDisabled(...)`) that blocks pressing and renders a "disabled" overlay on top. |
-| [`UIButton`](UIButton.h) | `UIWidget` | Pressable widget; `setOnPressHandler(...)` callback, hover/pressed states. |
-| [`UIToggleButton`](UIToggleButton.h) | `UIWidget` | On/off toggle. |
-| [`UIMultiStateToggleButton`](UIMultiStateToggleButton.h) | `UIWidget` | N-way cycle toggle. |
-| [`UIContainer`](UIContainer.h) | `UIElement` | Groups multiple elements under one transform. |
-| [`UIToggleGroupContainer`](UIToggleGroupContainer.h) | `UIContainer` | Radio-button group (mutually exclusive). |
+| [`UIElement`](UIElement.h) | — | Base node: position/scale/visibility/size, parent/child transform, layout + frame-update hooks. Also [`UIPadding`](UIElement.h), the per-side spacing panels take. |
+| [`UIContainer`](UIContainer.h) | `UIElement` | Groups multiple elements under one transform and lays them out (row/column, centered or directional). |
+| [`UIToggleGroupContainer`](UIToggleGroupContainer.h) | `UIContainer` | Radio-button group (mutually exclusive). Works on [`UIToggleable`](UIToggleable.h), so NIF and panel toggles can share one group. |
 | [`UIManager`](UIManager.h) | — | Singleton scene graph: attach/detach, wand/HMD presets, input dispatch, render. |
 | [`UIModAdapter`](UIModAdapter.h) | — | Interface the mod implements so the UI knows the interaction bone + how to point the hand. |
 
-Supporting: [`UIElement` helpers in `UIUtils.h`](UIUtils.h) and the [`UIDebugWidget`](UIDebugWidget.h)
-for visualizing interaction points.
+**NIF widgets** - a mesh per element
+
+| Class | Extends | Description |
+|-------|---------|-------------|
+| [`UIWidget`](UIWidget.h) | `UIElement` | A 2D panel built from a `.nif` mesh, with collision detection. Supports a disabled state (`setDisabled(...)`) that blocks pressing and renders a "disabled" overlay on top. |
+| [`UIButton`](UIButton.h) | `UIWidget` | Pressable widget; `setOnPressHandler(...)` callback, hover/pressed states. |
+| [`UIToggleButton`](UIToggleButton.h) | `UIWidget` | On/off toggle; draws `btn-border.nif` around itself while on. |
+| [`UIMultiStateToggleButton`](UIMultiStateToggleButton.h) | `UIWidget` | N-way cycle toggle, a NIF per state. |
+
+**Panels** - composed at runtime, drawn by the primitive renderer
+
+| Class | Extends | Description |
+|-------|---------|-------------|
+| [`UIPanel`](UIPanel.h) | `UIElement` | Base: a rectangle whose chrome - background, border, corner rounding, padding - it draws, leaving the content to the subclass. Occluded by the world by default; sizes to its content when the subclass can measure it ([`UIPanelSizing`](UIPanel.h)). Not interactive on its own. |
+| [`UITextPanel`](UITextPanel.h) | `UIPanel` | Rows of text, each a paragraph that wraps: per-row color, height, underline, tab stops, and [`TextSpan`](UITextPanel.h) pieces - including inline images - for several colors or an icon inside a sentence. |
+| [`UIImagePanel`](UIImagePanel.h) | `UIPanel` | One image, from a path the engine loads (loose file or BA2), tinted, contained or stretched. |
+| [`UIButtonPanel`](UIButtonPanel.h) | `UIPanel` | A pressable button built from up to three lines of text and/or an image, pressing exactly like `UIButton`. |
+| [`UIToggleButtonPanel`](UIToggleButtonPanel.h) | `UIButtonPanel` | On/off toggle; draws a ring outside its own border while on. |
+| [`UIMultiStateToggleButtonPanel<State>`](UIMultiStateToggleButtonPanel.h) | `UIButtonPanel` | N-way cycle over a `std::map<State, UIButtonPanelContent>`, in key order. |
+| [`UIPanelStyle`](UIPanelStyle.h) | — | The whole look as one aggregate (content color, background, border, rounding, padding). `F4VR_PANEL_STYLE` / `F4VR_BUTTON_STYLE` are the house looks; `imgui::UIImGuiPanel` takes the same value. |
+
+**Shared interfaces**
+
+| Class | Description |
+|-------|-------------|
+| [`UIPressable`](UIPressable.h) | The disabled state both kinds of button share, so code can enable/disable any mix of them. |
+| [`UIToggleable`](UIToggleable.h) | The on/off state both kinds of toggle share - what `UIToggleGroupContainer` drives. |
+
+Supporting: [`BindingPrompt`](BindingPrompt.h) (a controller binding as a text span with its icon),
+[`UIElement` helpers in `UIUtils.h`](UIUtils.h), and the [`UIDebugWidget`](UIDebugWidget.h) for
+visualizing interaction points.
 
 ## How it works
 
@@ -72,8 +107,9 @@ public:
 
 ### 2. Build a panel
 
-Each button/toggle is a `.nif` mesh; a `UIContainer` lays its children out automatically (rows or
-columns), so you don't position each element by hand. Keep the elements you'll query or update as
+Each button/toggle here is a `.nif` mesh; swap in the panel classes below to compose one from text
+and a DDS instead, with no mesh to build. A `UIContainer` lays its children out automatically (rows
+or columns), so you don't position each element by hand. Keep the elements you'll query or update as
 `shared_ptr` members; the rest can be local.
 
 ```cpp
@@ -154,10 +190,34 @@ std::shared_ptr<vrui::UIWidget>       _statusMsg;
 
 ## Assets
 
-Pre-built meshes and textures ship in `data/vrui/`: button grids `ui_btn_NxM.nif` (up to 5×5) and
-message panels `ui_msg_NxM.nif` (up to 6×2). Re-skin by editing DDS textures under
-`data/vrui/Textures/`, or pick a different grid cell by adjusting UV offsets in the
-`BDEffectShaderProperty` with NifSkope.
+A **panel** needs no mesh - only a texture, if it shows an image at all, named by a path the engine
+resolves like any other: `setImage("Data\\Textures\\MyMod\\icon.dds")`, or a partial path under the
+mod's own `Textures\<ModName>\`. `mod-template` ships a set of common icons at
+`Textures\<ModName>\f4cf\vrui\` (save, reset, exit, config, wiki, debug spheres), plus the
+controller icons the binding prompts draw under `f4cf\bindings\`. Text is drawn in the framework's
+font, or the mod's own TTF at `Data\Interface\<ModName>\<ModName>.ttf` - see
+[`render/`](../render/README.md#text).
+
+Making your own is just exporting a `.dds` and pointing `setImage()` at it - any Fallout 4 texture
+the engine can load will draw. Match what the framework ships, though: **uncompressed 32-bit BGRA,
+no mipmaps**, with both dimensions a multiple of 4 (the shipped UI icons are 140x100, the activation
+icons 256x256). A loose icon is mostly defined by its alpha edge, which is exactly what block
+compression is worst at, and there is nothing to win by compressing it: every loose UI texture the
+framework and a mod like Immersive Flashlight ship comes to about 3 MB uncompressed against 0.7 MB
+as BC3, and they are sampled over a few hundred screen pixels each, so neither the memory nor the
+bandwidth is measurable. BC3 is for the packed atlases below, where a 1024x1024 sheet makes the
+trade worth it.
+
+Mipmaps are the choice that *does* matter, and it goes by how the image is used, not by its size: a
+panel icon is read at roughly one size near the hand and ships without them, while the activation
+icons - drawn in the world at whatever distance you are standing - ship with a full chain, because
+minifying a texture that has none both shimmers and scatters its texture-cache reads. Give one mips
+if it will be seen from across a room.
+
+A **NIF widget** needs a mesh and a slot in a texture atlas. Pre-built ones ship in `data/vrui/`:
+button grids `ui_btn_NxM.nif` (up to 5×5) and message panels `ui_msg_NxM.nif` (up to 6×2). Re-skin
+by editing DDS textures under `data/vrui/Textures/`, or pick a different grid cell by adjusting UV
+offsets in the `BDEffectShaderProperty` with NifSkope.
 
 ### Creating your own button atlas
 
@@ -250,8 +310,11 @@ loading).
   y = forward(+)/back(−), z = up(+)/down(−).
 - Detaching mid-frame can be unsafe; `UIManager::detachElement(element, releaseSafe=true)` defers the
   release to the next frame.
-- A dev layout mode (`UIManager::enableDevLayoutViaConfig`) reads element positions from the config's
-  `debugVRUIProperties` so you can tune placement live via INI reload. Each element's line holds
+- A dev layout mode tunes placement live through the INI. Calling
+  `UIManager::enableDevLayoutViaConfig()` writes the attached tree out to the config's
+  `[VRUI_DevLayout]` section and saves it. While that section has anything in it, the manager
+  re-applies it to the tree every frame, so editing a line and saving the INI reaches the running
+  game on the next one; emptying the section turns the mode off. Each element's line holds
   `Pos`, `Scale` and `Size`; containers add `Padding` and `Layout`, panels add `Pad:(t,r,b,l)` (and
   `MaxW` while their width follows the content), and text and button panels add their text sizes as
   `Text`. Delete a field from a line and it is simply no longer applied.
