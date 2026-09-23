@@ -376,6 +376,40 @@ namespace f4cf::f4vr
     // case a mod turns the player for, a menu that blocks turning — the first call latches 0x40 and every later
     // one is silently dropped. PlayerRotation drives the transform itself instead.
 
+    // The world-space VR UI: the HUD, the dialogue menu and every other menu the game draws into the world
+    // hang off two roots on the player, and the direction they face is one yaw the player also carries.
+    //
+    // PlayerCharacter::UpdateVRUI (named here for what it does) runs from the player update, every frame, on
+    // the main thread. It reads where the head is looking, drags the anchor yaw after it under the
+    // fHmdRotationLag*:VRUI settings - trailing it, holding off for fHmdRotationLagDuration, accelerating after
+    // that at fHmdRotationLagRecoveryAcceleration up to fHmdRotationLagRecoveryMaxSpeed, and snapping it
+    // whenever the head gets further away than fHmdRotationLagMaxDistance (45 degrees by default) - and then
+    // rebuilds both UI roots from the result and updates them. It is also the per-frame applier of the snap
+    // turn described further up. Writing the anchor yaw after it has run points the whole world-space UI
+    // wherever a mod wants it, and the engine builds it there itself on the next frame; the clamp still
+    // applies, so reaching further than it allows means raising that setting while it matters.
+    using _PlayerCharacter_UpdateVRUI = void (*)(RE::PlayerCharacter* a_player, float a_deltaSeconds, bool a_unk);
+    inline REL::Relocation<_PlayerCharacter_UpdateVRUI> PlayerCharacter_UpdateVRUI(REL::Offset(0xef7180));
+
+    // Fields of PlayerCharacter the function above owns. The two yaws are radians measured clockwise from +Y,
+    // the same convention the player's own angleZ is in - measured equal to it to three decimals in game, give
+    // or take whole turns, so a bearing taken with atan2(dx, dy) subtracts from either directly.
+    constexpr std::ptrdiff_t PLAYER_VR_UI_ANCHOR_YAW = 0x890; // float, the yaw the UI is anchored to
+    constexpr std::ptrdiff_t PLAYER_VR_UI_HEAD_YAW = 0x894; // float, the yaw of the head it trails
+    constexpr std::ptrdiff_t PLAYER_VR_UI_LAG_TIMER = 0x898; // float, seconds against fHmdRotationLagDuration
+    constexpr std::ptrdiff_t PLAYER_VR_UI_RECOVERY_SPEED = 0x89C; // float, the speed it is catching up at
+    constexpr std::ptrdiff_t PLAYER_VR_UI_ROOT_1 = 0x7E0; // NiNode*, rebuilt from the anchor yaw each frame
+    constexpr std::ptrdiff_t PLAYER_VR_UI_ROOT_2 = 0x7F0; // NiNode*, the same
+    // NOTE: CommonLibF4VR's PlayerCharacter declares unrelated members at these offsets - see the note in its
+    // PlayerCharacter.h. Reach them by byte offset, not by field.
+
+    // NOT declared here on purpose: the placement methods of the WS*Model family (WSHUDMenu, WSLootMenu,
+    // WSDialogueInputModel and ten more), slot 2 of each vtable, which write their menu node's local transform
+    // from a per-menu set of [VRUI] settings - fDialogueInputX/Y/Z/Pitch/Scale:VRUI and so on. They look like
+    // the way to place a menu and are not: for the dialogue menu every one of those settings is 0 (scale 1),
+    // so the node sits on its parent's origin with no offset or rotation of its own, and the method runs about
+    // three times a second on a worker thread. Where a menu ends up is decided by the roots above.
+
     using _isPlayerRadioEnabled = uint64_t (*)();
     inline REL::Relocation<_isPlayerRadioEnabled> isPlayerRadioEnabled(REL::Offset(0xd0a9d0));
 
