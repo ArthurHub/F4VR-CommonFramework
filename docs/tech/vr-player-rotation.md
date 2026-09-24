@@ -79,10 +79,11 @@ A second decomposition exists at `0x1C0FED0` (the snap path's), with a *differen
 
 Two further notes on reaching into these structures:
 
-- `PlayerCharacter+0x8C8` and `+0x12A4` are **VR layout**. The bundled CommonLibF4 header names a
-  different field at `0x8C8` (`pipboyAnimSubGraph`) — it describes the flat game, which diverges here.
-  Nothing in the framework reads those fields; they are documented so the next person recognises them
-  in a disassembly rather than trusts a header over them.
+- `PlayerCharacter+0x8C8` and `+0x12A4` are **VR layout**, and the bundled CommonLibF4 header now
+  agrees rather than contradicting them: both land inside its VR-only blocks (`0x8C8` in
+  `vrPlayerStateFront`, `0x12A4` in `vrPlayerStateBack`), so neither collides with a named field
+  any more — the `pipboyAnimSubGraph` that used to sit on `0x8C8` is at VR `0xD38`. Nothing in the
+  framework reads these two; they are documented so the next person recognises them in a disassembly.
 - `g_vrWorldData` is the global other VR mods call `vrDataStruct`.
 
 ## Using it

@@ -204,7 +204,7 @@ namespace f4cf::f4vr
             }
             switch (orientation) {
             case ActivationSphereOrientation::Hmd:
-                return getHeadingRotation(getPlayerNodes()->HmdNode);
+                return getHeadingRotation(getVRPlayerNodes()->hmdNode);
             case ActivationSphereOrientation::Body:
                 return getHeadingRotation(getRootNode());
             case ActivationSphereOrientation::World:
@@ -240,7 +240,7 @@ namespace f4cf::f4vr
             return false;
         }
 
-        const auto wand = isPrimaryHand(binding.hand) ? getPlayerNodes()->primaryWandNode : getPlayerNodes()->SecondaryWandNode;
+        const auto wand = isPrimaryHand(binding.hand) ? getVRPlayerNodes()->primaryWandNode : getVRPlayerNodes()->secondaryWandNode;
         return wand && contains(frame.node, frame.zone, wand->world.translate);
     }
 
@@ -369,7 +369,7 @@ namespace f4cf::f4vr
         const RE::NiNode* testNode = frame.node;
         RE::NiNode* attachParent = frame.sphereAttachNode;
         if (!attachParent && getPlayer()) {
-            attachParent = getPlayerNodes()->primaryUIAttachNode;
+            attachParent = getVRPlayerNodes()->primaryUIAttachNode;
         }
 
         // Fast idle path: nothing shown and nothing cached, so there is no style to compare while the sphere is
@@ -471,7 +471,7 @@ namespace f4cf::f4vr
         const float step = elapsed / ICON_FADE_MS;
         _iconOpacity = std::clamp(_iconOpacity + (show ? step : -step), 0.0f, 1.0f);
 
-        const auto hmd = getPlayer() ? getPlayerNodes()->HmdNode : nullptr;
+        const auto hmd = getPlayer() ? getVRPlayerNodes()->hmdNode : nullptr;
         if (_iconOpacity <= 0.0f || !frame.node || !hmd) {
             return;
         }

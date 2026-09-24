@@ -110,7 +110,7 @@ namespace f4cf::f4vr
      */
     void setWandsVisibility(const bool show, const bool leftWand)
     {
-        const auto node = leftWand ? getPlayerNodes()->primaryWandNode : getPlayerNodes()->SecondaryWandNode;
+        const auto node = leftWand ? getVRPlayerNodes()->primaryWandNode : getVRPlayerNodes()->secondaryWandNode;
         for (const auto& child : node->children) {
             if (child) {
                 if (child->IsNiTriShape()) {

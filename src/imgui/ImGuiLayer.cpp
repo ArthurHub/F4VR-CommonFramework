@@ -134,8 +134,8 @@ namespace f4cf::imgui::internal
 
         RE::NiPoint3 viewerPosition()
         {
-            const auto* nodes = f4vr::getPlayerNodes();
-            return nodes && nodes->HmdNode ? nodes->HmdNode->world.translate : RE::NiPoint3();
+            const auto* nodes = f4vr::getVRPlayerNodes();
+            return nodes && nodes->hmdNode ? nodes->hmdNode->world.translate : RE::NiPoint3();
         }
 
         /**

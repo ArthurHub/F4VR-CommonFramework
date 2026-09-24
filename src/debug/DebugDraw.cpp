@@ -684,11 +684,11 @@ namespace f4cf::debug
      */
     std::optional<RE::NiPoint3> DebugDraw::defaultHudAnchor() const
     {
-        const auto* nodes = f4vr::getPlayerNodes();
-        if (!nodes || !nodes->HmdNode) {
+        const auto* nodes = f4vr::getVRPlayerNodes();
+        if (!nodes || !nodes->hmdNode) {
             return std::nullopt;
         }
-        const RE::NiTransform& head = nodes->HmdNode->world;
+        const RE::NiTransform& head = nodes->hmdNode->world;
         const RE::NiPoint3 forward = MatrixUtils::vec3Norm(head.rotate.Transpose() * RE::NiPoint3(0, 1, 0));
         const RE::NiPoint3 up = MatrixUtils::vec3Norm(head.rotate.Transpose() * RE::NiPoint3(0, 0, 1));
         const RE::NiPoint3 right = MatrixUtils::vec3Norm(head.rotate.Transpose() * RE::NiPoint3(1, 0, 0));
@@ -728,8 +728,8 @@ namespace f4cf::debug
 
         // head position for this frame — feeds distance-scaled markers (during onFrameUpdate) and the
         // billboard labels (copied into the published frame in onFrameEnd)
-        if (const auto* nodes = f4vr::getPlayerNodes(); nodes && nodes->HmdNode) {
-            self._cameraPos = nodes->HmdNode->world.translate;
+        if (const auto* nodes = f4vr::getVRPlayerNodes(); nodes && nodes->hmdNode) {
+            self._cameraPos = nodes->hmdNode->world.translate;
         }
 
         self._configEnabled = configEnabled;

@@ -317,10 +317,10 @@ namespace f4cf
             f4vr::DebugDump::printAllNodes();
         }
         if (_settings.config->checkDebugDumpDataOnceFor("pipboy")) {
-            f4vr::DebugDump::printNodes(f4vr::getPlayerNodes()->PipboyRoot_nif_only_node);
+            f4vr::DebugDump::printNodes(f4vr::getVRPlayerNodes()->pipboyRootNIFOnlyNode);
         }
         if (_settings.config->checkDebugDumpDataOnceFor("world")) {
-            f4vr::DebugDump::printNodes(f4vr::getPlayerNodes()->primaryWeaponScopeCamera->parent->parent->parent->parent->parent->parent);
+            f4vr::DebugDump::printNodes(f4vr::getVRPlayerNodes()->primaryWeaponScopeCamera->parent->parent->parent->parent->parent->parent);
         }
         if (_settings.config->checkDebugDumpDataOnceFor("fp_skelly")) {
             f4vr::DebugDump::printNodes(f4vr::getFirstPersonSkeleton());
