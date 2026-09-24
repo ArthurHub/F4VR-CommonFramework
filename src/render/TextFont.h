@@ -67,6 +67,15 @@ namespace f4cf::render
      * their seams.
      */
     TextRunMetrics measureTextRun(std::string_view text, float textHeight);
+
+    /**
+     * Start building the font atlas on a background thread, so the first text drawn does not stall
+     * its frame for the build (about a tenth of a second). Idempotent.
+     *
+     * Anything that needs the font before the build finishes waits for it rather than building it a
+     * second time. ModBase calls this at plugin load when Settings::preloadRendering is set.
+     */
+    void preloadTextFont();
 }
 
 namespace f4cf::render::internal

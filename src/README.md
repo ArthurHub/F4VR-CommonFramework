@@ -85,6 +85,10 @@ namespace my_mod
 
 `setupMainGameLoop = true` installs the frame hook so `onFrameUpdate()` runs every frame.
 
+A mod that draws vrui panels, activation-sphere icons or other overlays should also set
+`_settings.preloadRendering = true;` in its constructor body, so the font and render pipeline are
+built before the main menu is left instead of stalling the first frame that draws.
+
 ### 3. Entry points + lifecycle
 
 ```cpp

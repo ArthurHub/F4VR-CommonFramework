@@ -79,6 +79,12 @@ atlas, so it stays sharp at any size, distance or angle. The file is read once, 
 text needs the font, so replacing it takes a restart. The same bytes feed the ImGui canvases, so a
 `vrui::UITextPanel` and an `imgui::UIImGuiPanel` always share a typeface.
 
+Building the atlas takes about a tenth of a second, and it happens on the first draw of anything
+(lines and fills sample it too), stalling that frame. A mod that draws sets
+`ModBase::Settings::preloadRendering`: the atlas is then built on a background thread from plugin
+load (`preloadTextFont()`), and the shared pipeline and Submit hook host at game loaded
+(`PrimitiveDrawRenderer::preload()`), both before the player is in the world.
+
 Sizes are always the **height of a capital letter**; `measureText(text, textHeight)` gives a run's
 width in the same unit and `textDescent` the room a row needs below its baseline. Four placements:
 

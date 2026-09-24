@@ -3,6 +3,7 @@
 #include <DirectXMath.h>
 #include <algorithm>
 #include <array>
+#include <chrono>
 #include <cmath>
 #include <cstddef>
 #include <format>
@@ -1047,6 +1048,31 @@ float4 main(PS_INPUT input) : SV_Target {
             drawWorldGeometry(context, frame);
             drawTextEntries(context, submitFrame.width, submitFrame.height, frame.texts, eye0, eye1, adjust0, adjust1);
         }
+
+        /**
+         * Build the pipeline every instance shares off the game device, once. False while the device
+         * is not up yet, so a caller can retry; a build that fails is logged once and drawing stays
+         * off.
+         */
+        bool ensureSharedPipeline()
+        {
+            if (s_pipelineReady) {
+                return true;
+            }
+            auto* device = getDevice();
+            if (!device) {
+                return false;
+            }
+            if (!createSharedPipeline(device)) {
+                if (!s_loggedPipelineFailed) {
+                    s_loggedPipelineFailed = true;
+                    logger::error("D3D initialization failed; primitive drawing disabled");
+                }
+                return false;
+            }
+            s_pipelineReady = true;
+            return true;
+        }
     }
 
     PrimitiveDrawRenderer::PrimitiveDrawRenderer(std::string name, const int drawOrder, const bool occluded)
@@ -1073,19 +1099,8 @@ float4 main(PS_INPUT input) : SV_Target {
     bool PrimitiveDrawRenderer::ensureInstalled()
     {
         if (_callbackId == INVALID_DRAW_CALLBACK) {
-            auto* device = getDevice();
-            if (!device) {
+            if (!ensureSharedPipeline()) {
                 return false;
-            }
-            if (!s_pipelineReady) {
-                if (!createSharedPipeline(device)) {
-                    if (!s_loggedPipelineFailed) {
-                        s_loggedPipelineFailed = true;
-                        logger::error("D3D initialization failed; primitive drawing disabled");
-                    }
-                    return false;
-                }
-                s_pipelineReady = true;
             }
             _callbackId = registerDrawCallback(
                 _name,
@@ -1101,6 +1116,19 @@ float4 main(PS_INPUT input) : SV_Target {
     bool PrimitiveDrawRenderer::isInstalled() const
     {
         return _callbackId != INVALID_DRAW_CALLBACK && render::isInstalled();
+    }
+
+    bool PrimitiveDrawRenderer::preload()
+    {
+        const auto started = std::chrono::steady_clock::now();
+        const bool ready = ensureSharedPipeline() && render::ensureInstalled();
+        const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - started);
+        if (ready) {
+            logger::info("Rendering preloaded in {}ms", elapsed.count());
+        } else {
+            logger::warn("Rendering preload incomplete, the rest is built on the first draw");
+        }
+        return ready;
     }
 
     /**

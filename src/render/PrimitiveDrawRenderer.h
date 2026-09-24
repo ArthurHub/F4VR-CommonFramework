@@ -65,6 +65,17 @@ namespace f4cf::render
         bool isInstalled() const;
 
         /**
+         * Build what every layer shares - the D3D pipeline, the font atlas upload with it, and the
+         * Submit hook host - ahead of the first draw, so that draw does not stall its frame for it.
+         * Registers no layer, so nothing draws and the hook stays dormant until one publishes.
+         *
+         * False when the D3D device or the OpenVR compositor is not up yet; the first
+         * ensureInstalled() then does the work as it would have without a preload. ModBase calls
+         * this on game loaded when Settings::preloadRendering is set.
+         */
+        static bool preload();
+
+        /**
          * Hand this frame's primitives to the render thread (game thread). An empty frame goes
          * dormant, so the Submit hook stays a single atomic read when there is nothing to draw.
          */

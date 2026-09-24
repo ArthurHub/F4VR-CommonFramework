@@ -174,6 +174,7 @@ The `Settings` struct passed to the `ModBase` constructor controls:
 - Trampoline size (default 256)
 - `earlyFrameUpdate` / `lateFrameUpdate` flags — late means "run before all others" (used by FRIK for body tracking priority)
 - Update frequency (calls per second for `onFrameUpdate`)
+- `preloadRendering` (default off) — build the overlay rendering before the first draw instead of on it, which otherwise stalls that frame for ~0.1s (mostly the font atlas): the font on a background thread from plugin load (`render::preloadTextFont()`), the shared D3D pipeline + Submit hook host at game loaded (`render::PrimitiveDrawRenderer::preload()`). Turn it on in a mod that draws vrui panels, activation-sphere icons or other `f4cf::render` overlays; the mod sets it in its constructor (`_settings.preloadRendering = true;`)
 
 ### mod-template
 The `mod-template/` directory is a complete starting point for new mods. See [Creating a New Mod](#creating-a-new-mod) below for the full process.

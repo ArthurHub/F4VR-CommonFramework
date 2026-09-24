@@ -41,6 +41,10 @@ namespace f4cf
             // setting game loop late means that this mod will be the first to have its onFrameUpdate called
             // important for mods like FRIK that update the player skeleton
             bool setupMainGameLoopLate = false;
+            // build the overlay rendering (font atlas, D3D pipeline, Submit hook) before the game leaves
+            // the main menu, rather than on the first draw, which otherwise stalls its frame for ~0.1s;
+            // for mods that draw panels, activation-sphere icons or other f4cf::render overlays
+            bool preloadRendering = false;
 
             Settings(const std::string_view& name, const std::string_view& version, ConfigBase* config);
             Settings(const std::string_view& name, const std::string_view& version, ConfigBase* config, int trampolineAllocationSize, bool setupMainGameLoop);

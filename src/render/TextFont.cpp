@@ -9,10 +9,12 @@
 #include <fstream>
 #include <functional>
 #include <limits>
+#include <mutex>
 #include <numeric>
 #include <optional>
 #include <span>
 #include <string>
+#include <thread>
 
 #include "../ModBase.h"
 
@@ -530,6 +532,26 @@ namespace f4cf::render
         metrics.inkLeft *= textHeight;
         metrics.inkRight *= textHeight;
         return metrics;
+    }
+
+    /**
+     * The build is textFont()'s function-local static, whose initialization the language already
+     * makes thread-safe: a game-thread caller arriving mid-build blocks until it is done, and a
+     * build that throws leaves it uninitialized for the next caller to retry. Detached, since
+     * nothing needs to join it - its result lands in that static.
+     */
+    void preloadTextFont()
+    {
+        static std::once_flag started;
+        std::call_once(started, [] {
+            std::thread([] {
+                try {
+                    textFont();
+                } catch (const std::exception& ex) {
+                    logger::error("Text font: background build failed, it will be built on first use: {}", ex.what());
+                }
+            }).detach();
+        });
     }
 }
 

@@ -10,6 +10,8 @@
 #include "f4vr/DebugInventory.h"
 
 #include "f4vr/PlayerNodes.h"
+#include "render/PrimitiveDrawRenderer.h"
+#include "render/TextFont.h"
 #include "vrcf/VRControllersHaptic.h"
 #include "vrcf/VRControllersManager.h"
 #include "vrcf/VRControllersSuppressor.h"
@@ -128,6 +130,11 @@ namespace f4cf
 
             logger::info("Init config...");
             _settings.config->load();
+
+            if (_settings.preloadRendering) {
+                // CPU only, so it can start now and be done long before the main menu
+                render::preloadTextFont();
+            }
 
             logger::info("Register F4SE messages...");
             _messaging = F4SE::GetMessagingInterface();
@@ -264,6 +271,11 @@ namespace f4cf
         CPPTRACE_TRY
         {
             vrui::initUIManager();
+
+            if (_settings.preloadRendering) {
+                // needs the game's D3D device, which is up by the main menu
+                render::PrimitiveDrawRenderer::preload();
+            }
 
             if (_settings.setupMainGameLoop && _settings.setupMainGameLoopLate) {
                 main_hook::hook();
