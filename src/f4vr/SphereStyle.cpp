@@ -1,5 +1,6 @@
 #include "SphereStyle.h"
 
+#include "EffectShaderMaterials.h"
 #include "F4VROffsets.h"
 #include "F4VRUtils.h"
 #include "common/CommonUtils.h"
@@ -51,59 +52,6 @@ namespace f4cf::f4vr
             { "amber", { 1.0f, 0.5f, 0.08f } },
             { "gold", { 1.0f, 0.993f, 0.12f } },
         };
-
-        template <class Fn>
-        void forEachGeometry(RE::NiAVObject* node, Fn&& fn)
-        {
-            if (const auto geometry = node->IsGeometry()) {
-                fn(geometry);
-                return;
-            }
-            if (const auto niNode = node->IsNode()) {
-                for (const auto& child : niNode->children) {
-                    if (child) {
-                        forEachGeometry(child.get(), fn);
-                    }
-                }
-            }
-        }
-
-        bool isEffectShaderProperty(const RE::NiProperty* property)
-        {
-            const auto rtti = property ? property->GetRTTI() : nullptr;
-            return rtti && std::string_view(rtti->GetName()) == "BSEffectShaderProperty";
-        }
-
-        /**
-         * Whether no other shape can see this material: kept out of the shared material cache and referenced only by
-         * the property holding it — so writing its values restyles that one shape.
-         */
-        bool isPrivateMaterial(const RE::BSShaderMaterial* material)
-        {
-            return material->hashKey == RE::BSShaderMaterial::UNIQUE_HASH_KEY && material->QRefCount() == 1;
-        }
-
-        /**
-         * The property's material, made private first when other shapes can see it, so the values written next restyle
-         * only this shape. A cloned mesh normally already owns its material; one acquired from the engine's shared
-         * cache is swapped for a unique copy through the engine's own SetMaterial(unique), which copies the current
-         * material before releasing it.
-         */
-        RE::BSEffectShaderMaterial* getPrivateMaterial(RE::BSShaderProperty* property, const RE::NiAVObject* geometry)
-        {
-            if (!property->material) {
-                return nullptr;
-            }
-            if (!isPrivateMaterial(property->material)) {
-                property->SetMaterial(property->material, true);
-                if (!property->material || !isPrivateMaterial(property->material)) {
-                    logger::error("'{}' could not get a material of its own; left as authored", geometry->name.c_str());
-                    return nullptr;
-                }
-                logger::info("'{}' shared its material; restyling a private copy", geometry->name.c_str());
-            }
-            return static_cast<RE::BSEffectShaderMaterial*>(property->material);
-        }
 
         /**
          * The Data-relative form the engine keeps texture names in ("Textures\..."), from a resolved path that may be
@@ -187,9 +135,10 @@ namespace f4cf::f4vr
     }
 
     /**
-     * Load the style's texture once, then restyle each effect-shaded shape on a material of its own. The texture's
-     * name is written next to the texture itself, in the engine's Data-relative form, so the two never disagree should
-     * the engine look the texture up again by name. A texture that fails to load leaves the mesh's own texture in place.
+     * Load the style's texture once, then restyle each effect-shaded shape on a material of its own
+     * (makeEffectShaderMaterialsPrivate). The texture's name is written next to the texture itself, in the engine's
+     * Data-relative form, so the two never disagree should the engine look the texture up again by name. A texture that
+     * fails to load leaves the mesh's own texture in place.
      *
      * The values the mesh was authored with are logged before they are overwritten: they must match the .nif, which
      * confirms the material layout on the running game.
@@ -210,37 +159,27 @@ namespace f4cf::f4vr
             }
         }
 
-        int styledShapes = 0;
-        forEachGeometry(node, [&](RE::BSGeometry* geometry) {
-            const auto property = geometry->GetRuntimeData().properties[1].get();
-            if (!isEffectShaderProperty(property)) {
-                return;
-            }
-            const auto material = getPrivateMaterial(static_cast<RE::BSShaderProperty*>(property), geometry);
-            if (!material) {
-                return;
-            }
-
+        makeEffectShaderMaterialsPrivate(node);
+        const int styledShapes = forEachEffectShaderMaterial(node, [&](RE::BSEffectShaderMaterial& material, const RE::BSGeometry& geometry) {
             logger::info("'{}' authored with texture '{}', color ({:.3f}, {:.3f}, {:.3f}, {:.3f}), base color scale {:.2f}, falloff {:.3f} -> {:.3f}",
-                geometry->name.c_str(),
-                material->baseTextureName.c_str(),
-                material->baseColor.r,
-                material->baseColor.g,
-                material->baseColor.b,
-                material->baseColor.a,
-                material->baseColorScale,
-                material->falloffStartOpacity,
-                material->falloffStopOpacity);
+                geometry.name.c_str(),
+                material.baseTextureName.c_str(),
+                material.baseColor.r,
+                material.baseColor.g,
+                material.baseColor.b,
+                material.baseColor.a,
+                material.baseColorScale,
+                material.falloffStartOpacity,
+                material.falloffStopOpacity);
 
-            material->baseColor = RE::NiColorA{ style.color[0], style.color[1], style.color[2], style.color[3] };
-            material->baseColorScale = style.glow * MAX_BASE_COLOR_SCALE;
-            material->falloffStartOpacity = style.centerOpacity;
-            material->falloffStopOpacity = style.rimOpacity;
+            material.baseColor = RE::NiColorA{ style.color[0], style.color[1], style.color[2], style.color[3] };
+            material.baseColorScale = style.glow * MAX_BASE_COLOR_SCALE;
+            material.falloffStartOpacity = style.centerOpacity;
+            material.falloffStopOpacity = style.rimOpacity;
             if (texture) {
-                material->baseTexture = texture;
-                material->baseTextureName = RE::BSFixedString(toDataRelativePath(texturePath));
+                material.baseTexture = texture;
+                material.baseTextureName = RE::BSFixedString(toDataRelativePath(texturePath));
             }
-            ++styledShapes;
         });
 
         if (styledShapes == 0) {
