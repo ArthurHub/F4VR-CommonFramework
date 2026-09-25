@@ -6,8 +6,6 @@ namespace f4cf::vrui
 {
     struct UIUtils
     {
-        static std::string getDebugSphereNifName();
-        static std::string getDefaultSphereNifName();
         static std::string getEmptyButtonFrameNifName();
         static std::string getToggleButtonFrameNifName();
         static std::string getDisabledOverlayNifName();

@@ -1,7 +1,11 @@
 #include "UIElement.h"
 
+#include <charconv>
 #include <format>
 #include <stdexcept>
+#include <string>
+#include <system_error>
+#include <utility>
 
 namespace f4cf::vrui
 {
@@ -172,7 +176,14 @@ namespace f4cf::vrui
      */
     void UIElement::writeDevLayoutProperties(const std::string& namePrefix, std::map<std::string, std::string>& propertiesMap) const
     {
-        propertiesMap[namePrefix + _name] = std::format("Pos:({:.2f},{:.2f},{:.2f}), Scale:({:.2f}), Size:({:.2f},{:.2f})",
+        std::string line;
+        writeDevLayoutFields(line);
+        propertiesMap[namePrefix + _name] = std::move(line);
+    }
+
+    void UIElement::writeDevLayoutFields(std::string& line) const
+    {
+        line += std::format("Pos:({:.2f},{:.2f},{:.2f}), Scale:({:.2f}), Size:({:.2f},{:.2f})",
             getPosition().x,
             getPosition().y,
             getPosition().z,
@@ -187,19 +198,64 @@ namespace f4cf::vrui
      */
     void UIElement::readDevLayoutProperties(const std::string& namePrefix, const std::map<std::string, std::string>& propertiesMap)
     {
-        const auto key = namePrefix + _name;
-        if (!propertiesMap.contains(key)) {
-            return;
+        const auto line = propertiesMap.find(namePrefix + _name);
+        if (line != propertiesMap.end()) {
+            readDevLayoutFields(parseDevLayoutFields(line->second));
         }
-        try {
-            float x, y, z, scale, width, height;
-            if (std::sscanf(propertiesMap.at(key).c_str(), "Pos:(%f,%f,%f), Scale:(%f), Size:(%f,%f)", &x, &y, &z, &scale, &width, &height) == 6) { // NOLINT(cert-err34-c)
-                setPosition(x, y, z);
-                setScale(scale);
-                setSize(width, height);
+    }
+
+    void UIElement::readDevLayoutFields(const DevLayoutFields& fields)
+    {
+        if (const auto position = fields.find("Pos"); position != fields.end() && position->second.size() == 3) {
+            setPosition(position->second[0], position->second[1], position->second[2]);
+        }
+        if (const auto scale = fields.find("Scale"); scale != fields.end() && scale->second.size() == 1) {
+            setScale(scale->second[0]);
+        }
+        if (const auto size = fields.find("Size"); size != fields.end() && size->second.size() == 2) {
+            setSize(size->second[0], size->second[1]);
+        }
+    }
+
+    /**
+     * Split a dev-layout line into its fields. Each field is a name, a colon and parenthesised numbers
+     * separated by commas; whatever sits between fields is ignored, and a number that does not parse ends its
+     * field's values there. Hand-edited lines are the input, so nothing here throws or rejects the whole line.
+     */
+    UIElement::DevLayoutFields UIElement::parseDevLayoutFields(const std::string_view line)
+    {
+        DevLayoutFields fields;
+        std::size_t pos = 0;
+        while (pos < line.size()) {
+            const std::size_t open = line.find(":(", pos);
+            const std::size_t close = open == std::string_view::npos ? std::string_view::npos : line.find(')', open);
+            if (close == std::string_view::npos) {
+                break;
             }
-        } catch (std::exception& e) {
-            logger::warn("Failed to read VRUI properties in element '{}': {}", _name, e.what());
+
+            // the name runs back from the colon to the separator before it
+            const std::size_t separator = line.find_last_of(", ", open);
+            const std::size_t nameStart = separator == std::string_view::npos || separator < pos ? pos : separator + 1;
+            auto& values = fields[std::string(line.substr(nameStart, open - nameStart))];
+            values.clear();
+
+            const std::string_view inside = line.substr(open + 2, close - open - 2);
+            std::size_t cursor = 0;
+            while (cursor < inside.size()) {
+                if (inside[cursor] == ' ' || inside[cursor] == ',') {
+                    ++cursor;
+                    continue;
+                }
+                float value = 0.0f;
+                const auto [end, error] = std::from_chars(inside.data() + cursor, inside.data() + inside.size(), value);
+                if (error != std::errc()) {
+                    break;
+                }
+                values.push_back(value);
+                cursor = static_cast<std::size_t>(end - inside.data());
+            }
+            pos = close + 1;
         }
+        return fields;
     }
 }

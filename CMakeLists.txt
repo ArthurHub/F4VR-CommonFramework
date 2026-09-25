@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 4.2)
 
 # >>> Project
 set(NAME "F4VRCommonFramework")
-set(VERSION 0.3.0)
+set(VERSION 0.4.0)
 
 
 # >>> Folders
@@ -28,6 +28,12 @@ endmacro()
 
 # >>> Configuration options
 option(F4VR_BUILD_SHARED "Build F4VRCommonFramework as a shared library (DLL)" OFF)
+# Escape hatch for the Dear ImGui UI layer (f4cf::imgui). ON compiles it into the archive; the layer
+# self-registers, so a mod that never calls it still links no ImGui. Turn OFF only to stop paying the
+# compile time or to drop the vcpkg port entirely - then src/imgui/ is not built and its headers are
+# not exposed, so consumer code using f4cf::imgui fails to COMPILE instead of linking clean and
+# silently never drawing.
+option(F4CF_WITH_IMGUI_UI "Build the Dear ImGui UI overlay (f4cf::imgui)" ON)
 set(F4VR_LIB_TYPE STATIC)
 if(F4VR_BUILD_SHARED)
   set(F4VR_LIB_TYPE SHARED)
@@ -100,6 +106,12 @@ file(GLOB_RECURSE headers CONFIGURE_DEPENDS "${SOURCE_DIR}/*.h")
 file(GLOB_RECURSE sources CONFIGURE_DEPENDS "${SOURCE_DIR}/*.cpp")
 file(GLOB_RECURSE inls    CONFIGURE_DEPENDS "${SOURCE_DIR}/*.inl")
 
+if(NOT F4CF_WITH_IMGUI_UI)
+  list(FILTER headers EXCLUDE REGEX "/src/imgui/")
+  list(FILTER sources EXCLUDE REGEX "/src/imgui/")
+  list(FILTER inls    EXCLUDE REGEX "/src/imgui/")
+endif()
+
 source_group(TREE ${ROOT_DIR} FILES ${headers} ${sources} ${inls})
 
 set(resource_files
@@ -150,6 +162,25 @@ target_include_directories(${PROJECT_NAME}
     ${SOURCE_DIR}
 )
 
+
+# >>> Embedded text font for src/render/TextFont.cpp: the TTF is compiled in as a byte array, so the
+# framework carries its own font and no mod has to ship one
+set(F4CF_TEXT_FONT "${SOURCE_DIR}/render/fonts/Roboto-Medium.ttf")
+set(F4CF_TEXT_FONT_SOURCE "${BUILD_DIR}/generated/EmbeddedTextFont.cpp")
+add_custom_command(
+  OUTPUT "${F4CF_TEXT_FONT_SOURCE}"
+  COMMAND "${CMAKE_COMMAND}" "-DINPUT=${F4CF_TEXT_FONT}" "-DOUTPUT=${F4CF_TEXT_FONT_SOURCE}" -DNAMESPACE=f4cf::render::internal -DSYMBOL=TEXT_FONT_TTF -P "${ROOT_DIR}/cmake/embed-binary.cmake"
+  DEPENDS "${F4CF_TEXT_FONT}" "${ROOT_DIR}/cmake/embed-binary.cmake"
+  COMMENT "Embedding Roboto-Medium.ttf"
+  VERBATIM
+)
+set_source_files_properties("${F4CF_TEXT_FONT_SOURCE}" PROPERTIES GENERATED TRUE SKIP_PRECOMPILE_HEADERS ON)
+target_sources(${PROJECT_NAME} PRIVATE "${F4CF_TEXT_FONT_SOURCE}")
+source_group("Generated Files" FILES "${F4CF_TEXT_FONT_SOURCE}")
+# stb_truetype rasterizes it - vendored rather than taken from the imgui port, so text still builds
+# with F4CF_WITH_IMGUI_UI off
+target_include_directories(${PROJECT_NAME} PRIVATE "${ROOT_DIR}/external/stb")
+
 # Dependencies
 target_link_libraries(${PROJECT_NAME}
   PUBLIC
@@ -163,6 +194,30 @@ target_link_libraries(${PROJECT_NAME}
 # cpptrace (via vcpkg)
 find_package(cpptrace CONFIG REQUIRED)
 target_link_libraries(${PROJECT_NAME} PRIVATE cpptrace::cpptrace)
+
+
+# >>> Dear ImGui (via vcpkg) for the f4cf::imgui UI layer
+if(F4CF_WITH_IMGUI_UI)
+  find_package(imgui CONFIG QUIET)
+  if(NOT TARGET imgui::imgui)
+    # vcpkg manifest mode reads the TOP-LEVEL project's vcpkg.json, not this one, so a consuming mod
+    # must declare the dependency itself - name the fix rather than failing with "package not found"
+    message(FATAL_ERROR ">> Dear ImGui not found. Add this to your mod's vcpkg.json dependencies:
+"
+                        ">>   { \"name\": \"imgui\", \"features\": [ \"dx11-binding\" ] }
+"
+                        ">> or configure with -DF4CF_WITH_IMGUI_UI=OFF to build without the UI layer.")
+  endif()
+  # PUBLIC: mods write their own ImGui calls in their content callbacks, so they need the headers too.
+  # NOTE: do NOT add IMGUI_DISABLE_OBSOLETE_FUNCTIONS / _KEYIO here. vcpkg builds the port with
+  # ImGui's defaults, and those macros resize ImGuiIO::KeysData - defining them on our side only
+  # would give us a different sizeof(ImGuiIO) than the library we link against.
+  target_link_libraries(${PROJECT_NAME} PUBLIC imgui::imgui)
+  target_compile_definitions(${PROJECT_NAME} PUBLIC F4CF_WITH_IMGUI_UI=1)
+  message(">>> Dear ImGui UI layer (f4cf::imgui): enabled")
+else()
+  message(">>> Dear ImGui UI layer (f4cf::imgui): disabled")
+endif()
 
 
 # >>> OpenVR (vcpkg first, then vendored fallback)

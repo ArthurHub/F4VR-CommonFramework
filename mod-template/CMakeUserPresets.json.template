@@ -3,9 +3,11 @@
 // Support multiple paths separated by semicolons (i.e. "<path1>;<path2>").
 // Use "F4VR_COMMON_FRAMEWORK_PATH" to use existing F4VRCommonFramework instead of submodule.
 // Rename the file to 'CMakeUserPresets.json' (it is in .gitignore to keep it local to you).
+// Build preset names must not repeat the ones in CMakePresets.json ("debug" / "release").
 // Remove this comment block.
 // Run:
 // cmake --preset custom
+// cmake --build --preset custom-debug   (or custom-release)
 
 {
   "version": 3,
@@ -18,6 +20,18 @@
         "F4VR_COMMON_FRAMEWORK_PATH": ""
       },
       "inherits": "default"
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "custom-debug",
+      "configurePreset": "custom",
+      "configuration": "Debug"
+    },
+    {
+      "name": "custom-release",
+      "configurePreset": "custom",
+      "configuration": "Release"
     }
   ]
 }

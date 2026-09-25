@@ -1,11 +1,12 @@
 #pragma once
 
 #include "UIElement.h"
+#include "UIPressable.h"
 #include "UIUtils.h"
 
 namespace f4cf::vrui
 {
-    class UIWidget : public UIElement
+    class UIWidget : public UIElement, public UIPressable
     {
     public:
         explicit UIWidget(const std::string& nifPath, const float scale = 1.0f);
@@ -13,12 +14,12 @@ namespace f4cf::vrui
         virtual std::string toString() const override;
 
         // A disabled widget cannot be pressed and renders the "disabled" overlay on top of it.
-        bool isDisabled() const
+        bool isDisabled() const override
         {
             return _disabled;
         }
 
-        void setDisabled(bool disabled);
+        void setDisabled(bool disabled) override;
 
     protected:
         virtual bool isPressable() const

@@ -27,7 +27,7 @@ When you finish an item, move its writeup into a focused `*-investigation.md` do
 - **What:** RE the contents of the 0x470-byte VR-only block in `PlayerCharacter`. Currently declared as `std::byte vrPlayerStatePadding[0x470]` (per commit `760b8b5`).
 - **Why:** This block almost certainly contains HMD pose, controller hand-bone refs, IK rig anchors, and other VR-essential state that VR mods (FRIK, scope mods, hand pose mods, body mods) need direct access to. Right now they get to it via guesswork or through PlayerNodes, not via typed CommonLibF4VR fields.
 - **How to start:**
-  1. Cross-reference [`Modding-Reference/F4VR/Analysis/gold/FRIK_RE_REFERENCE.md`](../../Modding-Reference/F4VR/Analysis/gold/FRIK_RE_REFERENCE.md) and other VR-aware mod analyses — see which offsets in 0xB70..0xFE0 they read.
+  1. Cross-reference `Modding-Reference/F4VR/Analysis/gold/FRIK_RE_REFERENCE.md` and other VR-aware mod analyses — see which offsets in 0xB70..0xFE0 they read.
   2. In IDA, find the `PlayerCharacter` constructor (likely near `PlayerCharacter::GetSingleton`) and look at the init pattern in the 0xB70 range — mirrors how we cracked MiddleHighProcessData.
   3. Ship one named field at a time, with `static_assert(offsetof(...) == 0x???)` per field. Same `#ifdef ENABLE_FALLOUT_VR` pattern.
 - **Estimated commits:** unknown — could be 5-30 depending on how many fields are useful. Each is small.

@@ -1,51 +1,145 @@
 # Controller bindings & activation spheres
 
-Mods built on F4VR-CommonFramework let you **rebind controller inputs from the INI** — pick the hand,
-the button, and how it has to be pressed — without rebuilding the mod. This page covers two related
-things:
+Mods built on F4VR-CommonFramework let you change their controls in the mod's INI file: which hand, which
+button, and how you press it. Some actions are **gestures**: you reach a hand to a spot, such as your chest,
+your head or your other hand, and press a button there. Each of those spots is an **activation sphere**.
 
-- **[The binding line](#the-binding-line)** — the format for a single rebindable input. Every
-  rebindable action is one INI key whose value is a binding line, for example:
+The INI is `Documents\My Games\Fallout4VR\Mods_Config\<ModName>\<ModName>.ini`. Which settings it has, and
+their defaults, is up to each mod. The formats on this page are the same in every mod.
 
-  ```ini
-  [Controls]
-  sOpenMenu = offhand longpress grip
-  ```
+> **Edits apply live.** Save the INI while the game runs and the change takes effect right away, with no
+> restart. A value that can't be read is logged as a warning, and the setting keeps its previous value.
 
-- **[Activation spheres](#activation-spheres)** — a higher-level _proximity gesture_: a spherical zone
-  around a hand, the HMD, or a prop that fires a binding when your hand enters it. A sphere is a small
-  group of INI keys (a zone + up to two binding lines + haptics + a visual), each grouped in its own
-  section. **Not every binding is part of a sphere** — plain action keys (menus, toggles, …) use just a
-  binding line; spheres are for reach-into-a-zone gestures.
+This page has three parts:
+
+- **[Common changes](#common-changes)**: change a button, turn an action off, and hide or adjust a
+  gesture's icon and sphere, vibration or zone.
+- **The full reference**, for advanced players and mod authors: every option of
+  [the binding line](#the-binding-line) and of [activation spheres](#activation-spheres).
+- **[For mod authors](#for-mod-authors)**: the code behind them.
+
+---
+
+# Common changes
+
+## Change a button
+
+A binding is one line: the hand, how you press, and the button.
+
+```ini
+sOpenMenu = offhand longpress grip
+```
+
+| Part   | Common values                                                                                                             |
+| ------ | ------------------------------------------------------------------------------------------------------------------------- |
+| Hand   | `primary` (your weapon hand), `offhand` (the other hand)                                                                  |
+| Press  | `tap` (a quick press and release), `press` (the moment it goes down), `longpress` (hold it 0.6 s), `double` (press twice) |
+| Button | `trigger`, `grip`, `a` (A / X), `b` (B / Y), `thumbstick` (click the stick)                                               |
+
+| Example                   | Meaning                                     |
+| ------------------------- | ------------------------------------------- |
+| `offhand tap grip`        | Tap the off-hand grip                       |
+| `primary longpress a`     | Hold **A** on your weapon hand              |
+| `primary longpress a 1.2` | The same, but you have to hold it for 1.2 s |
+| `offhand double b`        | Double-press **B** on the off hand          |
+
+Upper or lower case doesn't matter. `primary` and `offhand` follow the game's left-handed mode, so a binding
+keeps working when you switch hands.
+
+The binding line can do more, such as pushing the thumbstick in a direction or holding one button while
+pressing another. See [the binding line](#the-binding-line).
+
+## Turn an action off
+
+Set it to `none`:
+
+```ini
+sOpenMenu = none
+```
+
+An empty value (`sOpenMenu =`) turns it off too. Deleting the whole line doesn't: the mod then uses its
+default binding.
+
+## Gestures
+
+Each gesture has its own INI section. The section's name is up to the mod, but the keys in it are the same
+in every mod. The ones you're most likely to change:
 
 ```ini
 [MyMod_SomeActivation]
 tZone = 0,0,0;0,0,0;18
 sPrimaryBinding = offhand tap trigger suppress
-sSecondaryBinding = none
+sSecondaryBinding = offhand longpress trigger suppress
 sEntryHaptic = Tick
-sPrimaryHaptic = DoubleClick
+sShowIcon = wheninside
+fIconSize = 1
+sShowSphere = never
 ```
 
-Which keys and sections exist (and their defaults) is up to each mod — check its INI. The formats
-below are the same in every mod.
+### Hide or show the icon and sphere
 
-> **Edits apply live.** The INI is watched while the game runs, so saving takes effect immediately — no
-> restart. A malformed value is logged as a warning and the action keeps its previous (or default)
-> value.
+A gesture can mark its zone with a small **icon**, a glowing **sphere**, or both. By default only the icon
+shows, and only while your hand is in the zone. To never show the icon:
+
+```ini
+sShowIcon = never
+```
+
+The gesture still works the same, and the vibration as your hand enters still tells you when it's in the
+zone.
+
+`sShowIcon` (the icon) and `sShowSphere` (the sphere) each take one of:
+
+| Value           | Shows                                                                                                        |
+| --------------- | ------------------------------------------------------------------------------------------------------------ |
+| `never`         | Never                                                                                                        |
+| `always`        | All the time                                                                                                 |
+| `wheninside`    | Only while your hand is in the zone                                                                          |
+| `whenavailable` | Whenever the gesture can be used right now, e.g. a gesture that needs a drawn weapon only while one is drawn |
+
+To change how they look:
+
+- `fIconSize`: the icon's size in game units (one unit is about 1.4 cm).
+- `sIcon`: which icon. `f4cf\activation-icon-hand.dds` (an open hand), `f4cf\activation-icon-ring.dds` (a
+  ring), `f4cf\activation-icon-circle.dds` (a dot), or an icon the mod ships.
+- `sSphereStyle`: the sphere's color and strength, e.g. `cyan-subtle` (see [the presets](#the-sphere)).
+
+### Change the button, or turn the gesture off
+
+`sPrimaryBinding` and `sSecondaryBinding` take a binding, as in [Change a button](#change-a-button). Keep
+`suppress` at the end: it stops the button's normal action, such as firing your weapon, while your hand is in
+the zone.
+
+To turn the gesture off, set both to `none`. Its icon and sphere go with it, unless they're set to `always`.
+
+### Turn off the vibration
+
+`sEntryHaptic = none` stops the one as your hand enters the zone. `sPrimaryHaptic = none` and
+`sSecondaryHaptic = none` stop the one when the gesture fires. The other patterns are listed under
+[haptics](#haptics).
+
+### Move or resize the zone
+
+`tZone` is `x,y,z;0,0,0;size`. The first three numbers place the zone relative to what it's attached to (a
+hand, your head, or a prop on your body), and the last one is its diameter in game units. The three in the
+middle aren't used. To see the zone while you move it, set `sShowSphere = always`; the sphere then shows the
+zone's real size, as long as `fSphereScale` is left at `1`.
 
 ---
 
 # The binding line
 
+The full format, of which [Change a button](#change-a-button) uses the first three parts:
+
 ```
 <hand> <type> <button> [duration] [suppress|nosuppress] [+modifier]
 ```
 
-- **Case-insensitive** and forgiving of spacing — tokens may be separated by spaces, commas, or colons.
+- **Case-insensitive** and forgiving of spacing: tokens may be separated by spaces, commas, or colons.
 - `<hand>` and `<type>` are always required. Button activations also need a `<button>`; thumbstick /
   axis activations need a `<direction>` instead (see [Thumbstick & axis bindings](#thumbstick--axis-bindings)).
 - `[duration]`, `[suppress|nosuppress]`, and `[+modifier]` are optional and may be omitted.
+- `none`, or an empty value, disables the binding (see [Turn an action off](#turn-an-action-off)).
 
 | Example                             | Meaning                                                       |
 | ----------------------------------- | ------------------------------------------------------------- |
@@ -158,18 +252,6 @@ weapon while your hand is in the grab zone).
 sGrab = offhand tap trigger suppress
 ```
 
-## Disabling a binding
-
-Set the value to `none` or leave it **empty** to turn an action off — it parses cleanly and simply
-never fires (no warning logged).
-
-```ini
-sOpenMenu = none
-```
-
-> Note the difference between _empty_ and _absent_. A present-but-empty value is an explicit "off",
-> while removing the key entirely falls back to the mod's built-in default binding.
-
 ---
 
 # Activation spheres
@@ -181,70 +263,97 @@ hand's wand, the HMD, or a prop attached to the body — and, while a bound hand
   its normal action),
 - plays a one-shot **entry haptic** when the hand first enters,
 - **fires** whichever of its (up to two) bindings is pressed, with a per-binding **activation haptic**,
-- and optionally **draws the zone** as a translucent sphere so you can see where to reach.
+- and optionally **marks the zone** — with a small icon at its center, a translucent sphere, or both — so
+  you can see where to reach.
 
 A mod groups each sphere into **its own INI section**. The section name is chosen by the mod (check its
-INI); the keys inside are always these:
+INI); the keys inside are always the ones below. Any key you leave out keeps the mod's default for that
+sphere.
 
-| Key                 | What it sets                                                                                                                                                                                                                                                   |
-| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `tZone`             | The zone as a transform `x,y,z;heading,roll,attitude;scale`. Only **translate + scale** matter — the zone is a sphere, so rotation is ignored and `scale` is its **diameter**.                                                                                 |
-| `tZonePA`           | Optional **power-armor variant** of `tZone` (for a zone whose anchor moves in PA). Omit to reuse `tZone`.                                                                                                                                                      |
-| `sPrimaryBinding`   | The main [binding line](#the-binding-line). Append `suppress` to hide its button while the hand is in the zone.                                                                                                                                                |
-| `sSecondaryBinding` | An optional second binding line (e.g. a `longpress` variant of the same button). `none` to omit.                                                                                                                                                               |
-| `sEntryHaptic`      | Haptic played **once** when a hand enters the zone. `none` = silent.                                                                                                                                                                                           |
-| `sPrimaryHaptic`    | Haptic played when `sPrimaryBinding` fires. `none` = silent.                                                                                                                                                                                                   |
-| `sSecondaryHaptic`  | Haptic played when `sSecondaryBinding` fires. `none` = silent.                                                                                                                                                                                                 |
-| `sShowSphere`       | When the zone's visual is drawn: `never`, `always`, or `wheninside` (only while a bound hand is in it — a proximity hint).                                                                                                                                     |
-| `sSphereNif`        | The `.nif` mesh drawn as the zone's visual (a mesh path resolved like any prop nif). Empty uses the framework's default sphere mesh. Changing it at runtime releases the old mesh and loads the new one.                                                       |
-| `fSphereScale`      | Scale multiplier for the drawn visual **only** — the proximity hit test always uses the full `tZone` scale. `< 1` draws the sphere smaller than the interaction radius (e.g. an "inside the zone" hint with `sShowSphere = wheninside`); `1` matches the zone. |
+## Zone and bindings
 
-Any key you leave out keeps the mod's built-in default for that sphere.
+| Key                 | What it sets                                                                                                                                                                   |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `tZone`             | The zone as a transform `x,y,z;heading,roll,attitude;scale`. Only **translate + scale** matter — the zone is a sphere, so rotation is ignored and `scale` is its **diameter**. |
+| `tZonePA`           | Optional **power-armor variant** of `tZone` (for a zone whose anchor moves in PA). Omit to reuse `tZone`.                                                                      |
+| `sPrimaryBinding`   | The main [binding line](#the-binding-line). Append `suppress` to hide its button while the hand is in the zone.                                                                |
+| `sSecondaryBinding` | An optional second binding line (e.g. a `longpress` variant of the same button). `none` to omit.                                                                               |
 
-## Haptic names
+## Haptics
 
-`sEntryHaptic` / `sPrimaryHaptic` / `sSecondaryHaptic` take one of these names
-(case-insensitive), or `none` for silent:
+| Key                | Played                                |
+| ------------------ | ------------------------------------- |
+| `sEntryHaptic`     | **Once**, when a hand enters the zone |
+| `sPrimaryHaptic`   | When `sPrimaryBinding` fires          |
+| `sSecondaryHaptic` | When `sSecondaryBinding` fires        |
+
+Each takes one of these names (case-insensitive), or `none` for silent:
 
 `Tick`, `Click`, `DoubleClick`, `TripleClick`, `Success`, `Warning`, `Error`, `Notification`,
 `Start`, `Stop`, `RampUp`, `RampDown`, `Heartbeat1`, `Heartbeat2`, `Heartbeat3`, `Buzz`, `MidBuzz`,
 `LongBuzz`.
 
-## Controlling the visual sphere
+## Controlling the visuals
 
-The sphere you see is **purely cosmetic** and separate from the interaction zone: the proximity hit test
-always uses the full `tZone`, so tuning the visual never changes where the gesture actually fires. Three
-keys control it independently:
+A zone can be marked two ways, each shown on its own schedule: a small **icon** at its center and a
+translucent **sphere**. Both are **purely cosmetic** and separate from the interaction zone: the proximity
+hit test always uses the full `tZone`, so tuning a visual never changes where the gesture actually fires.
 
-- **Whether it shows** — `sShowSphere`: `never` (invisible — the default for most spheres), `always` (a
-  fixed marker, handy while tuning placement), or `wheninside` (appears only while a bound hand is in the
-  zone — a "you're in range" hint).
-- **Which mesh** — `sSphereNif`: point it at any `.nif` to change the look (or pick one of the built-in
-  meshes below); empty falls back to the framework's default sphere. Editing this while the game runs
-  hot-swaps the mesh (the old one is released and the new one loaded on the next frame it's shown).
-- **How big** — `fSphereScale`: multiplies the drawn size **only**. Use `< 1` to draw a small marker inside
-  the real (larger) zone so the hint doesn't fill your whole reach; `1` matches the zone exactly.
+**When each shows** — `sShowIcon` / `sShowSphere`, each one of:
 
-**Built-in meshes** shipped under `ui-common\`:
+- `never` — not drawn.
+- `always` — a fixed marker, handy while tuning placement.
+- `wheninside` — only while a bound hand is in the zone: a "you're in range" hint. The framework's default
+  for the icon.
+- `whenavailable` — whenever the gesture can fire, i.e. while the mod has at least one of its bindings
+  enabled. A mod turns a binding off in states where it has no action (e.g. "put the light on the gun"
+  with no gun drawn), so a visual set this way only advertises gestures that will work.
 
-- `ui-common\activation-sphere@white-full.nif`
-- `ui-common\activation-sphere@white-medium.nif`
-- `ui-common\activation-sphere@white-subtle.nif`
-- `ui-common\activation-sphere@cyan-full.nif`
-- `ui-common\activation-sphere@cyan-medium.nif`
-- `ui-common\activation-sphere@cyan-subtle.nif`
-- `ui-common\activation-sphere@green-medium.nif`
-- `ui-common\activation-sphere@green-subtle.nif`
-- `ui-common\activation-sphere@purple-medium.nif`
-- `ui-common\activation-sphere@purple-subtle.nif`
-- `ui-common\activation-sphere@amber-medium.nif`
-- `ui-common\activation-sphere@amber-subtle.nif`
-- `ui-common\activation-sphere@gold-subtle.nif`
-- `ui-common\debug-sphere.nif`
-- `ui-common\debug-sphere@strong.nif`
+Each visual gets its own setting so they can combine, e.g. the icon `always` marking where to reach and the
+sphere `wheninside` lighting up once your hand arrives.
+
+### The icon
+
+A small image at the zone's center that always turns to face you and is drawn on top of the world (it sits
+inside your body or on a held prop, where the world would otherwise hide it). It fades in and out rather
+than popping.
+
+| Key          | What it sets                                                                                                                                                                                                                                                                                                                                                                              |
+| ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `sShowIcon`  | When it's drawn (see above).                                                                                                                                                                                                                                                                                                                                                              |
+| `sIcon`      | The image: a `.dds` path, resolved like the mod's other textures. The framework ships `f4cf\activation-icon-hand.dds` (an open hand, "reach here", the framework's default), `f4cf\activation-icon-ring.dds` (a plain ring) and `f4cf\activation-icon-circle.dds` (a filled dot); a mod may ship its own. A white glyph on a transparent background works best, since the tint colors it. |
+| `sIconColor` | The tint, multiplied into the image: `r,g,b` or `r,g,b,a`, each a whole number in `0..255`; the optional `a` is its opacity.                                                                                                                                                                                                                                                              |
+| `fIconSize`  | The size of its longer side, in game units.                                                                                                                                                                                                                                                                                                                                               |
+
+### The sphere
+
+| Key                  | What it sets                                                                                                                                                                                                                                                                                          |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `sShowSphere`        | When it's drawn (see above).                                                                                                                                                                                                                                                                          |
+| `sSphereStyle`       | How it looks: a preset (below). The keys under it override single values of the preset.                                                                                                                                                                                                               |
+| `sSphereColor`       | The color as `r,g,b` or `r,g,b,a`, each a whole number in `0..255` (e.g. `255,51,51`). The optional `a` is the overall opacity (the activation presets draw at `27`-`40`); leave it off to keep the preset's.                                                                                         |
+| `fSphereGlow`        | Brightness, `0..1`. `1` is as bright as the `debug` sphere; the activation presets sit at `0.4`-`0.5`.                                                                                                                                                                                                |
+| `sSphereFalloff`     | How the opacity fades from the middle of the sphere to its edge, as `center,rim` (e.g. `0.045,1`). The activation mesh keeps its middle faint so it reads as a glowing rim; equal values draw it evenly.                                                                                              |
+| `sSphereTexture`     | The texture set on the mesh (a `.dds` path, resolved like the mod's other textures). `none` keeps the texture the mesh itself names.                                                                                                                                                                  |
+| `sSphereNif`         | The `.nif` mesh drawn (resolved like any prop nif).                                                                                                                                                                                                                                                   |
+| `fSphereScale`       | The drawn size relative to the zone: `1` matches it, `< 1` draws a smaller marker inside the real zone so the hint doesn't fill your whole reach. The hit test always uses the full `tZone`.                                                                                                          |
+| `sSphereOrientation` | Which way it faces: `body` (default — turns with the direction your body faces, kept upright, so a sphere on your body looks still as you turn), `hmd` (turns with the direction your head faces), or `world` (holds still in the world). Only a patterned look such as `debug` shows the difference. |
+
+Editing any of these while the game runs redraws the sphere with the new look the next frame it's shown.
+
+**Presets** for `sSphereStyle`:
+
+- `<color>-<strength>` — the glowing-rim activation sphere. Colors: `white`, `gray`, `cyan`, `green`,
+  `purple`, `red`, `amber`, `gold`. Strengths: `full`, `medium`, `subtle`, `low`. For example
+  `cyan-subtle`; `white-subtle` is the default.
+- `debug` — the evenly lit, two-sided debug sphere: a light grid.
+
+To go beyond the presets, start from the closest one and override values, e.g. `sSphereStyle = white-subtle`
+with `sSphereColor = 255,105,180` for a subtle pink sphere.
 
 A common recipe is a small proximity dot — `sShowSphere = wheninside` with `fSphereScale = 0.5` — that
-appears only as your hand nears the zone. To hide the visual entirely, set `sShowSphere = never`.
+appears only as your hand nears the zone. To hide the visuals entirely, set `sShowIcon` and `sShowSphere`
+to `never`.
 
 ## Example
 
@@ -256,12 +365,15 @@ sSecondaryBinding = offhand longpress trigger suppress
 sEntryHaptic = Tick
 sPrimaryHaptic = DoubleClick
 sSecondaryHaptic = Click
+sShowIcon = whenavailable
+sIcon = f4cf\activation-icon-ring.dds
 sShowSphere = wheninside
-sSphereNif = ui-common\activation-sphere@white-medium.nif
+sSphereStyle = cyan-subtle
 ```
 
 A tap of the off-hand trigger while it's near the HMD fires the primary gesture (its trigger hidden
-from the game); a long-press fires the secondary; the zone shows only while your hand is near it.
+from the game); a long-press fires the secondary. A ring marks the zone whenever the gesture can fire, and
+the sphere lights up once your hand is in it.
 
 ---
 
@@ -276,11 +388,35 @@ parse a string directly with `parseInputBinding(...)`. The `suppress` flag rides
 
 **An activation sphere** is two types:
 
-- `f4cf::f4vr::WandActivationConfig` — the authored bundle (zone + bindings + haptics + visibility + visual mesh/scale).
+- `f4cf::f4vr::WandActivationConfig` — the authored bundle (zone + bindings + haptics + when each visual shows + the icon and sphere styles).
   Load one whole INI section with `ConfigBase::loadWandActivationConfig(ini, "SectionName", defaults)`.
 - `f4cf::f4vr::WandActivationSphere` — the runtime zone. Drive it each frame with `onFrameUpdate(frame,
 onActivated)`, composing the per-frame `Frame` from your `WandActivationConfig` (gating a binding off
   for the frame by passing the disabled binding, and re-anchoring the zone if needed). It handles the
-  proximity test, owner-keyed suppression, haptics, cooldown, and the debug/proximity visual.
+  proximity test, owner-keyed suppression, haptics, cooldown, and the visuals. `Frame::showZone` is a
+  tuning override that draws the sphere at the zone's true size whatever the config says.
+
+The icon's look is an `f4cf::f4vr::ActivationIconStyle` (texture, tint, size). Icons are drawn by the
+framework's primitive overlay (`src/render`), on one layer shared by every sphere, so they need no mesh.
+
+The sphere's look is an `f4cf::f4vr::SphereStyle` (`src/f4vr/SphereStyle.h`): a mesh plus the values set
+at runtime on its effect shader — color, alpha, glow, falloff opacities, and the texture. Because the
+texture is set by code, the meshes name no mod, and **every mod ships the same files** from the
+framework's `mod-template` under its own folder:
+
+- `Meshes\<ModName>\f4cf\activation-sphere.nif` (the one mesh every preset draws on)
+- `Textures\<ModName>\f4cf\activation-sphere.dds`, `debug-sphere.dds`
+- `Textures\<ModName>\f4cf\activation-icon-hand.dds` (the default icon), `activation-icon-ring.dds`, `activation-icon-circle.dds`
 
 See [`src/f4vr/README.md`](../src/f4vr/README.md) for the `WandActivationSphere` API and an example.
+
+**Telling the player what is bound.** Do not hard-code a button name in your UI - it goes stale the
+moment someone edits the INI. `f4cf::vrui::appendBindingPrompt(spans, binding)`
+([`src/vrui/BindingPrompt.h`](../src/vrui/BindingPrompt.h)) turns an `InputBinding` into a text span
+for a `UITextPanel` row, drawing the controller icon the binding actually resolves to - primary and
+offhand mapped to the left or right controller by the player's handedness, and buttons named the way
+the controller prints them (the runtime's `A` is `X` on the left one). A binding no shipped icon
+covers - a chord, a touch, the system button - falls back to words (`bindingLabel`), and
+`samePrompt(a, b)` tells whether two bindings read the same, for a caller listing several at once.
+The icons are the `Textures\<ModName>\f4cf\bindings\` set that `mod-template` ships; a mod that
+did not copy them simply gets the words.

@@ -5,6 +5,20 @@
 
 namespace f4cf
 {
+    /**
+     * Register a callback to run at the end of every frame, right after the mod's onFrameUpdate.
+     *
+     * This exists so an optional subsystem can be pumped without ModBase naming any of its symbols:
+     * with static-library semantics, a mod that never calls that subsystem's API never pulls its
+     * object files, so it pays neither the code size nor the frame cost. The subsystem registers
+     * itself the first time the mod uses it - the ImGui UI layer does so when the first panel is
+     * constructed - which is also why callbacks are never removed.
+     *
+     * Safe to call from inside a callback (a subsystem installing lazily from its own pump); the one
+     * registered that way runs in the same frame. GAME thread only, like the callbacks themselves.
+     */
+    void registerFrameEndCallback(void (*callback)());
+
     class ModBase
     {
     public:
@@ -27,6 +41,10 @@ namespace f4cf
             // setting game loop late means that this mod will be the first to have its onFrameUpdate called
             // important for mods like FRIK that update the player skeleton
             bool setupMainGameLoopLate = false;
+            // build the overlay rendering (font atlas, D3D pipeline, Submit hook) before the game leaves
+            // the main menu, rather than on the first draw, which otherwise stalls its frame for ~0.1s;
+            // for mods that draw panels, activation-sphere icons or other f4cf::render overlays
+            bool preloadRendering = false;
 
             Settings(const std::string_view& name, const std::string_view& version, ConfigBase* config);
             Settings(const std::string_view& name, const std::string_view& version, ConfigBase* config, int trampolineAllocationSize, bool setupMainGameLoop);

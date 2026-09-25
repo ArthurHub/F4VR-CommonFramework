@@ -6,19 +6,16 @@ reuse (`btn-empty` for plain buttons, `btn-border` / `btn-border-2` for toggles)
 config-menu buttons (advanced/misc config, misc options). Re-skin any of them by editing
 the PNG and re-running the pack command below.
 
-`debug-sphere` and `activation-sphere` are not buttons but **custom meshes** (the spheres the
-activation-sphere visuals clone). `pack` pairs meshes and textures by name — exact, or up to a
-`@` suffix — and reuses the mesh instead of a flat quad, keeping its geometry, repointing its
-texture at the atlas, and remapping its UVs into the paired texture's region. The two folders
-show both directions:
+These are the sprites for **NIF** buttons (`UIButton` / `UIToggleButton`). A panel button
+(`UIButtonPanel`) takes a loose `.dds` instead, and the same standard actions ship as one under
+`Textures\MyMod\f4cf\vrui\` — so a UI built from panels uses those and needs no atlas at all.
+Those are uncompressed 32-bit BGRA with no mipmaps, which is the format to match for a loose icon;
+see [the vrui README](../../../../src/vrui/README.md#assets). The atlas below is BC3.
 
-- **One mesh, many textures** — `debug-sphere.nif` reused by `debug-sphere.png` and
-  `debug-sphere@strong.png`, so those two PNGs are two skins of the one sphere.
-- **One texture, many meshes** — the `activation-sphere@<color>-<strength>.nif` meshes all
-  share `activation-sphere.png`; each mesh is kept and emits its own output nif.
-
-(`@` rather than `#` since `#` is an INI comment.) See the packer's
-[custom mesh override](../../../../nif-tools/README.md#custom-mesh-override).
+The activation / debug sphere visuals are not in this atlas either: they are standalone meshes and
+textures under `Meshes\MyMod\f4cf\` and `Textures\MyMod\f4cf\`, shipped as-is (the
+texture is set by code at runtime, so nothing in them names the mod). See
+[`SphereStyle`](../../../../src/f4vr/SphereStyle.h).
 
 ## Pack command
 

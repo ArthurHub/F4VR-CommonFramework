@@ -162,6 +162,17 @@ namespace f4cf
             std::string drawDisabledChannels;
             std::string drawToggleBinding;
             std::string drawHudPlacement = "center";
+            // f4cf::render::sceneDepth: which implementation resolves the world's depth for overlay
+            // occlusion (auto / direct / off) - see render::sceneDepth::internal::Strategy. A support
+            // switch: "direct" keeps the capture but never resamples, "off" drops occlusion entirely.
+            std::string sceneDepthStrategy = "auto";
+            // f4cf::render::sceneDepth: investigate the overlay-occlusion capture - add its rows to
+            // the debug-draw watch table, and re-run the side-by-side comparison of the shipped
+            // policies against their alternatives. Off by default: the comparison has already
+            // answered and costs a D3D query per committed graphics state, and the rows belong to
+            // whoever is looking at the capture, not to everyone who opens the overlay. The capture
+            // reports itself to the log either way.
+            bool sceneDepthDiagnostics = false;
             // One-shot name lists consumed via checkDebugDumpDataOnceFor() / consumeDebugAddItemsOnce();
             // each is cleared (in memory + INI) once consumed so the file-watch reload doesn't re-trigger it.
             std::string dumpDataOnceNames;

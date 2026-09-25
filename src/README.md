@@ -85,6 +85,10 @@ namespace my_mod
 
 `setupMainGameLoop = true` installs the frame hook so `onFrameUpdate()` runs every frame.
 
+A mod that draws vrui panels, activation-sphere icons or other overlays should also set
+`_settings.preloadRendering = true;` in its constructor body, so the font and render pipeline are
+built before the main menu is left instead of stalling the first frame that draws.
+
 ### 3. Entry points + lifecycle
 
 ```cpp
@@ -158,6 +162,8 @@ flags for runtime toggling, debug-dump triggers, and batch config saves).
 | [`debug/`](debug/README.md)          | `f4cf::debug`  | Immediate-mode in-world debug draw overlay: wire primitives, HUD text/labels, watch table. Zero cost until used. |
 | [`f4vr/`](f4vr/README.md)            | `f4cf::f4vr`   | Fallout 4 VR game-state utilities: nodes, skeleton, player nodes, menus, Scaleform, thumbstick.                  |
 | [`f4sevr/`](f4sevr/README.md)        | `F4SEVR`       | Ported F4SE VR SDK: Papyrus VM interop, native-function registration, VM value/arg marshalling.                  |
+| [`imgui/`](imgui/README.md)          | `f4cf::imgui`  | Dear ImGui panels drawn as world-space quads: a raw `Canvas`, and `UIImGuiPanel` for a vrui layout.              |
+| [`render/`](render/README.md)        | `f4cf::render` | Overlay rendering: world-space lines/fills/images/text over the VR view, the shared Submit hook, scene-depth occlusion. |
 | [`vrcf/`](vrcf/README.md)            | `f4cf::vrcf`   | VR Controller Framework. OpenVR button/trigger/thumbstick state, input suppression, haptic feedback.             |
 | [`vrui/`](vrui/README.md)            | `f4cf::vrui`   | VR UI widget system: panels, buttons, toggles, containers, scene graph, input dispatch.                          |
 | [`PCH.h`](PCH.h)                     | —              | Precompiled header, included implicitly in every translation unit.                                               |
@@ -177,15 +183,19 @@ flags for runtime toggling, debug-dump triggers, and batch config saves).
               ├── vrcf::VRControllersSuppress ... hide input from the game
               ├── vrcf::VRHaptics ............... haptic feedback patterns
               ├── vrui::UIManager ............... drive + render the VR UI
+              ├── imgui::UIImGuiPanel ........... Dear ImGui content inside that UI
               ├── debug::dd() ................... immediate-mode debug draw overlay
               └── f4vr::* / common::* ........... game state + math helpers
+                          │
+                          └── render::* ......... the one overlay path the vrui panels, the imgui
+                                                  canvases and the debug overlay all draw through
 ```
 
 ## Conventions
 
-- **Root namespace is `f4cf`.** Subsystems live in nested namespaces (`f4cf::common`, `f4cf::f4vr`,
-  `f4cf::vrcf`, `f4cf::vrui`). The exception is [`f4sevr/`](f4sevr/README.md), which hosts the
-  ported F4SE VR SDK under `namespace F4SEVR`.
+- **Root namespace is `f4cf`.** Subsystems live in nested namespaces (`f4cf::common`, `f4cf::debug`,
+  `f4cf::f4vr`, `f4cf::imgui`, `f4cf::render`, `f4cf::vrcf`, `f4cf::vrui`). The exception is
+  [`f4sevr/`](f4sevr/README.md), which hosts the ported F4SE VR SDK under `namespace F4SEVR`.
 - **Globals.** A handful of subsystems expose a single global instance by design:
   `f4cf::g_mod`, `f4cf::vrcf::VRControllers`, `f4cf::vrcf::VRControllersSuppress`,
   `f4cf::vrcf::VRHaptics`, and `f4cf::vrui::g_uiManager`.

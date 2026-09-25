@@ -17,14 +17,16 @@ provenance. It is a generalization of ROCK's `DebugBodyOverlay` per the referenc
 | | **D3D11 + `Submit` hook** (chosen) | Scene-graph NIF (`f4cf::vrui` style) |
 |---|---|---|
 | Arbitrary topology (any polyline/mesh) | ✅ push verts to a buffer | ❌ needs procedural `BSGeometry` per shape |
-| Screen-space HUD text + value watch | ✅ trivial (2D overlay + bitmap font) | ❌ Scaleform / font NIF, awkward |
-| Depth occlusion (hidden behind walls) | ❌ draws on top only | ✅ free |
+| Screen-space HUD text + value watch | ✅ trivial (2D overlay + its own font) | ❌ Scaleform / font NIF, awkward |
+| Depth occlusion (hidden behind walls) | ⚠️ needs the scene depth captured | ✅ free |
 | Threading | render thread → needs handoff | game thread |
 | Version-specific offsets | one (VR camera globals) | none |
 
 For a general debug helper whose headline features are "any shape anywhere" + HUD text/watch, D3D
 wins on the rows that matter and only concedes depth occlusion — which for debug drawing is usually
-*wanted* (x-ray visibility of colliders/zones through geometry).
+*wanted* (x-ray visibility of colliders/zones through geometry). The framework has since gained
+occlusion anyway ([scene-depth capture](scene-depth-occlusion.md), used by the vrui panels and the
+ImGui canvases); the debug overlay deliberately opts out of it.
 
 ## 2. Architecture
 
@@ -39,7 +41,7 @@ DebugDraw::onFrameStart(config...)                      vrSubmitHook(eye, textur
 mod onFrameUpdate()                                            ├─ RTV over submitted texture (cached)
   └─ dd().sphere/cone/line/watch/... appends                   ├─ upload engine eye matrices (CB b0)
      (tessellated to line segments at call site)               ├─ draw color-runs of segments ×2 instanced
-                                                               ├─ draw text quads (5×7 bitmap font)
+                                                               ├─ draw text quads (SDF font atlas)
 DebugDraw::onFrameEnd()                                        ├─ endFrame: restore FULL D3D state
   ├─ lay out watch table as text rows                          └─ chain original Submit
   ├─ lazy renderer::ensureInstalled()
@@ -56,8 +58,9 @@ DebugDraw::onFrameEnd()                                        ├─ endFrame: 
   billboard labels, but done on the game thread by adjusting the size, so it needs no renderer
   support. `capsule`/`cone` are excluded (a segment / a directional volume has no single scale
   anchor).
-- **Consumer** ([`src/debug/DebugDrawRenderer.cpp`](../../src/debug/DebugDrawRenderer.cpp)): dumb —
-  no lifetime logic; draws whatever frame was last published.
+- **Consumer** ([`src/render/PrimitiveDrawRenderer.cpp`](../../src/render/PrimitiveDrawRenderer.cpp)):
+  dumb — no lifetime logic; draws whatever frame was last published. Not debug-specific: it is the
+  framework's generic line/glyph renderer, and the debug overlay is one layer registered on it.
 
 ## 3. Zero cost when unused (the lazy-hook contract)
 
@@ -71,7 +74,12 @@ DebugDraw::onFrameEnd()                                        ├─ endFrame: 
 - When the overlay is disabled (INI/hotkey/`setEnabled(false)`) appends are skipped at the call
   site behind a single pre-computed bool (`_appendActive`).
 
-## 4. Rendering pipeline details (ported from ROCK)
+## 4. Rendering pipeline details (ported from ROCK, now shared)
+
+All of this lives in [`src/render/`](../../src/render/README.md) rather than in the overlay: the
+vrui panels, the ImGui canvases and the activation-sphere icons are layers on the same hook, so the
+rules below are implemented once. The provenance is recorded here because the technique arrived with
+this overlay.
 
 - **Device/context** straight off `RE::BSGraphics::RendererData::GetSingleton()` (`device` @0x48,
   `context` @0x50) — no swapchain creation (ROCK :1142-1152).
@@ -90,15 +98,18 @@ DebugDraw::onFrameEnd()                                        ├─ endFrame: 
   corrupts the frame (ROCK :1187-1231).
 - **Line batching**: producer publishes segments sorted by color; the renderer uploads one dynamic
   VB and issues one `DrawInstanced` per same-color run.
-- **Text**: self-contained 5×7 bitmap font (7 bit-rows per glyph, one quad per lit pixel, no
-  texture/asset; ROCK :2129-2314), in three modes. **Screen HUD** (`text()`): quads in clip space,
+- **Text**: a real typeface (the embedded Roboto Medium, or the mod's own TTF) rasterized into a
+  signed-distance-field atlas, so glyphs stay sharp at any size, distance or angle. ROCK's
+  self-contained 5×7 bitmap font (one quad per lit pixel; ROCK :2129-2314) was the original and was
+  replaced when the same renderer had to draw UI panels. The overlay uses three of the four
+  placements `render::TextPlacement` offers. **Screen HUD** (`text()`): quads in clip space,
   duplicated into both eye halves. **World-anchored screen text** (the watch table): the anchor is
   CPU-projected per eye and the glyph quads laid out in screen space at that spot (`TextAlign`
   left/center/right). **World billboard** (`label()`): the glyphs are emitted as *world-space* quads
-  on a viewer-facing plane (world-up right/up basis, from `RenderFrame::cameraPos`) and drawn through
-  the **stereo geometry shader** — so a label shares the shapes' exact projection/depth, stays welded
-  to its world point, tilts with the world (not screen-upright), and scales with distance. This is why
-  a `label()` no longer appears to rotate as you move your head the way flat screen text does.
+  on a viewer-facing plane (from the frame's `viewerPosition`) and drawn through the **stereo
+  geometry shader** — so a label shares the shapes' exact projection/depth, stays welded to its world
+  point, tilts with the world (not screen-upright), and scales with distance. This is why a `label()`
+  does not appear to rotate as you move your head the way flat screen text does.
 - **RTV cache**: the RTV over the submitted texture is cached keyed by texture pointer + desc — the
   texture is stable frame-to-frame (ROCK :1167-1185).
 - ROCK's second hook (`write_call<5>` at `0xD844BC` on the render path) is intentionally **not**
@@ -123,15 +134,17 @@ store (`sec > 0`), channels + INI toggles + in-headset hotkey, the `watch()` tab
 | `+0x25D0` | → camera data block pointer | `VR_RENDER_CAMERA_DATA_OFFSET` | same |
 | camera `+0xD0` / `+0x2E0` | eye 0 / eye 1 view-projection 4×4 | `VR_RENDER_CAMERA_EYE{0,1}_VIEW_PROJ_OFFSET` | same |
 | `+0x2590` / `+0x25C0` | eye 0 / eye 1 posAdjust float3 | `VR_RENDER_CAMERA_EYE{0,1}_POS_ADJUST_OFFSET` | same |
-| vtable idx 5 | `IVRCompositor::Submit` | `DebugDrawRenderer.cpp` | ROCK `DebugBodyOverlay.cpp:2614`, OpenVR ABI |
+| vtable idx 5 | `IVRCompositor::Submit` | `render/SubmitHook.cpp` | ROCK `DebugBodyOverlay.cpp:2614`, OpenVR ABI |
 
 This is the overlay's **only** version-specific game address. If overlay geometry reads as garbage
 after a game/runtime change, suspect it first.
 
 ## 7. Gotchas & limitations
 
-1. **On-top only** — the Submit path has no scene depth bound; shapes draw through walls (usually
-   desired). True occlusion would need a hook earlier in the render, out of scope.
+1. **On top by design** — the debug layer is registered un-occluded, so shapes draw through walls and
+   through any mod UI (`DRAW_ORDER_DEBUG`, last in the painter order). The framework *can* occlude an
+   overlay now — see [scene-depth capture](scene-depth-occlusion.md) — but a diagnostic hidden behind
+   the thing you are diagnosing is worse than useless.
 2. **Game thread only for draws.** The render side never touches game state; the producer side is
    not thread-safe by design.
 3. **Budgets**: 64k line vertices / 128k text vertices per frame; over-budget appends are dropped
@@ -139,7 +152,9 @@ after a game/runtime change, suspect it first.
 4. **VR only** — on flat Fallout 4 the overlay logs once and stays inert.
 5. **Hook lifetime**: the vtable patch is never removed (process-lifetime, like the input-suppression
    hook). The original `Submit` is always chained.
-6. **Watch-table font** covers `A-Z 0-9 - + = . , : / ( ) %`; other characters render blank.
+6. **Font coverage** is whatever the loaded typeface has; a character it lacks draws as `?`. A mod's
+   own font file is not bounds-checked as it is parsed, so a damaged one can crash the game rather
+   than be rejected.
 7. **Screen-space HUD is cropped in VR.** `text()` draws into the eye render target's raw pixels; the
    corners are cropped by the lens, so corner HUDs are *not visible in-headset*. The **watch table is
    world-anchored** to avoid this: by default a point in front of the HMD (`defaultHudAnchor()` —
@@ -149,9 +164,13 @@ after a game/runtime change, suspect it first.
    `watchAnchor()` / `watchAnchorNode()` (e.g. offhand controller = wrist display). Both give correct
    stereo depth for free. Plain `text()` is really only useful on flat FO4 or a mirror/2D capture. The
    head local axes are `rotate.Transpose() * (0,1,0)` forward / `(0,0,1)` up / `(1,0,0)` right — if the
-   default HUD lands off-centre, adjust those in `defaultHudAnchor()`. HUD rows are `TextAlign`-ed
-   (left/right for the side placements, else centred) so they keep a clean edge on their side of the
-   view. The HUD rides `HmdNode`, so it tracks head yaw/pitch/roll; that's fine for a head-locked
+   default HUD lands off-centre, adjust those in `defaultHudAnchor()`. The table is laid out on the
+   game thread (`layoutWatchTable()`) as two columns measured with `render::measureText` at
+   `TEXT_PIXELS_PER_SIZE` — the font is proportional, so tabs or space padding can't align it — with
+   rows grouped under a header per channel. The columns hang off the gap between them, placed per
+   side (after the widest name for the left placements, on the anchor when centred, before the widest
+   recent value for the right placements) so the table keeps a clean edge on its side of the view and
+   never slides as values change width. The HUD rides `HmdNode`, so it tracks head yaw/pitch/roll; that's fine for a head-locked
    readout, and world `label()`s use the billboard path instead when a truly world-stuck tag is needed.
 
 ## 8. Configuration

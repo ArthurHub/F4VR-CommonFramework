@@ -306,6 +306,110 @@ namespace f4cf::f4vr
     using _isPipboyLightOn = bool* (*)(RE::Actor* a_actor);
     inline REL::Relocation<_isPipboyLightOn> isPipboyLightOn(REL::Offset(0xf27790));
 
+    // PlayerCharacter::ShowPipboyLight(bool show, bool skipGlowEffects) — AddressLib 1304102, VR 0x140f277b0. The
+    // worker behind togglePipboyLight, which adds the UIPipBoyLightOn/Off menu sound and the controller light-bar state
+    // around it; this plays no sound. Showing builds a new NiLight + BSLight from the light form
+    // (TESObjectLIGH::GenDynamic) into PlayerCharacter::niPipboyLight / pipboyLight, hiding removes them
+    // (ShadowSceneNode::RemoveLight). a_skipGlowEffects leaves the glow meshes of the wrist / headlamp light as they are.
+    using _PlayerCharacter_ShowPipboyLight = void (*)(RE::PlayerCharacter* a_player, bool a_show, bool a_skipGlowEffects);
+    inline REL::Relocation<_PlayerCharacter_ShowPipboyLight> PlayerCharacter_ShowPipboyLight(REL::Offset(0xf277b0));
+
+    // The `call PlayerCharacter::IsPipboyLightOn` in PipboyManager::InitPipboy (VR 0x140c34780), which runs as the
+    // Pip-Boy opens: bytes E8 DA 2C 2F 00. InitPipboy saves the result as PipboyManager::wasPipboyLightActive (VR +0x1F5,
+    // flat +0x1E5) and, when it's set, hides the light with ShowPipboyLight(false, true); closing the
+    // Pip-Boy (VR 0x140c337a0) shows it again when the flag is set. In power armor InitPipboy stores false without
+    // making the call, which is why the light stays on there: an `xor eax, eax` in its place does the same outside.
+    inline REL::Relocation<std::uintptr_t> PipboyManager_InitPipboy_IsPipboyLightOnCall(REL::Offset(0xc34ab1));
+
+    // BSLight::SetShape — VR 0x14286f9b0, no address-library name (named here for what it does). Sets the light type
+    // (BSLight +0x180; 6 = spot) and the light-volume geometry the deferred renderer draws the light with
+    // (NiPointer<BSGeometry> at +0x148). A spot gets a cone, BSShaderUtil::GenerateCone(a_width, a_baseRadius,
+    // a_height, 18 sides), made under BSGraphics::Renderer::TryLock (no new cone when the lock is busy), and the
+    // cone's bound is copied onto the NiLight. The light factory (VR 0x1427e9cd0) calls it for a spot with
+    // a_width = sqrt(2 * tan^2(FOV / 2)) * 1.22077 (the half FOV clamped to [1°, 160°]), a_baseRadius = a_width * radius,
+    // a_height = radius, and 1, 1, 1 (read by the area-light type only). Returns early when the type is unchanged, so
+    // rebuilding the cone of a live light means clearing +0x180 first.
+    using _BSLight_SetShape = void (*)(RE::BSLight* a_light, std::int32_t a_type, float a_width, float a_baseRadius, float a_height, float a_x, float a_y, float a_z);
+    inline REL::Relocation<_BSLight_SetShape> BSLight_SetShape(REL::Offset(0x286f9b0));
+
+    // BSLight::SetCameraFrustum — VR 0x14286f180, no address-library name (named here for what it does). Applies a
+    // perspective frustum to the camera (NiCamera::SetViewFrustum): ±tan of the half FOVs (radians, each clamped to
+    // [1°, 160°]), a_near, and the light's NiLight radius as far (a_far only while the light has no NiLight). Sets up
+    // a BSShadowFrustumLight's shadow camera, and the gobo projection camera of a light without shadows.
+    using _BSLight_SetCameraFrustum = void (*)(RE::BSLight* a_light, float a_fovX, float a_fovY, RE::NiCamera* a_camera, float a_near, float a_far);
+    inline REL::Relocation<_BSLight_SetCameraFrustum> BSLight_SetCameraFrustum(REL::Offset(0x286f180));
+
+    // vtables of the classes a TESObjectLIGH spot light is built as: BSLight without shadows, BSShadowFrustumLight with.
+    inline REL::Relocation<std::uintptr_t> BSLight_vtbl(REL::Offset(0x30b8a40));
+    inline REL::Relocation<std::uintptr_t> BSShadowFrustumLight_vtbl(REL::Offset(0x30beed8));
+
+    // VR player turning. The game turns the player by rotating the VR world (room) transform rather than the
+    // actor: the actor's heading follows the HMD. The three entries below are the get/set pair the engine's own
+    // turn code uses plus the global it works on — all raw VR offsets, none of them has a row in the VR address
+    // library, read off the turn handler (VR 0x140fcf5e0) of Fallout4VR.exe 1.2.72. See PlayerRotation.h.
+
+    // The VR world-space data the game rotates when the player turns; other VR mods call it `vrDataStruct`. The
+    // room rotation sits at +0x210 as a SIMD-padded 3x3 matrix (three rows of four floats).
+    inline REL::Relocation<void**> g_vrWorldData(REL::Offset(0x59429c0));
+    inline constexpr std::ptrdiff_t VR_WORLD_DATA_ROTATION_OFFSET = 0x210;
+
+    // Euler decomposition of the VR world rotation matrix (pass g_vrWorldData + 0x210): the yaw the game turns
+    // with lands in a_outYaw, in radians. The two other out-params are the remaining Euler angles, written in
+    // every path; the return says whether the matrix was outside the gimbal-lock branch. VR 0x141c11b00.
+    //
+    // Pair it with VRWorld_SetYaw and nothing else: that is the pair the engine's own smooth turn uses, so a
+    // get -> add -> set round trip is sign-convention safe. (A second decomposition exists at 0x141c0fed0, used
+    // by the snap path, with a different Euler convention.)
+    using _VRWorld_GetEulerAngles = bool (*)(const void* a_rotationMatrix, float* a_outYaw, float* a_outB, float* a_outC);
+    inline REL::Relocation<_VRWorld_GetEulerAngles> VRWorld_GetEulerAngles(REL::Offset(0x1c11b00));
+
+    // Rebuild the VR world rotation from a single yaw (radians, taken by pointer) and write it back — what both
+    // the engine's smooth turn and its instant snap call to actually move the player. VR 0x141ba7780.
+    using _VRWorld_SetYaw = void (*)(void* a_vrWorldData, const float* a_yawRadians);
+    inline REL::Relocation<_VRWorld_SetYaw> VRWorld_SetYaw(REL::Offset(0x1ba7780));
+
+    // NOT declared here on purpose: the engine's own snap entry points, PlayerCharacter "start smoothed snap"
+    // (VR 0x140efa920) and "snap now, with the comfort fade" (VR 0x140efa980). Both only park a target angle in
+    // PlayerCharacter +0x8C8 behind the latch flags at +0x12A4: bit 0x20 is handed to the per-frame applier
+    // (VR 0x140ef7180, called from the player update) and bit 0x40 is cleared *only* by the vanilla thumbstick
+    // handler when the stick re-centres. Called while that handler is out of the loop — which is exactly the
+    // case a mod turns the player for, a menu that blocks turning — the first call latches 0x40 and every later
+    // one is silently dropped. PlayerRotation drives the transform itself instead.
+
+    // The world-space VR UI: the HUD, the dialogue menu and every other menu the game draws into the world
+    // hang off two roots on the player, and the direction they face is one yaw the player also carries.
+    //
+    // PlayerCharacter::UpdateVRUI (named here for what it does) runs from the player update, every frame, on
+    // the main thread. It reads where the head is looking, drags the anchor yaw after it under the
+    // fHmdRotationLag*:VRUI settings - trailing it, holding off for fHmdRotationLagDuration, accelerating after
+    // that at fHmdRotationLagRecoveryAcceleration up to fHmdRotationLagRecoveryMaxSpeed, and snapping it
+    // whenever the head gets further away than fHmdRotationLagMaxDistance (45 degrees by default) - and then
+    // rebuilds both UI roots from the result and updates them. It is also the per-frame applier of the snap
+    // turn described further up. Writing the anchor yaw after it has run points the whole world-space UI
+    // wherever a mod wants it, and the engine builds it there itself on the next frame; the clamp still
+    // applies, so reaching further than it allows means raising that setting while it matters.
+    using _PlayerCharacter_UpdateVRUI = void (*)(RE::PlayerCharacter* a_player, float a_deltaSeconds, bool a_unk);
+    inline REL::Relocation<_PlayerCharacter_UpdateVRUI> PlayerCharacter_UpdateVRUI(REL::Offset(0xef7180));
+
+    // Fields of PlayerCharacter the function above owns. The two yaws are radians measured clockwise from +Y,
+    // the same convention the player's own angleZ is in - measured equal to it to three decimals in game, give
+    // or take whole turns, so a bearing taken with atan2(dx, dy) subtracts from either directly.
+    constexpr std::ptrdiff_t PLAYER_VR_UI_ANCHOR_YAW = 0x890; // float, the yaw the UI is anchored to
+    constexpr std::ptrdiff_t PLAYER_VR_UI_HEAD_YAW = 0x894; // float, the yaw of the head it trails
+    constexpr std::ptrdiff_t PLAYER_VR_UI_LAG_TIMER = 0x898; // float, seconds against fHmdRotationLagDuration
+    constexpr std::ptrdiff_t PLAYER_VR_UI_RECOVERY_SPEED = 0x89C; // float, the speed it is catching up at
+    constexpr std::ptrdiff_t PLAYER_VR_UI_ROOT_1 = 0x7E0; // NiNode*, rebuilt from the anchor yaw each frame
+    constexpr std::ptrdiff_t PLAYER_VR_UI_ROOT_2 = 0x7F0; // NiNode*, the same
+    // NOTE: CommonLibF4VR's PlayerCharacter declares unrelated members at these offsets - see the note in its
+    // PlayerCharacter.h. Reach them by byte offset, not by field.
+
+    // NOT declared here on purpose: the placement methods of the WS*Model family (WSHUDMenu, WSLootMenu,
+    // WSDialogueInputModel and ten more), slot 2 of each vtable, which write their menu node's local transform
+    // from a per-menu set of [VRUI] settings - fDialogueInputX/Y/Z/Pitch/Scale:VRUI and so on. They look like
+    // the way to place a menu and are not: for the dialogue menu every one of those settings is 0 (scale 1),
+    // so the node sits on its parent's origin with no offset or rotation of its own, and the method runs about
+    // three times a second on a worker thread. Where a menu ends up is decided by the roots above.
+
     using _isPlayerRadioEnabled = uint64_t (*)();
     inline REL::Relocation<_isPlayerRadioEnabled> isPlayerRadioEnabled(REL::Offset(0xd0a9d0));
 

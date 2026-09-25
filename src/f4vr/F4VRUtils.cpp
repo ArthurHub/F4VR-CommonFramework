@@ -110,7 +110,7 @@ namespace f4cf::f4vr
      */
     void setWandsVisibility(const bool show, const bool leftWand)
     {
-        const auto node = leftWand ? getPlayerNodes()->primaryWandNode : getPlayerNodes()->SecondaryWandNode;
+        const auto node = leftWand ? getVRPlayerNodes()->primaryWandNode : getVRPlayerNodes()->secondaryWandNode;
         for (const auto& child : node->children) {
             if (child) {
                 if (child->IsNiTriShape()) {
@@ -897,6 +897,27 @@ namespace f4cf::f4vr
         if (!papyrusInterface->Register(callback)) {
             throw std::exception("Failed to register papyrus functions");
         }
+    }
+
+    /**
+     * Resolve a texture path the way a vrui NIF path is resolved: as given, then under Data\Textures\, then under
+     * the mod's own Data\Textures\<ModName>\, taking the first loose file that exists. The path comes back unchanged
+     * when none does - a texture packed in a BA2 archive, or one that is simply missing, which the load then reports.
+     */
+    std::string resolveTexturePath(const std::string_view path)
+    {
+        const std::string given(path);
+        // a leading separator would leave the prefixed candidates with a doubled one
+        const auto firstReal = given.find_first_not_of("/\\");
+        const std::string relative = firstReal == std::string::npos ? given : given.substr(firstReal);
+
+        for (const auto& candidate : { given, "Data\\Textures\\" + relative, "Data\\Textures\\" + g_mod->getName() + "\\" + relative }) {
+            std::error_code error;
+            if (std::filesystem::exists(candidate, error)) {
+                return candidate;
+            }
+        }
+        return given;
     }
 
     /**

@@ -3,15 +3,17 @@
 #include <format>
 
 #include "common/MatrixUtils.h"
+#include "f4vr/SphereStyle.h"
 
 using namespace common;
 
 namespace f4cf::vrui
 {
     UIDebugWidget::UIDebugWidget(const bool followInteractPos)
-        : UIWidget(UIUtils::getDebugSphereNifName())
+        : UIWidget(f4vr::getDebugSphereStyle().nif)
     {
         _followInteractionPosition = followInteractPos;
+        f4vr::applySphereStyle(_node.get(), f4vr::getDebugSphereStyle());
     }
 
     std::string UIDebugWidget::toString() const

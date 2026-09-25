@@ -19,4 +19,4 @@ Each PNG's file name becomes its `.nif` name — the same name you pass to `UIBu
 `UIWidget` in code. `--texture-subpath MyMod` is both the texture path baked into every nif
 (`Textures\MyMod\ui-example.DDS`) and the subfolder the atlas/nifs are written under; set it
 to your mod's name, and use `--output` to write straight into your mod's data folder. Full
-options and the reverse (`unpack`) are in [nif-tools/README.md](../../../../../nif-tools/README.md).
+options and the reverse (`unpack`) are in [nif-tools/README.md](../../../../nif-tools/README.md).

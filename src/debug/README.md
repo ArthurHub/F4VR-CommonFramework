@@ -4,9 +4,12 @@ Immediate-mode debug drawing anywhere in the VR world: boxes, spheres, lines, ar
 capsules, grids, arbitrary polylines/meshes, screen-space HUD text, world-anchored labels, and a
 "name: value" watch table. Namespace `f4cf::debug`.
 
-Rendering is a D3D11 wire/text renderer injected at the OpenVR `IVRCompositor::Submit` vtable hook,
-reusing the engine's own per-eye camera matrices, so shapes land exactly where the game renders that
-frame. Shapes draw **on top** of everything (no depth occlusion — usually wanted for debugging).
+Drawing goes through [`render/`](../render/README.md), the framework's shared overlay path: the
+producer here fills a `render::PrimitiveDraw` and publishes it to its own layer, which replays it on
+the render thread through the engine's own per-eye camera matrices, so shapes land exactly where the
+game renders that frame. The layer is registered at `DRAW_ORDER_DEBUG` and is **not** occluded by the
+world, so shapes draw on top of everything, mod UI included — which for debugging is what you want
+(x-ray visibility of colliders and zones through geometry).
 
 Design doc: [`docs/tech/debug-draw-overlay.md`](../../docs/tech/debug-draw-overlay.md).
 
@@ -20,7 +23,7 @@ namespace colors = f4cf::debug::colors;
 void MyMod::onFrameUpdate()
 {
     // call EVERY FRAME you want it visible — stop calling and it's gone (immediate mode)
-    dd().nodeAxes(f4vr::getPlayerNodes()->primaryWandNode);          // RGB orientation tripod
+    dd().nodeAxes(f4vr::getVRPlayerNodes()->primaryWandNode);        // RGB orientation tripod
     dd().sphere(zoneCenter, zoneRadius, /*distanceScaled*/false, colors::Cyan);   // true radius
     dd().sphere(markerPos, 12.0f, /*distanceScaled*/true, colors::Red);           // constant on-screen size
     dd().cone(lightPos, beamDir, range, fovDegrees, colors::Yellow);
@@ -33,6 +36,7 @@ void MyMod::onFrameUpdate()
 
     // HUD: watch table (auto-laid-out) + world-anchored label at a point
     dd().watch("grip angle", angleDeg);          // any std::format-able value
+    dd().watch("grip", "lost", colors::Red);     // optional color tints the value (flag a state)
     dd().label("event", eventPos, colors::White);
     // (optional) re-home the watch table from the default head HUD to the offhand controller:
     // dd().watchAnchorNode(f4vr::getOffhandWandNode());
@@ -45,8 +49,14 @@ void MyMod::onFrameUpdate()
 > not visible. Re-home the table with `watchAnchorNode(node)` / `watchAnchor(pos)` (e.g. the offhand
 > controller, for a wrist display). `label()` is a **world-space billboard** welded to its point (it
 > tilts with the world instead of staying screen-upright, so it doesn't appear to rotate as you move
-> your head, and scales with distance for a depth cue). The watch table's first row is an auto
-> `channels: …` line naming the channels drawn this frame (with `(off)` on any the config is muting).
+> your head, and scales with distance for a depth cue).
+
+**Watch table layout:** two columns — a dim name column right-aligned against the value column — so
+values line up at a glance. Rows are grouped under an underlined header for the channel they were
+watched on (untagged rows first, headerless); see [Channels](#channels). The columns are placed so a
+value changing width never shifts the table: for the centred HUD the gap between them sits on the
+anchor, for a left table after the widest name, for a right table before the widest value seen since
+the rows last changed.
 
 **Zero cost until used:** no hook is installed and the per-frame driver is a single atomic read
 until the first draw/watch call of the session. The Submit hook + D3D resources install lazily on
@@ -82,9 +92,14 @@ Tag draws so independent systems can be toggled separately:
 dd().setChannelEnabled("npc-detection", false);              // runtime kill-switch
 ```
 
-The channels tagged this frame show up automatically as the watch table's first row —
-`channels: npc-detection physics(off)` — so you can see at a glance what is drawing and what a
-config toggle is muting.
+Every channel tagged this frame gets a header in the watch table with the rows watched on it
+underneath, so there's no need to prefix row names with the system's name. A channel that only drew
+shapes still gets a bare header, and a muted one shows as a grey `physics (off)` with no rows — so you
+can see at a glance what is drawing and what a config toggle is muting.
+
+Channels are not only a mod's own: the framework tags its scene-depth readout `SCENE-DEPTH`, so
+`sDebugDrawDisabledChannels` mutes it like any other. That readout is off unless asked for — see
+[`bSceneDepthDiagnostics`](../../docs/debug-config.md#scene-depth-occlusion).
 
 ## `[Debug]` INI keys (all mods get these via `ConfigBase`, hot-reloadable)
 
@@ -100,7 +115,11 @@ config toggle is muting.
 | File                    | What it is                                                                                   |
 | ----------------------- | -------------------------------------------------------------------------------------------- |
 | `DebugDraw.h/.cpp`      | Public API + game-thread producer: primitives → line segments, watch table, channels, timed-shape store, frame publish. |
-| `DebugDrawRenderer.h/.cpp` | Internal render-thread consumer: `Submit` vtable hook, stereo-instancing shader, D3D state save/restore, 5×7 bitmap font. |
+
+The actual drawing is not here: `DebugDraw` fills a [`render::PrimitiveDraw`](../render/PrimitiveDraw.h)
+buffer and hands it to a [`render::PrimitiveDrawRenderer`](../render/PrimitiveDrawRenderer.h) layer,
+which owns the shaders, the text font and the draw callback on the shared
+[`render::SubmitHook`](../render/SubmitHook.h).
 
 ## Provenance
 

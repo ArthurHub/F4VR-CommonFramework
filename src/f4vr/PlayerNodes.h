@@ -5,8 +5,11 @@
 
 namespace f4cf::f4vr
 {
-    // part of PlayerCharacter object but making useful struct below since not mapped in F4SE
-    struct PlayerNodes
+    /**
+     * The VR node table at PlayerCharacter + 0x6E0 under its older member names.
+     * Deprecated: use getVRPlayerNodes() and CommonLibF4's RE::VRPlayerNodes. Removed in v0.5.0.
+     */
+    struct [[deprecated("f4vr::PlayerNodes is removed in v0.5.0; use getVRPlayerNodes() (RE::VRPlayerNodes)")]] PlayerNodes
     {
         RE::NiNode* playerworldnode; //0x06E0
         RE::NiNode* roomnode; //0x06E8
@@ -52,17 +55,40 @@ namespace f4cf::f4vr
         RE::NiNode* LockPickParentNode; //0x0828
     };
 
+    // The framework's own references to the deprecated struct below would otherwise warn in every file
+    // that includes this header; only callers of getPlayerNodes() should see the deprecation.
+#pragma warning(push)
+#pragma warning(disable: 4996)
+
+    // Guards the cast in getPlayerNodes() below: this struct must not describe more bytes than the one
+    // it aliases. RE::VRPlayerNodes in CommonLibF4 is where this table is documented and maintained.
+    static_assert(sizeof(PlayerNodes) <= sizeof(RE::VRPlayerNodes));
+
     inline RE::PlayerCharacter* getPlayer()
     {
         return RE::PlayerCharacter::GetSingleton();
     }
 
-    inline PlayerNodes* getPlayerNodes()
+    /**
+     * The VR node table, typed by CommonLibF4 as a real PlayerCharacter member, so the offsets are
+     * checked by the compiler rather than by a cast. Prefer this over getPlayerNodes().
+     */
+    inline RE::VRPlayerNodes* getVRPlayerNodes()
     {
         const auto player = RE::PlayerCharacter::GetSingleton();
-        auto* nodes = reinterpret_cast<PlayerNodes*>(reinterpret_cast<std::uintptr_t>(player) + 0x6E0);
-        return nodes;
+        return player ? &player->vrNodes : nullptr;
     }
+
+    /**
+     * The same table under the older member names, kept so existing callers still build.
+     * Deprecated: use getVRPlayerNodes(), whose struct is the one that is maintained. Removed in v0.5.0.
+     */
+    [[deprecated("f4vr::getPlayerNodes() is removed in v0.5.0; use getVRPlayerNodes() (RE::VRPlayerNodes)")]] inline PlayerNodes* getPlayerNodes()
+    {
+        return reinterpret_cast<PlayerNodes*>(getVRPlayerNodes());
+    }
+
+#pragma warning(pop)
 
     inline RE::NiNode* getWorldRootNode()
     {
@@ -126,7 +152,7 @@ namespace f4cf::f4vr
 
     inline RE::NiNode* getPrimaryWandNode()
     {
-        return findNode(getPlayerNodes()->primaryUIAttachNode, "world_primaryWand.nif");
+        return findNode(getVRPlayerNodes()->primaryUIAttachNode, "world_primaryWand.nif");
     }
 
     /**
@@ -135,7 +161,7 @@ namespace f4cf::f4vr
      */
     inline RE::NiNode* getThrowableWeaponNode()
     {
-        const auto meleeNode = getPlayerNodes()->primaryMeleeWeaponOffsetNode;
+        const auto meleeNode = getVRPlayerNodes()->primaryMeleeWeaponOffsetNode;
         return !meleeNode->children.empty() ? meleeNode->children[0]->IsNode() : nullptr;
     }
 
@@ -151,21 +177,21 @@ namespace f4cf::f4vr
 
     inline RE::NiNode* getLeftHandNode()
     {
-        return isLeftHandedMode() ? getPlayerNodes()->primaryWandNode : getPlayerNodes()->SecondaryWandNode;
+        return isLeftHandedMode() ? getVRPlayerNodes()->primaryWandNode : getVRPlayerNodes()->secondaryWandNode;
     }
 
     inline RE::NiNode* getRightHandNode()
     {
-        return isLeftHandedMode() ? getPlayerNodes()->SecondaryWandNode : getPlayerNodes()->primaryWandNode;
+        return isLeftHandedMode() ? getVRPlayerNodes()->secondaryWandNode : getVRPlayerNodes()->primaryWandNode;
     }
 
     inline RE::NiNode* getOffhandWandNode()
     {
-        return getPlayerNodes()->SecondaryWandNode;
+        return getVRPlayerNodes()->secondaryWandNode;
     }
 
     inline RE::NiNode* getPrimaryHandWandNode()
     {
-        return getPlayerNodes()->primaryWandNode;
+        return getVRPlayerNodes()->primaryWandNode;
     }
 }

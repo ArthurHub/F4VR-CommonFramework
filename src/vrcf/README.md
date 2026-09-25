@@ -113,6 +113,11 @@ To **disable** a binding, set its value to `none`, `off`, `disabled`, or leave i
 Note the difference from a *missing* key: an absent key falls back to the code default, while a present-but-empty
 value is an explicit "off". Example: `sOpenMenu = none`.
 
+To **show** a binding in your UI, do not spell the button out in a string literal — it goes stale as
+soon as someone edits the INI. `vrui::appendBindingPrompt(spans, binding)`
+([`BindingPrompt.h`](../vrui/BindingPrompt.h)) turns an `InputBinding` into a text-panel span with
+the controller icon it actually resolves to, falling back to words for a binding no icon covers.
+
 ## Haptic feedback
 
 `VRHaptics` plays haptic feedback on either controller — from a simple buzz to shaped patterns so

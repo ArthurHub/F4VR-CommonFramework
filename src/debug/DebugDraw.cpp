@@ -5,14 +5,22 @@
 #include <numbers>
 #include <set>
 
+#include "../ModBase.h"
 #include "../common/CommonUtils.h"
 #include "../common/MatrixUtils.h"
 #include "../f4vr/PlayerNodes.h"
+#include "../render/TextFont.h"
 #include "../vrcf/InputBindingParser.h"
 #include "../vrcf/VRControllersManager.h"
-#include "DebugDrawRenderer.h"
 
 using namespace common;
+
+namespace
+{
+    // This overlay's primitive-draw layer on the shared Submit hook. Static so it outlives the
+    // render thread's use of it, as PrimitiveDrawRenderer requires.
+    f4cf::render::PrimitiveDrawRenderer s_renderer("DebugDraw", f4cf::render::DRAW_ORDER_DEBUG);
+}
 
 namespace f4cf::debug
 {
@@ -23,10 +31,20 @@ namespace f4cf::debug
         // PhysicsScale.h:15 kFallbackHavokToGame).
         constexpr float HAVOK_TO_GAME_SCALE = 70.0f;
 
-        // watch-table layout: one "name: value" line per entry, stacked downward
+        // watch-table layout: a name column and a value column, rows stacked downward in groups under
+        // a header per channel
         constexpr float WATCH_TABLE_TEXT_SIZE = 2.0f;
-        // glyphs are 7 rows tall at `size` px per row; 9 rows of advance leaves a 2-row gap
-        constexpr float WATCH_TABLE_ROW_STEP = 9.0f * WATCH_TABLE_TEXT_SIZE;
+        // capitals are 7px tall per step of size and descenders reach about 2.3 more below them, so
+        // 11 steps between rows leaves a clear gap
+        constexpr float WATCH_TABLE_ROW_STEP = 11.0f * WATCH_TABLE_TEXT_SIZE;
+        // extra space above a channel header, setting its group apart from the one before
+        constexpr float WATCH_TABLE_GROUP_GAP = 0.5f * WATCH_TABLE_ROW_STEP;
+        // space between the name and value columns, in capital heights
+        constexpr float WATCH_TABLE_COLUMN_GAP = 1.5f;
+        // names dim so the values carry the eye; headers an accent, a muted channel's header grey
+        constexpr Color WATCH_NAME_COLOR = Color::rgba(170, 170, 170);
+        constexpr Color WATCH_HEADER_COLOR = Color::rgba(255, 196, 64);
+        constexpr Color WATCH_MUTED_HEADER_COLOR = Color::rgba(128, 128, 128);
 
         // Default head HUD placement (used when no explicit watchAnchor is set). The anchor is a
         // world point in front of the HMD so the table gets natural stereo depth. FORWARD_DIST sets
@@ -372,7 +390,7 @@ namespace f4cf::debug
         if (!isAppendActive() || str.empty()) {
             return;
         }
-        _building.texts.push_back(internal::TextEntry{ .text = std::string(str), .x = x, .y = y, .size = size, .color = color });
+        _building.addText(str, x, y, color, size);
     }
 
     /**
@@ -386,24 +404,33 @@ namespace f4cf::debug
         if (!isAppendActive() || str.empty()) {
             return;
         }
-        _building.texts.push_back(internal::TextEntry{ .text = std::string(str), .size = size, .color = color, .worldAnchor = worldPos, .worldAnchored = true, .billboard = true });
+        _building.addBillboardText(str, worldPos, color, size);
     }
 
     /**
-     * Add/update one row of the HUD "name: value" table for this frame (laid out in call order at
-     * the frame end). Immediate-mode like everything else: call it every frame the row should show.
+     * Add/update one row of the HUD watch table for this frame, under the current channel's header
+     * (laid out in call order at the frame end). Immediate-mode like everything else: call it every
+     * frame the row should show.
      */
-    void DebugDraw::watch(const std::string_view name, const std::string_view value)
+    void DebugDraw::watch(const std::string_view name, const std::string_view value, const Color& color)
     {
         s_everUsed.store(true, std::memory_order_relaxed);
         if (!isAppendActive()) {
             return;
         }
-        const auto it = std::ranges::find(_watch, name, &std::pair<std::string, std::string>::first);
+        if (!_channel.empty()) {
+            // a tag set in an earlier frame and never cleared isn't in this frame's set, and the
+            // layout only emits rows under a header it has
+            _channelsSeen.emplace(_channel);
+        }
+        const auto it = std::ranges::find_if(_watch, [&](const WatchRow& row) {
+            return row.channel == _channel && row.name == name;
+        });
         if (it != _watch.end()) {
-            it->second = value;
+            it->value = value;
+            it->color = color;
         } else {
-            _watch.emplace_back(std::string(name), std::string(value));
+            _watch.push_back(WatchRow{ .channel = _channel, .name = std::string(name), .value = std::string(value), .color = color });
         }
     }
 
@@ -437,15 +464,19 @@ namespace f4cf::debug
      */
     void DebugDraw::refreshAppendActive()
     {
-        bool channelEnabled = true;
-        if (!_channel.empty()) {
-            if (const auto it = _channelOverrides.find(_channel); it != _channelOverrides.end()) {
-                channelEnabled = it->second;
-            } else {
-                channelEnabled = !_configDisabledChannels.contains(_channel);
-            }
+        _appendActive = effectiveEnabled() && (_channel.empty() || isChannelEnabled(_channel));
+    }
+
+    /**
+     * A channel's own gate: its runtime override when one is set, else whether the INI-disabled set
+     * (sDebugDrawDisabledChannels) leaves it on.
+     */
+    bool DebugDraw::isChannelEnabled(const std::string& channel) const
+    {
+        if (const auto it = _channelOverrides.find(channel); it != _channelOverrides.end()) {
+            return it->second;
         }
-        _appendActive = effectiveEnabled() && channelEnabled;
+        return !_configDisabledChannels.contains(channel);
     }
 
     /**
@@ -472,11 +503,10 @@ namespace f4cf::debug
         if (!isAppendActive()) {
             return;
         }
-        if (_building.lines.size() * 2 + 2 > internal::MAX_LINE_VERTICES) {
+        if (!_building.addLine(start, end, color)) {
             ++_rejectedLines;
             return;
         }
-        _building.lines.push_back(internal::LineSegment{ .start = start, .end = end, .color = color });
         if (sec > 0) {
             _persist.push_back(TimedLine{ .segment = { .start = start, .end = end, .color = color }, .expiryMs = nowMillis() + static_cast<uint64_t>(sec * 1000.0f) });
         }
@@ -517,71 +547,100 @@ namespace f4cf::debug
     }
 
     /**
-     * "channels: a b(off)" — the channels drawn to this frame, each flagged (off) when its own gate
-     * (runtime override, else the INI-disabled set) is muting it. Empty when no channel was tagged.
-     */
-    std::string DebugDraw::channelStatusText() const
-    {
-        if (_channelsSeen.empty()) {
-            return {};
-        }
-        std::string out = "channels:";
-        for (const auto& name : _channelsSeen) {
-            bool enabled;
-            if (const auto it = _channelOverrides.find(name); it != _channelOverrides.end()) {
-                enabled = it->second;
-            } else {
-                enabled = !_configDisabledChannels.contains(name);
-            }
-            out += " " + name + (enabled ? "" : "(off)");
-        }
-        return out;
-    }
-
-    /**
-     * Lay the watch table out as stacked "name: value" rows, prefixed with a channel-status line
-     * (bypasses the channel gate — each row was already gated when watch() stored it). Rows are
-     * world-anchored labels stacking downward from the anchor's projected screen position, so they
-     * read in VR (a corner HUD is cropped by the lens): the explicit watchAnchor when set, else the
-     * default head HUD in front of the HMD. Falls back to nothing to draw if neither is available.
+     * Lay the watch table out in two columns: each row's dim name right-aligned against the gap, its
+     * value left-aligned after it. Untagged rows lead, headerless; then every channel tagged this
+     * frame gets a header with its rows under it in call order - a muted channel as a grey
+     * "NAME (off)" with no rows (watch() already dropped them), a channel that only drew shapes as a
+     * bare header, so the table still names everything drawing. Bypasses the channel gate (each row
+     * was gated when watch() stored it) but not the master switch.
+     *
+     * The columns hang off the gap between them, placed so a value changing width never moves it:
+     * after the widest name for a left-aligned table, on the anchor for a centred one (names grow left
+     * of it, values right), and before the widest value since the rows last changed for a
+     * right-aligned one. Headers start at the name column's left edge.
+     *
+     * Rows are world-anchored text stacking downward from the anchor's projected screen position, so
+     * they read in VR (a corner HUD is cropped by the lens): the explicit watchAnchor when set, else
+     * the default head HUD in front of the HMD. Nothing is drawn while neither is available.
      */
     void DebugDraw::layoutWatchTable()
     {
         const auto anchor = _watchAnchor ? _watchAnchor : defaultHudAnchor();
-        if (!anchor || (_watch.empty() && _channelsSeen.empty())) {
+        if (!anchor || !effectiveEnabled() || (_watch.empty() && _channelsSeen.empty())) {
             return;
         }
 
-        // Align the rows to the side the default HUD sits on (left rows flush-left, right flush-right,
-        // otherwise centred). An explicit watchAnchor has no placement, so left-align it.
-        internal::TextAlign align = internal::TextAlign::Left;
+        // Align the table to the side the default HUD sits on (left tables flush-left, right
+        // flush-right, otherwise centred). An explicit watchAnchor has no placement, so left-align it.
+        render::TextAlign align = render::TextAlign::Left;
         if (!_watchAnchor) {
             if (_hudPlacement == HudPlacement::CenterLeft || _hudPlacement == HudPlacement::CenterTopLeft) {
-                align = internal::TextAlign::Left;
+                align = render::TextAlign::Left;
             } else if (_hudPlacement == HudPlacement::CenterRight || _hudPlacement == HudPlacement::CenterTopRight) {
-                align = internal::TextAlign::Right;
+                align = render::TextAlign::Right;
             } else {
-                align = internal::TextAlign::Center;
+                align = render::TextAlign::Center;
             }
         }
 
+        const float textHeight = render::TEXT_PIXELS_PER_SIZE * WATCH_TABLE_TEXT_SIZE;
+        float nameColumnWidth = 0.0f;
+        float valueColumnWidth = 0.0f;
+        std::string layoutKey;
+        for (const auto& row : _watch) {
+            nameColumnWidth = (std::max)(nameColumnWidth, render::measureText(row.name, textHeight));
+            valueColumnWidth = (std::max)(valueColumnWidth, render::measureText(row.value, textHeight));
+            layoutKey.append(row.channel).append(1, '\n').append(row.name).append(1, '\n');
+        }
+        if (layoutKey != _watchLayoutKey) {
+            _watchLayoutKey = std::move(layoutKey);
+            _watchValueColumnWidth = valueColumnWidth;
+        } else {
+            _watchValueColumnWidth = (std::max)(_watchValueColumnWidth, valueColumnWidth);
+        }
+
+        // x offsets from the anchor: the gap's centre, and the column edges either side of it
+        const float halfGap = WATCH_TABLE_COLUMN_GAP * textHeight * 0.5f;
+        float gapCenter = 0.0f;
+        if (align == render::TextAlign::Left) {
+            gapCenter = nameColumnWidth + halfGap;
+        } else if (align == render::TextAlign::Right) {
+            gapCenter = -(_watchValueColumnWidth + halfGap);
+        }
+        const float nameEnd = gapCenter - halfGap;
+        const float valueStart = gapCenter + halfGap;
+        const float headerStart = nameEnd - nameColumnWidth;
+
         float y = 0.0f;
-        const auto addRow = [&](std::string text) {
-            _building.texts.push_back(internal::TextEntry{ .text = std::move(text),
-                .y = y,
-                .size = WATCH_TABLE_TEXT_SIZE,
-                .color = colors::White,
-                .worldAnchor = *anchor,
-                .worldAnchored = true,
-                .align = align });
+        const auto addHeader = [&](const std::string& text, const Color& color, const render::TextDecoration decoration) {
+            if (y > 0.0f) {
+                y += WATCH_TABLE_GROUP_GAP;
+            }
+            _building.addWorldAnchoredText(text, *anchor, headerStart, y, color, WATCH_TABLE_TEXT_SIZE, render::TextAlign::Left, decoration);
             y += WATCH_TABLE_ROW_STEP;
         };
+        const auto addRows = [&](const std::string_view channel) {
+            for (const auto& row : _watch) {
+                if (row.channel != channel) {
+                    continue;
+                }
+                // a Right-aligned run ends x to the LEFT of the anchor, hence the negated edge
+                _building.addWorldAnchoredText(row.name, *anchor, -nameEnd, y, WATCH_NAME_COLOR, WATCH_TABLE_TEXT_SIZE, render::TextAlign::Right);
+                if (!row.value.empty()) {
+                    _building.addWorldAnchoredText(row.value, *anchor, valueStart, y, row.color, WATCH_TABLE_TEXT_SIZE, render::TextAlign::Left);
+                }
+                y += WATCH_TABLE_ROW_STEP;
+            }
+        };
 
-        if (auto channels = channelStatusText(); !channels.empty()) {
-            addRow(std::move(channels));
-        }
-        for (const auto& [name, value] : _watch) {
-            addRow(name + ": " + value);
+        addRows("");
+        for (const auto& channel : _channelsSeen) {
+            if (isChannelEnabled(channel)) {
+                addHeader(channel, WATCH_HEADER_COLOR, render::TextDecoration::Underline);
+                addRows(channel);
+            } else {
+                addHeader(channel + " (off)", WATCH_MUTED_HEADER_COLOR, render::TextDecoration::None);
+            }
         }
     }
 
@@ -625,11 +684,11 @@ namespace f4cf::debug
      */
     std::optional<RE::NiPoint3> DebugDraw::defaultHudAnchor() const
     {
-        const auto* nodes = f4vr::getPlayerNodes();
-        if (!nodes || !nodes->HmdNode) {
+        const auto* nodes = f4vr::getVRPlayerNodes();
+        if (!nodes || !nodes->hmdNode) {
             return std::nullopt;
         }
-        const RE::NiTransform& head = nodes->HmdNode->world;
+        const RE::NiTransform& head = nodes->hmdNode->world;
         const RE::NiPoint3 forward = MatrixUtils::vec3Norm(head.rotate.Transpose() * RE::NiPoint3(0, 1, 0));
         const RE::NiPoint3 up = MatrixUtils::vec3Norm(head.rotate.Transpose() * RE::NiPoint3(0, 0, 1));
         const RE::NiPoint3 right = MatrixUtils::vec3Norm(head.rotate.Transpose() * RE::NiPoint3(1, 0, 0));
@@ -651,17 +710,26 @@ namespace f4cf::debug
      * changes, poll the hotkey, clear the last frame's command list, and re-emit unexpired timed
      * shapes. A no-op (single atomic read) until the first draw call ever.
      */
-    void DebugDraw::onFrameStart(const bool configEnabled, const std::string& configDisabledChannels, const std::string& configToggleBinding, const std::string& configHudPlacement)
+    void DebugDraw::onFrameStart()
     {
         if (!s_everUsed.load(std::memory_order_relaxed)) {
             return;
         }
+        const auto* config = g_mod ? g_mod->getConfig() : nullptr;
+        if (!config) {
+            return;
+        }
+        const bool configEnabled = config->debug.drawEnabled;
+        const std::string& configDisabledChannels = config->debug.drawDisabledChannels;
+        const std::string& configToggleBinding = config->debug.drawToggleBinding;
+        const std::string& configHudPlacement = config->debug.drawHudPlacement;
+
         auto& self = get();
 
         // head position for this frame — feeds distance-scaled markers (during onFrameUpdate) and the
         // billboard labels (copied into the published frame in onFrameEnd)
-        if (const auto* nodes = f4vr::getPlayerNodes(); nodes && nodes->HmdNode) {
-            self._cameraPos = nodes->HmdNode->world.translate;
+        if (const auto* nodes = f4vr::getVRPlayerNodes(); nodes && nodes->hmdNode) {
+            self._cameraPos = nodes->hmdNode->world.translate;
         }
 
         self._configEnabled = configEnabled;
@@ -684,7 +752,7 @@ namespace f4cf::debug
         self._watchAnchor.reset();
         self._channelsSeen.clear();
         if (self._rejectedLines > 0) {
-            logger::sample(5000, "DebugDraw: {} line(s) dropped over the {}-vertex budget", self._rejectedLines, internal::MAX_LINE_VERTICES);
+            logger::sample(5000, "DebugDraw: {} line(s) dropped over the {}-vertex budget", self._rejectedLines, render::MAX_LINE_VERTICES);
             self._rejectedLines = 0;
         }
 
@@ -695,10 +763,9 @@ namespace f4cf::debug
         });
         if (self.effectiveEnabled()) {
             for (const auto& timed : self._persist) {
-                if (self._building.lines.size() * 2 + 2 > internal::MAX_LINE_VERTICES) {
+                if (!self._building.addLine(timed.segment.start, timed.segment.end, timed.segment.color)) {
                     break;
                 }
-                self._building.lines.push_back(timed.segment);
             }
         }
     }
@@ -718,17 +785,17 @@ namespace f4cf::debug
         self.layoutWatchTable();
 
         if (!self._building.empty()) {
-            renderer::ensureInstalled();
+            s_renderer.ensureInstalled();
         }
 
         // hand this frame's head position to the render thread for orienting billboard labels
-        self._building.cameraPos = self._cameraPos;
+        self._building.viewerPosition = self._cameraPos;
 
         // group same-color lines into contiguous runs so the renderer draws each run in one call
-        std::ranges::stable_sort(self._building.lines, [](const internal::LineSegment& lhs, const internal::LineSegment& rhs) {
+        std::ranges::stable_sort(self._building.lines, [](const render::LineSegment& lhs, const render::LineSegment& rhs) {
             return colorLess(lhs.color, rhs.color);
         });
-        renderer::publish(std::move(self._building));
+        s_renderer.publish(std::move(self._building));
         self._building = {};
     }
 }

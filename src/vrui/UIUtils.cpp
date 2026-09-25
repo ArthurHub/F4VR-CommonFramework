@@ -28,16 +28,6 @@ namespace
 
 namespace f4cf::vrui
 {
-    std::string UIUtils::getDebugSphereNifName()
-    {
-        return "ui-common\\debug-sphere.nif";
-    }
-
-    std::string UIUtils::getDefaultSphereNifName()
-    {
-        return "ui-common\\activation-sphere@white-medium.nif";
-    }
-
     std::string UIUtils::getEmptyButtonFrameNifName()
     {
         return "ui-common\\btn-empty.nif";
@@ -58,7 +48,7 @@ namespace f4cf::vrui
      */
     RE::NiNode* UIUtils::getPrimaryWandAttachNode()
     {
-        return f4vr::getPlayerNodes()->primaryUIAttachNode;
+        return f4vr::getVRPlayerNodes()->primaryUIAttachNode;
     }
 
     /**
@@ -66,7 +56,7 @@ namespace f4cf::vrui
      */
     RE::NiNode* UIUtils::getHMDAttachNode()
     {
-        return findNode(f4vr::getPlayerNodes()->UprightHmdNode, "world_HMD_info.nif");
+        return findNode(f4vr::getVRPlayerNodes()->uprightHmdNode, "world_HMD_info.nif");
     }
 
     /**

@@ -10,6 +10,8 @@
 #include "f4vr/DebugInventory.h"
 
 #include "f4vr/PlayerNodes.h"
+#include "render/PrimitiveDrawRenderer.h"
+#include "render/TextFont.h"
 #include "vrcf/VRControllersHaptic.h"
 #include "vrcf/VRControllersManager.h"
 #include "vrcf/VRControllersSuppressor.h"
@@ -129,6 +131,11 @@ namespace f4cf
             logger::info("Init config...");
             _settings.config->load();
 
+            if (_settings.preloadRendering) {
+                // CPU only, so it can start now and be done long before the main menu
+                render::preloadTextFont();
+            }
+
             logger::info("Register F4SE messages...");
             _messaging = F4SE::GetMessagingInterface();
             _messaging->RegisterListener(onF4VRSEMessage);
@@ -154,6 +161,27 @@ namespace f4cf
         return success;
     }
 
+    namespace
+    {
+        /**
+         * Function-local static, not a namespace-level one: a subsystem's static initializer can run
+         * before this translation unit's, and registering into a not-yet-constructed vector would be
+         * undefined behaviour.
+         */
+        std::vector<void (*)()>& frameEndCallbacks()
+        {
+            static std::vector<void (*)()> callbacks;
+            return callbacks;
+        }
+    }
+
+    void registerFrameEndCallback(void (*callback)())
+    {
+        if (callback) {
+            frameEndCallbacks().push_back(callback);
+        }
+    }
+
     /**
      * Runs on every game frame, main logic goes here.
      * Handle any exceptions and log them.
@@ -172,12 +200,18 @@ namespace f4cf
 
             // debug-draw frame boundary around the mod update; both calls are a single atomic
             // read until the mod issues its first draw call ever (the zero-cost-when-unused contract)
-            const auto& debugConfig = _settings.config->debug;
-            debug::DebugDraw::onFrameStart(debugConfig.drawEnabled, debugConfig.drawDisabledChannels, debugConfig.drawToggleBinding, debugConfig.drawHudPlacement);
+            debug::DebugDraw::onFrameStart();
 
             onFrameUpdate();
 
             DebugAdjuster::onFrameUpdate(*_settings.config);
+
+            // Optional subsystems that self-registered (see registerFrameEndCallback); empty unless
+            // the mod actually uses one, which is what keeps them out of binaries that do not.
+            auto& callbacks = frameEndCallbacks();
+            for (std::size_t i = 0; i < callbacks.size(); ++i) {
+                callbacks[i]();
+            }
 
             debug::DebugDraw::onFrameEnd();
 
@@ -238,6 +272,11 @@ namespace f4cf
         {
             vrui::initUIManager();
 
+            if (_settings.preloadRendering) {
+                // needs the game's D3D device, which is up by the main menu
+                render::PrimitiveDrawRenderer::preload();
+            }
+
             if (_settings.setupMainGameLoop && _settings.setupMainGameLoopLate) {
                 main_hook::hook();
             }
@@ -290,10 +329,10 @@ namespace f4cf
             f4vr::DebugDump::printAllNodes();
         }
         if (_settings.config->checkDebugDumpDataOnceFor("pipboy")) {
-            f4vr::DebugDump::printNodes(f4vr::getPlayerNodes()->PipboyRoot_nif_only_node);
+            f4vr::DebugDump::printNodes(f4vr::getVRPlayerNodes()->pipboyRootNIFOnlyNode);
         }
         if (_settings.config->checkDebugDumpDataOnceFor("world")) {
-            f4vr::DebugDump::printNodes(f4vr::getPlayerNodes()->primaryWeaponScopeCamera->parent->parent->parent->parent->parent->parent);
+            f4vr::DebugDump::printNodes(f4vr::getVRPlayerNodes()->primaryWeaponScopeCamera->parent->parent->parent->parent->parent->parent);
         }
         if (_settings.config->checkDebugDumpDataOnceFor("fp_skelly")) {
             f4vr::DebugDump::printNodes(f4vr::getFirstPersonSkeleton());
