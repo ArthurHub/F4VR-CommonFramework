@@ -6,7 +6,12 @@ namespace f4cf::common
     {
         // 3D space related functions
         static float vec3Len(const RE::NiPoint3& v1);
+        // Always returns a unit vector: a degenerate input (length < 1e-6) has no direction, so it falls back to the
+        // principal axis of its largest component, sign preserved ((0,0,0) gives (1,0,0)). The fallback is unrelated to
+        // the geometry the caller meant, use tryVec3Norm where a degenerate input must be detected, not papered over.
         static RE::NiPoint3 vec3Norm(RE::NiPoint3 v1);
+        // Normalize `v` into `out`. Returns false and leaves `out` untouched if `v` is degenerate (length < epsilon).
+        static bool tryVec3Norm(const RE::NiPoint3& v, RE::NiPoint3& out, float epsilon = 0.000001f);
         static float vec3Dot(const RE::NiPoint3& v1, const RE::NiPoint3& v2);
         static RE::NiPoint3 vec3Cross(const RE::NiPoint3& v1, const RE::NiPoint3& v2);
         static float vec3Det(RE::NiPoint3 v1, RE::NiPoint3 v2, RE::NiPoint3 n);

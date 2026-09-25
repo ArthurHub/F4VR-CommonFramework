@@ -36,6 +36,17 @@ namespace f4cf::common
         return v1;
     }
 
+    bool MatrixUtils::tryVec3Norm(const RE::NiPoint3& v, RE::NiPoint3& out, const float epsilon)
+    {
+        const float mag = vec3Len(v);
+        // negated so a NaN length is rejected as well
+        if (!(mag >= epsilon)) {
+            return false;
+        }
+        out = RE::NiPoint3(v.x / mag, v.y / mag, v.z / mag);
+        return true;
+    }
+
     float MatrixUtils::vec3Dot(const RE::NiPoint3& v1, const RE::NiPoint3& v2)
     {
         return v1.x * v2.x + v1.y * v2.y + v1.z * v2.z;
@@ -287,6 +298,22 @@ namespace f4cf::common
 
         if (dotP >= 0.99999) {
             return getIdentityMatrix();
+        }
+
+        if (dotP <= -0.99999f) {
+            // antiparallel: the cross product below is ~zero so it gives no usable axis. Any axis perpendicular to the
+            // vectors is a valid 180-degree rotation, R = 2*a*a^T - I, which is symmetric so the storage convention doesn't matter.
+            const auto helper = abs(fromVecNorm.x) < 0.9f ? RE::NiPoint3(1, 0, 0) : RE::NiPoint3(0, 1, 0);
+            const auto perp = vec3Norm(vec3Cross(fromVecNorm, helper));
+            const float axis[3] = { perp.x, perp.y, perp.z };
+
+            RE::NiMatrix3 result;
+            for (int i = 0; i < 3; ++i) {
+                for (int j = 0; j < 3; ++j) {
+                    result.entry[i][j] = 2.0f * axis[i] * axis[j] - (i == j ? 1.0f : 0.0f);
+                }
+            }
+            return result;
         }
 
         const auto crossP = vec3Norm(vec3Cross(toVecNorm, fromVecNorm));
