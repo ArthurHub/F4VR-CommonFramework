@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What This Is
 
-F4VR Common Framework is a **static library** (v0.2.0) for building Fallout 4 VR F4SE plugins. It wraps [CommonLibF4VR](https://github.com/ArthurHub/CommonLibF4VR) and provides plugin lifecycle management, VR controller input, VR UI widgets, an overlay renderer (primitives, text, images, Dear ImGui), config hot-reload, and game-state utilities.
+F4VR Common Framework is a **static library** (v0.4.0; see [`docs/CHANGELOG.md`](docs/CHANGELOG.md)) for building Fallout 4 VR F4SE plugins. It wraps [CommonLibF4VR](https://github.com/ArthurHub/CommonLibF4VR) and provides plugin lifecycle management, VR controller input, VR UI widgets, an overlay renderer (primitives, text, images, Dear ImGui), config hot-reload, and game-state utilities.
 
 ## Build
 

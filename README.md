@@ -26,7 +26,7 @@ game-state utilities. Mods link it as a static library and start from the includ
 Writing a Fallout 4 VR F4SE plugin means re-solving the same problems every time: hooking the game
 main loop, registering Papyrus functions, reading OpenVR controllers, drawing UI in 3D space, and
 loading config that can change at runtime. This framework packages those into one reusable library
-(v0.2.0) that wraps [CommonLibF4VR](https://github.com/ArthurHub/CommonLibF4VR).
+(v0.4.0, see the [changelog](docs/CHANGELOG.md)) that wraps [CommonLibF4VR](https://github.com/ArthurHub/CommonLibF4VR).
 
 What it provides:
 
