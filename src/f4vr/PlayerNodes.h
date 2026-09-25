@@ -5,8 +5,11 @@
 
 namespace f4cf::f4vr
 {
-    // part of PlayerCharacter object but making useful struct below since not mapped in F4SE
-    struct PlayerNodes
+    /**
+     * The VR node table at PlayerCharacter + 0x6E0 under its older member names.
+     * Deprecated: use getVRPlayerNodes() and CommonLibF4's RE::VRPlayerNodes. Removed in v0.5.0.
+     */
+    struct [[deprecated("f4vr::PlayerNodes is removed in v0.5.0; use getVRPlayerNodes() (RE::VRPlayerNodes)")]] PlayerNodes
     {
         RE::NiNode* playerworldnode; //0x06E0
         RE::NiNode* roomnode; //0x06E8
@@ -52,6 +55,11 @@ namespace f4cf::f4vr
         RE::NiNode* LockPickParentNode; //0x0828
     };
 
+    // The framework's own references to the deprecated struct below would otherwise warn in every file
+    // that includes this header; only callers of getPlayerNodes() should see the deprecation.
+#pragma warning(push)
+#pragma warning(disable: 4996)
+
     // Guards the cast in getPlayerNodes() below: this struct must not describe more bytes than the one
     // it aliases. RE::VRPlayerNodes in CommonLibF4 is where this table is documented and maintained.
     static_assert(sizeof(PlayerNodes) <= sizeof(RE::VRPlayerNodes));
@@ -73,12 +81,14 @@ namespace f4cf::f4vr
 
     /**
      * The same table under the older member names, kept so existing callers still build.
-     * New code should use getVRPlayerNodes(), whose struct is the one that is maintained.
+     * Deprecated: use getVRPlayerNodes(), whose struct is the one that is maintained. Removed in v0.5.0.
      */
-    inline PlayerNodes* getPlayerNodes()
+    [[deprecated("f4vr::getPlayerNodes() is removed in v0.5.0; use getVRPlayerNodes() (RE::VRPlayerNodes)")]] inline PlayerNodes* getPlayerNodes()
     {
         return reinterpret_cast<PlayerNodes*>(getVRPlayerNodes());
     }
+
+#pragma warning(pop)
 
     inline RE::NiNode* getWorldRootNode()
     {

@@ -17,7 +17,7 @@ that make it all work.
 | [`CollisionLayers.h`](CollisionLayers.h) | Havok collision-layer (`RE::COL_LAYER`) helpers: the layer in a collision-filter word (`getCollisionLayer`), its readable name (`getCollisionLayerName` — "static", "actorZone", "charController"…, which is what makes a physics-query result legible), a name-or-number token back to a layer (`parseCollisionLayer`), and layer bitmasks for "which layers does this query care about" sets — `collisionLayerMask({ kTrigger, kActorZone… })` (`constexpr`, so a fixed set is free and a misspelling is a compile error), `parseCollisionLayerMask` for a set that comes from config, and `isCollisionLayerInMask` to test a filter word against either. |
 | [`F4VROffsets.h`](F4VROffsets.h) | All reverse-engineered RVAs (`REL::Relocation` / offsets) the framework calls into. |
 | [`PlayerRotation.h`](PlayerRotation.h) | Turns the player the way their VR comfort settings say (`iRotationType:VR` and friends, read live off the engine's `Setting` objects) — including where the game refuses to, since vanilla turning is a player-controls input handler and dialogue/menus take it away while a mod can still see the stick. Feed `turnByThumbstick(axisX)` each frame for the whole behaviour (snap per flick, continuous turn, or nothing, plus the stick latch), or drive it with `snapTurn`/`smoothTurn`; `getYaw`/`setYaw`/`rotateBy` bypass the configured style. Rotates the VR world (room) transform, as the engine does — not the actor. See [`../../docs/tech/vr-player-rotation.md`](../../docs/tech/vr-player-rotation.md). |
-| [`PlayerNodes.h`](PlayerNodes.h) | `PlayerNodes` struct — the 43 VR reference `NiNode*`s at `PlayerCharacter + 0x6E0` (wands, weapon offsets, Pip-Boy, HMD, scope, etc.). |
+| [`PlayerNodes.h`](PlayerNodes.h) | `getVRPlayerNodes()` — CommonLibF4's `RE::VRPlayerNodes`, the VR reference nodes at `PlayerCharacter + 0x6E0` (wands, weapon offsets, Pip-Boy, HMD, scope, etc.) — plus wand/weapon accessors like `getPrimaryWandNode()`. The older `PlayerNodes` struct / `getPlayerNodes()` are deprecated and removed in v0.5.0. |
 | [`WandActivationSphere.h`](WandActivationSphere.h) | Reusable proximity "activation sphere": a sphere around a node that, while a wand is inside it, suppresses each opted-in binding's button (owner-keyed, per-binding `InputBinding::suppress`), pulses a one-shot entry haptic, and fires an `onActivated` callback when a bound press lands (with a per-binding activation haptic). Two optional visuals, each drawn never / always / only `WhenInside` a hand / `WhenAvailable` (any binding fed enabled) (`ActivationSphereVisibility`): a sphere styled per sphere by a `SphereStyle` (default = the `white-subtle` preset; a runtime change reloads a freshly styled clone) at a visual-only scale (draw it smaller than the interaction radius as an "inside" hint; `Frame::showZone` forces it on at the zone's true size), facing the player's heading or the world axes (`ActivationSphereOrientation`); and an icon (`ActivationIconStyle`: a DDS, tint, world size — default `f4cf\activation-icon-hand.dds`) drawn at the zone center facing the HMD, on one primitive-overlay layer shared by all spheres, fading in and out. The authored bundle is `WandActivationConfig` (zone + optional power-armor zone + two bindings + entry/per-binding haptics + per-visual visibility + sphere and icon styles), loaded from one INI section via `ConfigBase::loadWandActivationConfig`. The caller mirrors the zone transform for handedness. See [`../../docs/input-binding.md`](../../docs/input-binding.md#activation-spheres). |
 | [`SphereStyle.h`](SphereStyle.h) | How a sphere visual looks (activation-sphere zones, vrui debug markers): a mesh plus the values `applySphereStyle` sets at runtime on its effect shader — color, alpha, glow, center/rim falloff opacity, and the texture. Each shape is restyled on a material of its own (a cloned mesh already owns one; a shared one is swapped for a private copy first). Named presets (`findSphereStylePreset`: `<color>-<strength>`, `debug`). Because the texture is set by code, the shipped meshes name no mod: every mod ships the same sphere mesh and textures from the `mod-template`. |
 | [`EffectShaderMaterials.h`](EffectShaderMaterials.h) | Runtime values on a cloned mesh's effect shaders (`BSEffectShaderProperty` — glows, beams, sphere visuals): `makeEffectShaderMaterialsPrivate` gives each effect-shaded shape a material of its own (call on a fresh clone, before it is first attached), then `forEachEffectShaderMaterial` hands you each such material to write — base color, base color scale, falloff opacities — which is safe live on a shown mesh, so it tints or fades one in place. `applySphereStyle` is built on it. |
@@ -51,12 +51,12 @@ if (isLeftHandedMode()) { /* swap hands */ }
 showNotification("Saved.");
 ```
 
-Accessing the VR player nodes (lives at `PlayerCharacter + 0x6E0`; see
-[`PlayerNodes.h`](PlayerNodes.h) for the full 43-node layout and the wand/weapon convenience
-accessors like `getPrimaryWandNode()`):
+Accessing the VR player nodes (lives at `PlayerCharacter + 0x6E0`; the layout is CommonLibF4's
+`RE::VRPlayerNodes`, and [`PlayerNodes.h`](PlayerNodes.h) adds wand/weapon convenience accessors
+like `getPrimaryWandNode()`):
 
 ```cpp
-RE::NiNode* hmd = getPlayerNodes()->HmdNode;
+RE::NiNode* hmd = getVRPlayerNodes()->hmdNode;
 ```
 
 ## Notes
@@ -67,5 +67,6 @@ RE::NiNode* hmd = getPlayerNodes()->HmdNode;
 - RVAs in [`F4VROffsets.h`](F4VROffsets.h) are version-specific (Fallout 4 VR 1.2.72). The
   authoritative source is `Analysis/gold/F4VR-CommonFramework_RE_REFERENCE.md` and the
   f4sevr 0.6.21 / FRIK references in the modding reference library.
-- The full `PlayerNodes` layout (all 43 nodes with byte offsets) is also documented in the reference
-  library's `F4VR-CommonFramework_RE_REFERENCE.md`.
+- The node table is documented and maintained as `RE::VRPlayerNodes` in CommonLibF4
+  (`RE/Bethesda/PlayerCharacter.h`). The deprecated `f4vr::PlayerNodes` / `getPlayerNodes()` alias
+  it under older member names and are removed in v0.5.0.

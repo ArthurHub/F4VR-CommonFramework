@@ -23,7 +23,7 @@ namespace colors = f4cf::debug::colors;
 void MyMod::onFrameUpdate()
 {
     // call EVERY FRAME you want it visible — stop calling and it's gone (immediate mode)
-    dd().nodeAxes(f4vr::getPlayerNodes()->primaryWandNode);          // RGB orientation tripod
+    dd().nodeAxes(f4vr::getVRPlayerNodes()->primaryWandNode);        // RGB orientation tripod
     dd().sphere(zoneCenter, zoneRadius, /*distanceScaled*/false, colors::Cyan);   // true radius
     dd().sphere(markerPos, 12.0f, /*distanceScaled*/true, colors::Red);           // constant on-screen size
     dd().cone(lightPos, beamDir, range, fovDegrees, colors::Yellow);
