@@ -233,6 +233,9 @@ test it immediately. Point it at your **MO2 mod folder** or your **`Fallout4VR\D
   build. Set it `false` to skip.
 - `COPY_PLUGIN_BASE_PATH` can be **several paths** separated by `;` (e.g. a MO2 folder *and* a live
   Data folder).
+- `COPY_PLUGIN_CONFIGURATIONS` limits the copy to some build configurations: `all` (the default) or a
+  `;` list such as `"Release"` or `"Debug;RelWithDebInfo"` (case-insensitive). Since a build preset picks
+  its `configuration`, this also decides which build presets deploy.
 - Add `"F4VR_COMMON_FRAMEWORK_PATH": "C:/path/to/checkout"` here only if you skipped the submodule.
 
 > Forward slashes in JSON. Use `C:/Path/...`, not `C:\Path\...` — a backslash is a JSON escape.

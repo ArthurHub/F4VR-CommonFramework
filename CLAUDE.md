@@ -199,6 +199,7 @@ Copy the entire `mod-template/` directory into the new mod's repo. Then replace 
 Also rename `CMakeUserPresets.json.template` → `CMakeUserPresets.json` (git-ignored) and fill in:
 - `POST_BUILD_COPY_PLUGIN`: `true` to auto-copy DLL/PDB after build
 - `COPY_PLUGIN_BASE_PATH`: path(s) to MO2 mod folder or `Fallout4VR\Data` (semicolon-separated)
+- `COPY_PLUGIN_CONFIGURATIONS`: build configurations to copy on — `all` (default) or a `;` list like `Release` / `Debug;RelWithDebInfo`
 - `F4VR_COMMON_FRAMEWORK_PATH`: only if not using a submodule (overrides the default `external/F4VR-CommonFramework`)
 
 Rename `src/PCH.h.template` → `src/PCH.h`.
