@@ -4,10 +4,10 @@
 #include <fmt/chrono.h>
 
 #include "MainLoopHook.h"
-#include "common/PerfMonitor.h"
 #include "debug/DebugDraw.h"
 #include "f4vr/DebugDump.h"
 #include "f4vr/DebugInventory.h"
+#include "perf/PerfMonitor.h"
 
 #include "f4vr/PlayerNodes.h"
 #include "render/PrimitiveDrawRenderer.h"
@@ -16,8 +16,6 @@
 #include "vrcf/VRControllersManager.h"
 #include "vrcf/VRControllersSuppressor.h"
 #include "vrui/UIManager.h"
-
-using namespace common;
 
 namespace f4cf
 {
@@ -188,7 +186,7 @@ namespace f4cf
      */
     void ModBase::onFrameUpdateSafe()
     {
-        static PerfMonitor perf("onFrameUpdateSafe");
+        static perf::PerfMonitor perf("ModBase::onFrameUpdateSafe");
         const auto perfTimer = perf.scope();
 
         CPPTRACE_TRY

@@ -7,6 +7,18 @@ and tooling tweaks are left to the git history.
 Versions follow `set(VERSION ...)` in the root [`CMakeLists.txt`](../CMakeLists.txt). While the
 major version is `0`, a minor bump may break the API; the **Upgrading** notes say what to change.
 
+## 0.5.0 — unreleased
+
+- **`f4cf::perf`**: `PerfMonitor` moved out of `common/` into its own module, and every site can
+  now be read on demand as well as logged: `PerfMonitor::all()` lists them, and while
+  `setCollecting(true)` is on each one accumulates into `stats()` until `resetStats()`.
+
+**Upgrading**
+
+- `PerfMonitor` moved to its own `perf/` folder and namespace: include `perf/PerfMonitor.h` and
+  use `perf::PerfMonitor` instead of `common/PerfMonitor.h` / `common::PerfMonitor`. It can no
+  longer be copied or moved, since it registers itself by address in `PerfMonitor::all()`.
+
 ## 0.4.0 — unreleased
 
 **Rendering in VR, built into the framework.**

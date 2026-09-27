@@ -124,6 +124,7 @@ Each source subsystem has its own README with usage details and examples:
 | [`imgui/`](src/imgui/README.md)   | Dear ImGui panels as world-space quads, standalone or inside a vrui layout. |
 | [`render/`](src/render/README.md) | Overlay rendering: lines, fills, images and text over the VR view; scene-depth occlusion. |
 | [`debug/`](src/debug/README.md)   | In-world debug draw: wire primitives, HUD text, world labels, watch table. |
+| [`perf/`](src/perf/README.md)     | Hot-path CPU timing: a periodic log summary per site, readable on demand. |
 
 ## Maintainers
 

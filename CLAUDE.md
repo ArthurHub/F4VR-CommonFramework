@@ -49,6 +49,7 @@ After cloning, run `pre-commit install` once to enforce clang-format on every co
 - `f4cf::render` — overlay rendering: lines/fills/images/text over the VR view, the shared `IVRCompositor::Submit` hook, scene-depth occlusion
 - `f4cf::imgui` — Dear ImGui panels as world-space quads (compiled out by `F4CF_WITH_IMGUI_UI=OFF`)
 - `f4cf::common` — math (quaternions, matrices) and shared utilities
+- `f4cf::perf` — hot-path CPU timing (`PerfMonitor` sites: periodic log line at debug level, on-demand `stats()` for a tool to read; game thread only)
 
 ### Plugin Lifecycle (`src/ModBase.h`)
 `ModBase` is the base class every mod derives from. Override these hooks:

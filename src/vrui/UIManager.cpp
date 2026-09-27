@@ -1,7 +1,7 @@
 #include "UIManager.h"
 
 #include "ModBase.h"
-#include "common/PerfMonitor.h"
+#include "perf/PerfMonitor.h"
 
 using namespace common;
 
@@ -33,7 +33,7 @@ namespace f4cf::vrui
         }
 
         // Only measured when a UI is actually attached (scene-graph layout/interaction work).
-        static common::PerfMonitor perf("UIManager::onFrameUpdate");
+        static perf::PerfMonitor perf("UIManager::onFrameUpdate");
         const auto perfTimer = perf.scope();
 
         if (!config->debugVRUIProperties.empty()) {
