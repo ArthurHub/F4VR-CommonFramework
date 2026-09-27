@@ -263,8 +263,9 @@ Open `build/HelloVR.sln`, pick the **Debug** configuration, and build. You shoul
 - `build/.../HelloVR.dll` and `HelloVR.pdb`,
 - a copy of both under `<COPY_PLUGIN_BASE_PATH>/F4SE/Plugins/` (if you enabled the copy).
 
-A **Release** build additionally stages `data/mod/` + the DLL and zips a versioned `.7z` into
-`build/package/` — that archive *is* your Nexus upload.
+Building the `package_mod` target in **Release** (`cmake --build build --config Release --target package_mod`) stages
+`data/mod/` + the DLL and zips a versioned `.7z` into `build/package/` — that archive *is* your Nexus
+upload. A normal build does not package.
 
 At this point the mod builds and loads, but does nothing. Time to give it a body.
 
@@ -470,5 +471,5 @@ with examples:
   data dumps, live tuning.
 - **[`src/README.md`](../src/README.md)** — how the subsystems fit together, at a glance.
 
-When you're ready to publish, do a **Release** build — it packages a versioned `.7z` under
-`build/package/` with the DLL and `data/mod/` laid out ready for a mod manager.
+When you're ready to publish, build the `package_mod` target in **Release** — it packages a versioned
+`.7z` under `build/package/` with the DLL and `data/mod/` laid out ready for a mod manager.

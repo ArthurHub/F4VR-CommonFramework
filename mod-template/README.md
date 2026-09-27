@@ -61,7 +61,7 @@ cd MyMod
 cmake --preset default      # generates build/MyMod.sln
 ```
 
-Open the solution and build. A Release build packages a versioned `.7z` under `build/package/`.
+Open the solution and build. To package, build the `package_mod` target in Release; it writes a versioned `.7z` under `build/package/`.
 
 ## Support
 

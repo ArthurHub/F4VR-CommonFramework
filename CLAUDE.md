@@ -220,7 +220,7 @@ Or point `F4VR_COMMON_FRAMEWORK_PATH` in CMakeUserPresets.json at an existing ch
 cmake --preset default        # or --preset vs2026
 ```
 
-Opens a VS solution in `build/`. Debug and Release configurations are both available. Release builds automatically stage everything (DLL, PDB, `data/mod/` contents) and produce a versioned `.7z` at `build/package/`.
+Opens a VS solution in `build/`. Debug and Release configurations are both available. Building the `package_mod` target (`cmake --build build --config Release --target package_mod`) stages everything (DLL, PDB, `data/mod/` contents) and produces a versioned `.7z` at `build/package/`; a normal build does not package.
 
 ### 4. Source file responsibilities
 
@@ -235,7 +235,7 @@ Opens a VS solution in `build/`. Debug and Release configurations are both avail
 | `cmake/Version.h.in` | Template → auto-generated `Version.h` with `Version::PROJECT`, `Version::NAME`, semver consts |
 | `cmake/version.rc.in` | Template → DLL metadata resource (file version, product name) |
 | `cmake/resources.rc.in` | Template → embeds `MyMod.ini` as binary resource ID 101 inside the DLL |
-| `cmake/package.cmake` | Post-build Release script: stages files → zips to versioned `.7z` |
+| `cmake/package.cmake` | Run by the `package_mod` target: stages files → zips to versioned `.7z` |
 | `data/config/MyMod.ini` | Shipped INI (also embedded in DLL as default). Sections: `[MyMod]` for settings, `[Debug]` for log level/pattern/debug flags |
 
 ### 5. Lifecycle hooks (override in MyMod.cpp)
