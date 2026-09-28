@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <functional>
+#include <memory>
 #include <string>
 
 #include <nlohmann/json.hpp>
@@ -57,7 +58,7 @@ namespace f4cf::devbench
     /**
      * Add an action to this mod's devbench tool. Call it before onGameLoaded returns, so the tool is registered
      * with its full description once; an action added later re-registers the tool.
-     * The generic actions every framework mod has (health, config, set, clear, overrides, perf) can't be replaced, and
+     * The generic actions every framework mod has (health, state, config, set, clear, overrides, perf) can't be replaced, and
      * neither can an action already added: either is logged and ignored.
      */
     void addAction(Action action);
@@ -105,5 +106,55 @@ namespace f4cf::devbench
          * Run the game-thread actions queued since the last frame. Game thread, before the mod's onFrameUpdate.
          */
         void onFrameStart();
+
+        /**
+         * Publish this frame's state snapshot while the tool is armed. Game thread, after the mod's onFrameUpdate.
+         */
+        void onFrameEnd();
+
+        /**
+         * The type-erased form of a mod's state provider; see devbench::setStateProvider.
+         */
+        struct StateProvider
+        {
+            // game thread, every frame while the tool is armed: a new snapshot of the mod's state
+            std::function<std::shared_ptr<const void>()> capture;
+            // listener thread: the JSON of a snapshot that capture returned
+            std::function<nlohmann::json(const void*)> toJson;
+        };
+
+        void setStateProvider(std::string description, StateProvider provider);
+    }
+
+    /**
+     * The mod's part of the state action.
+     *
+     * While the tool is armed, capture fills a new T on the game thread after every onFrameUpdate, and the state
+     * action formats the latest one with toJson on devbench's listener thread, so state answers without waiting for
+     * the game thread. T must hold plain values only: a snapshot outlives the frame that made it, and whatever a
+     * pointer in it pointed to may be gone by then. toJson must only read its T.
+     *
+     * The keys toJson returns are the state action's top level, beside the framework's "liveness"; the keys of a
+     * "liveness" object it returns are added to that block instead, for whatever tells whether the mod's state is
+     * current, such as a generation counter. description says what the keys mean; it is added to the tool's
+     * description. Call it before onGameLoaded returns; a later call re-registers the tool.
+     *
+     * @code
+     *     devbench::setStateProvider<MyState>("swim: underwater, depth, surfacing", &captureMyState, &myStateToJson);
+     * @endcode
+     */
+    template <typename T, typename Capture, typename ToJson>
+    void setStateProvider(std::string description, Capture capture, ToJson toJson)
+    {
+        internal::StateProvider provider;
+        provider.capture = [capture = std::move(capture)]() -> std::shared_ptr<const void> {
+            auto state = std::make_shared<T>();
+            capture(*state);
+            return state;
+        };
+        provider.toJson = [toJson = std::move(toJson)](const void* state) -> nlohmann::json {
+            return toJson(*static_cast<const T*>(state));
+        };
+        internal::setStateProvider(std::move(description), std::move(provider));
     }
 }

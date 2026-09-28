@@ -163,13 +163,15 @@ Full API and the draw path: [`src/imgui/README.md`](src/imgui/README.md).
 ### devbench Tool (`src/devbench/`)
 [devbench](https://github.com/ArthurHub/devbench) is a separate F4SE plugin serving MCP + REST tools
 from inside the game. `ModBase` registers one tool per mod after `onGameLoaded`, named after
-`Settings::name` in lowercase, with generic actions (`health`, `config`, `set`, `clear`,
-`overrides`, `perf`); a mod adds its own with `devbench::addAction` and opens the description with
-`devbench::setToolDescription`.
+`Settings::name` in lowercase, with generic actions (`health`, `state`, `config`, `set`, `clear`,
+`overrides`, `perf`); a mod adds its own with `devbench::addAction`, its state with
+`devbench::setStateProvider`, and opens the description with `devbench::setToolDescription`.
 
 - Devbench calls the tool on its **listener thread**. Actions run on the game thread by default:
   queued and run by `ModBase` right before `onFrameUpdate`, with a 2s timeout. `RunOn::Listener`
-  actions must not touch game or mod state.
+  actions (`health`, `state`) must not touch game or mod state.
+- `state` answers from a snapshot `ModBase` publishes after every `onFrameUpdate` once the tool is
+  armed; the provider's struct must hold **plain values only**, since a snapshot outlives its frame.
 - Tool names are one flat namespace in devbench, and a duplicate **silently replaces** the earlier
   tool; that is why the name comes from `Settings::name` and never from a generic word.
 - Only the devbench C-ABI slots every version has are called; a later slot needs a

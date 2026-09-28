@@ -11,8 +11,9 @@ major version is `0`, a minor bump may break the API; the **Upgrading** notes sa
 
 - **`f4cf::devbench`**: every mod gets its own [devbench](https://github.com/ArthurHub/devbench)
   tool, so an AI agent or a script can drive it in the running game over MCP or REST. `ModBase`
-  registers it, named after the mod, with generic actions for health, session config overrides
-  and reading every `PerfMonitor` site; a mod adds its own actions with `devbench::addAction`. Opt out with
+  registers it, named after the mod, with generic actions for health, the mod's state as of its
+  last frame, session config overrides and reading every `PerfMonitor` site; a mod adds its own
+  actions with `devbench::addAction` and its state with `devbench::setStateProvider`. Opt out with
   `Settings::devbenchTool = false`.
 - **`f4cf::perf`**: `PerfMonitor` moved out of `common/` into its own module, and every site can
   now be read on demand as well as logged: `PerfMonitor::all()` lists them, and while

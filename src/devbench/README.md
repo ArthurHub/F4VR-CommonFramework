@@ -19,7 +19,8 @@ same generic actions:
 
 | Action | Arguments | What it does |
 |--------|-----------|--------------|
-| `health` | — | Which mod and framework version this is, the tool's `contract` number, the devbench build, whether the tool is armed, and its actions. Answered without the game thread, so it replies while the game is stalled. |
+| `health` | — | Which mod and framework version this is, the tool's `contract` number, the devbench build, whether the tool is armed, whether a state snapshot exists and its `liveness`, and the actions. Answered without the game thread, so it replies while the game is stalled. |
+| `state` | — | What the mod is doing as of its last frame: `liveness` plus the mod's own state (see below). Answered from a snapshot without the game thread; the call that arms the tool waits for the first one. |
 | `config` | `key`, `section` | One INI value as the mod sees it: the session override if one is set, otherwise the file's. |
 | `set` | `key`, `value`, `section` | Override one INI value for the session (`ConfigBase::setConfigOverride`); the file is not written. |
 | `clear` | `key`, `section`, or `all` | Drop one session override, or all of them. |
@@ -53,20 +54,63 @@ void MyMod::onModLoaded(const F4SE::LoadInterface*)
 - **Threads.** Devbench calls the tool on its own listener thread. An action runs on the game
   thread by default: it is queued, run at the start of the next frame right before the mod's
   `onFrameUpdate`, and the caller waits up to 2 seconds for it. `RunOn::Listener` runs it at once
-  instead, for answers that must work while the game is stalled; such a handler may only read
-  atomics and data that no longer changes. A mod without `setupMainGameLoop` has no frame to run
+  instead, for answers that must work while the game is stalled, as `health` and `state` do; such a
+  handler may only read atomics and data that no longer changes. A mod without `setupMainGameLoop` has no frame to run
   the queue in, so its actions go through F4SE's task interface.
 - **Answers.** A handler returns a JSON object and gets `"ok": true` added; throwing turns the
   call into `{ "ok": false, "error": "<message>" }`, which carries no other keys.
 - **Arming.** The first call of any action but `health` arms the tool (`devbench::isArmed()`) for
   the rest of the session, and anything that costs per-frame work waits for it: arming is what
-  switches on `PerfMonitor` collection, so a perf window starts at the first use. `health` never
-  arms, so probing every mod is free.
+  switches on `PerfMonitor` collection, so a perf window starts at the first use, and the per-frame
+  state snapshot. `health` never arms, so probing every mod is free.
 - **Arguments.** All actions share one flat input schema, so start each argument's description
   with the actions that read it (`"surface: ..."`). An argument several actions share is declared
   once; the first declaration wins.
 - **Adding late.** Actions and the description added before `onGameLoaded` returns go out in
   the first registration; a later change re-registers the tool.
+
+### State
+
+While the tool is armed, `ModBase` publishes a snapshot after every `onFrameUpdate`, including
+the frames the mod's update returned early from, and `state` answers from the latest one without
+waiting for the game thread. That is what keeps it answering while the game is stalled, and all
+of its values come from the same frame.
+
+Every snapshot carries the framework's `liveness`, which a reader checks first:
+
+| Key | Meaning |
+|-----|---------|
+| `frame` | Snapshots published since the tool was armed. This tool's counter, not the engine's frame. |
+| `ageMs` | How old the snapshot is. A growing `ageMs` means the game thread stopped publishing. |
+| `publishedAtMs` | When it was published, on `steady_clock`, which every DLL in the game process shares, so snapshots of different mods line up. |
+
+The mod adds its own state with a provider: a plain-values struct, filled on the game thread and
+turned into JSON on devbench's thread.
+
+```cpp
+struct SwimState
+{
+    bool underwater = false;
+    float depth = 0;
+    std::uint32_t sessionGeneration = 0;
+};
+
+devbench::setStateProvider<SwimState>(
+    "swim: underwater and depth in game units",
+    [](SwimState& state) { state.underwater = isUnderwater(); state.depth = currentDepth(); state.sessionGeneration = g_generation; },
+    [](const SwimState& state) -> nlohmann::json {
+        return { { "swim", { { "underwater", state.underwater }, { "depth", state.depth } } },
+            { "liveness", { { "sessionGeneration", state.sessionGeneration } } } };
+    });
+```
+
+- The keys the JSON has become the top level of the `state` answer, beside `liveness`. The keys
+  of its own `liveness` object are added to the framework's block, for whatever tells whether the
+  state is current, such as a generation counter. They never replace the framework's keys.
+- The struct must hold **plain values only**. A snapshot outlives its frame, and a node or form a
+  pointer pointed to may be gone by the time a reader formats it.
+- The description goes into the `state` action's description, so an agent knows what the keys mean.
+- Capturing costs one allocation and a copy per frame, and only while the tool is armed.
 
 ### Several mods at once
 

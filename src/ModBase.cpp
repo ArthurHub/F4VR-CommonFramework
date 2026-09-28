@@ -207,6 +207,10 @@ namespace f4cf
 
             onFrameUpdate();
 
+            // this frame's devbench state snapshot, after every exit path of the mod's update; a single relaxed load
+            // until someone uses the mod's devbench tool
+            devbench::internal::onFrameEnd();
+
             DebugAdjuster::onFrameUpdate(*_settings.config);
 
             // Optional subsystems that self-registered (see registerFrameEndCallback); empty unless

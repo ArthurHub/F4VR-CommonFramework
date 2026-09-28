@@ -8,6 +8,7 @@
 #include <future>
 #include <mutex>
 #include <optional>
+#include <thread>
 #include <vector>
 
 #include "ConfigBase.h"
@@ -30,6 +31,9 @@ namespace f4cf::devbench
 
         // the free probe every mod answers: the one action that never arms the tool
         constexpr auto HEALTH_ACTION = "health";
+
+        // the generic action whose description the mod's state provider extends
+        constexpr auto STATE_ACTION = "state";
 
         /**
          * Serialize an answer for the host. Invalid UTF-8 (an INI value in a legacy code page, say) is replaced rather
@@ -291,6 +295,44 @@ namespace f4cf::devbench
                 });
             }
 
+            void setStateProvider(std::string description, internal::StateProvider provider)
+            {
+                if (!provider.capture || !provider.toJson) {
+                    logger::error("devbench: ignoring a state provider without a capture or a toJson");
+                    return;
+                }
+                {
+                    std::lock_guard lock(_lock);
+                    _stateDescription = std::move(description);
+                }
+                _stateProvider.store(std::make_shared<const internal::StateProvider>(std::move(provider)));
+                refreshRegistration();
+            }
+
+            /**
+             * Game thread, at the end of every frame, including the frames the mod's update returned early from: a
+             * snapshot frozen at its last good value through a loading screen would be a lie. One relaxed load while
+             * the tool is not armed.
+             */
+            void publishState()
+            {
+                if (!isArmed()) {
+                    return;
+                }
+                auto snapshot = std::make_shared<Snapshot>();
+                snapshot->frame = ++_publishedFrames;
+                snapshot->publishedAt = std::chrono::steady_clock::now();
+                if (auto provider = _stateProvider.load()) {
+                    try {
+                        snapshot->modState = provider->capture();
+                        snapshot->provider = std::move(provider);
+                    } catch (const std::exception& ex) {
+                        snapshot->captureError = ex.what();
+                    }
+                }
+                _snapshot.store(std::move(snapshot));
+            }
+
             /**
              * Game thread, at the start of every frame. One relaxed load while nothing is queued.
              */
@@ -329,6 +371,15 @@ namespace f4cf::devbench
                               handler(&Tool::health),
                               RunOn::Listener },
                     true);
+                addAction({ STATE_ACTION,
+                              "what the mod is doing as of its last frame. Read 'liveness' first: frame counts the frames published since the tool "
+                              "was armed and ageMs is how old the latest is, so a growing ageMs means the game thread has stopped. Answered from a "
+                              "snapshot published every frame, so it replies while the game is stalled; the call that arms the tool waits for the "
+                              "first one",
+                              json::object(),
+                              handler(&Tool::readState),
+                              RunOn::Listener },
+                    true);
                 addAction({ "config",
                               "one INI value as the mod sees it: the session override if one is set, otherwise the file's",
                               { { "section", section }, { "key", key } },
@@ -365,6 +416,17 @@ namespace f4cf::devbench
 
             json health(const json&) const
             {
+                // before taking _lock, as it calls the mod's toJson; health never waits for a snapshot
+                const auto snapshot = _snapshot.load();
+                json liveness = nullptr;
+                if (snapshot) {
+                    try {
+                        liveness = stateJson(*snapshot)["liveness"];
+                    } catch (const std::exception&) {
+                        liveness = frameworkLiveness(*snapshot);
+                    }
+                }
+
                 std::lock_guard lock(_lock);
                 json actions = json::array();
                 for (const auto& entry : _actions) {
@@ -378,8 +440,22 @@ namespace f4cf::devbench
                     { "tool", _name },
                     { "devbench", _hostBuild },
                     { "armed", isArmed() },
+                    { "hasSnapshot", snapshot != nullptr },
+                    { "liveness", liveness },
                     { "actions", actions },
                 };
+            }
+
+            /**
+             * Listener thread: the latest snapshot, never the game thread.
+             */
+            json readState(const json&) const
+            {
+                const auto snapshot = waitForSnapshot();
+                if (!snapshot->captureError.empty()) {
+                    throw std::runtime_error(std::format("capturing the mod's state threw on the game thread: {}", snapshot->captureError));
+                }
+                return stateJson(*snapshot);
             }
 
             json readConfig(const json& args) const
@@ -522,6 +598,90 @@ namespace f4cf::devbench
             }
 
             /**
+             * One frame of state, published on the game thread and read on the listener thread. Immutable once
+             * published, and a reader keeps the one it loaded alive for as long as it needs it.
+             */
+            struct Snapshot
+            {
+                std::uint64_t frame = 0;
+                std::chrono::steady_clock::time_point publishedAt;
+                // the provider that captured modState, which is also the one that can format it
+                std::shared_ptr<const internal::StateProvider> provider;
+                std::shared_ptr<const void> modState;
+                std::string captureError;
+            };
+
+            /**
+             * The framework's liveness block: frame is this tool's publish counter, not the engine's; publishedAtMs is
+             * on steady_clock, which every DLL in the process shares, so snapshots of different mods line up.
+             */
+            static json frameworkLiveness(const Snapshot& snapshot)
+            {
+                using std::chrono::duration_cast;
+                using std::chrono::milliseconds;
+                return {
+                    { "frame", snapshot.frame },
+                    { "ageMs", duration_cast<milliseconds>(std::chrono::steady_clock::now() - snapshot.publishedAt).count() },
+                    { "publishedAtMs", duration_cast<milliseconds>(snapshot.publishedAt.time_since_epoch()).count() },
+                };
+            }
+
+            /**
+             * The state answer: the mod's keys at the top level, and the framework's liveness block with the keys of the
+             * mod's own "liveness" object added (never replacing the framework's).
+             */
+            static json stateJson(const Snapshot& snapshot)
+            {
+                json state = json::object();
+                json liveness = frameworkLiveness(snapshot);
+                if (snapshot.provider && snapshot.modState) {
+                    const auto modState = snapshot.provider->toJson(snapshot.modState.get());
+                    if (modState.is_object()) {
+                        for (const auto& [key, value] : modState.items()) {
+                            if (key == "liveness" && value.is_object()) {
+                                for (const auto& [livenessKey, livenessValue] : value.items()) {
+                                    if (!liveness.contains(livenessKey)) {
+                                        liveness[livenessKey] = livenessValue;
+                                    }
+                                }
+                            } else if (key != "ok") {
+                                state[key] = value;
+                            }
+                        }
+                    }
+                }
+                state["liveness"] = std::move(liveness);
+                return state;
+            }
+
+            /**
+             * The latest snapshot. The call that armed the tool finds none yet, so it waits for the one the end of the
+             * next frame publishes rather than failing.
+             */
+            std::shared_ptr<const Snapshot> waitForSnapshot() const
+            {
+                auto snapshot = _snapshot.load();
+                if (snapshot) {
+                    return snapshot;
+                }
+                if (!_settings.hasFrameUpdate) {
+                    throw std::runtime_error("this mod has no frame update, so it publishes no state");
+                }
+                // polled, as it happens once per session and a condition variable would cost the publisher every frame
+                const auto deadline = std::chrono::steady_clock::now() + GAME_THREAD_TIMEOUT;
+                while (!(snapshot = _snapshot.load()) && std::chrono::steady_clock::now() < deadline) {
+                    std::this_thread::sleep_for(std::chrono::milliseconds(5));
+                }
+                if (!snapshot) {
+                    throw std::runtime_error(
+                        std::format("no state was published within {}ms: the game thread is stalled or paused, or the mod's frame "
+                                    "update is not running",
+                            GAME_THREAD_TIMEOUT.count()));
+                }
+                return snapshot;
+            }
+
+            /**
              * What devbench lists for the tool: a description that opens with the mod's own words and lists every
              * action, and one flat input schema holding every action's arguments.
              */
@@ -535,6 +695,9 @@ namespace f4cf::devbench
                     for (const auto& entry : _actions) {
                         if (entry.generic == generic) {
                             text += std::format("\n- {}: {}", entry.action.name, entry.action.description);
+                            if (entry.action.name == STATE_ACTION) {
+                                text += _stateDescription.empty() ? ". This mod publishes only liveness" : std::format(". This mod's part: {}", _stateDescription);
+                            }
                         }
                     }
                 };
@@ -546,9 +709,16 @@ namespace f4cf::devbench
                 }
                 text += "\nGeneric actions, the same in every F4VR-CommonFramework mod:";
                 appendActions(true);
-                text +=
-                    "\nEvery action but health runs on the game thread at the start of the next frame, and fails after 2s if the game "
-                    "thread does not get there.";
+                std::string listenerActions;
+                for (const auto& entry : _actions) {
+                    if (entry.action.runOn == RunOn::Listener) {
+                        listenerActions += (listenerActions.empty() ? "" : ", ") + entry.action.name;
+                    }
+                }
+                text += std::format(
+                    "\n{} answer at once, without the game thread. Every other action runs on the game thread at the start of the next frame, "
+                    "and fails after 2s if the game thread does not get there.",
+                    listenerActions);
 
                 json names = json::array();
                 json properties = json::object();
@@ -633,6 +803,14 @@ namespace f4cf::devbench
             std::mutex _commandsLock;
             std::vector<Command> _commands;
             std::atomic<bool> _hasCommands{ false };
+
+            // the mod's state provider (set at load, swapped whole) and its description, which is under _lock
+            std::atomic<std::shared_ptr<const internal::StateProvider>> _stateProvider;
+            std::string _stateDescription;
+            // written on the game thread, read on the listener thread
+            std::atomic<std::shared_ptr<const Snapshot>> _snapshot;
+            // game thread only
+            std::uint64_t _publishedFrames = 0;
         };
 
         /**
@@ -692,6 +870,16 @@ namespace f4cf::devbench
         void onFrameStart()
         {
             tool().runQueuedCommands();
+        }
+
+        void onFrameEnd()
+        {
+            tool().publishState();
+        }
+
+        void setStateProvider(std::string description, StateProvider provider)
+        {
+            tool().setStateProvider(std::move(description), std::move(provider));
         }
     }
 }
