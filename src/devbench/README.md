@@ -112,6 +112,27 @@ devbench::setStateProvider<SwimState>(
 - The description goes into the `state` action's description, so an agent knows what the keys mean.
 - Capturing costs one allocation and a copy per frame, and only while the tool is armed.
 
+### Events
+
+`devbench::emit(topic, makePayload)` publishes an event through devbench: MCP clients get it as a
+notification, REST clients poll `GET /api/events?since=N`, and devbench stamps each one with the
+engine frame. The topic is prefixed with the tool's name, so `emit("skeleton.ready")` in FRIK is
+published as `frik.skeleton.ready`.
+
+```cpp
+devbench::emit("skeleton.ready", [&] { return nlohmann::json{ { "generation", _skeletonGeneration } }; });
+devbench::emit("modeEntered");   // no payload
+```
+
+The payload is a function, called only when the event can go somewhere: while devbench is absent,
+and before the game has loaded, an emit is one atomic load and builds nothing.
+
+- Every mod publishes `<tool>.sessionLoaded` after each save load and new game, once the mod's
+  own `onGameSessionLoaded` has run.
+- Events of every mod share one ring of 256 in devbench, so emit them when something changes
+  (a skeleton rebuilt, a mode entered), never every frame.
+- Any thread. Before the tool is registered, and when devbench is absent, it does nothing.
+
 ### Several mods at once
 
 Each mod DLL links its own copy of the framework, so each has its own tool, queue and config, and
@@ -121,8 +142,8 @@ which is also the DLL's name, keeps them unique; the framework logs a warning wh
 registration replaced something. The generic actions are identical in every mod, and `health`'s
 `framework` and `contract` fields say which version of them a mod has.
 
-Only `GetBuildNumber` and `RegisterTool` are used, slots every devbench has, so a mod works with
-any devbench version. A later slot would have to be gated on `GetBuildNumber()` (see below).
+Only `GetBuildNumber`, `RegisterTool` and `EmitEvent` are used, slots every devbench has, so a mod
+works with any devbench version. A later slot would have to be gated on `GetBuildNumber()` (see below).
 
 ## Vendored client API
 

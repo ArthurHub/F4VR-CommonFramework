@@ -323,6 +323,9 @@ namespace f4cf
             _settings.config->load();
 
             onGameSessionLoaded();
+
+            // after the mod's own handling, so a client waiting on it finds the mod reset for the new session
+            devbench::emit("sessionLoaded");
         }
         CPPTRACE_CATCH(const std::exception& ex)
         {

@@ -208,6 +208,11 @@ namespace f4cf::devbench
                 _defaultSection = std::move(section);
             }
 
+            [[nodiscard]] bool isRegistered() const
+            {
+                return _registered.load(std::memory_order_acquire);
+            }
+
             [[nodiscard]] bool isArmed() const
             {
                 return _armed.load(std::memory_order_relaxed);
@@ -226,7 +231,7 @@ namespace f4cf::devbench
 
             void registerTool(const internal::ToolSettings& settings)
             {
-                if (_registered) {
+                if (_registered.load(std::memory_order_acquire)) {
                     return;
                 }
                 {
@@ -249,7 +254,8 @@ namespace f4cf::devbench
                 if (!_interface->RegisterTool(_name.c_str(), descriptor.c_str(), &toolHandler, nullptr)) {
                     logger::warn("devbench: registering the '{}' tool replaced an existing tool of that name, registered earlier by another mod or by devbench", _name);
                 }
-                _registered = true;
+                // release: a thread that sees it registered also sees _name and _interface
+                _registered.store(true, std::memory_order_release);
                 logger::info("devbench build {}: registered the '{}' tool", _hostBuild, _name);
             }
 
@@ -293,6 +299,19 @@ namespace f4cf::devbench
                 return runOnGameThread([selected = *action, args] {
                     return runHandler(selected, args);
                 });
+            }
+
+            /**
+             * Any thread: devbench's EmitEvent only queues the event, it never delivers on the caller's thread.
+             */
+            void emit(const std::string_view topic, const json& payload) const
+            {
+                if (topic.empty() || !_registered.load(std::memory_order_acquire)) {
+                    return;
+                }
+                const auto fullTopic = std::format("{}.{}", _name, topic);
+                const auto body = dump(payload);
+                _interface->EmitEvent(fullTopic.c_str(), body.c_str());
             }
 
             void setStateProvider(std::string description, internal::StateProvider provider)
@@ -745,7 +764,7 @@ namespace f4cf::devbench
              */
             void refreshRegistration() const
             {
-                if (!_registered) {
+                if (!_registered.load(std::memory_order_acquire)) {
                     return;
                 }
                 const auto descriptor = buildDescriptor();
@@ -796,7 +815,7 @@ namespace f4cf::devbench
             std::string _name;
             DevBenchAPI::IDevBenchInterface001* _interface = nullptr;
             unsigned int _hostBuild = 0;
-            bool _registered = false;
+            std::atomic<bool> _registered{ false };
 
             std::atomic<bool> _armed{ false };
 
@@ -880,6 +899,16 @@ namespace f4cf::devbench
         void setStateProvider(std::string description, StateProvider provider)
         {
             tool().setStateProvider(std::move(description), std::move(provider));
+        }
+
+        bool canEmit()
+        {
+            return tool().isRegistered();
+        }
+
+        void emit(const std::string_view topic, const nlohmann::json& payload)
+        {
+            tool().emit(topic, payload);
         }
     }
 }

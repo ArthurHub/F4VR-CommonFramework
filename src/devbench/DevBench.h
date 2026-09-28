@@ -1,9 +1,11 @@
 #pragma once
 
+#include <concepts>
 #include <cstdint>
 #include <functional>
 #include <memory>
 #include <string>
+#include <string_view>
 
 #include <nlohmann/json.hpp>
 
@@ -124,6 +126,45 @@ namespace f4cf::devbench
         };
 
         void setStateProvider(std::string description, StateProvider provider);
+
+        /**
+         * Whether an event would go anywhere: the tool is registered, so devbench is installed and the game has loaded.
+         * One atomic load. Any thread.
+         */
+        [[nodiscard]] bool canEmit();
+
+        void emit(std::string_view topic, const nlohmann::json& payload);
+    }
+
+    /**
+     * Publish an event through devbench, where MCP clients get it as a notification and REST clients poll it from
+     * /api/events. The topic is prefixed with the tool's name ("skeleton.ready" is published as
+     * "frik.skeleton.ready"), so it can't collide with another mod's. Events share one small ring in devbench with
+     * every other mod's, so emit them at the rate of lifecycle changes, never every frame.
+     *
+     * makePayload returns the event's JSON and is called only when the event can go somewhere, so while devbench is
+     * absent (and before the game has loaded) an emit costs one atomic load and builds nothing. Any thread.
+     *
+     * @code
+     *     devbench::emit("skeleton.ready", [&] { return nlohmann::json{ { "generation", _skeletonGeneration } }; });
+     * @endcode
+     */
+    template <std::invocable MakePayload>
+    void emit(const std::string_view topic, MakePayload&& makePayload)
+    {
+        if (internal::canEmit()) {
+            internal::emit(topic, std::forward<MakePayload>(makePayload)());
+        }
+    }
+
+    /**
+     * An event without a payload; see emit(topic, makePayload).
+     */
+    inline void emit(const std::string_view topic)
+    {
+        emit(topic, [] {
+            return nlohmann::json::object();
+        });
     }
 
     /**
