@@ -115,6 +115,8 @@ namespace f4cf
 
         bool hasConfigOverride(const char* section, const char* key) const;
 
+        std::map<std::pair<std::string, std::string>, std::string> getConfigOverrides() const;
+
         void loadEmbeddedDefaultOnly();
 
         void saveIniConfigValue(const char* section, const char* key, bool value);

@@ -125,6 +125,7 @@ Each source subsystem has its own README with usage details and examples:
 | [`render/`](src/render/README.md) | Overlay rendering: lines, fills, images and text over the VR view; scene-depth occlusion. |
 | [`debug/`](src/debug/README.md)   | In-world debug draw: wire primitives, HUD text, world labels, watch table. |
 | [`perf/`](src/perf/README.md)     | Hot-path CPU timing: a periodic log summary per site, readable on demand. |
+| [`devbench/`](src/devbench/README.md) | Each mod's devbench tool, for agents and scripts driving the running game. |
 
 ## Maintainers
 

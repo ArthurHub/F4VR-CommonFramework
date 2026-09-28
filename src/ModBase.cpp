@@ -5,6 +5,7 @@
 
 #include "MainLoopHook.h"
 #include "debug/DebugDraw.h"
+#include "devbench/DevBench.h"
 #include "f4vr/DebugDump.h"
 #include "f4vr/DebugInventory.h"
 #include "perf/PerfMonitor.h"
@@ -200,6 +201,10 @@ namespace f4cf
             // read until the mod issues its first draw call ever (the zero-cost-when-unused contract)
             debug::DebugDraw::onFrameStart();
 
+            // devbench actions queued since the last frame, so they read and change state before the mod's update
+            // consumes it; a single relaxed load when nothing is queued
+            devbench::internal::onFrameStart();
+
             onFrameUpdate();
 
             DebugAdjuster::onFrameUpdate(*_settings.config);
@@ -280,6 +285,11 @@ namespace f4cf
             }
 
             onGameLoaded();
+
+            // after the mod's onGameLoaded, so the actions it adds there are in the tool's first descriptor
+            if (_settings.devbenchTool) {
+                devbench::internal::registerTool({ _settings.name, _settings.version, _settings.config, _settings.setupMainGameLoop });
+            }
         }
         CPPTRACE_CATCH(const std::exception& ex)
         {

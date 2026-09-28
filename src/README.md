@@ -160,6 +160,7 @@ flags for runtime toggling, debug-dump triggers, and batch config saves).
 | [`Logger.h`](Logger.h)               | `f4cf::logger` | spdlog wrapper. `logger::trace` / `debug` / `info` / `warn` / `error` functions + rate-limited `logger::sample`. |
 | [`common/`](common/README.md)        | `f4cf::common` | Math (quaternions, matrices, transforms) and engine-agnostic utilities (strings, files, resources, time).        |
 | [`debug/`](debug/README.md)          | `f4cf::debug`  | Immediate-mode in-world debug draw overlay: wire primitives, HUD text/labels, watch table. Zero cost until used. |
+| [`devbench/`](devbench/README.md)    | `f4cf::devbench` | The mod's devbench tool: generic health/config actions plus the mod's own, for agents and scripts driving the running game. |
 | [`f4vr/`](f4vr/README.md)            | `f4cf::f4vr`   | Fallout 4 VR game-state utilities: nodes, skeleton, player nodes, menus, Scaleform, thumbstick.                  |
 | [`f4sevr/`](f4sevr/README.md)        | `F4SEVR`       | Ported F4SE VR SDK: Papyrus VM interop, native-function registration, VM value/arg marshalling.                  |
 | [`imgui/`](imgui/README.md)          | `f4cf::imgui`  | Dear ImGui panels drawn as world-space quads: a raw `Canvas`, and `UIImGuiPanel` for a vrui layout.              |

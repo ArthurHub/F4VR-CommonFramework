@@ -559,6 +559,19 @@ namespace f4cf
     }
 
     /**
+     * Every active session override, keyed by {section, key}, with its value in the INI string form.
+     */
+    std::map<std::pair<std::string, std::string>, std::string> ConfigBase::getConfigOverrides() const
+    {
+        std::lock_guard lock(_overridesMutex);
+        std::map<std::pair<std::string, std::string>, std::string> overrides;
+        for (const auto& [sectionKey, value] : _overrides) {
+            overrides.emplace(sectionKey, value.toString());
+        }
+        return overrides;
+    }
+
+    /**
      * Save or clear the VRUI dev layout section in the INI file depending on if we have VRUI properties.
      */
     void ConfigBase::saveVRUIIniSection(CSimpleIniA& ini)

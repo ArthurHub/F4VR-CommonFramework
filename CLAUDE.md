@@ -49,6 +49,7 @@ After cloning, run `pre-commit install` once to enforce clang-format on every co
 - `f4cf::render` — overlay rendering: lines/fills/images/text over the VR view, the shared `IVRCompositor::Submit` hook, scene-depth occlusion
 - `f4cf::imgui` — Dear ImGui panels as world-space quads (compiled out by `F4CF_WITH_IMGUI_UI=OFF`)
 - `f4cf::common` — math (quaternions, matrices) and shared utilities
+- `f4cf::devbench` — each mod's devbench tool (MCP/REST actions an agent or script calls in the running game), registered by `ModBase`
 - `f4cf::perf` — hot-path CPU timing (`PerfMonitor` sites: periodic log line at debug level, on-demand `stats()` for a tool to read; game thread only)
 
 ### Plugin Lifecycle (`src/ModBase.h`)
@@ -159,6 +160,23 @@ and composited as one quad, so N canvases cost one ImGui frame and one draw call
 
 Full API and the draw path: [`src/imgui/README.md`](src/imgui/README.md).
 
+### devbench Tool (`src/devbench/`)
+[devbench](https://github.com/ArthurHub/devbench) is a separate F4SE plugin serving MCP + REST tools
+from inside the game. `ModBase` registers one tool per mod after `onGameLoaded`, named after
+`Settings::name` in lowercase, with generic actions (`health`, `config`, `set`, `clear`,
+`overrides`); a mod adds its own with `devbench::addAction` and opens the description with
+`devbench::setToolDescription`.
+
+- Devbench calls the tool on its **listener thread**. Actions run on the game thread by default:
+  queued and run by `ModBase` right before `onFrameUpdate`, with a 2s timeout. `RunOn::Listener`
+  actions must not touch game or mod state.
+- Tool names are one flat namespace in devbench, and a duplicate **silently replaces** the earlier
+  tool; that is why the name comes from `Settings::name` and never from a generic word.
+- Only the devbench C-ABI slots every version has are called; a later slot needs a
+  `GetBuildNumber()` check. `DevBenchAPI.h/.cpp` are vendored verbatim: never edit or reformat them.
+
+Full API: [`src/devbench/README.md`](src/devbench/README.md).
+
 ### FRIK Inter-Mod Integration
 Mods that want a button in FRIK's config menu:
 ```cpp
@@ -176,6 +194,7 @@ The `Settings` struct passed to the `ModBase` constructor controls:
 - `earlyFrameUpdate` / `lateFrameUpdate` flags — late means "run before all others" (used by FRIK for body tracking priority)
 - Update frequency (calls per second for `onFrameUpdate`)
 - `preloadRendering` (default off) — build the overlay rendering before the first draw instead of on it, which otherwise stalls that frame for ~0.1s (mostly the font atlas): the font on a background thread from plugin load (`render::preloadTextFont()`), the shared D3D pipeline + Submit hook host at game loaded (`render::PrimitiveDrawRenderer::preload()`). Turn it on in a mod that draws vrui panels, activation-sphere icons or other `f4cf::render` overlays; the mod sets it in its constructor (`_settings.preloadRendering = true;`)
+- `devbenchTool` (default on) — register the mod's devbench tool when devbench is installed; set it to `false` in the constructor to opt out
 
 ### mod-template
 The `mod-template/` directory is a complete starting point for new mods. See [Creating a New Mod](#creating-a-new-mod) below for the full process.
