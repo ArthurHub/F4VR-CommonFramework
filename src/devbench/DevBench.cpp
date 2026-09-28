@@ -373,7 +373,7 @@ namespace f4cf::devbench
                 return {
                     { "plugin", _settings.modName },
                     { "version", _settings.modVersion },
-                    { "framework", std::string(Version::NAME) },
+                    { "framework", F4CF_VERSION },
                     { "contract", TOOL_CONTRACT },
                     { "tool", _name },
                     { "devbench", _hostBuild },

@@ -140,6 +140,10 @@ target_compile_features(${PROJECT_NAME} PUBLIC cxx_std_23)
 target_compile_definitions(${PROJECT_NAME}
   PRIVATE
     _UNICODE
+    # The framework's own version, for framework code. Version::NAME can't be it: the mod generates a
+    # Version.h with the same inline variables, and the linker keeps one definition of them for the
+    # whole DLL, which in practice is the mod's.
+    F4CF_VERSION="${PROJECT_VERSION}"
 )
 
 # Public headers for consumers (switch base to ${ROOT_DIR}/include if you have one)
