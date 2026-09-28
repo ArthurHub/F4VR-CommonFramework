@@ -12,6 +12,7 @@
 
 #include "ConfigBase.h"
 #include "DevBenchAPI.h"
+#include "perf/PerfMonitor.h"
 
 namespace f4cf::devbench
 {
@@ -208,6 +209,17 @@ namespace f4cf::devbench
                 return _armed.load(std::memory_order_relaxed);
             }
 
+            /**
+             * Someone is using the tool, so switch on what costs per-frame work, once: every PerfMonitor starts
+             * collecting what the perf action reads.
+             */
+            void arm()
+            {
+                if (!_armed.exchange(true, std::memory_order_relaxed)) {
+                    perf::PerfMonitor::setCollecting(true);
+                }
+            }
+
             void registerTool(const internal::ToolSettings& settings)
             {
                 if (_registered) {
@@ -269,7 +281,7 @@ namespace f4cf::devbench
                 }
 
                 if (name != HEALTH_ACTION) {
-                    _armed.store(true, std::memory_order_relaxed);
+                    arm();
                 }
                 if (action->runOn == RunOn::Listener) {
                     return runHandler(*action, args);
@@ -333,6 +345,12 @@ namespace f4cf::devbench
                               handler(&Tool::clearConfig) },
                     true);
                 addAction({ "overrides", "the session overrides in effect", json::object(), handler(&Tool::listOverrides) }, true);
+                addAction({ "perf",
+                              "CPU time on the game thread of every PerfMonitor site in the mod (n, avg, p95, p99, min, max ms, busy%) since its last "
+                              "reset. Collection starts when the tool is first used, so reset, hold the condition, then read. It cannot see GPU time",
+                              { { "reset", argument("boolean", "perf: clear every site after reading it, starting a new window") } },
+                              handler(&Tool::readPerf) },
+                    true);
             }
 
             /**
@@ -407,6 +425,40 @@ namespace f4cf::devbench
                     overrides.push_back({ { "section", sectionKey.first }, { "key", sectionKey.second }, { "value", value } });
                 }
                 return { { "overrides", overrides } };
+            }
+
+            /**
+             * Game thread, since that is the only thread the monitors are safe to read on.
+             */
+            json readPerf(const json& args) const
+            {
+                const bool reset = argBool(args, "reset");
+                const auto now = perf::PerfStats::Clock::now();
+                json sites = json::object();
+                for (auto* monitor : perf::PerfMonitor::all()) {
+                    const auto s = monitor->stats().summary(now);
+                    // two sites sharing a name must not hide each other
+                    auto name = monitor->name();
+                    for (int copy = 2; sites.contains(name); ++copy) {
+                        name = std::format("{} ({})", monitor->name(), copy);
+                    }
+                    sites[name] = {
+                        { "n", s.count },
+                        { "windowMs", s.windowMs },
+                        { "totalMs", s.totalMs },
+                        { "avgMs", s.avgMs },
+                        { "p95Ms", s.p95Ms },
+                        { "p99Ms", s.p99Ms },
+                        { "minMs", s.minMs },
+                        { "maxMs", s.maxMs },
+                        { "busyPct", s.busyPct },
+                        { "percentilesTruncated", s.percentilesTruncated },
+                    };
+                    if (reset) {
+                        monitor->resetStats();
+                    }
+                }
+                return { { "reset", reset }, { "sites", sites } };
             }
 
             ConfigBase& config() const

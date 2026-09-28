@@ -57,7 +57,7 @@ namespace f4cf::devbench
     /**
      * Add an action to this mod's devbench tool. Call it before onGameLoaded returns, so the tool is registered
      * with its full description once; an action added later re-registers the tool.
-     * The generic actions every framework mod has (health, config, set, clear, overrides) can't be replaced, and
+     * The generic actions every framework mod has (health, config, set, clear, overrides, perf) can't be replaced, and
      * neither can an action already added: either is logged and ignored.
      */
     void addAction(Action action);

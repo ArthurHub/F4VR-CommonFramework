@@ -11,7 +11,8 @@ Cheap CPU timing of the functions a mod runs every frame. A measured site is one
   accumulates into `stats()`, which only `resetStats()` clears. `PerfMonitor::all()` lists every
   monitor in the DLL, the framework's own included (`ModBase::onFrameUpdateSafe` is the mod's whole
   frame, `UIManager::onFrameUpdate` its vrui update), so a tool can read every site at once over
-  whatever window it chooses.
+  whatever window it chooses. The mod's [devbench tool](../devbench/README.md) does exactly that:
+  using it switches collection on, and its `perf` action reads (and optionally resets) every site.
 
 With both off, `scope()` returns an inert timer: the cost at a site is one log-level check and one
 relaxed atomic load. This measures CPU time on the calling thread only; it cannot see GPU time.

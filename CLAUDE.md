@@ -164,7 +164,7 @@ Full API and the draw path: [`src/imgui/README.md`](src/imgui/README.md).
 [devbench](https://github.com/ArthurHub/devbench) is a separate F4SE plugin serving MCP + REST tools
 from inside the game. `ModBase` registers one tool per mod after `onGameLoaded`, named after
 `Settings::name` in lowercase, with generic actions (`health`, `config`, `set`, `clear`,
-`overrides`); a mod adds its own with `devbench::addAction` and opens the description with
+`overrides`, `perf`); a mod adds its own with `devbench::addAction` and opens the description with
 `devbench::setToolDescription`.
 
 - Devbench calls the tool on its **listener thread**. Actions run on the game thread by default:
