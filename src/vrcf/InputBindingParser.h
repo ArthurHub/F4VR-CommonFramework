@@ -3,6 +3,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <vector>
 
 #include "VRControllersManager.h"
 
@@ -53,4 +54,22 @@ namespace f4cf::vrcf
      * required button/axis/direction tokens cannot be resolved.
      */
     std::optional<InputBinding> parseInputBinding(std::string_view text);
+
+    /**
+     * The grammar's word for a button - system, menu, grip, a, trigger, thumbstick - the inverse of parseButton, so
+     * text built with it parses back to the same button. "button<id>" for one the grammar has no word for.
+     */
+    std::string buttonName(vr::EVRButtonId button);
+
+    /**
+     * The grammar's word for an axis - thumbstick, trigger, grip - the inverse of parseAxis. "axis<index>" for one
+     * the grammar has no word for.
+     */
+    std::string axisName(Axis axis);
+
+    /**
+     * Every button an OpenVR button mask holds (as in VRControllerState_t::ulButtonPressed), by buttonName, lowest
+     * id first.
+     */
+    std::vector<std::string> buttonNames(uint64_t buttonMask);
 }

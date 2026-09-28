@@ -158,6 +158,10 @@ namespace f4cf::vrcf
         // is at most one line per suppression transition -- never per frame. Main thread only.
         void logState(std::string_view key, const char* action) const;
 
+        // Publishes key's masks and the effective ones as the mod's devbench "input.suppression" event. Called only on
+        // real changes, alongside logState, so never per frame. Main thread only.
+        void emitChange(std::string_view key) const;
+
         // Applies the suppression masks to a state read when shouldSuppress is true (i.e. not one of
         // our own SelfControllerReadScope reads). Called on the OpenVR / polling thread.
         void applyTo(vr::TrackedDeviceIndex_t idx, vr::VRControllerState_t* state, bool shouldSuppress) const;

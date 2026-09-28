@@ -173,7 +173,8 @@ from inside the game. `ModBase` registers one tool per mod after `onGameLoaded`,
 - `state` answers from a snapshot `ModBase` publishes after every `onFrameUpdate` once the tool is
   armed; the provider's struct must hold **plain values only**, since a snapshot outlives its frame.
 - `devbench::emit(topic)` publishes `<tool>.<topic>` into a 256-event ring every mod shares: emit on
-  changes, never per frame. `ModBase` emits `<tool>.sessionLoaded` after each save load.
+  changes, never per frame. The framework emits `sessionLoaded`, `config.reloaded`, `config.override`
+  (any source, including other mods) and `input.suppression` (per owner, only on a real mask change).
 - Tool names are one flat namespace in devbench, and a duplicate **silently replaces** the earlier
   tool; that is why the name comes from `Settings::name` and never from a generic word.
 - Only the devbench C-ABI slots every version has are called; a later slot needs a

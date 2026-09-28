@@ -6,6 +6,9 @@
 
 #include <utility>
 
+#include "InputBindingParser.h"
+#include "devbench/DevBench.h"
+
 namespace f4cf::vrcf
 {
     namespace
@@ -158,6 +161,7 @@ namespace f4cf::vrcf
         if (changed) {
             republishAggregate();
             logState(key, "updated");
+            emitChange(key);
         }
     }
 
@@ -195,6 +199,45 @@ namespace f4cf::vrcf
             _right.buttons.load(std::memory_order_relaxed),
             static_cast<unsigned>(_right.axes.load(std::memory_order_relaxed)),
             _owners.size());
+    }
+
+    namespace
+    {
+        /**
+         * One hand's mask by the input binding grammar's names (InputBindingParser), so an event reads like an INI
+         * binding. Axis bits index rAxis, which is what Axis numbers.
+         */
+        nlohmann::json sideJson(const uint64_t buttons, const uint8_t axes)
+        {
+            nlohmann::json axisNames = nlohmann::json::array();
+            for (uint32_t axis = 0; axis < 8; ++axis) {
+                if (axes & (1u << axis)) {
+                    axisNames.push_back(axisName(static_cast<Axis>(axis)));
+                }
+            }
+            return { { "buttons", buttonNames(buttons) }, { "axes", axisNames } };
+        }
+    }
+
+    /**
+     * Publishes one owner's change as the mod's devbench event: the owner's masks after it (empty once released) and
+     * the effective union every owner adds up to, per physical hand. The cross-mod timeline of who held which input.
+     */
+    void VRControllersSuppressor::emitChange(const std::string_view key) const
+    {
+        devbench::emit("input.suppression", [&] {
+            const auto it = _owners.find(key);
+            const OwnerMask owner = it != _owners.end() ? it->second : OwnerMask{};
+            return nlohmann::json{
+                { "owner", std::string(key) },
+                { "left", sideJson(owner.left.buttons, owner.left.axes) },
+                { "right", sideJson(owner.right.buttons, owner.right.axes) },
+                { "effective",
+                    { { "left", sideJson(_left.buttons.load(std::memory_order_relaxed), _left.axes.load(std::memory_order_relaxed)) },
+                        { "right", sideJson(_right.buttons.load(std::memory_order_relaxed), _right.axes.load(std::memory_order_relaxed)) } } },
+                { "owners", _owners.size() },
+            };
+        });
     }
 
     /**
@@ -408,6 +451,7 @@ namespace f4cf::vrcf
             _owners.erase(it);
             republishAggregate();
             logState(key, "released owner");
+            emitChange(key);
         }
     }
 
@@ -416,12 +460,19 @@ namespace f4cf::vrcf
      */
     void VRControllersSuppressor::reset()
     {
+        const bool hadOwners = !_owners.empty();
         _owners.clear();
         _left.buttons.store(0, std::memory_order_release);
         _left.axes.store(0, std::memory_order_release);
         _right.buttons.store(0, std::memory_order_release);
         _right.axes.store(0, std::memory_order_release);
         logger::info("VRControllersSuppress: reset (all owners cleared)");
+        if (hadOwners) {
+            // every owner stopped at once; without it a client tracking owners would think they still suppress
+            devbench::emit("input.suppression", [] {
+                return nlohmann::json{ { "reset", true }, { "owners", 0 } };
+            });
+        }
     }
 
     /**

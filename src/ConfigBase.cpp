@@ -5,6 +5,7 @@
 #include <nlohmann/json.hpp>
 
 #include "common/MatrixUtils.h"
+#include "devbench/DevBench.h"
 #include "f4vr/WandActivationSphere.h"
 #include "vrcf/InputBindingParser.h"
 #include "vrcf/VRControllersHaptic.h"
@@ -250,6 +251,9 @@ namespace f4cf
     void ConfigBase::reload()
     {
         loadIniConfigValues();
+        devbench::emit("config.reloaded", [&] {
+            return nlohmann::json{ { "file", fs::path(_iniFilePath).filename().string() }, { "trigger", "reload" } };
+        });
     }
 
     /**
@@ -513,6 +517,10 @@ namespace f4cf
         }
         logger::info("Config: Set session override \"{}.{} = {}\"", section, key, value.toString());
         loadIniConfigValues();
+        // whoever set it: a devbench call, the mod itself, or another mod through the mod's API
+        devbench::emit("config.override", [&] {
+            return nlohmann::json{ { "section", section }, { "key", key }, { "value", value.toString() } };
+        });
     }
 
     /**
@@ -529,6 +537,9 @@ namespace f4cf
         if (removed) {
             logger::info("Config: Cleared session override \"{}.{}\"", section, key);
             loadIniConfigValues();
+            devbench::emit("config.override", [&] {
+                return nlohmann::json{ { "section", section }, { "key", key }, { "value", nullptr } };
+            });
         }
     }
 
@@ -546,6 +557,9 @@ namespace f4cf
         if (hadAny) {
             logger::info("Config: Cleared all session overrides");
             loadIniConfigValues();
+            devbench::emit("config.override", [&] {
+                return nlohmann::json{ { "all", true }, { "value", nullptr } };
+            });
         }
     }
 
@@ -1073,6 +1087,11 @@ namespace f4cf
                     logger::info("Notify INI config change subscriber '{}'", key.c_str());
                     subscriber(key);
                 }
+
+                // once the subscribers have it too, so a client that reacts to it sees the mod already reconfigured
+                devbench::emit("config.reloaded", [&] {
+                    return nlohmann::json{ { "file", fs::path(_iniFilePath).filename().string() }, { "trigger", "file" } };
+                });
             });
         }).detach();
     }

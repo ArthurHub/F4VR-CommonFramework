@@ -2,6 +2,7 @@
 
 #include <cctype>
 #include <charconv>
+#include <format>
 #include <vector>
 
 namespace f4cf::vrcf
@@ -164,6 +165,51 @@ namespace f4cf::vrcf
             return Direction::Right;
         }
         return std::nullopt;
+    }
+
+    std::string buttonName(const vr::EVRButtonId button)
+    {
+        switch (button) {
+        case vr::k_EButton_System:
+            return "system";
+        case vr::k_EButton_ApplicationMenu:
+            return "menu";
+        case vr::k_EButton_Grip:
+            return "grip";
+        case vr::k_EButton_A:
+            return "a";
+        case vr::k_EButton_SteamVR_Trigger:
+            return "trigger";
+        case vr::k_EButton_SteamVR_Touchpad:
+            return "thumbstick";
+        default:
+            return std::format("button{}", static_cast<uint32_t>(button));
+        }
+    }
+
+    std::string axisName(const Axis axis)
+    {
+        switch (axis) {
+        case Axis::Thumbstick:
+            return "thumbstick";
+        case Axis::Trigger:
+            return "trigger";
+        case Axis::Grip:
+            return "grip";
+        default:
+            return std::format("axis{}", static_cast<uint32_t>(axis));
+        }
+    }
+
+    std::vector<std::string> buttonNames(const uint64_t buttonMask)
+    {
+        std::vector<std::string> names;
+        for (uint32_t id = 0; id < 64; ++id) {
+            if (buttonMask & vr::ButtonMaskFromId(static_cast<vr::EVRButtonId>(id))) {
+                names.push_back(buttonName(static_cast<vr::EVRButtonId>(id)));
+            }
+        }
+        return names;
     }
 
     std::optional<InputBinding> parseInputBinding(const std::string_view text)

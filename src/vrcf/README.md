@@ -89,7 +89,9 @@ must be held down for the binding to fire — on the binding's own hand by defau
 
 To load bindings from INI, [`InputBindingParser.h`](InputBindingParser.h) parses a forgiving,
 case-insensitive line into an `InputBinding` (token helpers `parseHand` / `parseActivationType` /
-`parseButton` / `parseAxis` / `parseDirection` are also exposed). If your config derives from
+`parseButton` / `parseAxis` / `parseDirection` are also exposed, and `buttonName` / `axisName` /
+`buttonNames(mask)` go the other way, to the grammar's words, for logs and messages that should read
+like the INI). If your config derives from
 `ConfigBase`, prefer its `getInputBindingValue(ini, section, key, default)` helper — it reads the key,
 falls back to your default, and logs a warning on a malformed value (same pattern as
 `getTransformValue` / `getHandPoseValue`):

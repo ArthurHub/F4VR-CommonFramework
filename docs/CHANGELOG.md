@@ -14,7 +14,8 @@ major version is `0`, a minor bump may break the API; the **Upgrading** notes sa
   registers it, named after the mod, with generic actions for health, the mod's state as of its
   last frame, session config overrides and reading every `PerfMonitor` site; a mod adds its own
   actions with `devbench::addAction`, its state with `devbench::setStateProvider`, and publishes
-  events with `devbench::emit`. Opt out with `Settings::devbenchTool = false`.
+  events with `devbench::emit`; the framework publishes its own for session loads, config reloads
+  and overrides, and input suppression changes. Opt out with `Settings::devbenchTool = false`.
 - **`f4cf::perf`**: `PerfMonitor` moved out of `common/` into its own module, and every site can
   now be read on demand as well as logged: `PerfMonitor::all()` lists them, and while
   `setCollecting(true)` is on each one accumulates into `stats()` until `resetStats()`.

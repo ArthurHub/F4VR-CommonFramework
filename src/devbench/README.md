@@ -127,8 +127,18 @@ devbench::emit("modeEntered");   // no payload
 The payload is a function, called only when the event can go somewhere: while devbench is absent,
 and before the game has loaded, an emit is one atomic load and builds nothing.
 
-- Every mod publishes `<tool>.sessionLoaded` after each save load and new game, once the mod's
-  own `onGameSessionLoaded` has run.
+- The framework publishes these for every mod:
+
+  | Event | When | Payload |
+  |-------|------|---------|
+  | `sessionLoaded` | After each save load and new game, once the mod's own `onGameSessionLoaded` has run | — |
+  | `config.reloaded` | The file watcher applied an INI change from disk, or `ConfigBase::reload()` ran | `file`, `trigger` (`file` or `reload`) |
+  | `config.override` | A session override was set or cleared, by anyone: a devbench call, the mod, or another mod through the mod's API | `section`, `key`, `value` (`null` when cleared), or `all: true` |
+  | `input.suppression` | An owner started or stopped suppressing controller input | `owner`, its `left`/`right` `buttons`/`axes` (empty once released), the `effective` union, `owners` |
+
+  Names are the input binding grammar's (`grip`, `trigger`, `menu`, `a`, `thumbstick`), and
+  hands are physical. A suppression that is re-applied every frame publishes nothing; only a
+  change does.
 - Events of every mod share one ring of 256 in devbench, so emit them when something changes
   (a skeleton rebuilt, a mode entered), never every frame.
 - Any thread. Before the tool is registered, and when devbench is absent, it does nothing.
