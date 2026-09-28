@@ -7,7 +7,7 @@ and tooling tweaks are left to the git history.
 Versions follow `set(VERSION ...)` in the root [`CMakeLists.txt`](../CMakeLists.txt). While the
 major version is `0`, a minor bump may break the API; the **Upgrading** notes say what to change.
 
-## 0.5.0 — unreleased
+## 0.4.1 — unreleased
 
 - **`f4cf::devbench`**: every mod gets its own [devbench](https://github.com/ArthurHub/devbench)
   tool, so an AI agent or a script can drive it in the running game over MCP or REST. `ModBase`
@@ -24,7 +24,7 @@ major version is `0`, a minor bump may break the API; the **Upgrading** notes sa
   use `perf::PerfMonitor` instead of `common/PerfMonitor.h` / `common::PerfMonitor`. It can no
   longer be copied or moved, since it registers itself by address in `PerfMonitor::all()`.
 
-## 0.4.0 — unreleased
+## 0.4.0 — 2026-09-25
 
 **Rendering in VR, built into the framework.**
 
