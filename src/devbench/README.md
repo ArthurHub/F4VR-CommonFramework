@@ -41,8 +41,8 @@ the game thread (the one `ModBase::onFrameUpdateSafe` runs on) first:
   "threads": [
   { "thread": "8412", "gameThread": true, "sites": [
     { "label": "ModBase::onFrameUpdateSafe", "key": "ModBase::onFrameUpdateSafe", "n": 2701, "p95Ms": 0.61, "selfAvgMs": 0.04, "callsPerFrame": 1,
-      "children": [ { "label": "FRIK::onFrameUpdateInner", "children": [ { "label": "Skeleton::onFrameUpdate", "children": [
-        { "label": "arms", "key": "Skeleton::onFrameUpdate/arms", "children": [ { "label": "solveArms" } ] } ] } ] } ] },
+      "children": [ { "label": "FRIK::onFrameUpdate", "children": [ { "label": "FRIK::onFrameUpdateInner", "children": [ { "label": "Skeleton::onFrameUpdate",
+        "children": [ { "label": "arms", "key": "Skeleton::onFrameUpdate/arms", "children": [ { "label": "solveArms" } ] } ] } ] } ] } ] },
     { "label": "SmoothMovementVR::onFrameUpdate" } ] } ] }
 ```
 
@@ -65,19 +65,27 @@ the game thread (the one `ModBase::onFrameUpdateSafe` runs on) first:
 - `windowMs` counts from the last reset; the call that arms the tool is that reset.
 
 `format: "text"` puts the same tree in `text` as a table, which is also what the `perf` debug dump
-(`sDumpDataOnceNames`) writes to the log:
+(`sDumpDataOnceNames`) writes to the log. An excerpt from FRIK, sites under a caller in the order
+they run:
 
 ```
-perf: 490.4s window, 43884 frames (89.5 fps), times in ms
-frame: 90 Hz, budget 11.11 | interval p50 11.11 p95 11.52 p99 13.87 max 48.21
-gpu:   p50 8.93 p95 10.41 p99 11.02 max 19.77 | game p95 9.12 | compositor p95 0.84
-vr:    43790 frames | reprojected cpu 41, gpu 12 | dropped 3 | mispresented 5 | late start p95 0.12 | headroom p50 1.64
-site                                  n      avg      p50      p95      p99      max     self   /frame  %budget
-game thread 57744
-  ModBase::onFrameUpdateSafe      43884    0.292    0.242    0.483    0.606    3.033    0.035     1.00      2.6
-    FRIK::onFrameUpdateInner      43884    0.257    0.217    0.451    0.573    3.005    0.062     1.00      2.3
-      Skeleton::onFrameUpdate     43884    0.179    0.152    0.336    0.418    2.930    0.001     1.00      1.6
-        arms                      43884    0.109    0.080    0.258    0.319    2.857    0.001     1.00      1.0
+perf: 20.0s window, 1793 frames (89.6 fps), times in ms
+frame: 90 Hz, budget 11.11 | interval p50 11.27 p95 11.80 p99 17.30 max 68.68
+gpu:   p50 5.37 p95 5.64 p99 5.90 max 6.34 | game p95 5.37 | compositor p95 0.02
+vr:    1761 frames | reprojected cpu 0, gpu 0 | dropped 0 | mispresented 8 | late start p95 1.34 | headroom p50 8.65
+site                                                  n      avg      p50      p95      p99      max     self   /frame  %budget
+game thread 46428
+  GetControllerState:other                        27544    0.010    0.001    0.080    0.104    0.305    0.010    15.36      1.4
+  ModBase::onFrameUpdateSafe                       1793    0.463    0.451    0.573    0.705    0.805    0.002     1.00      4.2
+    VRControllersManager::update                   1793    0.016    0.005    0.084    0.088    0.107    0.002     1.00      0.1
+      GetControllerStateWithPose:own               3586    0.007    0.002    0.076    0.080    0.100    0.007     2.00      0.1
+    FRIK::onFrameUpdate                            1793    0.443    0.434    0.541    0.672    0.765    0.001     1.00      4.0
+      FRIK::onFrameUpdateInner                     1793    0.423    0.401    0.516    0.672    0.746    0.002     1.00      3.8
+        Skeleton::onFrameUpdate                    1793    0.305    0.287    0.369    0.541    0.621    0.001     1.00      2.7
+          arms                                     1793    0.241    0.225    0.303    0.483    0.556    0.001     1.00      2.2
+            phaseAfterArmSolve                     1793    0.211    0.193    0.270    0.451    0.527    0.000     1.00      1.9
+              AfterArmSolve:ROCK                   1793    0.211    0.193    0.270    0.451    0.527    0.207     1.00      1.9
+        AfterWorldFinal:ROCK                       1793    0.072    0.072    0.080    0.104    0.199    0.072     1.00      0.6
 ```
 
 ```powershell

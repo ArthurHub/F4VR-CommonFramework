@@ -70,6 +70,19 @@ for (const auto* site : perf::sites()) {
 perf::reset();
 ```
 
+## What the framework times
+
+Every mod gets these sites without code of its own:
+
+| Site | Where it shows | What it says |
+|------|----------------|--------------|
+| `ModBase::onFrameUpdateSafe` | the game thread's root | the mod's whole frame; its call count is the frame count |
+| `internal::sampleFrame`, `Tool::publishState`, `Tool::runQueuedCommands` | under the frame | what measuring and the devbench tool cost the frame, on the frames they do work |
+| `VRControllersManager::update`, `VRControllersSuppressor::update`, `VRControllersHaptic::update`, `DebugDraw::onFrameStart` / `onFrameEnd`, `DebugAdjuster::onFrameUpdate`, `frameEndCallbacks` | under the frame | the framework's per-frame work; debug draw only once something has drawn |
+| `GetControllerState:own` / `:other`, `GetControllerStateWithPose:own` / `:other` | under the site that polls, or a root | every controller-state poll through the suppressor's vtable hooks, the mod's own apart from everyone else's; `/frame` is how often each reads |
+| `render::drawToSubmittedTexture`, each draw callback under it by its registered name | the render thread's root | overlay drawing in the Submit hook, CPU time only; absent while nothing draws |
+| `UIManager::onFrameUpdate` | where the mod calls it | vrui, while a UI is attached |
+
 ## Notes
 
 - **Name the code, not the path.** A label only has to be unique within its function (`"arms"`,
