@@ -6,6 +6,7 @@
 #include "common/CommonUtils.h"
 #include "common/MatrixUtils.h"
 #include "f4vr/F4VRUtils.h"
+#include "perf/Perf.h"
 #include "vrcf/VRControllersHaptic.h"
 #include "vrcf/VRControllersManager.h"
 #include "vrcf/VRControllersSuppressor.h"
@@ -198,6 +199,8 @@ namespace f4cf
      */
     void DebugAdjuster::onFrameUpdate(ConfigBase& config)
     {
+        F4CF_PERF_FUNCTION();
+
         const bool active = config.debug.adjustTarget != DebugAdjustTarget::None;
 
         // Idempotent and self-restoring: re-enabled / released the moment the adjuster is turned off.

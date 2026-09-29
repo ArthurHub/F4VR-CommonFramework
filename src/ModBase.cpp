@@ -194,6 +194,8 @@ namespace f4cf
         // the frame interval and the compositor's timing, which perf reports each site against; one relaxed load while
         // recording is off
         perf::internal::sampleFrame();
+        // declared out here: CPPTRACE_TRY runs its block in lambdas, and a site in there would be named after one
+        static perf::Site frameEndCallbacksSite(__FUNCTION__, "frameEndCallbacks");
 
         CPPTRACE_TRY
         {
@@ -221,8 +223,11 @@ namespace f4cf
             // Optional subsystems that self-registered (see registerFrameEndCallback); empty unless
             // the mod actually uses one, which is what keeps them out of binaries that do not.
             auto& callbacks = frameEndCallbacks();
-            for (std::size_t i = 0; i < callbacks.size(); ++i) {
-                callbacks[i]();
+            {
+                const perf::Scope perfScope(frameEndCallbacksSite);
+                for (std::size_t i = 0; i < callbacks.size(); ++i) {
+                    callbacks[i]();
+                }
             }
 
             debug::DebugDraw::onFrameEnd();

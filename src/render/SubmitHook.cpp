@@ -9,6 +9,7 @@
 
 #include "../../external/openvr/openvr.h"
 #include "../ModBase.h"
+#include "../perf/Perf.h"
 #include "SceneDepthCapture.h"
 #include "SceneDepthDiagnostics.h"
 
@@ -43,7 +44,16 @@ namespace f4cf::render
             std::string name;
             SubmitDrawCallback callback;
             int order = DRAW_ORDER_DEFAULT;
+            // labelled with the name, under the draw's own site
+            perf::Site* perfSite = nullptr;
         };
+
+        // the function the draw is timed as, which the draw callbacks' sites share
+        constexpr const char* DRAW_PERF_FUNCTION = "f4cf::render::drawToSubmittedTexture";
+
+        // Constructed with the DLL rather than on the render thread's first draw, which would take the perf registry's
+        // lock there. A root of its own: the render thread runs no other site around it.
+        perf::Site s_drawPerfSite(DRAW_PERF_FUNCTION, nullptr);
 
         /**
          * RTV over the submitted eye texture, cached keyed by texture pointer + size - the texture
@@ -132,6 +142,8 @@ namespace f4cf::render
          */
         void drawToSubmittedTexture(const vr::Texture_t* texture)
         {
+            const perf::Scope perfScope(s_drawPerfSite);
+
             auto* device = getDevice();
             auto* context = getContext();
             if (!device || !context || !texture || !texture->handle || texture->eType != vr::TextureType_DirectX) {
@@ -219,6 +231,7 @@ namespace f4cf::render
             for (std::size_t i = 0; i < orderedCount; ++i) {
                 const std::size_t index = ordered[i];
                 try {
+                    const perf::Scope callbackPerfScope(*s_callbacks[index].perfSite);
                     s_callbacks[index].callback(frame);
                 } catch (const std::exception& ex) {
                     setDrawCallbackActive(static_cast<DrawCallbackId>(index), false);
@@ -399,6 +412,8 @@ namespace f4cf::render
             return INVALID_DRAW_CALLBACK;
         }
 
+        // looked up here on the registering thread, so the render thread never takes the perf registry's lock
+        s_callbacks[index].perfSite = &perf::dynamicSite(DRAW_PERF_FUNCTION, name);
         s_callbacks[index].name = std::move(name);
         s_callbacks[index].callback = std::move(callback);
         s_callbacks[index].order = order;

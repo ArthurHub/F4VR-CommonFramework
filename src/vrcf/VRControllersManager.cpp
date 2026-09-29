@@ -6,6 +6,7 @@
 #include "VRControllersSuppressor.h"
 
 #include "../../external/openvr/openvr.h"
+#include "../perf/Perf.h"
 
 namespace f4cf::vrcf
 {
@@ -14,6 +15,8 @@ namespace f4cf::vrcf
      */
     void VRControllersManager::update(const bool isLeftHanded)
     {
+        F4CF_PERF_FUNCTION();
+
         if (!vr::VRSystem()) {
             return;
         }

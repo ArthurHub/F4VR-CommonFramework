@@ -6,6 +6,7 @@
 #include <unordered_map>
 
 #include "common/CommonUtils.h"
+#include "perf/Perf.h"
 
 namespace
 {
@@ -75,6 +76,8 @@ namespace f4cf::vrcf
      */
     void VRControllersHaptic::update(const bool isLeftHanded)
     {
+        F4CF_PERF_FUNCTION();
+
         if (!vr::VRSystem()) {
             return;
         }

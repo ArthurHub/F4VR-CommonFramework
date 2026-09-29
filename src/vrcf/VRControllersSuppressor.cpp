@@ -8,6 +8,7 @@
 
 #include "InputBindingParser.h"
 #include "devbench/DevBench.h"
+#include "perf/Perf.h"
 
 namespace f4cf::vrcf
 {
@@ -115,6 +116,8 @@ namespace f4cf::vrcf
      */
     void VRControllersSuppressor::update(const bool isLeftHanded)
     {
+        F4CF_PERF_FUNCTION();
+
         _leftHanded.store(isLeftHanded, std::memory_order_relaxed);
 
         auto* system = vr::VRSystem();
@@ -545,9 +548,16 @@ namespace f4cf::vrcf
      */
     bool VRControllersSuppressor::hookedGetControllerState(vr::IVRSystem* system, const vr::TrackedDeviceIndex_t index, vr::VRControllerState_t* state, const uint32_t stateSize)
     {
+        // Every poll through the shared vtable, ours apart from everyone else's: n per frame is how often each reads
+        // controller state. Apart, since the game's polls run outside any site and would otherwise be counted under
+        // the site our own polls run in. Labelled with the OpenVR call, since a table shows only the label.
+        static perf::Site ownPoll(__FUNCTION__, "GetControllerState:own");
+        static perf::Site otherPoll(__FUNCTION__, "GetControllerState:other");
+        const bool selfRead = isSelfControllerRead();
+        const perf::Scope perfScope(selfRead ? ownPoll : otherPoll);
         const bool ok = _origGetControllerState(system, index, state, stateSize);
         if (ok) {
-            VRControllersSuppress.applyTo(index, state, !isSelfControllerRead());
+            VRControllersSuppress.applyTo(index, state, !selfRead);
         }
         return ok;
     }
@@ -559,9 +569,14 @@ namespace f4cf::vrcf
     bool VRControllersSuppressor::hookedGetControllerStateWithPose(vr::IVRSystem* system, const vr::ETrackingUniverseOrigin origin, const vr::TrackedDeviceIndex_t index,
         vr::VRControllerState_t* state, const uint32_t stateSize, vr::TrackedDevicePose_t* pose)
     {
+        // timed like hookedGetControllerState
+        static perf::Site ownPoll(__FUNCTION__, "GetControllerStateWithPose:own");
+        static perf::Site otherPoll(__FUNCTION__, "GetControllerStateWithPose:other");
+        const bool selfRead = isSelfControllerRead();
+        const perf::Scope perfScope(selfRead ? ownPoll : otherPoll);
         const bool ok = _origGetControllerStateWithPose(system, origin, index, state, stateSize, pose);
         if (ok) {
-            VRControllersSuppress.applyTo(index, state, !isSelfControllerRead());
+            VRControllersSuppress.applyTo(index, state, !selfRead);
         }
         return ok;
     }

@@ -9,6 +9,7 @@
 #include "../common/CommonUtils.h"
 #include "../common/MatrixUtils.h"
 #include "../f4vr/PlayerNodes.h"
+#include "../perf/Perf.h"
 #include "../render/TextFont.h"
 #include "../vrcf/InputBindingParser.h"
 #include "../vrcf/VRControllersManager.h"
@@ -715,6 +716,7 @@ namespace f4cf::debug
         if (!s_everUsed.load(std::memory_order_relaxed)) {
             return;
         }
+        F4CF_PERF_FUNCTION();
         const auto* config = g_mod ? g_mod->getConfig() : nullptr;
         if (!config) {
             return;
@@ -780,6 +782,7 @@ namespace f4cf::debug
         if (!s_everUsed.load(std::memory_order_relaxed)) {
             return;
         }
+        F4CF_PERF_FUNCTION();
         auto& self = get();
 
         self.layoutWatchTable();

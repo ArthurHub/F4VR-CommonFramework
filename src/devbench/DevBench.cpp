@@ -489,6 +489,8 @@ namespace f4cf::devbench
                 if (!_hasCommands.load(std::memory_order_relaxed)) {
                     return;
                 }
+                // the frames that ran game-thread actions, and what they cost
+                F4CF_PERF_FUNCTION();
                 std::vector<Command> commands;
                 {
                     std::lock_guard lock(_commandsLock);
