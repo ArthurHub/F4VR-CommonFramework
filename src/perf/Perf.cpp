@@ -31,6 +31,22 @@ namespace f4cf::perf
 
         std::atomic<std::chrono::steady_clock::rep> s_windowStart{ 0 };
 
+        std::atomic<const Site*> s_frameSite{ nullptr };
+
+        /**
+         * The frame site, published for readers as soon as it exists.
+         */
+        struct FrameSite
+        {
+            explicit FrameSite(const char* function)
+                : site(function, nullptr)
+            {
+                s_frameSite.store(&site, std::memory_order_release);
+            }
+
+            Site site;
+        };
+
         /**
          * The last two "::" parts of a function name, as a pointer into it.
          */
@@ -124,5 +140,16 @@ namespace f4cf::perf
         std::lock_guard lock(reg.lock);
         const auto [it, inserted] = reg.dynamicSites.try_emplace(std::pair<std::string, std::string>(function, label), &created->site);
         return *it->second;
+    }
+
+    Site& declareFrameSite(const char* function)
+    {
+        static FrameSite frame(function);
+        return frame.site;
+    }
+
+    const Site* frameSite()
+    {
+        return s_frameSite.load(std::memory_order_acquire);
     }
 }

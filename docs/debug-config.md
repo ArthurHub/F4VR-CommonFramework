@@ -172,6 +172,12 @@ runs** so a later file reload doesn't repeat it. Names are comma-separated.
 | `pipboy`    | Pip-Boy node tree                                         |
 | `world`     | Framework player/weapon-related world subtree             |
 | `all_nodes` | Full scene node tree — **potentially huge**               |
+| `perf`      | The [perf sites](../src/perf/README.md) since the last reset, as an indented table (the devbench `perf` action's `text` format) |
+| `perf_reset` | Like `perf`, then starts a new window. When recording is off, it only switches it on |
+
+Recording is off unless the mod's devbench tool switched it on, so start with `perf_reset`, hold
+the condition being measured, then use `perf`, or `perf_reset` again to log that window and start
+the next one.
 
 ```ini
 [Debug]

@@ -25,10 +25,47 @@ same generic actions:
 | `set` | `key`, `value`, `section` | Override one INI value for the session (`ConfigBase::setConfigOverride`); the file is not written. |
 | `clear` | `key`, `section`, or `all` | Drop one session override, or all of them. |
 | `overrides` | — | The session overrides in effect. |
-| `perf` | `reset` | Time spent in every [perf site](../perf/README.md) in the mod since the last reset, keyed by function and label (`Skeleton::onFrameUpdate/arms`): `n`, `avgMs`, `p50Ms`, `p95Ms`, `p99Ms`, `minMs`, `maxMs`, `busyPct`, `windowMs`. Sites that recorded nothing are left out. `reset: true` clears every site after reading it. Includes the framework's own sites, such as `ModBase::onFrameUpdateSafe`, which is the mod's whole frame. |
+| `perf` | `reset`, `format` | Time spent in every [perf site](../perf/README.md) in the mod since the last reset, as a tree per thread (see below). `reset: true` clears every site after reading it. `format`: `tree` (the default), `flat` (one map keyed by function and label) or `text` (the tree as an indented table in `text`, the quickest to read). Answered without the game thread, so reading never stalls a frame. |
 
 `section` defaults to the mod's name, the section the mod template uses; a mod whose main section
 is named differently says so with `devbench::setDefaultConfigSection`.
+
+`perf` nests each site under the site it runs inside, and groups the outermost ones by thread,
+the game thread (the one `ModBase::onFrameUpdateSafe` runs on) first:
+
+```json
+{ "windowMs": 30012.4, "frames": 2701, "reset": false, "threads": [
+  { "thread": "8412", "gameThread": true, "sites": [
+    { "label": "ModBase::onFrameUpdateSafe", "key": "ModBase::onFrameUpdateSafe", "n": 2701, "p95Ms": 0.61, "selfAvgMs": 0.04, "callsPerFrame": 1,
+      "children": [ { "label": "FRIK::onFrameUpdateInner", "children": [ { "label": "Skeleton::onFrameUpdate", "children": [
+        { "label": "arms", "key": "Skeleton::onFrameUpdate/arms", "children": [ { "label": "solveArms" } ] } ] } ] } ] },
+    { "label": "SmoothMovementVR::onFrameUpdate" } ] } ] }
+```
+
+- Every site has `n`, `totalMs`, `avgMs`, `p50Ms`, `p95Ms`, `p99Ms`, `minMs`, `maxMs`,
+  `selfTotalMs`, `selfAvgMs` (its time minus the sites under it), `busyPct` (of the window) and
+  `callsPerFrame` (per call of the frame site; `frames` counts those). `multipleCallers: true`
+  means it also runs under other sites and is shown under the first one seen.
+- `key` is the site's name in the `flat` view: its function, plus the label for a block.
+- A site that recorded nothing since the reset is left out, unless a site under it recorded.
+- `windowMs` counts from the last reset; the call that arms the tool is that reset.
+
+`format: "text"` puts the same tree in `text` as a table, which is also what the `perf` debug dump
+(`sDumpDataOnceNames`) writes to the log:
+
+```
+perf: 490.4s window, 43884 frames (89.5 fps), times in ms
+site                                  n      avg      p50      p95      p99      max     self   /frame
+game thread 57744
+  ModBase::onFrameUpdateSafe      43884    0.292    0.242    0.483    0.606    3.033    0.035     1.00
+    FRIK::onFrameUpdateInner      43884    0.257    0.217    0.451    0.573    3.005    0.062     1.00
+      Skeleton::onFrameUpdate     43884    0.179    0.152    0.336    0.418    2.930    0.001     1.00
+        arms                      43884    0.109    0.080    0.258    0.319    2.857    0.001     1.00
+```
+
+```powershell
+(irm http://127.0.0.1:8931/api/tool/frik -Method Post -ContentType application/json -Body '{"action":"perf","format":"text"}').text
+```
 
 A mod adds its own actions and the opening line of the tool's description:
 
@@ -54,7 +91,7 @@ void MyMod::onModLoaded(const F4SE::LoadInterface*)
 - **Threads.** Devbench calls the tool on its own listener thread. An action runs on the game
   thread by default: it is queued, run at the start of the next frame right before the mod's
   `onFrameUpdate`, and the caller waits up to 2 seconds for it. `RunOn::Listener` runs it at once
-  instead, for answers that must work while the game is stalled, as `health` and `state` do; such a
+  instead, for answers that must work while the game is stalled, as `health`, `state` and `perf` do; such a
   handler may only read atomics and data that no longer changes. A mod without `setupMainGameLoop` has no frame to run
   the queue in, so its actions go through F4SE's task interface.
 - **Answers.** A handler returns a JSON object and gets `"ok": true` added; throwing turns the

@@ -8,12 +8,14 @@
 #include <future>
 #include <mutex>
 #include <optional>
+#include <sstream>
 #include <thread>
 #include <vector>
 
 #include "ConfigBase.h"
 #include "DevBenchAPI.h"
 #include "perf/Perf.h"
+#include "perf/Report.h"
 
 namespace f4cf::devbench
 {
@@ -23,7 +25,8 @@ namespace f4cf::devbench
 
         // Bumped whenever a generic action changes its arguments or the shape of its answer. Every mod ships the
         // framework version it was built with, so this is how a client tells their tools apart (health reports it).
-        constexpr int TOOL_CONTRACT = 1;
+        // 2: perf answers without the game thread, as a tree per thread, a flat map or a text table (format)
+        constexpr int TOOL_CONTRACT = 2;
 
         // devbench's own stall watchdog is 5000ms; answering well before it keeps "the mod did not answer" apart from
         // "devbench is stalled"
@@ -84,6 +87,83 @@ namespace f4cf::devbench
         json argument(const char* type, const char* description)
         {
             return { { "type", type }, { "description", description } };
+        }
+
+        /**
+         * A perf site's name in the flat view: its function, and its label for a block ("Skeleton::onFrameUpdate/arms").
+         */
+        std::string perfSiteKey(const perf::Site& site)
+        {
+            return site.isWholeFunction() ? std::string(site.shortFunction()) : std::format("{}/{}", site.shortFunction(), site.label());
+        }
+
+        /**
+         * What the perf action reports for one site, in either view.
+         */
+        json perfStatsJson(const perf::Site& site, const perf::Site::Stats& stats, const double windowMs, const std::uint64_t frames)
+        {
+            const auto s = stats.durations.summary();
+            const double selfTotalMs = perf::Histogram::Snapshot::toMs(stats.selfNs());
+            json out = {
+                { "n", s.count },
+                { "totalMs", s.totalMs },
+                { "avgMs", s.avgMs },
+                { "p50Ms", s.p50Ms },
+                { "p95Ms", s.p95Ms },
+                { "p99Ms", s.p99Ms },
+                { "minMs", s.minMs },
+                { "maxMs", s.maxMs },
+                { "selfTotalMs", selfTotalMs },
+                { "selfAvgMs", s.count > 0 ? selfTotalMs / static_cast<double>(s.count) : 0.0 },
+                { "busyPct", windowMs > 0 ? s.totalMs / windowMs * 100.0 : 0.0 },
+            };
+            if (frames > 0) {
+                out["callsPerFrame"] = static_cast<double>(s.count) / static_cast<double>(frames);
+            }
+            if (site.hasMultipleCallers()) {
+                out["multipleCallers"] = true;
+            }
+            return out;
+        }
+
+        json perfNodeJson(const perf::Report::Node& node, const double windowMs, const std::uint64_t frames)
+        {
+            auto out = perfStatsJson(*node.site, node.stats, windowMs, frames);
+            out["label"] = node.site->label();
+            out["key"] = perfSiteKey(*node.site);
+            if (!node.children.empty()) {
+                json children = json::array();
+                for (const auto& child : node.children) {
+                    children.push_back(perfNodeJson(child, windowMs, frames));
+                }
+                out["children"] = std::move(children);
+            }
+            return out;
+        }
+
+        /**
+         * Every node of a tree that recorded something, keyed by perfSiteKey; two sites sharing a key don't hide each other.
+         */
+        void addFlatPerfSites(json& sites, const perf::Report::Node& node, const double windowMs, const std::uint64_t frames)
+        {
+            if (node.stats.durations.count > 0) {
+                const auto key = perfSiteKey(*node.site);
+                auto name = key;
+                for (int copy = 2; sites.contains(name); ++copy) {
+                    name = std::format("{} ({})", key, copy);
+                }
+                sites[name] = perfStatsJson(*node.site, node.stats, windowMs, frames);
+            }
+            for (const auto& child : node.children) {
+                addFlatPerfSites(sites, child, windowMs, frames);
+            }
+        }
+
+        std::string threadIdText(const std::thread::id id)
+        {
+            std::ostringstream text;
+            text << id;
+            return text.str();
         }
 
         /**
@@ -416,10 +496,17 @@ namespace f4cf::devbench
                     true);
                 addAction({ "overrides", "the session overrides in effect", json::object(), handler(&Tool::listOverrides) }, true);
                 addAction({ "perf",
-                              "time spent in every perf site in the mod (n, avg, p50, p95, p99, min, max ms, busy%) since the last reset. Recording "
-                              "starts when the tool is first used, so reset, hold the condition, then read. It cannot see GPU time",
-                              { { "reset", argument("boolean", "perf: clear every site after reading it, starting a new window") } },
-                              handler(&Tool::readPerf) },
+                              "time spent in every perf site in the mod since the last reset, as a tree per thread: each site under the site it runs "
+                              "inside, with n, avg, p50, p95, p99, min, max and self ms, busy% of the window and calls per frame. Recording starts when "
+                              "the tool is first used, so reset, hold the condition, then read. Answered without the game thread. It cannot see GPU "
+                              "time",
+                              { { "reset", argument("boolean", "perf: clear every site after reading it, starting a new window") },
+                                  { "format",
+                                      argument("string",
+                                          "perf: tree (default, JSON nested per thread), flat (one map keyed by function/label, \"Skeleton::onFrameUpdate/arms\") "
+                                          "or text (the tree as an indented table in 'text', the quickest to read)") } },
+                              handler(&Tool::readPerf),
+                              RunOn::Listener },
                     true);
             }
 
@@ -523,42 +610,52 @@ namespace f4cf::devbench
             }
 
             /**
-             * Every site that recorded something since the last reset, keyed by function and label
-             * ("Skeleton::onFrameUpdate/arms", or the function alone for a whole-function site).
+             * Listener thread: the sites are read with atomic loads, so this never waits for the game thread or stalls
+             * a frame. A reset drops what was recorded after the read, which the answer has already covered.
              */
             json readPerf(const json& args) const
             {
                 const bool reset = argBool(args, "reset");
-                const double windowMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - perf::windowStart()).count();
-                json sites = json::object();
-                for (const auto* site : perf::sites()) {
-                    const auto s = site->read().durations.summary();
-                    if (s.count == 0) {
-                        continue;
-                    }
-                    const auto key = site->isWholeFunction() ? std::string(site->shortFunction()) : std::format("{}/{}", site->shortFunction(), site->label());
-                    // two sites sharing a key must not hide each other
-                    auto name = key;
-                    for (int copy = 2; sites.contains(name); ++copy) {
-                        name = std::format("{} ({})", key, copy);
-                    }
-                    sites[name] = {
-                        { "n", s.count },
-                        { "windowMs", windowMs },
-                        { "totalMs", s.totalMs },
-                        { "avgMs", s.avgMs },
-                        { "p50Ms", s.p50Ms },
-                        { "p95Ms", s.p95Ms },
-                        { "p99Ms", s.p99Ms },
-                        { "minMs", s.minMs },
-                        { "maxMs", s.maxMs },
-                        { "busyPct", windowMs > 0 ? s.totalMs / windowMs * 100.0 : 0.0 },
-                    };
+                auto format = argString(args, "format");
+                if (format.empty()) {
+                    format = "tree";
                 }
+                if (format != "tree" && format != "flat" && format != "text") {
+                    throw std::invalid_argument(std::format("unknown format '{}' (tree, flat, text)", format));
+                }
+                const auto report = perf::readReport();
                 if (reset) {
                     perf::reset();
                 }
-                return { { "reset", reset }, { "sites", sites } };
+                const double windowMs = std::chrono::duration<double, std::milli>(report.window).count();
+                json answer = { { "reset", reset }, { "windowMs", windowMs }, { "frames", report.frames } };
+
+                if (format == "text") {
+                    answer["text"] = perf::formatReport(report);
+                    return answer;
+                }
+
+                if (format == "flat") {
+                    json sites = json::object();
+                    for (const auto& thread : report.threads) {
+                        for (const auto& root : thread.roots) {
+                            addFlatPerfSites(sites, root, windowMs, report.frames);
+                        }
+                    }
+                    answer["sites"] = std::move(sites);
+                    return answer;
+                }
+
+                json threads = json::array();
+                for (const auto& thread : report.threads) {
+                    json roots = json::array();
+                    for (const auto& root : thread.roots) {
+                        roots.push_back(perfNodeJson(root, windowMs, report.frames));
+                    }
+                    threads.push_back({ { "thread", threadIdText(thread.id) }, { "gameThread", thread.isGameThread }, { "sites", std::move(roots) } });
+                }
+                answer["threads"] = std::move(threads);
+                return answer;
             }
 
             ConfigBase& config() const

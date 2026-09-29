@@ -12,7 +12,8 @@ major version is `0`, a minor bump may break the API; the **Upgrading** notes sa
 - **`f4cf::devbench`**: every mod gets its own [devbench](https://github.com/ArthurHub/devbench)
   tool, so an AI agent or a script can drive it in the running game over MCP or REST. `ModBase`
   registers it, named after the mod, with generic actions for health, the mod's state as of its
-  last frame, session config overrides and reading every perf site; a mod adds its own
+  last frame, session config overrides and every perf site as a tree per thread, read without
+  the game thread; a mod adds its own
   actions with `devbench::addAction`, its state with `devbench::setStateProvider`, and publishes
   events with `devbench::emit`; the framework publishes its own for session loads, config reloads
   and overrides, and input suppression changes. Opt out with `Settings::devbenchTool = false`.
@@ -20,7 +21,8 @@ major version is `0`, a minor bump may break the API; the **Upgrading** notes sa
   `F4CF_PERF_SCOPE("label")` time a function or a block on any thread into a lock-free histogram
   (p50/p95/p99 within ~3%, no sample cap), and each site records the site it ran inside, so they
   nest into a tree with self time. Recording is off until `perf::setEnabled(true)`, which the
-  devbench tool does on first use; the log level no longer turns it on.
+  devbench tool does on first use; the log level no longer turns it on. Without devbench, the
+  `sDumpDataOnceNames` names `perf_reset` and `perf` start a window and log it as a table.
 
 **Upgrading**
 

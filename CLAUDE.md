@@ -77,7 +77,7 @@ iLogLevel = 2              # 0=trace, 1=debug, 2=info
 sLogPattern = %H:%M:%S.%e %l: %v
 fFlowFlag1/2/3 = 0   # Runtime feature toggles, read via g_config.debug.flowFlag1
 sFlowText1/2 =        # Debug text fields
-sDumpDataOnceNames =  # Comma-separated: ui_tree, skelly, fp_skelly, geometry, world, all_nodes
+sDumpDataOnceNames =  # Comma-separated: ui_tree, skelly, fp_skelly, geometry, world, all_nodes, perf (log the perf table), perf_reset (log it and start a new window; the first one switches recording on)
 sAddItemsOnceNames =  # Bulk-add items once: first token = operation (get=obtainable/get-all=everything/print=dry-run of get/print-all=dry-run of get-all), then "category[:filter]" tokens (weapons/throwables/ammo/armor/aid/misc); filter is '|'-sep key=value (name=/keyword= any; armor slot=/class=light|heavy|none; weapon class=melee|gun|unarmed)
 ```
 
@@ -169,7 +169,7 @@ from inside the game. `ModBase` registers one tool per mod after `onGameLoaded`,
 
 - Devbench calls the tool on its **listener thread**. Actions run on the game thread by default:
   queued and run by `ModBase` right before `onFrameUpdate`, with a 2s timeout. `RunOn::Listener`
-  actions (`health`, `state`) must not touch game or mod state.
+  actions (`health`, `state`, `perf`) must not touch game or mod state.
 - `state` answers from a snapshot `ModBase` publishes after every `onFrameUpdate` once the tool is
   armed; the provider's struct must hold **plain values only**, since a snapshot outlives its frame.
 - `devbench::emit(topic)` publishes `<tool>.<topic>` into a 256-event ring every mod shares: emit on

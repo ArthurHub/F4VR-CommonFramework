@@ -8,9 +8,15 @@ of its call durations, how much of that went to the sites it opened (so self tim
 children), and the site that opened it, so the sites nest into a tree per thread.
 
 Recording is off until something switches it on with `perf::setEnabled(true)`; while off, a site
-costs one relaxed atomic load and takes no timestamp. The mod's
-[devbench tool](../devbench/README.md) switches it on when it is first used, and its `perf` action
-reads every site. This times wall clock on the calling thread; it cannot see GPU time.
+costs one relaxed atomic load and takes no timestamp. Two things read it:
+
+- The mod's [devbench tool](../devbench/README.md) switches recording on when it is first used,
+  and its `perf` action reads every site as a JSON tree, a flat map or a text table.
+- Without devbench, `[Debug] sDumpDataOnceNames` does it through the INI: `perf` writes the text
+  table to the mod log, and `perf_reset` does too, then starts a new window; the first
+  `perf_reset` switches recording on ([debug-config.md](../../docs/debug-config.md)).
+
+This times wall clock on the calling thread; it cannot see GPU time.
 
 > Part of the [F4VR Common Framework](../README.md) source tree.
 
@@ -19,6 +25,7 @@ reads every site. This times wall clock on the calling thread; it cannot see GPU
 | File | Contents |
 |------|----------|
 | [`Perf.h`](Perf.h) / [`Perf.cpp`](Perf.cpp) | The `F4CF_PERF_SCOPE` / `F4CF_PERF_FUNCTION` macros, `Site` (a measured place, its stats and its caller), `Scope` (the RAII timer behind the macros), `dynamicSite()`, and the switch: `setEnabled()`, `reset()`, `windowStart()`, `sites()`. |
+| [`Report.h`](Report.h) / [`Report.cpp`](Report.cpp) | `readReport()` — one read of every site, nested by caller and grouped by the thread of each outermost site, the game thread first, with the window and the frame count. `formatReport()` — the same as an indented text table. What the devbench `perf` action and the `perf` debug dump show. |
 | [`Histogram.h`](Histogram.h) | `Histogram` — the lock-free duration histogram behind every site: log-linear buckets over nanoseconds, percentiles within ~3%, exact count/sum/min/max, and `Snapshot`s that merge by addition. Plain std, so it can be unit tested. |
 
 ## Usage
@@ -67,6 +74,10 @@ perf::reset();
   caller. A site called from several places keeps one set of stats and one caller, the first seen,
   and `hasMultipleCallers()` says so. Self time is still right, since each call charges its own
   caller. Each thread has its own roots, so a render-thread site never nests under a game-thread one.
+- **Threads and frames.** A site remembers the thread it first ran on, which is how a report groups
+  the outermost sites by thread. `ModBase` times its whole frame with the frame site
+  (`declareFrameSite`, around `onFrameUpdateSafe`): its thread is the game thread, and its call
+  count is the frame count that `callsPerFrame` divides by.
 - **Safe on any thread.** Recording is lock-free atomics; reading a site (`read()`) only loads them,
   so a reader on another thread never stalls the frame. A sample recorded during a read or a drain
   can land partly in it.

@@ -4,6 +4,7 @@
 #include <chrono>
 #include <cstdint>
 #include <string_view>
+#include <thread>
 #include <vector>
 
 #include "Histogram.h"
@@ -127,6 +128,23 @@ namespace f4cf::perf
         }
 
         /**
+         * Whether the site has run while recording was on, ever: it has a caller (or is known to be outermost) and a thread.
+         */
+        [[nodiscard]] bool hasRun() const
+        {
+            return _caller.load(std::memory_order_relaxed) != UNSEEN;
+        }
+
+        /**
+         * The thread the site first ran on, which is what groups a thread's outermost sites together. A default id until
+         * it has run.
+         */
+        [[nodiscard]] std::thread::id thread() const
+        {
+            return _thread.load(std::memory_order_relaxed);
+        }
+
+        /**
          * What was recorded since the last drain, leaving it in place.
          */
         [[nodiscard]] Stats read() const
@@ -149,7 +167,8 @@ namespace f4cf::perf
         static constexpr std::uintptr_t UNSEEN = 1;
 
         /**
-         * Keep the first caller seen, and note when another shows up. One relaxed load once the caller is known.
+         * Keep the first caller seen, and the thread of that first run, and note when another caller shows up. One
+         * relaxed load once the caller is known.
          */
         void noteCaller(const Site* caller)
         {
@@ -162,7 +181,11 @@ namespace f4cf::perf
             // caller was already running, or an SEH recovery skipped a restore. A real caller replaces that without
             // counting as a second one.
             while (known == UNSEEN || (known == 0 && value != 0)) {
+                const bool firstRun = known == UNSEEN;
                 if (_caller.compare_exchange_weak(known, value, std::memory_order_relaxed)) {
+                    if (firstRun) {
+                        _thread.store(std::this_thread::get_id(), std::memory_order_relaxed);
+                    }
                     return;
                 }
             }
@@ -178,6 +201,7 @@ namespace f4cf::perf
         std::atomic<std::uint64_t> _childrenNs{ 0 };
         std::atomic<std::uintptr_t> _caller{ UNSEEN };
         std::atomic<bool> _multipleCallers{ false };
+        std::atomic<std::thread::id> _thread{};
     };
 
     /**
@@ -235,6 +259,18 @@ namespace f4cf::perf
      * Any thread.
      */
     [[nodiscard]] Site& dynamicSite(const char* function, std::string_view label);
+
+    /**
+     * The site that times one whole frame of the mod, created by the first call with the function it times. ModBase
+     * declares it around onFrameUpdateSafe, so a mod does not call this. Readers count frames by it and call the
+     * thread it runs on the game thread.
+     */
+    [[nodiscard]] Site& declareFrameSite(const char* function);
+
+    /**
+     * The frame site, or nullptr before the mod's first frame. Any thread.
+     */
+    [[nodiscard]] const Site* frameSite();
 }
 
 #define F4CF_PERF_CONCAT_INNER_(a, b) a##b

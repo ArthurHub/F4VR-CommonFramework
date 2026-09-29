@@ -9,6 +9,7 @@
 #include "f4vr/DebugDump.h"
 #include "f4vr/DebugInventory.h"
 #include "perf/Perf.h"
+#include "perf/Report.h"
 
 #include "f4vr/PlayerNodes.h"
 #include "render/PrimitiveDrawRenderer.h"
@@ -187,7 +188,8 @@ namespace f4cf
      */
     void ModBase::onFrameUpdateSafe()
     {
-        F4CF_PERF_FUNCTION();
+        // the mod's whole frame: perf readers count frames by it and call its thread the game thread
+        const perf::Scope perfScope(perf::declareFrameSite(__FUNCTION__));
 
         CPPTRACE_TRY
         {
@@ -334,11 +336,47 @@ namespace f4cf
         }
     }
 
+    namespace
+    {
+        /**
+         * The perf table of every site since the last reset, one log line per row.
+         */
+        void logPerfReport()
+        {
+            if (!perf::isEnabled()) {
+                logger::info("perf: recording is off; add 'perf_reset' to sDumpDataOnceNames to start a window, then 'perf' to log it");
+                return;
+            }
+            const auto text = perf::formatReport(perf::readReport());
+            std::string_view rest = text;
+            while (!rest.empty()) {
+                const auto end = rest.find('\n');
+                logger::infoRaw("{}", rest.substr(0, end));
+                rest = end == std::string_view::npos ? std::string_view() : rest.substr(end + 1);
+            }
+        }
+    }
+
     /**
      * Dump game data if requested in "sDumpDataOnceNames" flag in INI config.
      */
     void ModBase::checkDebugDump() const
     {
+        // perf_reset is checked first since names match by substring, so "perf" would also match inside it
+        const bool perfReset = _settings.config->checkDebugDumpDataOnceFor("perf_reset");
+        const bool perfDump = _settings.config->checkDebugDumpDataOnceFor("perf");
+        if (perfReset && !perf::isEnabled()) {
+            // recording is off unless the devbench tool switched it on; switching it on starts the window
+            perf::setEnabled(true);
+            logger::info("perf: recording from a new window; add 'perf' to sDumpDataOnceNames to log it");
+        } else if (perfDump || perfReset) {
+            // perf_reset logs the window it ends, so listing both logs it once
+            logPerfReport();
+            if (perfReset) {
+                perf::reset();
+            }
+        }
+
         if (_settings.config->checkDebugDumpDataOnceFor("all_nodes")) {
             f4vr::DebugDump::printAllNodes();
         }
