@@ -4,6 +4,7 @@
 #include <Windows.h>
 #include <ranges>
 
+#include <optional>
 #include <utility>
 
 #include "InputBindingParser.h"
@@ -548,13 +549,16 @@ namespace f4cf::vrcf
      */
     bool VRControllersSuppressor::hookedGetControllerState(vr::IVRSystem* system, const vr::TrackedDeviceIndex_t index, vr::VRControllerState_t* state, const uint32_t stateSize)
     {
-        // Every poll through the shared vtable, ours apart from everyone else's: n per frame is how often each reads
-        // controller state. Apart, since the game's polls run outside any site and would otherwise be counted under
-        // the site our own polls run in. Labelled with the OpenVR call, since a table shows only the label.
-        static perf::Site ownPoll(__FUNCTION__, "GetControllerState:own", __FILE__, __LINE__);
-        static perf::Site otherPoll(__FUNCTION__, "GetControllerState:other", __FILE__, __LINE__);
+        // The mod's own polls, under the site that polls: what reading controller state costs the mod, and n per frame
+        // how often it reads. Everyone else's are not timed: every mod's hook sees the same ones, so each mod's table
+        // would show the whole game's polls, and one made inside a site of ours is that site's time anyway. Labelled
+        // with the OpenVR call, since a table shows only the label.
+        static perf::Site ownPoll(__FUNCTION__, "GetControllerState", __FILE__, __LINE__);
         const bool selfRead = isSelfControllerRead();
-        const perf::Scope perfScope(selfRead ? ownPoll : otherPoll);
+        std::optional<perf::Scope> perfScope;
+        if (selfRead) {
+            perfScope.emplace(ownPoll);
+        }
         const bool ok = _origGetControllerState(system, index, state, stateSize);
         if (ok) {
             VRControllersSuppress.applyTo(index, state, !selfRead);
@@ -569,11 +573,13 @@ namespace f4cf::vrcf
     bool VRControllersSuppressor::hookedGetControllerStateWithPose(vr::IVRSystem* system, const vr::ETrackingUniverseOrigin origin, const vr::TrackedDeviceIndex_t index,
         vr::VRControllerState_t* state, const uint32_t stateSize, vr::TrackedDevicePose_t* pose)
     {
-        // timed like hookedGetControllerState
-        static perf::Site ownPoll(__FUNCTION__, "GetControllerStateWithPose:own", __FILE__, __LINE__);
-        static perf::Site otherPoll(__FUNCTION__, "GetControllerStateWithPose:other", __FILE__, __LINE__);
+        // timed like hookedGetControllerState: the mod's own polls only
+        static perf::Site ownPoll(__FUNCTION__, "GetControllerStateWithPose", __FILE__, __LINE__);
         const bool selfRead = isSelfControllerRead();
-        const perf::Scope perfScope(selfRead ? ownPoll : otherPoll);
+        std::optional<perf::Scope> perfScope;
+        if (selfRead) {
+            perfScope.emplace(ownPoll);
+        }
         const bool ok = _origGetControllerStateWithPose(system, origin, index, state, stateSize, pose);
         if (ok) {
             VRControllersSuppress.applyTo(index, state, !selfRead);

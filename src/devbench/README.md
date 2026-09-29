@@ -75,10 +75,9 @@ gpu:   p50 5.37 p95 5.64 p99 5.90 max 6.34 | game p95 5.37 | compositor p95 0.02
 vr:    1761 frames | reprojected cpu 0, gpu 0 | dropped 0 | mispresented 8 | late start p95 1.34 | headroom p50 8.65
 site                                                  n      avg      p50      p95      p99      max     self   /frame  %budget
 game thread 46428
-  GetControllerState:other                        27544    0.010    0.001    0.080    0.104    0.305    0.010    15.36      1.4
   ModBase::onFrameUpdateSafe                       1793    0.463    0.451    0.573    0.705    0.805    0.002     1.00      4.2
     VRControllersManager::update                   1793    0.016    0.005    0.084    0.088    0.107    0.002     1.00      0.1
-      GetControllerStateWithPose:own               3586    0.007    0.002    0.076    0.080    0.100    0.007     2.00      0.1
+      GetControllerStateWithPose                   3586    0.007    0.002    0.076    0.080    0.100    0.007     2.00      0.1
     FRIK::onFrameUpdate                            1793    0.443    0.434    0.541    0.672    0.765    0.001     1.00      4.0
       FRIK::onFrameUpdateInner                     1793    0.423    0.401    0.516    0.672    0.746    0.002     1.00      3.8
         Skeleton::onFrameUpdate                    1793    0.305    0.287    0.369    0.541    0.621    0.001     1.00      2.7

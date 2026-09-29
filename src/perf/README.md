@@ -83,7 +83,7 @@ Every mod gets these sites without code of its own:
 | `ModBase::onFrameUpdateSafe` | the game thread's root | the mod's whole frame; its call count is the frame count |
 | `internal::sampleFrame`, `Tool::publishState`, `Tool::runQueuedCommands` | under the frame | what measuring and the devbench tool cost the frame, on the frames they do work |
 | `VRControllersManager::update`, `VRControllersSuppressor::update`, `VRControllersHaptic::update`, `DebugDraw::onFrameStart` / `onFrameEnd`, `DebugAdjuster::onFrameUpdate`, `frameEndCallbacks` | under the frame | the framework's per-frame work; debug draw only once something has drawn |
-| `GetControllerState:own` / `:other`, `GetControllerStateWithPose:own` / `:other` | under the site that polls, or a root | every controller-state poll through the suppressor's vtable hooks, the mod's own apart from everyone else's; `/frame` is how often each reads |
+| `GetControllerState`, `GetControllerStateWithPose` | under the site that polls | the mod's own controller-state polls (`SelfControllerReadScope`) through the suppressor's vtable hooks; `/frame` is how often the mod reads. Everyone else's polls are not timed: every mod's hook sees the same ones, so each mod's table would show the whole game's |
 | `render::drawToSubmittedTexture`, each draw callback under it by its registered name | a root on the game thread, after the frame | overlay drawing in the Submit hook, which FO4VR calls on the game thread about a millisecond after the mod's frame (on the loading screen's own thread during a load); CPU time only; absent while nothing draws |
 | `UIManager::onFrameUpdate` | where the mod calls it | vrui, while a UI is attached |
 
