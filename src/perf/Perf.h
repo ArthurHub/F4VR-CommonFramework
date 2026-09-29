@@ -20,6 +20,9 @@ namespace f4cf::perf
         // The innermost site open on this thread. A Scope keeps the one it replaced by value, never a pointer to another
         // Scope: an SEH recovery can skip destructors, and the next outer Scope to close restores this anyway.
         inline thread_local Site* t_openSite = nullptr;
+
+        // the last run order handed out, see Site::runOrder
+        inline std::atomic<std::uint64_t> g_lastRunOrder{ 0 };
     }
 
     /**
@@ -145,6 +148,16 @@ namespace f4cf::perf
         }
 
         /**
+         * Where the site runs among the sites sharing its caller: a number stamped when its caller became known, so
+         * sorting by it lists them in the order they run in a frame. A site that ran first with no caller open (see
+         * noteCaller) is stamped again when its real caller shows up. 0 until it has run.
+         */
+        [[nodiscard]] std::uint64_t runOrder() const
+        {
+            return _runOrder.load(std::memory_order_relaxed);
+        }
+
+        /**
          * What was recorded since the last drain, leaving it in place.
          */
         [[nodiscard]] Stats read() const
@@ -167,8 +180,8 @@ namespace f4cf::perf
         static constexpr std::uintptr_t UNSEEN = 1;
 
         /**
-         * Keep the first caller seen, and the thread of that first run, and note when another caller shows up. One
-         * relaxed load once the caller is known.
+         * Keep the first caller seen, the thread of that first run and the run order, and note when another caller
+         * shows up. One relaxed load once the caller is known.
          */
         void noteCaller(const Site* caller)
         {
@@ -186,6 +199,7 @@ namespace f4cf::perf
                     if (firstRun) {
                         _thread.store(std::this_thread::get_id(), std::memory_order_relaxed);
                     }
+                    _runOrder.store(internal::g_lastRunOrder.fetch_add(1, std::memory_order_relaxed) + 1, std::memory_order_relaxed);
                     return;
                 }
             }
@@ -202,6 +216,7 @@ namespace f4cf::perf
         std::atomic<std::uintptr_t> _caller{ UNSEEN };
         std::atomic<bool> _multipleCallers{ false };
         std::atomic<std::thread::id> _thread{};
+        std::atomic<std::uint64_t> _runOrder{ 0 };
     };
 
     /**

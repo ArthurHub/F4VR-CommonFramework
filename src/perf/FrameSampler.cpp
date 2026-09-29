@@ -139,6 +139,8 @@ namespace f4cf::perf::internal
             previousFrameRecorded = false;
             return;
         }
+        // what measuring the frame costs it
+        F4CF_PERF_FUNCTION();
         const auto now = Clock::now();
         // an interval only between two frames that both recorded, so switching recording on doesn't add one spanning
         // the whole time it was off

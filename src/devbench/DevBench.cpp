@@ -465,6 +465,8 @@ namespace f4cf::devbench
                 if (!isArmed()) {
                     return;
                 }
+                // what the tool costs each frame while it is in use, which is also while perf records
+                F4CF_PERF_FUNCTION();
                 auto snapshot = std::make_shared<Snapshot>();
                 snapshot->frame = ++_publishedFrames;
                 snapshot->publishedAt = std::chrono::steady_clock::now();

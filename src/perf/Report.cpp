@@ -23,8 +23,11 @@ namespace f4cf::perf
                   _taken(_sites.size(), false)
             {
                 _stats.reserve(_sites.size());
+                _runOrders.reserve(_sites.size());
                 for (std::size_t i = 0; i < _sites.size(); ++i) {
                     _stats.push_back(_sites[i]->read());
+                    // read once: a live value that changed mid-sort would break the sort's ordering
+                    _runOrders.push_back(_sites[i]->runOrder());
                     _indexOf.emplace(_sites[i], i);
                 }
                 for (std::size_t i = 0; i < _sites.size(); ++i) {
@@ -37,6 +40,14 @@ namespace f4cf::perf
                     } else {
                         _roots.push_back(i);
                     }
+                }
+                // in the order they run in a frame, not the order the sites were constructed
+                const auto runOrder = [this](const std::size_t index) {
+                    return _runOrders[index];
+                };
+                std::ranges::stable_sort(_roots, {}, runOrder);
+                for (auto& children : _children) {
+                    std::ranges::stable_sort(children, {}, runOrder);
                 }
             }
 
@@ -108,6 +119,7 @@ namespace f4cf::perf
 
             std::vector<Site*> _sites;
             std::vector<Site::Stats> _stats;
+            std::vector<std::uint64_t> _runOrders;
             std::unordered_map<const Site*, std::size_t> _indexOf;
             std::vector<std::vector<std::size_t>> _children;
             std::vector<std::size_t> _roots;

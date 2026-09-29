@@ -80,6 +80,8 @@ perf::reset();
   caller. A site called from several places keeps one set of stats and one caller, the first seen,
   and `hasMultipleCallers()` says so. Self time is still right, since each call charges its own
   caller. Each thread has its own roots, so a render-thread site never nests under a game-thread one.
+  A report lists the sites under a caller in the order they run in a frame (`Site::runOrder`), not
+  the order they were constructed.
 - **Threads and frames.** A site remembers the thread it first ran on, which is how a report groups
   the outermost sites by thread. `ModBase` times its whole frame with the frame site
   (`declareFrameSite`, around `onFrameUpdateSafe`): its thread is the game thread, and its call

@@ -21,7 +21,7 @@ namespace f4cf::perf
         {
             const Site* site = nullptr;
             Site::Stats stats;
-            // in the order the sites were constructed, which is roughly the order they first ran
+            // in the order they run in a frame (Site::runOrder)
             std::vector<Node> children;
         };
 
@@ -30,6 +30,7 @@ namespace f4cf::perf
             std::thread::id id;
             // the thread the frame site runs on
             bool isGameThread = false;
+            // in the order they run, like children
             std::vector<Node> roots;
         };
 
