@@ -10,6 +10,7 @@
 #include "../../external/openvr/openvr.h"
 #include "../ModBase.h"
 #include "../perf/Perf.h"
+#include "../perf/Tracy.h"
 #include "SceneDepthCapture.h"
 #include "SceneDepthDiagnostics.h"
 
@@ -53,7 +54,7 @@ namespace f4cf::render
 
         // Constructed with the DLL rather than on the render thread's first draw, which would take the perf registry's
         // lock there. A root of its own: the render thread runs no other site around it.
-        perf::Site s_drawPerfSite(DRAW_PERF_FUNCTION, nullptr);
+        perf::Site s_drawPerfSite(DRAW_PERF_FUNCTION, nullptr, __FILE__, __LINE__);
 
         /**
          * RTV over the submitted eye texture, cached keyed by texture pointer + size - the texture
@@ -79,6 +80,7 @@ namespace f4cf::render
 
         // --- render thread only -----------------------------------------------------------------
         thread_local int s_hookDepth = 0;
+        bool s_renderThreadNamed = false;
         CachedRenderTargetView s_submittedTextureRtv{};
         bool s_loggedDrawFailure = false;
         bool s_loggedReentry = false;
@@ -142,6 +144,13 @@ namespace f4cf::render
          */
         void drawToSubmittedTexture(const vr::Texture_t* texture)
         {
+            if constexpr (perf::TRACY_BUILT) {
+                // once, and only in a Tracy build: naming the thread allocates
+                if (!s_renderThreadNamed) {
+                    s_renderThreadNamed = true;
+                    perf::tracyThreadName("render");
+                }
+            }
             const perf::Scope perfScope(s_drawPerfSite);
 
             auto* device = getDevice();

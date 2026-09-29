@@ -34,6 +34,10 @@ option(F4VR_BUILD_SHARED "Build F4VRCommonFramework as a shared library (DLL)" O
 # not exposed, so consumer code using f4cf::imgui fails to COMPILE instead of linking clean and
 # silently never drawing.
 option(F4CF_WITH_IMGUI_UI "Build the Dear ImGui UI overlay (f4cf::imgui)" ON)
+# A "Tracy" build configuration next to Debug and Release: Release plus the Tracy profiler client, so every
+# perf site (f4cf::perf) is also a Tracy zone. The other configurations never compile Tracy in. Turn OFF only
+# to drop the configuration, and with it the download of Tracy's source at configure time.
+option(F4CF_WITH_TRACY "Add the Tracy build configuration: Release plus the Tracy profiler client" ON)
 set(F4VR_LIB_TYPE STATIC)
 if(F4VR_BUILD_SHARED)
   set(F4VR_LIB_TYPE SHARED)
@@ -79,6 +83,29 @@ set(Boost_USE_STATIC_RUNTIME OFF CACHE BOOL "")
 set(Boost_USE_STATIC_LIBS ON)
 set(CMAKE_INTERPROCEDURAL_OPTIMIZATION ON)
 set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_DEBUG OFF)
+
+# >>> The Tracy build configuration, built like any other: `cmake --build build --config Tracy`, or a build
+# preset with "configuration": "Tracy". Set up before any target, so every target, the mod's too, knows it. A
+# mod gives it what it gives Release only: "$<$<CONFIG:Release,Tracy>:...>".
+get_property(_F4CF_MULTI_CONFIG GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)
+if(_F4CF_MULTI_CONFIG)
+  set(_F4CF_CONFIGS ${CMAKE_CONFIGURATION_TYPES})
+  list(REMOVE_ITEM _F4CF_CONFIGS Tracy)
+  if(F4CF_WITH_TRACY)
+    list(APPEND _F4CF_CONFIGS Tracy)
+  endif()
+  set(CMAKE_CONFIGURATION_TYPES "${_F4CF_CONFIGS}" CACHE STRING "Semicolon separated list of supported configuration types" FORCE)
+endif()
+if(F4CF_WITH_TRACY)
+  # Release's compiler and linker flags
+  foreach(_F4CF_FLAGS CMAKE_CXX_FLAGS CMAKE_RC_FLAGS CMAKE_EXE_LINKER_FLAGS CMAKE_SHARED_LINKER_FLAGS CMAKE_MODULE_LINKER_FLAGS CMAKE_STATIC_LINKER_FLAGS)
+    set(${_F4CF_FLAGS}_TRACY "${${_F4CF_FLAGS}_RELEASE}" CACHE STRING "${_F4CF_FLAGS} for the Tracy configuration: Release's" FORCE)
+    mark_as_advanced(${_F4CF_FLAGS}_TRACY)
+  endforeach()
+  # and the Release build of every imported library, such as vcpkg's
+  set(CMAKE_MAP_IMPORTED_CONFIG_TRACY "Release;None;" CACHE STRING "Imported configurations the Tracy configuration uses" FORCE)
+  mark_as_advanced(CMAKE_MAP_IMPORTED_CONFIG_TRACY)
+endif()
 
 # >>> Configure CLF4 for Fallout 4 VR before add_subdirectory
 set(F4SE_SUPPORT_XBYAK ON CACHE BOOL "" FORCE)
@@ -224,6 +251,51 @@ else()
 endif()
 
 
+# >>> Tracy profiler client, fetched at configure time, compiled in and linked in the Tracy configuration only
+if(F4CF_WITH_TRACY)
+  # One release for every mod: the Tracy viewer (and its MCP server) must be the same version to connect.
+  set(F4CF_TRACY_VERSION "0.14.1")
+  # enabled per configuration below: every other configuration builds the library empty
+  set(TRACY_ENABLE OFF CACHE BOOL "" FORCE)
+  # costs nothing until a viewer connects, and buffers nothing before
+  set(TRACY_ON_DEMAND ON CACHE BOOL "" FORCE)
+  # no socket on the LAN; local discovery still works
+  set(TRACY_ONLY_LOCALHOST ON CACHE BOOL "" FORCE)
+  # crashes stay with the game's crash logger
+  set(TRACY_NO_CRASH_HANDLER ON CACHE BOOL "" FORCE)
+  # callstacks would have Tracy call SymInitialize on the game process, which crash loggers rely on
+  set(TRACY_NO_CALLSTACK ON CACHE BOOL "" FORCE)
+  # sampling and system tracing need the game elevated
+  set(TRACY_NO_SAMPLING ON CACHE BOOL "" FORCE)
+  set(TRACY_NO_SYSTEM_TRACING ON CACHE BOOL "" FORCE)
+  # no frame images, and so no thread for them
+  set(TRACY_NO_FRAME_IMAGE ON CACHE BOOL "" FORCE)
+  # started by ModBase when the plugin loads (perf::startTracy), never from a static initializer inside the loader lock
+  set(TRACY_MANUAL_LIFETIME ON CACHE BOOL "" FORCE)
+  set(TRACY_STATIC ON CACHE BOOL "" FORCE)
+  include(FetchContent)
+  FetchContent_Declare(tracy
+    URL "https://github.com/wolfpld/tracy/archive/refs/tags/v${F4CF_TRACY_VERSION}.tar.gz"
+    URL_HASH SHA256=bf4af567e9c7524d07f3caa745fad02fb33bd5694f11910750382d1efbb251c1
+  )
+  # without link-time optimization, which a profiler client doesn't need and Tracy's own check for fails here
+  set(_F4CF_IPO ${CMAKE_INTERPROCEDURAL_OPTIMIZATION})
+  set(CMAKE_INTERPROCEDURAL_OPTIMIZATION OFF)
+  FetchContent_MakeAvailable(tracy)
+  set(CMAKE_INTERPROCEDURAL_OPTIMIZATION ${_F4CF_IPO})
+  # TRACY_MANUAL_LIFETIME holds off Tracy's startup only together with TRACY_DELAYED_INIT, which has no CMake option
+  target_compile_definitions(TracyClient PUBLIC "$<$<CONFIG:Tracy>:TRACY_ENABLE>" TRACY_DELAYED_INIT)
+  # its own code under the mod's /W4: an unreachable-code warning in TracyProfiler.cpp
+  target_compile_options(TracyClient PRIVATE /wd4702)
+  # PUBLIC: the perf macros in the mod's own code open the zones
+  target_link_libraries(${PROJECT_NAME} PUBLIC "$<$<CONFIG:Tracy>:Tracy::TracyClient>")
+  target_compile_definitions(${PROJECT_NAME} PUBLIC "$<$<CONFIG:Tracy>:F4CF_WITH_TRACY=1>")
+  message(">>> Tracy profiler client v${F4CF_TRACY_VERSION}: in the Tracy configuration (on demand, localhost only)")
+else()
+  message(">>> Tracy profiler client: no Tracy configuration")
+endif()
+
+
 # >>> OpenVR (vcpkg first, then vendored fallback)
 option(F4VR_WITH_OPENVR "Enable OpenVR in the framework" ON)
 if(F4VR_WITH_OPENVR)
@@ -297,15 +369,16 @@ target_compile_options(${PROJECT_NAME}
 	/external:W0
 
     /W4 # Warning level
-    "$<$<CONFIG:RELEASE>:/Zc:inline;/JMC-;/Ob3>"
+    "$<$<CONFIG:Release,Tracy>:/Zc:inline;/JMC-;/Ob3>"
 )
 
 target_link_options(${PROJECT_NAME}
   PRIVATE
     /WX
     "$<$<CONFIG:DEBUG>:/INCREMENTAL;/OPT:NOREF;/OPT:NOICF>"
-    "$<$<CONFIG:RELEASE>:/INCREMENTAL:NO;/OPT:REF;/OPT:ICF;/DEBUG:FULL>"
+    "$<$<CONFIG:Release,Tracy>:/INCREMENTAL:NO;/OPT:REF;/OPT:ICF;/DEBUG:FULL>"
 )
 
 # >>> Fix a warning with /Ob2 being overridden with /Ob3
 string(REPLACE "/Ob2" "/Ob3" CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE}")
+string(REPLACE "/Ob2" "/Ob3" CMAKE_CXX_FLAGS_TRACY "${CMAKE_CXX_FLAGS_TRACY}")

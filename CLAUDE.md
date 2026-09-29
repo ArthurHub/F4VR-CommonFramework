@@ -23,6 +23,7 @@ This creates a VS solution in `build/`. Open and build there. All project config
 **Options:**
 - `F4VR_BUILD_SHARED=ON` — build as DLL instead of static lib (default: OFF)
 - `F4CF_WITH_IMGUI_UI=OFF` — drop the Dear ImGui UI layer `f4cf::imgui` (default: ON). Its headers are then not exposed either, so consumer code using it fails to **compile** instead of linking clean and drawing nothing. Everything else, the text font included, still builds.
+- `F4CF_WITH_TRACY=OFF` — drop the `Tracy` build configuration (default: ON), and with it the download of Tracy's source at configure time. The configuration is Release plus the Tracy profiler client, so every perf site is also a Tracy zone; the other configurations never compile Tracy in ([perf README](src/perf/README.md#tracy)). The framework adds it to `CMAKE_CONFIGURATION_TYPES` with Release's flags, so a mod's `CMakeLists.txt` writes `$<CONFIG:Release,Tracy>` wherever it means Release.
 - `COMMON_LIB_F4VR_PATH` — override path to CommonLibF4VR (default: `external/CommonLibF4VR`)
 
 ## Code Style
@@ -50,7 +51,7 @@ After cloning, run `pre-commit install` once to enforce clang-format on every co
 - `f4cf::imgui` — Dear ImGui panels as world-space quads (compiled out by `F4CF_WITH_IMGUI_UI=OFF`)
 - `f4cf::common` — math (quaternions, matrices) and shared utilities
 - `f4cf::devbench` — each mod's devbench tool (MCP/REST actions an agent or script calls in the running game), registered by `ModBase`
-- `f4cf::perf` — hot-path timing: `F4CF_PERF_FUNCTION()` / `F4CF_PERF_SCOPE("label")` sites on any thread, a lock-free histogram each, nested by the site each ran inside (self time = total - children), read against the frame context (frame interval, refresh-rate budget, VR compositor GPU time and reprojection, polled on the game thread); the framework times its own frame work, controller polls and overlay drawing (see the perf README); off until `perf::setEnabled(true)`, which the devbench tool does on first use
+- `f4cf::perf` — hot-path timing: `F4CF_PERF_FUNCTION()` / `F4CF_PERF_SCOPE("label")` sites on any thread, a lock-free histogram each, nested by the site each ran inside (self time = total - children), read against the frame context (frame interval, refresh-rate budget, VR compositor GPU time and reprojection, polled on the game thread); the framework times its own frame work, controller polls and overlay drawing (see the perf README); off until `perf::setEnabled(true)`, which the devbench tool does on first use; in the `Tracy` build configuration every site is also a Tracy zone, with frame marks, the frame context as plots and devbench events as messages (`perf/Tracy.h`)
 
 ### Plugin Lifecycle (`src/ModBase.h`)
 `ModBase` is the base class every mod derives from. Override these hooks:
@@ -224,7 +225,7 @@ Copy the entire `mod-template/` directory into the new mod's repo. Then replace 
 Also rename `CMakeUserPresets.json.template` → `CMakeUserPresets.json` (git-ignored) and fill in:
 - `POST_BUILD_COPY_PLUGIN`: `true` to auto-copy DLL/PDB after build
 - `COPY_PLUGIN_BASE_PATH`: path(s) to MO2 mod folder or `Fallout4VR\Data` (semicolon-separated)
-- `COPY_PLUGIN_CONFIGURATIONS`: build configurations to copy on — `all` (default) or a `;` list like `Release` / `Debug;RelWithDebInfo`
+- `COPY_PLUGIN_CONFIGURATIONS`: build configurations to copy on — `all` (default) or a `;` list like `Release;Tracy` / `Debug;RelWithDebInfo`
 - `F4VR_COMMON_FRAMEWORK_PATH`: only if not using a submodule (overrides the default `external/F4VR-CommonFramework`)
 
 Rename `src/PCH.h.template` → `src/PCH.h`.
@@ -245,7 +246,7 @@ Or point `F4VR_COMMON_FRAMEWORK_PATH` in CMakeUserPresets.json at an existing ch
 cmake --preset default        # or --preset vs2026
 ```
 
-Opens a VS solution in `build/`. Debug and Release configurations are both available. Building the `package_mod` target (`cmake --build build --config Release --target package_mod`) stages everything (DLL, PDB, `data/mod/` contents) and produces a versioned `.7z` at `build/package/`; a normal build does not package.
+Opens a VS solution in `build/`. Debug, Release and Tracy (Release plus the Tracy profiler client, the template's `tracy` build preset) configurations are available. Building the `package_mod` target (`cmake --build build --config Release --target package_mod`) stages everything (DLL, PDB, `data/mod/` contents) and produces a versioned `.7z` at `build/package/`; a normal build does not package.
 
 ### 4. Source file responsibilities
 

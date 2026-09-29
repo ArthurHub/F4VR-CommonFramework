@@ -598,6 +598,8 @@ namespace f4cf::devbench
                     { "tool", _name },
                     { "devbench", _hostBuild },
                     { "armed", isArmed() },
+                    // whether the build links the Tracy client, and whether a Tracy viewer is connected to it
+                    { "tracy", json{ { "built", perf::TRACY_BUILT }, { "connected", perf::isTracyConnected() } } },
                     { "hasSnapshot", snapshot != nullptr },
                     { "liveness", liveness },
                     { "actions", actions },
@@ -1062,6 +1064,10 @@ namespace f4cf::devbench
 
         void emit(const std::string_view topic, const nlohmann::json& payload)
         {
+            // a marker on the Tracy timeline, where it happened
+            if (perf::isTracyConnected()) {
+                perf::tracyMessage(payload.empty() ? std::string(topic) : std::format("{} {}", topic, dump(payload)));
+            }
             tool().emit(topic, payload);
         }
     }

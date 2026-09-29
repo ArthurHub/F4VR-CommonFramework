@@ -9,6 +9,10 @@
 
 #include "Histogram.h"
 
+#ifdef F4CF_WITH_TRACY
+#include <tracy/Tracy.hpp>
+#endif
+
 namespace f4cf::perf
 {
     class Site;
@@ -16,6 +20,12 @@ namespace f4cf::perf
     namespace internal
     {
         inline std::atomic<bool> g_enabled{ false };
+
+#ifdef F4CF_WITH_TRACY
+        // Set once the Tracy profiler has started (startTracy, when the plugin loads): a zone opened before that would
+        // find no profiler.
+        inline std::atomic<bool> g_tracyStarted{ false };
+#endif
 
         // The innermost site open on this thread. A Scope keeps the one it replaced by value, never a pointer to another
         // Scope: an SEH recovery can skip destructors, and the next outer Scope to close restores this anyway.
@@ -80,8 +90,11 @@ namespace f4cf::perf
          * @param function the enclosing function (__FUNCTION__), which tells blocks with the same label apart
          * @param label    the block measured ("arms"), or nullptr for the whole function. Both must outlive the site;
          *                 the macros pass string literals.
+         * @param file     the source file (__FILE__), "" when there is none, as for a dynamic site; it must outlive the
+         *                 site too
+         * @param line     the source line; with the file, it is where a Tracy build's viewer shows the site's source
          */
-        Site(const char* function, const char* label);
+        Site(const char* function, const char* label, const char* file = "", std::uint32_t line = 0);
         ~Site();
 
         Site(const Site&) = delete;
@@ -217,16 +230,25 @@ namespace f4cf::perf
         std::atomic<bool> _multipleCallers{ false };
         std::atomic<std::thread::id> _thread{};
         std::atomic<std::uint64_t> _runOrder{ 0 };
+#ifdef F4CF_WITH_TRACY
+        // what the site's Tracy zones are named and located by; after the members label() reads
+        ::tracy::SourceLocationData _tracyLocation;
+#endif
     };
 
     /**
      * RAII timer: records its lifetime into a site, and makes that site the caller of the sites opened inside it on the
      * same thread. While recording is off it does nothing, not even take a timestamp.
+     *
+     * In a Tracy build it is also a Tracy zone, open while a viewer is connected whether or not the site records.
      */
     class [[nodiscard]] Scope
     {
     public:
         explicit Scope(Site& site)
+#ifdef F4CF_WITH_TRACY
+            : _tracyZone(&site._tracyLocation, -1, internal::g_tracyStarted.load(std::memory_order_acquire))
+#endif
         {
             if (!isEnabled()) {
                 return;
@@ -260,6 +282,10 @@ namespace f4cf::perf
         Site* _site = nullptr;
         Site* _caller = nullptr;
         std::chrono::steady_clock::time_point _start{};
+#ifdef F4CF_WITH_TRACY
+        // ends after the destructor's body, so the zone spans the recorded time
+        ::tracy::ScopedZone _tracyZone;
+#endif
     };
 
     /**
@@ -290,8 +316,8 @@ namespace f4cf::perf
 
 #define F4CF_PERF_CONCAT_INNER_(a, b) a##b
 #define F4CF_PERF_CONCAT_(a, b) F4CF_PERF_CONCAT_INNER_(a, b)
-#define F4CF_PERF_SITE_(label, line)                                                       \
-    static ::f4cf::perf::Site F4CF_PERF_CONCAT_(f4cfPerfSite_, line)(__FUNCTION__, label); \
+#define F4CF_PERF_SITE_(label, line)                                                                       \
+    static ::f4cf::perf::Site F4CF_PERF_CONCAT_(f4cfPerfSite_, line)(__FUNCTION__, label, __FILE__, line); \
     const ::f4cf::perf::Scope F4CF_PERF_CONCAT_(f4cfPerfScope_, line)(F4CF_PERF_CONCAT_(f4cfPerfSite_, line))
 
 /**

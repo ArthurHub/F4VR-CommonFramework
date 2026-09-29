@@ -8,6 +8,7 @@
 #include "../../external/openvr/openvr.h"
 #include "FrameContext.h"
 #include "Perf.h"
+#include "Tracy.h"
 
 namespace f4cf::perf::internal
 {
@@ -64,35 +65,56 @@ namespace f4cf::perf::internal
         }
 
         /**
-         * Reads the compositor's frame timings into the frame context, each frame once, only frames timed in the
-         * current window.
+         * One compositor frame on the Tracy viewer's plots.
+         */
+        void plotCompositorFrame(const CompositorFrame& frame)
+        {
+            tracyPlot("vr.gpuMs", frame.gpuMs);
+            tracyPlot("vr.gameGpuMs", frame.gameGpuMs);
+            tracyPlot("vr.lateStartMs", frame.lateStartMs);
+            tracyPlot("vr.headroomMs", frame.headroomMs);
+            tracyPlot("vr.reprojectedCpu", frame.reprojectedCpu ? 1.0 : 0.0);
+            tracyPlot("vr.reprojectedGpu", frame.reprojectedGpu ? 1.0 : 0.0);
+            tracyPlot("vr.dropped", frame.dropped);
+        }
+
+        /**
+         * Reads the compositor's frame timings, each frame once, only frames timed in the current window: into the
+         * frame context while recording, onto the Tracy plots while a viewer is connected.
          */
         class CompositorPoller
         {
         public:
-            void poll(const Clock::time_point now)
+            /**
+             * @param resumed nothing was sampled last frame, so the frames timed since the last read belong to no
+             *                window, and would otherwise all arrive at once (on a viewer's plots, as one burst)
+             */
+            void poll(const Clock::time_point now, const bool recording, const bool plotting, const bool resumed)
             {
                 auto* compositor = vr::VRCompositor();
                 if (!compositor) {
                     return;
                 }
                 const auto window = windowStart();
-                if (!_started || window != _window) {
+                if (!_started || window != _window || resumed) {
                     startWindow(*compositor, window, now);
                     return;
                 }
-                if (now < _nextPoll) {
+                // every frame while plotting, so each plot point lands by its frame on the timeline, not in a burst
+                if (!plotting && now < _nextPoll) {
                     return;
                 }
                 _nextPoll = now + POLL_INTERVAL;
 
-                // newest first, one frame at a time, back to the last frame already recorded
+                // newest first, one frame at a time, back to the last frame already read
                 const auto newest = frameTiming(*compositor, 0);
                 if (!newest) {
                     return;
                 }
+                std::array<CompositorFrame, HISTORY_FRAMES> frames;
+                std::size_t count = 0;
                 auto newerIndex = newest->m_nFrameIndex;
-                auto latestRecorded = _lastFrame;
+                auto latestRead = _lastFrame;
                 for (auto framesAgo = SETTLING_FRAMES; framesAgo < HISTORY_FRAMES; ++framesAgo) {
                     const auto timing = frameTiming(*compositor, framesAgo);
                     // an index that stops going down is the history's end, where the oldest frame repeats
@@ -100,16 +122,26 @@ namespace f4cf::perf::internal
                         break;
                     }
                     newerIndex = timing->m_nFrameIndex;
-                    recordCompositorFrame(toCompositorFrame(*timing));
-                    latestRecorded = (std::max)(latestRecorded, timing->m_nFrameIndex);
+                    frames[count++] = toCompositorFrame(*timing);
+                    latestRead = (std::max)(latestRead, timing->m_nFrameIndex);
                 }
-                _lastFrame = latestRecorded;
+                _lastFrame = latestRead;
+
+                // oldest first, so the plots run forward in time
+                for (auto i = count; i-- > 0;) {
+                    if (recording) {
+                        recordCompositorFrame(frames[i]);
+                    }
+                    if (plotting) {
+                        plotCompositorFrame(frames[i]);
+                    }
+                }
             }
 
         private:
             /**
-             * A new window (recording switched on, or a reset): skip the frames timed before it, and read the refresh
-             * rate again in case it changed.
+             * A new window (recording switched on, a reset, or sampling resumed): skip the frames timed before it, and
+             * read the refresh rate again in case it changed.
              */
             void startWindow(vr::IVRCompositor& compositor, const Clock::time_point window, const Clock::time_point now)
             {
@@ -133,24 +165,33 @@ namespace f4cf::perf::internal
 
     void sampleFrame()
     {
-        static bool previousFrameRecorded = false;
+        static bool previousFrameSampled = false;
         static Clock::time_point previousFrame{};
-        if (!isEnabled()) {
-            previousFrameRecorded = false;
+        const bool recording = isEnabled();
+        const bool plotting = isTracyConnected();
+        if (!recording && !plotting) {
+            previousFrameSampled = false;
             return;
         }
         // what measuring the frame costs it
         F4CF_PERF_FUNCTION();
+        const bool resumed = !previousFrameSampled;
         const auto now = Clock::now();
-        // an interval only between two frames that both recorded, so switching recording on doesn't add one spanning
+        // an interval only between two frames that were both sampled, so switching sampling on doesn't add one spanning
         // the whole time it was off
-        if (previousFrameRecorded) {
-            recordFrameInterval(now - previousFrame);
+        if (previousFrameSampled) {
+            const auto interval = now - previousFrame;
+            if (recording) {
+                recordFrameInterval(interval);
+            }
+            if (plotting) {
+                tracyPlot("frame.intervalMs", std::chrono::duration<double, std::milli>(interval).count());
+            }
         }
         previousFrame = now;
-        previousFrameRecorded = true;
+        previousFrameSampled = true;
 
         static CompositorPoller compositor;
-        compositor.poll(now);
+        compositor.poll(now, recording, plotting, resumed);
     }
 }

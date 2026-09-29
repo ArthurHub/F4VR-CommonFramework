@@ -27,6 +27,12 @@ major version is `0`, a minor bump may break the API; the **Upgrading** notes sa
   render thread. Recording is off until `perf::setEnabled(true)`, which the
   devbench tool does on first use; the log level no longer turns it on. Without devbench, the
   `sDumpDataOnceNames` names `perf_reset` and `perf` start a window and log it as a table.
+- **Tracy**: a `Tracy` build configuration next to Debug and Release, a Release build with the
+  [Tracy](https://github.com/wolfpld/tracy) profiler client v0.14.1 in it. Every perf site is also
+  a Tracy zone, each frame is marked, the frame interval and the compositor's timing of each frame
+  are plots, and devbench events are messages, so the Tracy viewer shows the timeline, frame by
+  frame and thread by thread. The client is on demand and listens on localhost only; the other
+  configurations never compile it in. The mod template builds it with its `tracy` build preset.
 
 **Upgrading**
 
@@ -34,6 +40,11 @@ major version is `0`, a minor bump may break the API; the **Upgrading** notes sa
   `const auto timer = perf.scope();` with `F4CF_PERF_FUNCTION();` (or `F4CF_PERF_SCOPE("label")`
   for a block) from `perf/Perf.h`. Debug logging no longer turns timing on and nothing is logged
   any more; read the sites through the mod's devbench tool (`perf` action).
+- The `Tracy` configuration gets only what your `CMakeLists.txt` gives it: change the Release-only
+  `$<CONFIG:RELEASE>` settings to `$<CONFIG:Release,Tracy>`, and repeat the `/Ob2` to `/Ob3` fix for
+  `CMAKE_CXX_FLAGS_TRACY`, as the mod template does. Add a `tracy` build preset
+  (`"configuration": "Tracy"`) to build it. Configuring now downloads Tracy's source once;
+  `-DF4CF_WITH_TRACY=OFF` drops the configuration and the download.
 
 ## 0.4.0 — 2026-09-25
 

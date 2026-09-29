@@ -234,7 +234,7 @@ test it immediately. Point it at your **MO2 mod folder** or your **`Fallout4VR\D
 - `COPY_PLUGIN_BASE_PATH` can be **several paths** separated by `;` (e.g. a MO2 folder *and* a live
   Data folder).
 - `COPY_PLUGIN_CONFIGURATIONS` limits the copy to some build configurations: `all` (the default) or a
-  `;` list such as `"Release"` or `"Debug;RelWithDebInfo"` (case-insensitive). Since a build preset picks
+  `;` list such as `"Release;Tracy"` or `"Debug;RelWithDebInfo"` (case-insensitive). Since a build preset picks
   its `configuration`, this also decides which build presets deploy.
 - Add `"F4VR_COMMON_FRAMEWORK_PATH": "C:/path/to/checkout"` here only if you skipped the submodule.
 
@@ -266,6 +266,10 @@ Open `build/HelloVR.sln`, pick the **Debug** configuration, and build. You shoul
 Building the `package_mod` target in **Release** (`cmake --build build --config Release --target package_mod`) stages
 `data/mod/` + the DLL and zips a versioned `.7z` into `build/package/` — that archive *is* your Nexus
 upload. A normal build does not package.
+
+The **Tracy** configuration (`cmake --build --preset tracy`) is a Release build that the
+[Tracy](https://github.com/wolfpld/tracy) profiler connects to, for when you need to see where a frame
+goes ([perf README](../src/perf/README.md#tracy)).
 
 At this point the mod builds and loads, but does nothing. Time to give it a body.
 

@@ -19,7 +19,7 @@ same generic actions:
 
 | Action | Arguments | What it does |
 |--------|-----------|--------------|
-| `health` | — | Which mod and framework version this is, the tool's `contract` number, the devbench build, whether the tool is armed, whether a state snapshot exists and its `liveness`, and the actions. Answered without the game thread, so it replies while the game is stalled. |
+| `health` | — | Which mod and framework version this is, the tool's `contract` number, the devbench build, whether the tool is armed, whether a state snapshot exists and its `liveness`, whether this is a [Tracy](../perf/README.md#tracy) build and a Tracy viewer is connected (`tracy`: `built`, `connected`), and the actions. Answered without the game thread, so it replies while the game is stalled. |
 | `state` | — | What the mod is doing as of its last frame: `liveness` plus the mod's own state (see below). Answered from a snapshot without the game thread; the call that arms the tool waits for the first one. |
 | `config` | `key`, `section` | One INI value as the mod sees it: the session override if one is set, otherwise the file's. |
 | `set` | `key`, `value`, `section` | Override one INI value for the session (`ConfigBase::setConfigOverride`); the file is not written. |
@@ -204,6 +204,9 @@ and before the game has loaded, an emit is one atomic load and builds nothing.
 - Events of every mod share one ring of 256 in devbench, so emit them when something changes
   (a skeleton rebuilt, a mode entered), never every frame.
 - Any thread. Before the tool is registered, and when devbench is absent, it does nothing.
+- In a [Tracy build](../perf/README.md#tracy), while a Tracy viewer is connected, every event is also
+  a message on its timeline where it happened, as the topic without the tool's prefix and the
+  payload, with or without devbench.
 
 ### Several mods at once
 

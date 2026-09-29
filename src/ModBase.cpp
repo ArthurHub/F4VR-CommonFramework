@@ -11,6 +11,7 @@
 #include "perf/FrameSampler.h"
 #include "perf/Perf.h"
 #include "perf/Report.h"
+#include "perf/Tracy.h"
 
 #include "f4vr/PlayerNodes.h"
 #include "render/PrimitiveDrawRenderer.h"
@@ -132,6 +133,9 @@ namespace f4cf
             logger::info("Init config...");
             _settings.config->load();
 
+            // before any hook can open a zone; nothing unless the build links Tracy (F4CF_WITH_TRACY)
+            perf::startTracy(_settings.name.c_str());
+
             if (_settings.preloadRendering) {
                 // CPU only, so it can start now and be done long before the main menu
                 render::preloadTextFont();
@@ -189,13 +193,25 @@ namespace f4cf
      */
     void ModBase::onFrameUpdateSafe()
     {
+        if constexpr (perf::TRACY_BUILT) {
+            // one Tracy frame from each of the mod's updates to the next, like the frame interval
+            perf::tracyFrameMark();
+            // Tracy keeps "Main thread" for the thread that started it, the game thread when F4SE loads plugins there;
+            // this names the game thread in case it is another
+            static bool s_threadNamed = false;
+            if (!s_threadNamed) {
+                s_threadNamed = true;
+                perf::tracyThreadName("game");
+            }
+        }
+
         // the mod's whole frame: perf readers count frames by it and call its thread the game thread
         const perf::Scope perfScope(perf::declareFrameSite(__FUNCTION__));
         // the frame interval and the compositor's timing, which perf reports each site against; one relaxed load while
         // recording is off
         perf::internal::sampleFrame();
         // declared out here: CPPTRACE_TRY runs its block in lambdas, and a site in there would be named after one
-        static perf::Site frameEndCallbacksSite(__FUNCTION__, "frameEndCallbacks");
+        static perf::Site frameEndCallbacksSite(__FUNCTION__, "frameEndCallbacks", __FILE__, __LINE__);
 
         CPPTRACE_TRY
         {

@@ -551,8 +551,8 @@ namespace f4cf::vrcf
         // Every poll through the shared vtable, ours apart from everyone else's: n per frame is how often each reads
         // controller state. Apart, since the game's polls run outside any site and would otherwise be counted under
         // the site our own polls run in. Labelled with the OpenVR call, since a table shows only the label.
-        static perf::Site ownPoll(__FUNCTION__, "GetControllerState:own");
-        static perf::Site otherPoll(__FUNCTION__, "GetControllerState:other");
+        static perf::Site ownPoll(__FUNCTION__, "GetControllerState:own", __FILE__, __LINE__);
+        static perf::Site otherPoll(__FUNCTION__, "GetControllerState:other", __FILE__, __LINE__);
         const bool selfRead = isSelfControllerRead();
         const perf::Scope perfScope(selfRead ? ownPoll : otherPoll);
         const bool ok = _origGetControllerState(system, index, state, stateSize);
@@ -570,8 +570,8 @@ namespace f4cf::vrcf
         vr::VRControllerState_t* state, const uint32_t stateSize, vr::TrackedDevicePose_t* pose)
     {
         // timed like hookedGetControllerState
-        static perf::Site ownPoll(__FUNCTION__, "GetControllerStateWithPose:own");
-        static perf::Site otherPoll(__FUNCTION__, "GetControllerStateWithPose:other");
+        static perf::Site ownPoll(__FUNCTION__, "GetControllerStateWithPose:own", __FILE__, __LINE__);
+        static perf::Site otherPoll(__FUNCTION__, "GetControllerStateWithPose:other", __FILE__, __LINE__);
         const bool selfRead = isSelfControllerRead();
         const perf::Scope perfScope(selfRead ? ownPoll : otherPoll);
         const bool ok = _origGetControllerStateWithPose(system, origin, index, state, stateSize, pose);

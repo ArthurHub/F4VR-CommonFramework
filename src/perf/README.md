@@ -22,6 +22,9 @@ frame interval, the frame budget at the headset's refresh rate, and in VR the co
 of each frame, which is where GPU time, late starts (the game being CPU-bound) and reprojected
 frames show. Each site's share of the budget (`%budget`) is its time per frame over the budget.
 
+For the frame by frame view, build the **`Tracy` configuration**: every site is then also a
+[Tracy](https://github.com/wolfpld/tracy) zone, on a timeline per thread (see [Tracy](#tracy)).
+
 > Part of the [F4VR Common Framework](../README.md) source tree.
 
 ## Files
@@ -31,7 +34,8 @@ frames show. Each site's share of the budget (`%budget`) is its time per frame o
 | [`Perf.h`](Perf.h) / [`Perf.cpp`](Perf.cpp) | The `F4CF_PERF_SCOPE` / `F4CF_PERF_FUNCTION` macros, `Site` (a measured place, its stats and its caller), `Scope` (the RAII timer behind the macros), `dynamicSite()`, and the switch: `setEnabled()`, `reset()`, `windowStart()`, `sites()`. |
 | [`Report.h`](Report.h) / [`Report.cpp`](Report.cpp) | `readReport()` — one read of every site, nested by caller and grouped by the thread of each outermost site, the game thread first, with the window and the frame count. `formatReport()` — the same as an indented text table. What the devbench `perf` action and the `perf` debug dump show. |
 | [`FrameContext.h`](FrameContext.h) / [`FrameContext.cpp`](FrameContext.cpp) | `FrameContext` — the whole frame over the window: the game's frame interval, the headset's refresh rate (the budget), and the VR compositor's timing of the same frames (GPU time, late starts, reprojected and dropped frames). Plain std; `CompositorFrame` carries the OpenVR fields it keeps. |
-| [`FrameSampler.h`](FrameSampler.h) / [`FrameSampler.cpp`](FrameSampler.cpp) | `internal::sampleFrame()` — what `ModBase` calls every frame to fill the frame context: the interval, and every half second the frames since the last read, one `IVRCompositor::GetFrameTiming` each (never `GetFrameTimings`, which overran its array). The one place perf calls OpenVR, on the game thread. |
+| [`FrameSampler.h`](FrameSampler.h) / [`FrameSampler.cpp`](FrameSampler.cpp) | `internal::sampleFrame()` — what `ModBase` calls every frame to fill the frame context: the interval, and every half second the frames since the last read, one `IVRCompositor::GetFrameTiming` each (never `GetFrameTimings`, which overran its array). While a Tracy viewer is connected it reads every frame and plots them. The one place perf calls OpenVR, on the game thread. |
+| [`Tracy.h`](Tracy.h) / [`Tracy.cpp`](Tracy.cpp) | The Tracy client's side of perf: `startTracy()` (`ModBase` calls it), `isTracyConnected()`, `tracyFrameMark()`, `tracyThreadName()`, `tracyMessage()`, `tracyPlot()`, and `TRACY_BUILT` for `if constexpr`. Outside the `Tracy` configuration they are inline no-ops. |
 | [`Histogram.h`](Histogram.h) | `Histogram` — the lock-free duration histogram behind every site: log-linear buckets over nanoseconds, percentiles within ~3%, exact count/sum/min/max, and `Snapshot`s that merge by addition. Plain std, so it can be unit tested. |
 
 ## Usage
@@ -82,6 +86,53 @@ Every mod gets these sites without code of its own:
 | `GetControllerState:own` / `:other`, `GetControllerStateWithPose:own` / `:other` | under the site that polls, or a root | every controller-state poll through the suppressor's vtable hooks, the mod's own apart from everyone else's; `/frame` is how often each reads |
 | `render::drawToSubmittedTexture`, each draw callback under it by its registered name | the render thread's root | overlay drawing in the Submit hook, CPU time only; absent while nothing draws |
 | `UIManager::onFrameUpdate` | where the mod calls it | vrui, while a UI is attached |
+
+## Tracy
+
+The `Tracy` build configuration is a Release build with the Tracy profiler client v0.14.1 compiled
+in. Every site is then also a Tracy zone, so the Tracy viewer shows what the tables above add up:
+which frame was slow, what ran in it, and on which thread. The mod needs no code of its own for
+it, and the other configurations never compile Tracy in.
+
+1. Build it with the mod's `tracy` build preset (`cmake --build --preset tracy`) or
+   `cmake --build build --config Tracy`. The DLL is copied to the mod folder like any other build's,
+   over the Release one; a later Release build copies back only when it relinks.
+2. Start the game, then the Tracy viewer (`tracy-profiler.exe`) of the same release, v0.14.1, and
+   connect to the mod in its list of local clients. `tracy-capture.exe -a 127.0.0.1 -o <file>.tracy`
+   records one to a file instead.
+
+The client only listens on localhost, and costs next to nothing until a viewer connects: nothing is
+buffered before. A capture holds:
+
+- **Zones**: every site, named by its label, with the function, file and line.
+- **Frames**: one per call of `ModBase::onFrameUpdateSafe`. The first frame of a capture spans from
+  the plugin loading to the connection; skip it.
+- **Threads**: the render thread is named `render` once the Submit hook draws. The game thread shows
+  as *Main thread*, since Tracy names the thread that started it so, whatever it is called later.
+- **Plots**: `frame.intervalMs` every frame, and one point per compositor frame for `vr.gpuMs`,
+  `vr.gameGpuMs`, `vr.lateStartMs`, `vr.headroomMs`, `vr.reprojectedCpu`, `vr.reprojectedGpu` and
+  `vr.dropped` (the frame context's numbers), whether perf recording is on or not.
+- **Messages**: every [devbench event](../devbench/README.md#events), with its topic and payload,
+  even without devbench.
+
+Code that wants more includes [`Tracy.h`](Tracy.h): `tracyPlot()`, `tracyMessage()` and
+`isTracyConnected()` (to skip building what only a viewer would see) compile to nothing in the other
+configurations.
+
+- **One client per mod.** The framework is a static library, so each mod built this way runs its own
+  client (port 8086, then 8087, ...) and makes its own capture; the viewer lists them by mod name. A
+  saved capture is named after the game's executable whatever the mod.
+- **Left out on purpose:** call stacks (Tracy would call `SymInitialize` on the game, which crash
+  loggers rely on), sampling and system tracing (both need the game elevated), frame images, and
+  Tracy's crash handler, so a crash still goes to the game's crash logger.
+- **Started by `ModBase`** when the plugin loads (`startTracy`), not from a static initializer inside
+  the loader lock. A site that runs before that is not a zone.
+- **In the mod's `CMakeLists.txt`**, the `Tracy` configuration gets what Release gets: write
+  `$<CONFIG:Release,Tracy>` where a setting is for Release only, and repeat the `/Ob2` to `/Ob3` fix
+  for `CMAKE_CXX_FLAGS_TRACY`, as the mod template does. The framework adds the configuration itself,
+  with Release's flags and the Release build of imported libraries.
+- **Configuring downloads Tracy's source** once, pinned by hash. `-DF4CF_WITH_TRACY=OFF` drops the
+  configuration and the download.
 
 ## Notes
 

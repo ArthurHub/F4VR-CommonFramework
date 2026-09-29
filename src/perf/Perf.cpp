@@ -103,10 +103,14 @@ namespace f4cf::perf
         return std::chrono::steady_clock::time_point(std::chrono::steady_clock::duration(s_windowStart.load(std::memory_order_relaxed)));
     }
 
-    Site::Site(const char* function, const char* label)
+    Site::Site(const char* function, const char* label, [[maybe_unused]] const char* file, [[maybe_unused]] const std::uint32_t line)
         : _function(function),
           _label(label),
           _shortFunction(shortName(function))
+#ifdef F4CF_WITH_TRACY
+          ,
+          _tracyLocation{ this->label(), function, file, line, 0 }
+#endif
     {
         auto& reg = registry();
         std::lock_guard lock(reg.lock);

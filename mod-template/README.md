@@ -62,6 +62,8 @@ cmake --preset default      # generates build/MyMod.sln
 ```
 
 Open the solution and build. To package, build the `package_mod` target in Release; it writes a versioned `.7z` under `build/package/`.
+To profile with [Tracy](https://github.com/wolfpld/tracy), build the `Tracy` configuration (`cmake --build --preset tracy`): a Release build
+whose perf sites are also Tracy zones.
 
 ## Support
 

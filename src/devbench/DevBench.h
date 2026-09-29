@@ -9,6 +9,8 @@
 
 #include <nlohmann/json.hpp>
 
+#include "../perf/Tracy.h"
+
 namespace f4cf
 {
     class ConfigBase;
@@ -145,6 +147,9 @@ namespace f4cf::devbench
      * makePayload returns the event's JSON and is called only when the event can go somewhere, so while devbench is
      * absent (and before the game has loaded) an emit costs one atomic load and builds nothing. Any thread.
      *
+     * In a Tracy build the event is also a message on the Tracy viewer's timeline while one is connected, with or
+     * without devbench.
+     *
      * @code
      *     devbench::emit("skeleton.ready", [&] { return nlohmann::json{ { "generation", _skeletonGeneration } }; });
      * @endcode
@@ -152,7 +157,7 @@ namespace f4cf::devbench
     template <std::invocable MakePayload>
     void emit(const std::string_view topic, MakePayload&& makePayload)
     {
-        if (internal::canEmit()) {
+        if (internal::canEmit() || perf::isTracyConnected()) {
             internal::emit(topic, std::forward<MakePayload>(makePayload)());
         }
     }
