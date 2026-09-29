@@ -13,7 +13,7 @@
 
 #include "ConfigBase.h"
 #include "DevBenchAPI.h"
-#include "perf/PerfMonitor.h"
+#include "perf/Perf.h"
 
 namespace f4cf::devbench
 {
@@ -219,13 +219,13 @@ namespace f4cf::devbench
             }
 
             /**
-             * Someone is using the tool, so switch on what costs per-frame work, once: every PerfMonitor starts
-             * collecting what the perf action reads.
+             * Someone is using the tool, so switch on what costs per-frame work, once: every perf site starts
+             * recording what the perf action reads.
              */
             void arm()
             {
                 if (!_armed.exchange(true, std::memory_order_relaxed)) {
-                    perf::PerfMonitor::setCollecting(true);
+                    perf::setEnabled(true);
                 }
             }
 
@@ -416,8 +416,8 @@ namespace f4cf::devbench
                     true);
                 addAction({ "overrides", "the session overrides in effect", json::object(), handler(&Tool::listOverrides) }, true);
                 addAction({ "perf",
-                              "CPU time on the game thread of every PerfMonitor site in the mod (n, avg, p95, p99, min, max ms, busy%) since its last "
-                              "reset. Collection starts when the tool is first used, so reset, hold the condition, then read. It cannot see GPU time",
+                              "time spent in every perf site in the mod (n, avg, p50, p95, p99, min, max ms, busy%) since the last reset. Recording "
+                              "starts when the tool is first used, so reset, hold the condition, then read. It cannot see GPU time",
                               { { "reset", argument("boolean", "perf: clear every site after reading it, starting a new window") } },
                               handler(&Tool::readPerf) },
                     true);
@@ -523,35 +523,40 @@ namespace f4cf::devbench
             }
 
             /**
-             * Game thread, since that is the only thread the monitors are safe to read on.
+             * Every site that recorded something since the last reset, keyed by function and label
+             * ("Skeleton::onFrameUpdate/arms", or the function alone for a whole-function site).
              */
             json readPerf(const json& args) const
             {
                 const bool reset = argBool(args, "reset");
-                const auto now = perf::PerfStats::Clock::now();
+                const double windowMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - perf::windowStart()).count();
                 json sites = json::object();
-                for (auto* monitor : perf::PerfMonitor::all()) {
-                    const auto s = monitor->stats().summary(now);
-                    // two sites sharing a name must not hide each other
-                    auto name = monitor->name();
+                for (const auto* site : perf::sites()) {
+                    const auto s = site->read().durations.summary();
+                    if (s.count == 0) {
+                        continue;
+                    }
+                    const auto key = site->isWholeFunction() ? std::string(site->shortFunction()) : std::format("{}/{}", site->shortFunction(), site->label());
+                    // two sites sharing a key must not hide each other
+                    auto name = key;
                     for (int copy = 2; sites.contains(name); ++copy) {
-                        name = std::format("{} ({})", monitor->name(), copy);
+                        name = std::format("{} ({})", key, copy);
                     }
                     sites[name] = {
                         { "n", s.count },
-                        { "windowMs", s.windowMs },
+                        { "windowMs", windowMs },
                         { "totalMs", s.totalMs },
                         { "avgMs", s.avgMs },
+                        { "p50Ms", s.p50Ms },
                         { "p95Ms", s.p95Ms },
                         { "p99Ms", s.p99Ms },
                         { "minMs", s.minMs },
                         { "maxMs", s.maxMs },
-                        { "busyPct", s.busyPct },
-                        { "percentilesTruncated", s.percentilesTruncated },
+                        { "busyPct", windowMs > 0 ? s.totalMs / windowMs * 100.0 : 0.0 },
                     };
-                    if (reset) {
-                        monitor->resetStats();
-                    }
+                }
+                if (reset) {
+                    perf::reset();
                 }
                 return { { "reset", reset }, { "sites", sites } };
             }

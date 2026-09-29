@@ -164,7 +164,7 @@ flags for runtime toggling, debug-dump triggers, and batch config saves).
 | [`f4vr/`](f4vr/README.md)            | `f4cf::f4vr`   | Fallout 4 VR game-state utilities: nodes, skeleton, player nodes, menus, Scaleform, thumbstick.                  |
 | [`f4sevr/`](f4sevr/README.md)        | `F4SEVR`       | Ported F4SE VR SDK: Papyrus VM interop, native-function registration, VM value/arg marshalling.                  |
 | [`imgui/`](imgui/README.md)          | `f4cf::imgui`  | Dear ImGui panels drawn as world-space quads: a raw `Canvas`, and `UIImGuiPanel` for a vrui layout.              |
-| [`perf/`](perf/README.md)            | `f4cf::perf`   | Hot-path CPU timing: `PerfMonitor` sites that log a periodic summary and can be read on demand.                  |
+| [`perf/`](perf/README.md)            | `f4cf::perf`   | Hot-path timing: sites that nest into a tree, record from any thread, and are read on demand (devbench `perf`).  |
 | [`render/`](render/README.md)        | `f4cf::render` | Overlay rendering: world-space lines/fills/images/text over the VR view, the shared Submit hook, scene-depth occlusion. |
 | [`vrcf/`](vrcf/README.md)            | `f4cf::vrcf`   | VR Controller Framework. OpenVR button/trigger/thumbstick state, input suppression, haptic feedback.             |
 | [`vrui/`](vrui/README.md)            | `f4cf::vrui`   | VR UI widget system: panels, buttons, toggles, containers, scene graph, input dispatch.                          |

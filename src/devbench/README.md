@@ -25,7 +25,7 @@ same generic actions:
 | `set` | `key`, `value`, `section` | Override one INI value for the session (`ConfigBase::setConfigOverride`); the file is not written. |
 | `clear` | `key`, `section`, or `all` | Drop one session override, or all of them. |
 | `overrides` | — | The session overrides in effect. |
-| `perf` | `reset` | CPU time of every [`PerfMonitor`](../perf/README.md) site in the mod since its last reset: `n`, `avgMs`, `p95Ms`, `p99Ms`, `minMs`, `maxMs`, `busyPct`, `windowMs`. `reset: true` clears each site after reading it. Includes the framework's own sites, such as `ModBase::onFrameUpdateSafe`, which is the mod's whole frame. |
+| `perf` | `reset` | Time spent in every [perf site](../perf/README.md) in the mod since the last reset, keyed by function and label (`Skeleton::onFrameUpdate/arms`): `n`, `avgMs`, `p50Ms`, `p95Ms`, `p99Ms`, `minMs`, `maxMs`, `busyPct`, `windowMs`. Sites that recorded nothing are left out. `reset: true` clears every site after reading it. Includes the framework's own sites, such as `ModBase::onFrameUpdateSafe`, which is the mod's whole frame. |
 
 `section` defaults to the mod's name, the section the mod template uses; a mod whose main section
 is named differently says so with `devbench::setDefaultConfigSection`.
@@ -61,7 +61,7 @@ void MyMod::onModLoaded(const F4SE::LoadInterface*)
   call into `{ "ok": false, "error": "<message>" }`, which carries no other keys.
 - **Arming.** The first call of any action but `health` arms the tool (`devbench::isArmed()`) for
   the rest of the session, and anything that costs per-frame work waits for it: arming is what
-  switches on `PerfMonitor` collection, so a perf window starts at the first use, and the per-frame
+  switches on perf site recording, so a perf window starts at the first use, and the per-frame
   state snapshot. `health` never arms, so probing every mod is free.
 - **Arguments.** All actions share one flat input schema, so start each argument's description
   with the actions that read it (`"surface: ..."`). An argument several actions share is declared

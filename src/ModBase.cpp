@@ -8,7 +8,7 @@
 #include "devbench/DevBench.h"
 #include "f4vr/DebugDump.h"
 #include "f4vr/DebugInventory.h"
-#include "perf/PerfMonitor.h"
+#include "perf/Perf.h"
 
 #include "f4vr/PlayerNodes.h"
 #include "render/PrimitiveDrawRenderer.h"
@@ -187,8 +187,7 @@ namespace f4cf
      */
     void ModBase::onFrameUpdateSafe()
     {
-        static perf::PerfMonitor perf("ModBase::onFrameUpdateSafe");
-        const auto perfTimer = perf.scope();
+        F4CF_PERF_FUNCTION();
 
         CPPTRACE_TRY
         {

@@ -13,8 +13,8 @@
 namespace f4cf::perf
 {
     /**
-     * Lock-free duration histogram behind every perf site: record from any thread, drain it into a Snapshot at a
-     * window boundary, and read percentiles from snapshots, which merge by plain addition.
+     * Lock-free duration histogram behind every perf site: record from any thread, peek at it or drain it into a
+     * Snapshot, and read percentiles from snapshots, which merge by plain addition.
      *
      * Buckets are log-linear over nanoseconds (HdrHistogram style): every power of two is split into SUB_BUCKETS
      * equal buckets, so a bucket is at most 1/16 of its lower bound wide, and a percentile, reported as the midpoint
@@ -198,32 +198,54 @@ namespace f4cf::perf
          */
         [[nodiscard]] Snapshot drain()
         {
-            Snapshot snapshot;
-            std::size_t first = BUCKET_COUNT;
-            std::size_t last = 0;
-            for (std::size_t i = 0; i < BUCKET_COUNT; ++i) {
-                const auto n = _buckets[i].exchange(0, std::memory_order_relaxed);
-                snapshot.buckets[i] = n;
-                snapshot.count += n;
-                if (n > 0) {
-                    first = (std::min)(first, i);
-                    last = i;
-                }
-            }
-            snapshot.sumNs = _sumNs.exchange(0, std::memory_order_relaxed);
-            const auto minNs = _minNs.exchange(EMPTY_MIN, std::memory_order_relaxed);
-            const auto maxNs = _maxNs.exchange(0, std::memory_order_relaxed);
-            if (snapshot.count == 0) {
-                snapshot.sumNs = 0;
-                return snapshot;
-            }
-            snapshot.maxNs = (std::max)(maxNs, bucketLowerBound(last));
-            snapshot.minNs = (std::min)((std::min)(minNs, bucketUpperBound(first) - 1), snapshot.maxNs);
-            return snapshot;
+            return collect(*this, [](auto& value, const auto empty) {
+                return value.exchange(empty, std::memory_order_relaxed);
+            });
+        }
+
+        /**
+         * Everything recorded since the last drain, leaving it in place. Any thread, and safe while others record; a
+         * sample recorded during the read may be only partly in it, as with drain.
+         */
+        [[nodiscard]] Snapshot peek() const
+        {
+            return collect(*this, [](const auto& value, auto) {
+                return value.load(std::memory_order_relaxed);
+            });
         }
 
     private:
         static constexpr std::uint64_t EMPTY_MIN = (std::numeric_limits<std::uint64_t>::max)();
+
+        /**
+         * The body of drain and peek: take(atomic, emptyValue) returns the atomic's value, and drain also resets it.
+         */
+        template <typename Self, typename Take>
+        static Snapshot collect(Self& self, Take take)
+        {
+            Snapshot snapshot;
+            std::size_t firstUsed = BUCKET_COUNT;
+            std::size_t lastUsed = 0;
+            for (std::size_t i = 0; i < BUCKET_COUNT; ++i) {
+                const std::uint64_t n = take(self._buckets[i], std::uint32_t{ 0 });
+                snapshot.buckets[i] = n;
+                snapshot.count += n;
+                if (n > 0) {
+                    firstUsed = (std::min)(firstUsed, i);
+                    lastUsed = i;
+                }
+            }
+            snapshot.sumNs = take(self._sumNs, std::uint64_t{ 0 });
+            const std::uint64_t minNs = take(self._minNs, EMPTY_MIN);
+            const std::uint64_t maxNs = take(self._maxNs, std::uint64_t{ 0 });
+            if (snapshot.count == 0) {
+                snapshot.sumNs = 0;
+                return snapshot;
+            }
+            snapshot.maxNs = (std::max)(maxNs, bucketLowerBound(lastUsed));
+            snapshot.minNs = (std::min)((std::min)(minNs, bucketUpperBound(firstUsed) - 1), snapshot.maxNs);
+            return snapshot;
+        }
 
         static void lowerTo(std::atomic<std::uint64_t>& target, const std::uint64_t value)
         {

@@ -12,19 +12,22 @@ major version is `0`, a minor bump may break the API; the **Upgrading** notes sa
 - **`f4cf::devbench`**: every mod gets its own [devbench](https://github.com/ArthurHub/devbench)
   tool, so an AI agent or a script can drive it in the running game over MCP or REST. `ModBase`
   registers it, named after the mod, with generic actions for health, the mod's state as of its
-  last frame, session config overrides and reading every `PerfMonitor` site; a mod adds its own
+  last frame, session config overrides and reading every perf site; a mod adds its own
   actions with `devbench::addAction`, its state with `devbench::setStateProvider`, and publishes
   events with `devbench::emit`; the framework publishes its own for session loads, config reloads
   and overrides, and input suppression changes. Opt out with `Settings::devbenchTool = false`.
-- **`f4cf::perf`**: `PerfMonitor` moved out of `common/` into its own module, and every site can
-  now be read on demand as well as logged: `PerfMonitor::all()` lists them, and while
-  `setCollecting(true)` is on each one accumulates into `stats()` until `resetStats()`.
+- **`f4cf::perf`**: `PerfMonitor` is replaced by sites. `F4CF_PERF_FUNCTION()` and
+  `F4CF_PERF_SCOPE("label")` time a function or a block on any thread into a lock-free histogram
+  (p50/p95/p99 within ~3%, no sample cap), and each site records the site it ran inside, so they
+  nest into a tree with self time. Recording is off until `perf::setEnabled(true)`, which the
+  devbench tool does on first use; the log level no longer turns it on.
 
 **Upgrading**
 
-- `PerfMonitor` moved to its own `perf/` folder and namespace: include `perf/PerfMonitor.h` and
-  use `perf::PerfMonitor` instead of `common/PerfMonitor.h` / `common::PerfMonitor`. It can no
-  longer be copied or moved, since it registers itself by address in `PerfMonitor::all()`.
+- `common::PerfMonitor` is gone: replace `static PerfMonitor perf("Name");` and
+  `const auto timer = perf.scope();` with `F4CF_PERF_FUNCTION();` (or `F4CF_PERF_SCOPE("label")`
+  for a block) from `perf/Perf.h`. Debug logging no longer turns timing on and nothing is logged
+  any more; read the sites through the mod's devbench tool (`perf` action).
 
 ## 0.4.0 — 2026-09-25
 
