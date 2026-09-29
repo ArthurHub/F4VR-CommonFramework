@@ -59,7 +59,12 @@ the game thread (the one `ModBase::onFrameUpdateSafe` runs on) first:
     `lateStartMs` (how late the game asked for poses: the CPU-bound signal), `headroomMs` (time
     the compositor idled that the game could have used), `reprojected` frames by the reason the
     runtime gives, `cpu` or `gpu`, `dropped` and `misPresented`. `compositorFrames` counts them.
-  - The sites time the CPU; this is the only place the GPU shows.
+  - The sites time the CPU; this is where the whole frame's GPU time shows.
+- `gpu`, once the mod has timed GPU work (the framework's overlay drawing does while something
+  draws): the GPU sites, nested like a thread's sites, read back from timestamps 1-3 frames late
+  ([perf README](../perf/README.md#gpu-time)). The text table lists them last, under `gpu`, and
+  `flat` keys them with a `gpu:` prefix, since a GPU site can share its function and label with a
+  CPU one.
 - `key` is the site's name in the `flat` view: its function, plus the label for a block.
 - A site that recorded nothing since the reset is left out, unless a site under it recorded.
 - `windowMs` counts from the last reset; the call that arms the tool is that reset.

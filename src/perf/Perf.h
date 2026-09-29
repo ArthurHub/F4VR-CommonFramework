@@ -60,6 +60,16 @@ namespace f4cf::perf
     [[nodiscard]] std::chrono::steady_clock::time_point windowStart();
 
     /**
+     * What a site times: wall clock on the thread it runs on, or GPU time of work the mod issued, read back from GPU
+     * timestamps (GpuTimer). A report nests each kind apart, GPU sites in a tree of their own.
+     */
+    enum class SiteKind : std::uint8_t
+    {
+        Cpu,
+        Gpu,
+    };
+
+    /**
      * One measured place in the code: the duration of every call made while recording is on, how much of that was
      * spent in sites it opened (self time = total - children), and the site that opened it, which nests sites into a
      * tree per thread.
@@ -93,8 +103,9 @@ namespace f4cf::perf
          * @param file     the source file (__FILE__), "" when there is none, as for a dynamic site; it must outlive the
          *                 site too
          * @param line     the source line; with the file, it is where a Tracy build's viewer shows the site's source
+         * @param kind     what it times: Gpu for a site GpuTimer records into, which never opens a Scope
          */
-        Site(const char* function, const char* label, const char* file = "", std::uint32_t line = 0);
+        Site(const char* function, const char* label, const char* file = "", std::uint32_t line = 0, SiteKind kind = SiteKind::Cpu);
         ~Site();
 
         Site(const Site&) = delete;
@@ -126,6 +137,11 @@ namespace f4cf::perf
         [[nodiscard]] bool isWholeFunction() const
         {
             return _label == nullptr;
+        }
+
+        [[nodiscard]] SiteKind kind() const
+        {
+            return _kind;
         }
 
         /**
@@ -186,6 +202,20 @@ namespace f4cf::perf
             return { _durations.drain(), _childrenNs.exchange(0, std::memory_order_relaxed) };
         }
 
+        /**
+         * Record one duration measured elsewhere, such as a GPU span GpuTimer read back, under caller: a site of the same
+         * kind, or nullptr for an outermost one. Unlike a Scope it records whether or not perf is recording, so the one
+         * measuring decides. Any thread.
+         */
+        void record(const std::uint64_t ns, Site* caller)
+        {
+            noteCaller(caller);
+            _durations.recordNs(ns);
+            if (caller) {
+                caller->_childrenNs.fetch_add(ns, std::memory_order_relaxed);
+            }
+        }
+
     private:
         friend class Scope;
 
@@ -224,6 +254,7 @@ namespace f4cf::perf
         const char* _function;
         const char* _label;
         const char* _shortFunction;
+        SiteKind _kind;
         Histogram _durations;
         std::atomic<std::uint64_t> _childrenNs{ 0 };
         std::atomic<std::uintptr_t> _caller{ UNSEEN };
@@ -298,8 +329,10 @@ namespace f4cf::perf
      * (__FUNCTION__). The first call for a function and label creates it, later ones return the same site, and it is
      * never freed. Takes a lock, so look it up once and keep the reference rather than calling this per measurement.
      * Any thread.
+     *
+     * A GPU site (kind Gpu) is another site from a CPU one with the same function and label.
      */
-    [[nodiscard]] Site& dynamicSite(const char* function, std::string_view label);
+    [[nodiscard]] Site& dynamicSite(const char* function, std::string_view label, SiteKind kind = SiteKind::Cpu);
 
     /**
      * The site that times one whole frame of the mod, created by the first call with the function it times. ModBase

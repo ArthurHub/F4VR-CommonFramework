@@ -3,6 +3,7 @@
 #include <map>
 #include <mutex>
 #include <string>
+#include <tuple>
 #include <utility>
 
 #include "FrameContext.h"
@@ -15,8 +16,8 @@ namespace f4cf::perf
         {
             std::mutex lock;
             std::vector<Site*> sites;
-            // by function and label; the sites are never freed, see dynamicSite
-            std::map<std::pair<std::string, std::string>, Site*, std::less<>> dynamicSites;
+            // by function, label and kind; the sites are never freed, see dynamicSite
+            std::map<std::tuple<std::string, std::string, SiteKind>, Site*, std::less<>> dynamicSites;
         };
 
         /**
@@ -68,9 +69,9 @@ namespace f4cf::perf
          */
         struct DynamicSite
         {
-            DynamicSite(const char* function, const std::string_view label)
+            DynamicSite(const char* function, const std::string_view label, const SiteKind kind)
                 : label(label),
-                  site(function, this->label.c_str())
+                  site(function, this->label.c_str(), "", 0, kind)
             {}
 
             std::string label;
@@ -103,10 +104,11 @@ namespace f4cf::perf
         return std::chrono::steady_clock::time_point(std::chrono::steady_clock::duration(s_windowStart.load(std::memory_order_relaxed)));
     }
 
-    Site::Site(const char* function, const char* label, [[maybe_unused]] const char* file, [[maybe_unused]] const std::uint32_t line)
+    Site::Site(const char* function, const char* label, [[maybe_unused]] const char* file, [[maybe_unused]] const std::uint32_t line, const SiteKind kind)
         : _function(function),
           _label(label),
-          _shortFunction(shortName(function))
+          _shortFunction(shortName(function)),
+          _kind(kind)
 #ifdef F4CF_WITH_TRACY
           ,
           _tracyLocation{ this->label(), function, file, line, 0 }
@@ -131,21 +133,21 @@ namespace f4cf::perf
         return reg.sites;
     }
 
-    Site& dynamicSite(const char* function, const std::string_view label)
+    Site& dynamicSite(const char* function, const std::string_view label, const SiteKind kind)
     {
         auto& reg = registry();
         {
             std::lock_guard lock(reg.lock);
-            const auto found = reg.dynamicSites.find(std::pair<std::string_view, std::string_view>(function, label));
+            const auto found = reg.dynamicSites.find(std::tuple<std::string_view, std::string_view, SiteKind>(function, label, kind));
             if (found != reg.dynamicSites.end()) {
                 return *found->second;
             }
         }
         // constructed outside the lock, since a Site registers itself under it; never freed, so the reference stays valid
         // for the life of the process and the registry never holds a destroyed site
-        auto* created = new DynamicSite(function, label);
+        auto* created = new DynamicSite(function, label, kind);
         std::lock_guard lock(reg.lock);
-        const auto [it, inserted] = reg.dynamicSites.try_emplace(std::pair<std::string, std::string>(function, label), &created->site);
+        const auto [it, inserted] = reg.dynamicSites.try_emplace(std::tuple<std::string, std::string, SiteKind>(function, label, kind), &created->site);
         return *it->second;
     }
 

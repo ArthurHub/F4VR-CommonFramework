@@ -27,6 +27,11 @@ major version is `0`, a minor bump may break the API; the **Upgrading** notes sa
   Submit hook. Recording is off until `perf::setEnabled(true)`, which the
   devbench tool does on first use; the log level no longer turns it on. Without devbench, the
   `sDumpDataOnceNames` names `perf_reset` and `perf` start a window and log it as a table.
+- **GPU time**: GPU sites and `perf::GpuTimer` time the GPU work a mod issues itself, from
+  timestamps read back 1-3 frames later without waiting. The Submit host times every overlay layer
+  this way, the shared setup and each draw callback by name, shown as a `gpu` tree in the perf
+  report and as plots in a Tracy build. The host also names its drawing for frame capture tools
+  (RenderDoc, PIX) while one is attached.
 - **Tracy**: a `Tracy` build configuration next to Debug and Release, a Release build with the
   [Tracy](https://github.com/wolfpld/tracy) profiler client v0.14.1 in it. Every perf site is also
   a Tracy zone, each frame is marked, the frame interval and the compositor's timing of each frame

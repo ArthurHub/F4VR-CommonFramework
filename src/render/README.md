@@ -198,6 +198,16 @@ negotiable:
   chain onto the same hook, in the middle of theirs, and a field left clobbered presents as *their*
   bug.
 
+## Timing and capture tools
+
+The host times its draw on the CPU, as `render::drawToSubmittedTexture` with each callback under it
+by its registered name, and on the GPU, as the same names in the perf report's `gpu` tree with the
+shared `setup` among them ([perf README](../perf/README.md#gpu-time)). While a frame capture tool is
+attached (RenderDoc, PIX), the draw is also an event named `<mod> overlays`, with an event per
+callback inside it, so a capture shows each mod's layers by name. Neither costs anything unused: the
+GPU queries only while perf records or a Tracy viewer is connected, the events only while
+`ID3DUserDefinedAnnotation::GetStatus()` reports a tool.
+
 ## Zero cost until used, and never removed
 
 - Nothing is installed until a layer actually has something to draw. `ensureInstalled()` compiles the

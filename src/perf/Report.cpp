@@ -58,10 +58,10 @@ namespace f4cf::perf
             }
 
             /**
-             * Every root with what recorded under it, grouped by thread, then whatever a caller loop kept from being
-             * reached from a root.
+             * Every root with what recorded under it, the CPU ones grouped by thread and the GPU ones into gpu, then
+             * whatever a caller loop kept from being reached from a root.
              */
-            [[nodiscard]] std::vector<Report::Thread> threads(const std::thread::id gameThread)
+            [[nodiscard]] std::vector<Report::Thread> threads(const std::thread::id gameThread, std::vector<Report::Node>& gpu)
             {
                 std::vector<Report::Thread> threads;
                 if (gameThread != std::thread::id()) {
@@ -70,6 +70,10 @@ namespace f4cf::perf
                 const auto addRoot = [&](const std::size_t index) {
                     auto node = build(index);
                     if (!node) {
+                        return;
+                    }
+                    if (_sites[index]->kind() == SiteKind::Gpu) {
+                        gpu.push_back(std::move(*node));
                         return;
                     }
                     const auto thread = _sites[index]->thread();
@@ -134,7 +138,7 @@ namespace f4cf::perf
         Builder builder(sites());
         const auto* frame = frameSite();
         report.frames = builder.countOf(frame);
-        report.threads = builder.threads(frame ? frame->thread() : std::thread::id());
+        report.threads = builder.threads(frame ? frame->thread() : std::thread::id(), report.gpu);
         report.frame = readFrameContext();
         return report;
     }
@@ -272,6 +276,9 @@ namespace f4cf::perf
             multipleCallers = multipleCallers || anyMultipleCallers(thread.roots);
             anySite = anySite || !thread.roots.empty();
         }
+        width = (std::max)(width, labelColumnWidth(report.gpu, 1));
+        multipleCallers = multipleCallers || anyMultipleCallers(report.gpu);
+        anySite = anySite || !report.gpu.empty();
         if (!anySite) {
             return out + "no site has recorded anything since the last reset\n";
         }
@@ -293,6 +300,12 @@ namespace f4cf::perf
         for (const auto& thread : report.threads) {
             out += threadName(thread) + '\n';
             for (const auto& root : thread.roots) {
+                appendNode(out, root, 1, width, report);
+            }
+        }
+        if (!report.gpu.empty()) {
+            out += "gpu (timestamps, read 1-3 frames late)\n";
+            for (const auto& root : report.gpu) {
                 appendNode(out, root, 1, width, report);
             }
         }

@@ -16,11 +16,13 @@ costs one relaxed atomic load and takes no timestamp. Two things read it:
   table to the mod log, and `perf_reset` does too, then starts a new window; the first
   `perf_reset` switches recording on ([debug-config.md](../../docs/debug-config.md)).
 
-Sites time wall clock on the calling thread and cannot see the GPU. What they cost is read
-against the **frame context**, recorded over the same window while recording is on: the game's
-frame interval, the frame budget at the headset's refresh rate, and in VR the compositor's timing
-of each frame, which is where GPU time, late starts (the game being CPU-bound) and reprojected
-frames show. Each site's share of the budget (`%budget`) is its time per frame over the budget.
+Sites time wall clock on the calling thread. **GPU sites** hold the GPU time of work the mod
+issues itself, read back from GPU timestamps ([GPU time](#gpu-time)); the framework's overlay
+drawing is timed that way. What they cost is read against the **frame context**, recorded over the
+same window while recording is on: the game's frame interval, the frame budget at the headset's
+refresh rate, and in VR the compositor's timing of each frame, which is where the whole frame's GPU
+time, late starts (the game being CPU-bound) and reprojected frames show. Each site's share of the
+budget (`%budget`) is its time per frame over the budget.
 
 For the frame by frame view, build the **`Tracy` configuration**: every site is then also a
 [Tracy](https://github.com/wolfpld/tracy) zone, on a timeline per thread (see [Tracy](#tracy)).
@@ -35,6 +37,7 @@ For the frame by frame view, build the **`Tracy` configuration**: every site is 
 | [`Report.h`](Report.h) / [`Report.cpp`](Report.cpp) | `readReport()` — one read of every site, nested by caller and grouped by the thread of each outermost site, the game thread first, with the window and the frame count. `formatReport()` — the same as an indented text table. What the devbench `perf` action and the `perf` debug dump show. |
 | [`FrameContext.h`](FrameContext.h) / [`FrameContext.cpp`](FrameContext.cpp) | `FrameContext` — the whole frame over the window: the game's frame interval, the headset's refresh rate (the budget), and the VR compositor's timing of the same frames (GPU time, late starts, reprojected and dropped frames). Plain std; `CompositorFrame` carries the OpenVR fields it keeps. |
 | [`FrameSampler.h`](FrameSampler.h) / [`FrameSampler.cpp`](FrameSampler.cpp) | `internal::sampleFrame()` — what `ModBase` calls every frame to fill the frame context: the interval, and every half second the frames since the last read, one `IVRCompositor::GetFrameTiming` each (never `GetFrameTimings`, which overran its array). While a Tracy viewer is connected it reads every frame and plots them. The one place perf calls OpenVR, on the game thread. |
+| [`GpuTimer.h`](GpuTimer.h) / [`GpuTimer.cpp`](GpuTimer.cpp) | `GpuTimer` — GPU time of the work a mod issues on the D3D11 immediate context, split into spans by timestamps, read back 1-3 frames later without waiting, into GPU sites (`SiteKind::Gpu`). What the Submit host times every overlay layer with. |
 | [`Tracy.h`](Tracy.h) / [`Tracy.cpp`](Tracy.cpp) | The Tracy client's side of perf: `startTracy()` (`ModBase` calls it), `isTracyConnected()`, `tracyFrameMark()`, `tracyThreadName()`, `tracyMessage()`, `tracyPlot()`, and `TRACY_BUILT` for `if constexpr`. Outside the `Tracy` configuration they are inline no-ops. |
 | [`Histogram.h`](Histogram.h) | `Histogram` — the lock-free duration histogram behind every site: log-linear buckets over nanoseconds, percentiles within ~3%, exact count/sum/min/max, and `Snapshot`s that merge by addition. Plain std, so it can be unit tested. |
 
@@ -86,6 +89,40 @@ Every mod gets these sites without code of its own:
 | `GetControllerState`, `GetControllerStateWithPose` | under the site that polls | the mod's own controller-state polls (`SelfControllerReadScope`) through the suppressor's vtable hooks; `/frame` is how often the mod reads. Everyone else's polls are not timed: every mod's hook sees the same ones, so each mod's table would show the whole game's |
 | `render::drawToSubmittedTexture`, each draw callback under it by its registered name | a root on the game thread, after the frame | overlay drawing in the Submit hook, which FO4VR calls on the game thread about a millisecond after the mod's frame (on the loading screen's own thread during a load); CPU time only; absent while nothing draws |
 | `UIManager::onFrameUpdate` | where the mod calls it | vrui, while a UI is attached |
+| `render::drawToSubmittedTexture`, and under it `setup` and each draw callback by its registered name | the `gpu` tree | the GPU time of the overlay drawing: the shared setup, then each layer (vrui panels, ImGui canvases, debug draw, activation-sphere icons); read back 1-3 frames late |
+
+## GPU time
+
+A **GPU site** (`SiteKind::Gpu`) holds the GPU time of work the mod issues itself on the D3D11
+immediate context. `GpuTimer` measures it: a timestamp where the work starts and one after each
+span, so N spans take N+1 timestamps, inside a disjoint query that says whether the GPU clock held.
+Each whole frame goes into the timer's root site, and each span into its own site under it. A
+report lists the GPU sites last, as a tree of their own (`gpu`), since they run on no thread.
+
+```cpp
+static perf::Site gpuSite("MyLayer::draw", nullptr, __FILE__, __LINE__, perf::SiteKind::Gpu);
+static perf::Site blurSite("MyLayer::draw", "blur", __FILE__, __LINE__, perf::SiteKind::Gpu);
+static perf::GpuTimer gpuTimer(gpuSite, "gpu.myLayerMs");
+
+auto gpuFrame = gpuTimer.begin(context);   // on the thread that issues the work
+drawBlur(context);
+gpuFrame.mark(blurSite, "gpu.myLayer.blurMs");
+// the frame ends with gpuFrame's scope
+```
+
+- **The Submit host times every layer**, with no code in the layers: the whole draw as
+  `render::drawToSubmittedTexture`, and under it the shared `setup` and each draw callback by its
+  registered name, so every layer has a GPU time next to its CPU time.
+- **Read 1-3 frames late**, without waiting or flushing. Four frames can be in flight; a frame is
+  not timed while all four are, and one the GPU clock was disjoint over is dropped, as are the frames
+  still in flight at a reset.
+- **Only while measured**: nothing is issued unless perf is recording or a Tracy viewer is
+  connected.
+- **What a span means**: the GPU time between two points in the command stream, with idle time and
+  overlap at its edges, so a very short span is mostly its edges. A lightly loaded GPU also clocks
+  down, which inflates short times.
+- **Only the mod's own work.** What the engine renders because of the mod (a body, a light and its
+  shadow map, NIF widgets) is part of the frame context's GPU time and can't be timed from here.
 
 ## Tracy
 
@@ -112,7 +149,9 @@ buffered before. A capture holds:
   mod's frame; during a loading screen it comes from the loading screen's own thread.
 - **Plots**: `frame.intervalMs` every frame, and one point per compositor frame for `vr.gpuMs`,
   `vr.gameGpuMs`, `vr.lateStartMs`, `vr.headroomMs`, `vr.reprojectedCpu`, `vr.reprojectedGpu` and
-  `vr.dropped` (the frame context's numbers), whether perf recording is on or not.
+  `vr.dropped` (the frame context's numbers), whether perf recording is on or not. Each GPU site
+  timed is a plot too, 1-3 frames after the frame it times: `gpu.drawMs`, `gpu.draw.setupMs` and
+  `gpu.draw.<callback>Ms` for the overlay drawing.
 - **Messages**: every [devbench event](../devbench/README.md#events), with its topic and payload,
   even without devbench.
 

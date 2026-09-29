@@ -40,8 +40,11 @@ namespace f4cf::perf
         std::uint64_t frames = 0;
         // the whole frame over the same window: frame interval, refresh rate, and the compositor's timing in VR
         FrameContext frame;
-        // the game thread first
+        // the game thread first; CPU sites only
         std::vector<Thread> threads;
+        // the GPU sites (GpuTimer), nested like a thread's but on no thread, in the order they run; empty when nothing
+        // was timed on the GPU
+        std::vector<Node> gpu;
 
         /**
          * A site's average cost per game frame as a share of the frame budget, in percent; 0 when either is unknown.
@@ -68,7 +71,7 @@ namespace f4cf::perf
     /**
      * The report as a text table for a person to read: the frame context, then one line per site, indented under the
      * site it runs inside, with n, avg, p50, p95, p99, max and self ms, calls per frame and share of the frame budget,
-     * under a line per thread. Every line ends in '\n'.
+     * under a line per thread, and the GPU sites last under a line of their own. Every line ends in '\n'.
      */
     [[nodiscard]] std::string formatReport(const Report& report);
 }

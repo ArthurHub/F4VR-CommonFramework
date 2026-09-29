@@ -1,14 +1,20 @@
 #include "SubmitHook.h"
 
+#include <algorithm>
 #include <array>
 #include <atomic>
 #include <filesystem>
+#include <format>
+#include <string>
+#include <string_view>
 
+#include <d3d11_1.h>
 #include <windows.h>
 #include <wrl/client.h>
 
 #include "../../external/openvr/openvr.h"
 #include "../ModBase.h"
+#include "../perf/GpuTimer.h"
 #include "../perf/Perf.h"
 #include "SceneDepthCapture.h"
 #include "SceneDepthDiagnostics.h"
@@ -46,6 +52,11 @@ namespace f4cf::render
             int order = DRAW_ORDER_DEFAULT;
             // labelled with the name, under the draw's own site
             perf::Site* perfSite = nullptr;
+            // its GPU time, under the draw's GPU site, and the Tracy plot of it
+            perf::Site* gpuSite = nullptr;
+            std::string gpuPlotName;
+            // what a frame capture tool shows its drawing as
+            std::wstring captureMarkerName;
         };
 
         // the function the draw is timed as, which the draw callbacks' sites share
@@ -54,6 +65,12 @@ namespace f4cf::render
         // Constructed with the DLL rather than on the first draw, which would take the perf registry's lock inside
         // Submit. A root of its own: Submit runs outside the mod's frame, so no other site is open around it.
         perf::Site s_drawPerfSite(DRAW_PERF_FUNCTION, nullptr, __FILE__, __LINE__);
+
+        // The GPU time of the whole draw, and of the shared setup and each callback under it: a timestamp before the
+        // setup and one after it and after each callback. Read back 1-3 frames later.
+        perf::Site s_drawGpuSite(DRAW_PERF_FUNCTION, nullptr, __FILE__, __LINE__, perf::SiteKind::Gpu);
+        perf::Site s_setupGpuSite(DRAW_PERF_FUNCTION, "setup", __FILE__, __LINE__, perf::SiteKind::Gpu);
+        perf::GpuTimer s_gpuTimer(s_drawGpuSite, "gpu.drawMs");
 
         /**
          * RTV over the submitted eye texture, cached keyed by texture pointer + size - the texture
@@ -106,6 +123,53 @@ namespace f4cf::render
         void** s_compositorVTable = nullptr;
         vr::IVRCompositor* s_hookedCompositor = nullptr;
         ID3D11Buffer* s_cameraConstantBuffer = nullptr;
+        // where a frame capture tool is told what we draw, and what it calls the whole draw ("FRIK overlays")
+        Microsoft::WRL::ComPtr<ID3DUserDefinedAnnotation> s_captureAnnotation;
+        std::wstring s_drawCaptureMarkerName;
+
+        std::wstring widen(const std::string_view text)
+        {
+            if (text.empty()) {
+                return {};
+            }
+            const int size = MultiByteToWideChar(CP_UTF8, 0, text.data(), static_cast<int>(text.size()), nullptr, 0);
+            std::wstring wide(static_cast<std::size_t>((std::max)(size, 0)), L'\0');
+            if (size > 0) {
+                MultiByteToWideChar(CP_UTF8, 0, text.data(), static_cast<int>(text.size()), wide.data(), size);
+            }
+            return wide;
+        }
+
+        /**
+         * A named event around a stretch of our drawing, which a frame capture tool (RenderDoc, PIX) lists the draw by.
+         * Given no annotation, which is how the draw says no tool is attached, it does nothing.
+         */
+        class ScopedCaptureMarker
+        {
+        public:
+            ScopedCaptureMarker(ID3DUserDefinedAnnotation* annotation, const std::wstring& name)
+                : _annotation(annotation)
+            {
+                if (_annotation) {
+                    _annotation->BeginEvent(name.c_str());
+                }
+            }
+
+            ~ScopedCaptureMarker()
+            {
+                if (_annotation) {
+                    _annotation->EndEvent();
+                }
+            }
+
+            ScopedCaptureMarker(const ScopedCaptureMarker&) = delete;
+            ScopedCaptureMarker& operator=(const ScopedCaptureMarker&) = delete;
+            ScopedCaptureMarker(ScopedCaptureMarker&&) = delete;
+            ScopedCaptureMarker& operator=(ScopedCaptureMarker&&) = delete;
+
+        private:
+            ID3DUserDefinedAnnotation* _annotation;
+        };
 
         /**
          * The camera constant buffer bound to VS b0 for every callback, so the per-eye matrices are
@@ -198,6 +262,11 @@ namespace f4cf::render
 
             // constructed before anything is bound, destroyed after the last callback returns
             const ScopedPipelineState savedState(context);
+            // Our drawing, named for a frame capture tool while one is attached, and timed on the GPU while perf records
+            // or a Tracy viewer is connected; both end before the state is restored.
+            ID3DUserDefinedAnnotation* const captureAnnotation = s_captureAnnotation && s_captureAnnotation->GetStatus() ? s_captureAnnotation.Get() : nullptr;
+            const ScopedCaptureMarker drawMarker(captureAnnotation, s_drawCaptureMarkerName);
+            const auto gpuFrame = s_gpuTimer.begin(context);
 
             // The depth view is read-only, so binding it for everyone is safe: a callback that does
             // not enable depth testing is unaffected, and none of them can write to the engine's
@@ -216,6 +285,7 @@ namespace f4cf::render
                 context->Unmap(s_cameraConstantBuffer, 0);
             }
             context->VSSetConstantBuffers(0, 1, &s_cameraConstantBuffer);
+            gpuFrame.mark(s_setupGpuSite, "gpu.draw.setupMs");
 
             // Collect the active callbacks in painter order. Sorted here, on a stack array of at
             // most 32 entries, rather than keeping the table itself sorted: registration only ever
@@ -238,20 +308,21 @@ namespace f4cf::render
 
             for (std::size_t i = 0; i < orderedCount; ++i) {
                 const std::size_t index = ordered[i];
-                try {
-                    const perf::Scope callbackPerfScope(*s_callbacks[index].perfSite);
-                    s_callbacks[index].callback(frame);
-                } catch (const std::exception& ex) {
-                    setDrawCallbackActive(static_cast<DrawCallbackId>(index), false);
-                    logger::error("Draw callback '{}' threw ({}); dropped for this session", s_callbacks[index].name, ex.what());
+                const auto& entry = s_callbacks[index];
+                {
+                    const ScopedCaptureMarker callbackMarker(captureAnnotation, entry.captureMarkerName);
+                    try {
+                        const perf::Scope callbackPerfScope(*entry.perfSite);
+                        entry.callback(frame);
+                    } catch (const std::exception& ex) {
+                        setDrawCallbackActive(static_cast<DrawCallbackId>(index), false);
+                        logger::error("Draw callback '{}' threw ({}); dropped for this session", entry.name, ex.what());
+                    }
                 }
+                gpuFrame.mark(*entry.gpuSite, entry.gpuPlotName.c_str());
             }
         }
 
-        /**
-         * The Submit hook. Every path chains: a skipped original Submit black-screens the headset,
-         * so the chain call is the last statement and nothing between here and it may throw.
-         */
         /**
          * Which threads the game calls Submit on, each logged once, from when the game thread is known. In FO4VR it is
          * the game thread during play, about a millisecond after the mods' frames, and another thread while a loading
@@ -284,6 +355,10 @@ namespace f4cf::render
             }
         }
 
+        /**
+         * The Submit hook. Every path chains: a skipped original Submit black-screens the headset,
+         * so the chain call is the last statement and nothing between here and it may throw.
+         */
         vr::EVRCompositorError vrSubmitHook(vr::IVRCompositor* compositor, const vr::EVREye eye, const vr::Texture_t* texture, const vr::VRTextureBounds_t* bounds,
             const vr::EVRSubmitFlags flags)
         {
@@ -454,8 +529,12 @@ namespace f4cf::render
             return INVALID_DRAW_CALLBACK;
         }
 
-        // looked up here on the registering thread, so Submit never takes the perf registry's lock
+        // looked up here on the registering thread, so Submit never takes the perf registry's lock, nor allocates the
+        // names it plots and marks the callback by
         s_callbacks[index].perfSite = &perf::dynamicSite(DRAW_PERF_FUNCTION, name);
+        s_callbacks[index].gpuSite = &perf::dynamicSite(DRAW_PERF_FUNCTION, name, perf::SiteKind::Gpu);
+        s_callbacks[index].gpuPlotName = std::format("gpu.draw.{}Ms", name);
+        s_callbacks[index].captureMarkerName = widen(name);
         s_callbacks[index].name = std::move(name);
         s_callbacks[index].callback = std::move(callback);
         s_callbacks[index].order = order;
@@ -514,6 +593,12 @@ namespace f4cf::render
                 }
                 return false;
             }
+            // Asked for once, before the hook can draw; a frame capture tool is only told anything while GetStatus() says
+            // one is attached. Named after the mod, since every framework mod draws through a host of its own.
+            if (auto* context = getContext()) {
+                (void)context->QueryInterface(IID_PPV_ARGS(s_captureAnnotation.GetAddressOf()));
+            }
+            s_drawCaptureMarkerName = widen(std::format("{} overlays", g_mod ? g_mod->getName() : std::string("F4CF")));
             s_d3dInitialized = true;
         }
 

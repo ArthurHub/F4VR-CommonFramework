@@ -94,7 +94,9 @@ namespace f4cf::devbench
          */
         std::string perfSiteKey(const perf::Site& site)
         {
-            return site.isWholeFunction() ? std::string(site.shortFunction()) : std::format("{}/{}", site.shortFunction(), site.label());
+            // a GPU site can share its function and label with a CPU one, as the Submit host's draw callbacks do
+            const auto* kind = site.kind() == perf::SiteKind::Gpu ? "gpu:" : "";
+            return site.isWholeFunction() ? std::format("{}{}", kind, site.shortFunction()) : std::format("{}{}/{}", kind, site.shortFunction(), site.label());
         }
 
         double windowMsOf(const perf::Report& report)
@@ -696,6 +698,9 @@ namespace f4cf::devbench
                             addFlatPerfSites(sites, root, report);
                         }
                     }
+                    for (const auto& root : report.gpu) {
+                        addFlatPerfSites(sites, root, report);
+                    }
                     answer["sites"] = std::move(sites);
                     return answer;
                 }
@@ -709,6 +714,14 @@ namespace f4cf::devbench
                     threads.push_back({ { "thread", threadIdText(thread.id) }, { "gameThread", thread.isGameThread }, { "sites", std::move(roots) } });
                 }
                 answer["threads"] = std::move(threads);
+                // the mod's own GPU work, read back from timestamps 1-3 frames late; nested like a thread's sites
+                if (!report.gpu.empty()) {
+                    json gpu = json::array();
+                    for (const auto& root : report.gpu) {
+                        gpu.push_back(perfNodeJson(root, report));
+                    }
+                    answer["gpu"] = std::move(gpu);
+                }
                 return answer;
             }
 
