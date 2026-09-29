@@ -382,3 +382,13 @@ target_link_options(${PROJECT_NAME}
 # >>> Fix a warning with /Ob2 being overridden with /Ob3
 string(REPLACE "/Ob2" "/Ob3" CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE}")
 string(REPLACE "/Ob2" "/Ob3" CMAKE_CXX_FLAGS_TRACY "${CMAKE_CXX_FLAGS_TRACY}")
+
+
+# >>> Unit tests for the game-independent logic (tests/), run with ctest. ON when the framework is built on its
+# own; a mod that adds it with add_subdirectory turns it on to build and run them with its own tests, and then
+# needs catch2 in its vcpkg.json.
+option(F4CF_BUILD_TESTS "Build the framework's unit tests" ${PROJECT_IS_TOP_LEVEL})
+if(F4CF_BUILD_TESTS)
+  enable_testing()
+  add_subdirectory(tests)
+endif()

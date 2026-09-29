@@ -84,7 +84,9 @@ and debug as usual. All project configuration changes go in `CMakeLists.txt`, no
 
 Build options: `F4VR_BUILD_SHARED=ON` builds a DLL instead of a static lib (default `OFF`);
 `F4CF_WITH_IMGUI_UI=OFF` drops the Dear ImGui UI layer and its vcpkg port (default `ON`);
-`COMMON_LIB_F4VR_PATH` overrides the path to CommonLibF4VR.
+`F4CF_BUILD_TESTS` builds the unit tests in `tests/` (default `ON` for a standalone build, `OFF` in a
+mod's), which `ctest --test-dir build -C Release` runs; `COMMON_LIB_F4VR_PATH` overrides the path to
+CommonLibF4VR.
 
 ## Usage
 

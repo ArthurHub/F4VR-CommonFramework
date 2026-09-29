@@ -11,6 +11,7 @@
     "simpleini",
     "thomasmonkman-filewatch",
     "cpptrace",
+    "catch2",
     {
       "name": "imgui",
       "features": [

@@ -24,7 +24,10 @@ This creates a VS solution in `build/`. Open and build there. All project config
 - `F4VR_BUILD_SHARED=ON` — build as DLL instead of static lib (default: OFF)
 - `F4CF_WITH_IMGUI_UI=OFF` — drop the Dear ImGui UI layer `f4cf::imgui` (default: ON). Its headers are then not exposed either, so consumer code using it fails to **compile** instead of linking clean and drawing nothing. Everything else, the text font included, still builds.
 - `F4CF_WITH_TRACY=OFF` — drop the `Tracy` build configuration (default: ON), and with it the download of Tracy's source at configure time. The configuration is Release plus the Tracy profiler client, so every perf site is also a Tracy zone; the other configurations never compile Tracy in ([perf README](src/perf/README.md#tracy)). The framework adds it to `CMAKE_CONFIGURATION_TYPES` with Release's flags, so a mod's `CMakeLists.txt` writes `$<CONFIG:Release,Tracy>` wherever it means Release.
+- `F4CF_BUILD_TESTS` — build the unit tests in `tests/` (default: ON when the framework is the top-level project, OFF under a mod's `add_subdirectory`). A mod turns it on to build and run them with its own; it then needs `catch2` in its own `vcpkg.json`.
 - `COMMON_LIB_F4VR_PATH` — override path to CommonLibF4VR (default: `external/CommonLibF4VR`)
+
+**Tests:** `ctest --test-dir build -C Release` after a build. Catch2 unit tests in `tests/` for the game-independent logic (today `f4cf::perf`). The test binary compiles the plain-std `.cpp` files it covers directly, without the PCH, so only code free of F4SE and CommonLibF4 can be tested; keep pure logic in such files so it can be. Add a new test file and any source it covers to `tests/CMakeLists.txt`.
 
 ## Code Style
 
@@ -350,4 +353,4 @@ F4VR/
 | `src/render/` | Shared OpenVR Submit hook, primitive/text/image renderers, and the scene-depth capture that occludes overlays behind the world (design + the `sSceneDepthStrategy` key: [`docs/tech/scene-depth-occlusion.md`](docs/tech/scene-depth-occlusion.md)) |
 | `src/imgui/` | Dear ImGui canvases + `UIImGuiPanel`; compiled out by `F4CF_WITH_IMGUI_UI=OFF` |
 | `CMakePresets.json` | VS2022/VS2026 preset definitions |
-| `vcpkg.json` | Dependency manifest (spdlog, xbyak, nlohmann-json, simpleini, filewatch, cpptrace, imgui with `dx11-binding`) |
+| `vcpkg.json` | Dependency manifest (spdlog, xbyak, nlohmann-json, simpleini, filewatch, cpptrace, catch2 for the tests, imgui with `dx11-binding`) |
