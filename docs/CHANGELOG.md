@@ -20,7 +20,9 @@ major version is `0`, a minor bump may break the API; the **Upgrading** notes sa
 - **`f4cf::perf`**: `PerfMonitor` is replaced by sites. `F4CF_PERF_FUNCTION()` and
   `F4CF_PERF_SCOPE("label")` time a function or a block on any thread into a lock-free histogram
   (p50/p95/p99 within ~3%, no sample cap), and each site records the site it ran inside, so they
-  nest into a tree with self time. Recording is off until `perf::setEnabled(true)`, which the
+  nest into a tree with self time. Every read comes with the frame context of the same window:
+  the frame interval, the budget at the headset's refresh rate, and the VR compositor's GPU time,
+  late starts and reprojected frames. Recording is off until `perf::setEnabled(true)`, which the
   devbench tool does on first use; the log level no longer turns it on. Without devbench, the
   `sDumpDataOnceNames` names `perf_reset` and `perf` start a window and log it as a table.
 

@@ -34,7 +34,11 @@ is named differently says so with `devbench::setDefaultConfigSection`.
 the game thread (the one `ModBase::onFrameUpdateSafe` runs on) first:
 
 ```json
-{ "windowMs": 30012.4, "frames": 2701, "reset": false, "threads": [
+{ "windowMs": 30012.4, "frames": 2701, "reset": false,
+  "frame": { "hz": 90, "budgetMs": 11.11, "fps": 90.0, "intervalMs": { "avg": 11.11, "p50": 11.11, "p95": 11.52, "p99": 13.87, "max": 48.21 },
+    "compositorFrames": 2690, "gpuMs": { "p95": 10.41 }, "gameGpuMs": { "p95": 9.12 }, "compositorGpuMs": { "p95": 0.84 },
+    "lateStartMs": { "p95": 0.12 }, "headroomMs": { "p50": 1.64 }, "reprojected": { "cpu": 41, "gpu": 12 }, "dropped": 3, "misPresented": 5 },
+  "threads": [
   { "thread": "8412", "gameThread": true, "sites": [
     { "label": "ModBase::onFrameUpdateSafe", "key": "ModBase::onFrameUpdateSafe", "n": 2701, "p95Ms": 0.61, "selfAvgMs": 0.04, "callsPerFrame": 1,
       "children": [ { "label": "FRIK::onFrameUpdateInner", "children": [ { "label": "Skeleton::onFrameUpdate", "children": [
@@ -43,9 +47,19 @@ the game thread (the one `ModBase::onFrameUpdateSafe` runs on) first:
 ```
 
 - Every site has `n`, `totalMs`, `avgMs`, `p50Ms`, `p95Ms`, `p99Ms`, `minMs`, `maxMs`,
-  `selfTotalMs`, `selfAvgMs` (its time minus the sites under it), `busyPct` (of the window) and
-  `callsPerFrame` (per call of the frame site; `frames` counts those). `multipleCallers: true`
-  means it also runs under other sites and is shown under the first one seen.
+  `selfTotalMs`, `selfAvgMs` (its time minus the sites under it), `busyPct` (of the window),
+  `callsPerFrame` (per call of the frame site; `frames` counts those) and `budgetPct` (its time
+  per frame as a share of the frame budget, once the refresh rate is known). `multipleCallers:
+  true` means it also runs under other sites and is shown under the first one seen.
+- `frame` is the whole frame over the same window, which the sites read against:
+  - `hz` and `budgetMs` (one frame at the headset's refresh rate), `fps`, and `intervalMs`, the
+    time between game frames as `ModBase` sees them.
+  - In VR, the compositor's timing of the same frames, read on the game thread about every half
+    second: `gpuMs` (the whole GPU frame), `gameGpuMs` (the game's scene), `compositorGpuMs`,
+    `lateStartMs` (how late the game asked for poses: the CPU-bound signal), `headroomMs` (time
+    the compositor idled that the game could have used), `reprojected` frames by the reason the
+    runtime gives, `cpu` or `gpu`, `dropped` and `misPresented`. `compositorFrames` counts them.
+  - The sites time the CPU; this is the only place the GPU shows.
 - `key` is the site's name in the `flat` view: its function, plus the label for a block.
 - A site that recorded nothing since the reset is left out, unless a site under it recorded.
 - `windowMs` counts from the last reset; the call that arms the tool is that reset.
@@ -55,12 +69,15 @@ the game thread (the one `ModBase::onFrameUpdateSafe` runs on) first:
 
 ```
 perf: 490.4s window, 43884 frames (89.5 fps), times in ms
-site                                  n      avg      p50      p95      p99      max     self   /frame
+frame: 90 Hz, budget 11.11 | interval p50 11.11 p95 11.52 p99 13.87 max 48.21
+gpu:   p50 8.93 p95 10.41 p99 11.02 max 19.77 | game p95 9.12 | compositor p95 0.84
+vr:    43790 frames | reprojected cpu 41, gpu 12 | dropped 3 | mispresented 5 | late start p95 0.12 | headroom p50 1.64
+site                                  n      avg      p50      p95      p99      max     self   /frame  %budget
 game thread 57744
-  ModBase::onFrameUpdateSafe      43884    0.292    0.242    0.483    0.606    3.033    0.035     1.00
-    FRIK::onFrameUpdateInner      43884    0.257    0.217    0.451    0.573    3.005    0.062     1.00
-      Skeleton::onFrameUpdate     43884    0.179    0.152    0.336    0.418    2.930    0.001     1.00
-        arms                      43884    0.109    0.080    0.258    0.319    2.857    0.001     1.00
+  ModBase::onFrameUpdateSafe      43884    0.292    0.242    0.483    0.606    3.033    0.035     1.00      2.6
+    FRIK::onFrameUpdateInner      43884    0.257    0.217    0.451    0.573    3.005    0.062     1.00      2.3
+      Skeleton::onFrameUpdate     43884    0.179    0.152    0.336    0.418    2.930    0.001     1.00      1.6
+        arms                      43884    0.109    0.080    0.258    0.319    2.857    0.001     1.00      1.0
 ```
 
 ```powershell

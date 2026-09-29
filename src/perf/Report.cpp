@@ -123,6 +123,7 @@ namespace f4cf::perf
         const auto* frame = frameSite();
         report.frames = builder.countOf(frame);
         report.threads = builder.threads(frame ? frame->thread() : std::thread::id());
+        report.frame = readFrameContext();
         return report;
     }
 
@@ -157,7 +158,7 @@ namespace f4cf::perf
             });
         }
 
-        void appendNode(std::string& out, const Report::Node& node, const std::size_t depth, const std::size_t width, const std::uint64_t frames)
+        void appendNode(std::string& out, const Report::Node& node, const std::size_t depth, const std::size_t width, const Report& report)
         {
             const auto s = node.stats.durations.summary();
             const double selfAvgMs = s.count > 0 ? Histogram::Snapshot::toMs(node.stats.selfNs()) / static_cast<double>(s.count) : 0.0;
@@ -176,14 +177,61 @@ namespace f4cf::perf
                 s.p99Ms,
                 s.maxMs,
                 selfAvgMs);
-            if (frames > 0) {
-                std::format_to(std::back_inserter(out), "{:>9.2f}\n", static_cast<double>(s.count) / static_cast<double>(frames));
+            if (report.frames > 0) {
+                std::format_to(std::back_inserter(out), "{:>9.2f}", static_cast<double>(s.count) / static_cast<double>(report.frames));
+            } else {
+                out += std::format("{:>9}", "-");
+            }
+            if (report.frames > 0 && report.frame.budgetMs() > 0) {
+                std::format_to(std::back_inserter(out), "{:>9.1f}\n", report.budgetPct(node.stats));
             } else {
                 out += std::format("{:>9}\n", "-");
             }
             for (const auto& child : node.children) {
-                appendNode(out, child, depth + 1, width, frames);
+                appendNode(out, child, depth + 1, width, report);
             }
+        }
+
+        /**
+         * The frame context lines: the refresh rate and frame interval, then in VR the compositor's GPU time and frame
+         * statistics. Nothing when nothing about the frame is known yet.
+         */
+        void appendFrameContext(std::string& out, const FrameContext& frame)
+        {
+            const auto interval = frame.interval.summary();
+            if (interval.count == 0 && frame.displayHz <= 0) {
+                return;
+            }
+            out += "frame:";
+            if (frame.displayHz > 0) {
+                std::format_to(std::back_inserter(out), " {:.0f} Hz, budget {:.2f} |", frame.displayHz, frame.budgetMs());
+            }
+            if (interval.count > 0) {
+                std::format_to(std::back_inserter(out), " interval p50 {:.2f} p95 {:.2f} p99 {:.2f} max {:.2f}\n", interval.p50Ms, interval.p95Ms, interval.p99Ms, interval.maxMs);
+            } else {
+                out += " no frame interval yet\n";
+            }
+            if (frame.compositorFrames == 0) {
+                return;
+            }
+            const auto gpu = frame.gpu.summary();
+            std::format_to(std::back_inserter(out),
+                "gpu:   p50 {:.2f} p95 {:.2f} p99 {:.2f} max {:.2f} | game p95 {:.2f} | compositor p95 {:.2f}\n",
+                gpu.p50Ms,
+                gpu.p95Ms,
+                gpu.p99Ms,
+                gpu.maxMs,
+                frame.gameGpu.summary().p95Ms,
+                frame.compositorGpu.summary().p95Ms);
+            std::format_to(std::back_inserter(out),
+                "vr:    {} frames | reprojected cpu {}, gpu {} | dropped {} | mispresented {} | late start p95 {:.2f} | headroom p50 {:.2f}\n",
+                frame.compositorFrames,
+                frame.reprojectedCpu,
+                frame.reprojectedGpu,
+                frame.dropped,
+                frame.misPresented,
+                frame.lateStart.summary().p95Ms,
+                frame.headroom.summary().p50Ms);
         }
 
         std::string threadName(const Report::Thread& thread)
@@ -202,6 +250,7 @@ namespace f4cf::perf
             out += std::format(" ({:.1f} fps)", static_cast<double>(report.frames) / windowSeconds);
         }
         out += ", times in ms\n";
+        appendFrameContext(out, report.frame);
 
         std::size_t width = std::string_view("site").size();
         bool multipleCallers = false;
@@ -216,11 +265,23 @@ namespace f4cf::perf
         }
         width += INDENT;
 
-        std::format_to(std::back_inserter(out), "{:<{}}{:>8}{:>9}{:>9}{:>9}{:>9}{:>9}{:>9}{:>9}\n", "site", width, "n", "avg", "p50", "p95", "p99", "max", "self", "/frame");
+        std::format_to(std::back_inserter(out),
+            "{:<{}}{:>8}{:>9}{:>9}{:>9}{:>9}{:>9}{:>9}{:>9}{:>9}\n",
+            "site",
+            width,
+            "n",
+            "avg",
+            "p50",
+            "p95",
+            "p99",
+            "max",
+            "self",
+            "/frame",
+            "%budget");
         for (const auto& thread : report.threads) {
             out += threadName(thread) + '\n';
             for (const auto& root : thread.roots) {
-                appendNode(out, root, 1, width, report.frames);
+                appendNode(out, root, 1, width, report);
             }
         }
         if (multipleCallers) {

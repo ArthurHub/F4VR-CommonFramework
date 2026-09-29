@@ -16,7 +16,11 @@ costs one relaxed atomic load and takes no timestamp. Two things read it:
   table to the mod log, and `perf_reset` does too, then starts a new window; the first
   `perf_reset` switches recording on ([debug-config.md](../../docs/debug-config.md)).
 
-This times wall clock on the calling thread; it cannot see GPU time.
+Sites time wall clock on the calling thread and cannot see the GPU. What they cost is read
+against the **frame context**, recorded over the same window while recording is on: the game's
+frame interval, the frame budget at the headset's refresh rate, and in VR the compositor's timing
+of each frame, which is where GPU time, late starts (the game being CPU-bound) and reprojected
+frames show. Each site's share of the budget (`%budget`) is its time per frame over the budget.
 
 > Part of the [F4VR Common Framework](../README.md) source tree.
 
@@ -26,6 +30,8 @@ This times wall clock on the calling thread; it cannot see GPU time.
 |------|----------|
 | [`Perf.h`](Perf.h) / [`Perf.cpp`](Perf.cpp) | The `F4CF_PERF_SCOPE` / `F4CF_PERF_FUNCTION` macros, `Site` (a measured place, its stats and its caller), `Scope` (the RAII timer behind the macros), `dynamicSite()`, and the switch: `setEnabled()`, `reset()`, `windowStart()`, `sites()`. |
 | [`Report.h`](Report.h) / [`Report.cpp`](Report.cpp) | `readReport()` — one read of every site, nested by caller and grouped by the thread of each outermost site, the game thread first, with the window and the frame count. `formatReport()` — the same as an indented text table. What the devbench `perf` action and the `perf` debug dump show. |
+| [`FrameContext.h`](FrameContext.h) / [`FrameContext.cpp`](FrameContext.cpp) | `FrameContext` — the whole frame over the window: the game's frame interval, the headset's refresh rate (the budget), and the VR compositor's timing of the same frames (GPU time, late starts, reprojected and dropped frames). Plain std; `CompositorFrame` carries the OpenVR fields it keeps. |
+| [`FrameSampler.h`](FrameSampler.h) / [`FrameSampler.cpp`](FrameSampler.cpp) | `internal::sampleFrame()` — what `ModBase` calls every frame to fill the frame context: the interval, and every half second the frames since the last read, one `IVRCompositor::GetFrameTiming` each (never `GetFrameTimings`, which overran its array). The one place perf calls OpenVR, on the game thread. |
 | [`Histogram.h`](Histogram.h) | `Histogram` — the lock-free duration histogram behind every site: log-linear buckets over nanoseconds, percentiles within ~3%, exact count/sum/min/max, and `Snapshot`s that merge by addition. Plain std, so it can be unit tested. |
 
 ## Usage

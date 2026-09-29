@@ -50,7 +50,7 @@ After cloning, run `pre-commit install` once to enforce clang-format on every co
 - `f4cf::imgui` — Dear ImGui panels as world-space quads (compiled out by `F4CF_WITH_IMGUI_UI=OFF`)
 - `f4cf::common` — math (quaternions, matrices) and shared utilities
 - `f4cf::devbench` — each mod's devbench tool (MCP/REST actions an agent or script calls in the running game), registered by `ModBase`
-- `f4cf::perf` — hot-path timing: `F4CF_PERF_FUNCTION()` / `F4CF_PERF_SCOPE("label")` sites on any thread, a lock-free histogram each, nested by the site each ran inside (self time = total - children); off until `perf::setEnabled(true)`, which the devbench tool does on first use
+- `f4cf::perf` — hot-path timing: `F4CF_PERF_FUNCTION()` / `F4CF_PERF_SCOPE("label")` sites on any thread, a lock-free histogram each, nested by the site each ran inside (self time = total - children), read against the frame context (frame interval, refresh-rate budget, VR compositor GPU time and reprojection, polled on the game thread); off until `perf::setEnabled(true)`, which the devbench tool does on first use
 
 ### Plugin Lifecycle (`src/ModBase.h`)
 `ModBase` is the base class every mod derives from. Override these hooks:

@@ -37,7 +37,7 @@ namespace f4cf::perf
     void setEnabled(bool enabled);
 
     /**
-     * Drop what every site recorded and start a new window. Any thread.
+     * Drop what every site and the frame context recorded, and start a new window. Any thread.
      */
     void reset();
 

@@ -6,6 +6,7 @@
 #include <thread>
 #include <vector>
 
+#include "FrameContext.h"
 #include "Perf.h"
 
 namespace f4cf::perf
@@ -36,8 +37,22 @@ namespace f4cf::perf
         std::chrono::steady_clock::duration window{};
         // calls of the frame site in the window: 0 before the mod's first frame
         std::uint64_t frames = 0;
+        // the whole frame over the same window: frame interval, refresh rate, and the compositor's timing in VR
+        FrameContext frame;
         // the game thread first
         std::vector<Thread> threads;
+
+        /**
+         * A site's average cost per game frame as a share of the frame budget, in percent; 0 when either is unknown.
+         */
+        [[nodiscard]] double budgetPct(const Site::Stats& stats) const
+        {
+            const double budgetMs = frame.budgetMs();
+            if (frames == 0 || budgetMs <= 0) {
+                return 0.0;
+            }
+            return Histogram::Snapshot::toMs(stats.durations.sumNs) / static_cast<double>(frames) / budgetMs * 100.0;
+        }
     };
 
     /**
@@ -50,8 +65,9 @@ namespace f4cf::perf
     [[nodiscard]] Report readReport();
 
     /**
-     * The report as a text table for a person to read: one line per site, indented under the site it runs inside, with
-     * n, avg, p50, p95, p99, max and self ms and calls per frame, under a line per thread. Every line ends in '\n'.
+     * The report as a text table for a person to read: the frame context, then one line per site, indented under the
+     * site it runs inside, with n, avg, p50, p95, p99, max and self ms, calls per frame and share of the frame budget,
+     * under a line per thread. Every line ends in '\n'.
      */
     [[nodiscard]] std::string formatReport(const Report& report);
 }

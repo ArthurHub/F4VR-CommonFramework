@@ -5,6 +5,8 @@
 #include <string>
 #include <utility>
 
+#include "FrameContext.h"
+
 namespace f4cf::perf
 {
     namespace
@@ -92,6 +94,7 @@ namespace f4cf::perf
         for (auto* site : sites()) {
             (void)site->drain();
         }
+        internal::resetFrameContext();
         s_windowStart.store(std::chrono::steady_clock::now().time_since_epoch().count(), std::memory_order_relaxed);
     }
 

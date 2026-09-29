@@ -97,13 +97,19 @@ namespace f4cf::devbench
             return site.isWholeFunction() ? std::string(site.shortFunction()) : std::format("{}/{}", site.shortFunction(), site.label());
         }
 
+        double windowMsOf(const perf::Report& report)
+        {
+            return std::chrono::duration<double, std::milli>(report.window).count();
+        }
+
         /**
          * What the perf action reports for one site, in either view.
          */
-        json perfStatsJson(const perf::Site& site, const perf::Site::Stats& stats, const double windowMs, const std::uint64_t frames)
+        json perfStatsJson(const perf::Site& site, const perf::Site::Stats& stats, const perf::Report& report)
         {
             const auto s = stats.durations.summary();
             const double selfTotalMs = perf::Histogram::Snapshot::toMs(stats.selfNs());
+            const double windowMs = windowMsOf(report);
             json out = {
                 { "n", s.count },
                 { "totalMs", s.totalMs },
@@ -117,8 +123,11 @@ namespace f4cf::devbench
                 { "selfAvgMs", s.count > 0 ? selfTotalMs / static_cast<double>(s.count) : 0.0 },
                 { "busyPct", windowMs > 0 ? s.totalMs / windowMs * 100.0 : 0.0 },
             };
-            if (frames > 0) {
-                out["callsPerFrame"] = static_cast<double>(s.count) / static_cast<double>(frames);
+            if (report.frames > 0) {
+                out["callsPerFrame"] = static_cast<double>(s.count) / static_cast<double>(report.frames);
+                if (report.frame.budgetMs() > 0) {
+                    out["budgetPct"] = report.budgetPct(stats);
+                }
             }
             if (site.hasMultipleCallers()) {
                 out["multipleCallers"] = true;
@@ -126,15 +135,15 @@ namespace f4cf::devbench
             return out;
         }
 
-        json perfNodeJson(const perf::Report::Node& node, const double windowMs, const std::uint64_t frames)
+        json perfNodeJson(const perf::Report::Node& node, const perf::Report& report)
         {
-            auto out = perfStatsJson(*node.site, node.stats, windowMs, frames);
+            auto out = perfStatsJson(*node.site, node.stats, report);
             out["label"] = node.site->label();
             out["key"] = perfSiteKey(*node.site);
             if (!node.children.empty()) {
                 json children = json::array();
                 for (const auto& child : node.children) {
-                    children.push_back(perfNodeJson(child, windowMs, frames));
+                    children.push_back(perfNodeJson(child, report));
                 }
                 out["children"] = std::move(children);
             }
@@ -144,7 +153,7 @@ namespace f4cf::devbench
         /**
          * Every node of a tree that recorded something, keyed by perfSiteKey; two sites sharing a key don't hide each other.
          */
-        void addFlatPerfSites(json& sites, const perf::Report::Node& node, const double windowMs, const std::uint64_t frames)
+        void addFlatPerfSites(json& sites, const perf::Report::Node& node, const perf::Report& report)
         {
             if (node.stats.durations.count > 0) {
                 const auto key = perfSiteKey(*node.site);
@@ -152,11 +161,49 @@ namespace f4cf::devbench
                 for (int copy = 2; sites.contains(name); ++copy) {
                     name = std::format("{} ({})", key, copy);
                 }
-                sites[name] = perfStatsJson(*node.site, node.stats, windowMs, frames);
+                sites[name] = perfStatsJson(*node.site, node.stats, report);
             }
             for (const auto& child : node.children) {
-                addFlatPerfSites(sites, child, windowMs, frames);
+                addFlatPerfSites(sites, child, report);
             }
+        }
+
+        json perfHistogramJson(const perf::Histogram::Snapshot& snapshot)
+        {
+            const auto s = snapshot.summary();
+            return { { "avg", s.avgMs }, { "p50", s.p50Ms }, { "p95", s.p95Ms }, { "p99", s.p99Ms }, { "max", s.maxMs } };
+        }
+
+        /**
+         * The whole frame over the window: refresh rate, budget and frame interval, and in VR the compositor's timing.
+         */
+        json perfFrameJson(const perf::Report& report)
+        {
+            const auto& frame = report.frame;
+            json out = json::object();
+            if (frame.displayHz > 0) {
+                out["hz"] = frame.displayHz;
+                out["budgetMs"] = frame.budgetMs();
+            }
+            const double windowMs = windowMsOf(report);
+            if (report.frames > 0 && windowMs > 0) {
+                out["fps"] = static_cast<double>(report.frames) / windowMs * 1000.0;
+            }
+            if (frame.interval.count > 0) {
+                out["intervalMs"] = perfHistogramJson(frame.interval);
+            }
+            if (frame.compositorFrames > 0) {
+                out["compositorFrames"] = frame.compositorFrames;
+                out["gpuMs"] = perfHistogramJson(frame.gpu);
+                out["gameGpuMs"] = perfHistogramJson(frame.gameGpu);
+                out["compositorGpuMs"] = perfHistogramJson(frame.compositorGpu);
+                out["lateStartMs"] = perfHistogramJson(frame.lateStart);
+                out["headroomMs"] = perfHistogramJson(frame.headroom);
+                out["reprojected"] = { { "cpu", frame.reprojectedCpu }, { "gpu", frame.reprojectedGpu } };
+                out["dropped"] = frame.dropped;
+                out["misPresented"] = frame.misPresented;
+            }
+            return out;
         }
 
         std::string threadIdText(const std::thread::id id)
@@ -497,9 +544,10 @@ namespace f4cf::devbench
                 addAction({ "overrides", "the session overrides in effect", json::object(), handler(&Tool::listOverrides) }, true);
                 addAction({ "perf",
                               "time spent in every perf site in the mod since the last reset, as a tree per thread: each site under the site it runs "
-                              "inside, with n, avg, p50, p95, p99, min, max and self ms, busy% of the window and calls per frame. Recording starts when "
-                              "the tool is first used, so reset, hold the condition, then read. Answered without the game thread. It cannot see GPU "
-                              "time",
+                              "inside, with n, avg, p50, p95, p99, min, max and self ms, busy% of the window, calls per frame and share of the frame "
+                              "budget. 'frame' puts it in context: refresh rate, frame interval and, in VR, the compositor's GPU time, late starts and "
+                              "reprojected (cpu/gpu) and dropped frames. Recording starts when the tool is first used, so reset, hold the condition, "
+                              "then read. Answered without the game thread. Sites time the CPU; only 'frame' sees the GPU",
                               { { "reset", argument("boolean", "perf: clear every site after reading it, starting a new window") },
                                   { "format",
                                       argument("string",
@@ -627,19 +675,19 @@ namespace f4cf::devbench
                 if (reset) {
                     perf::reset();
                 }
-                const double windowMs = std::chrono::duration<double, std::milli>(report.window).count();
-                json answer = { { "reset", reset }, { "windowMs", windowMs }, { "frames", report.frames } };
+                json answer = { { "reset", reset }, { "windowMs", windowMsOf(report) }, { "frames", report.frames } };
 
                 if (format == "text") {
                     answer["text"] = perf::formatReport(report);
                     return answer;
                 }
 
+                answer["frame"] = perfFrameJson(report);
                 if (format == "flat") {
                     json sites = json::object();
                     for (const auto& thread : report.threads) {
                         for (const auto& root : thread.roots) {
-                            addFlatPerfSites(sites, root, windowMs, report.frames);
+                            addFlatPerfSites(sites, root, report);
                         }
                     }
                     answer["sites"] = std::move(sites);
@@ -650,7 +698,7 @@ namespace f4cf::devbench
                 for (const auto& thread : report.threads) {
                     json roots = json::array();
                     for (const auto& root : thread.roots) {
-                        roots.push_back(perfNodeJson(root, windowMs, report.frames));
+                        roots.push_back(perfNodeJson(root, report));
                     }
                     threads.push_back({ { "thread", threadIdText(thread.id) }, { "gameThread", thread.isGameThread }, { "sites", std::move(roots) } });
                 }

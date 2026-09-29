@@ -8,6 +8,7 @@
 #include "devbench/DevBench.h"
 #include "f4vr/DebugDump.h"
 #include "f4vr/DebugInventory.h"
+#include "perf/FrameSampler.h"
 #include "perf/Perf.h"
 #include "perf/Report.h"
 
@@ -190,6 +191,9 @@ namespace f4cf
     {
         // the mod's whole frame: perf readers count frames by it and call its thread the game thread
         const perf::Scope perfScope(perf::declareFrameSite(__FUNCTION__));
+        // the frame interval and the compositor's timing, which perf reports each site against; one relaxed load while
+        // recording is off
+        perf::internal::sampleFrame();
 
         CPPTRACE_TRY
         {
