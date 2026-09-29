@@ -238,7 +238,7 @@ namespace f4cf
             onFrameUpdate();
 
             // this frame's devbench state snapshot, after every exit path of the mod's update; a single relaxed load
-            // until someone uses the mod's devbench tool
+            // (two in a Tracy build) until the mod's devbench tool is armed
             devbench::internal::onFrameEnd();
 
             DebugAdjuster::onFrameUpdate(*_settings.config);
@@ -397,9 +397,9 @@ namespace f4cf
         // perf_reset is checked first since names match by substring, so "perf" would also match inside it
         const bool perfReset = _settings.config->checkDebugDumpDataOnceFor("perf_reset");
         const bool perfDump = _settings.config->checkDebugDumpDataOnceFor("perf");
-        if (perfReset && !perf::isEnabled()) {
-            // recording is off unless the devbench tool switched it on; switching it on starts the window
-            perf::setEnabled(true);
+        if (perfReset && !devbench::isArmed()) {
+            // recording is off until the devbench tool is armed, and arming it starts the window
+            devbench::internal::arm();
             logger::info("perf: recording from a new window; add 'perf' to sDumpDataOnceNames to log it");
         } else if (perfDump || perfReset) {
             // perf_reset logs the window it ends, so listing both logs it once

@@ -81,9 +81,10 @@ namespace f4cf::devbench
     void setDefaultConfigSection(std::string section);
 
     /**
-     * Whether any action other than health has been called, i.e. whether anyone is using this mod's tool. Health
-     * never arms it, so probing every mod's health costs nothing. Collection that costs per-frame work waits for
-     * this, and it stays armed for the rest of the session. Any thread.
+     * Whether anything can read what the tool collects: devbench is installed (the tool registered), a Tracy viewer
+     * connected, or perf_reset in sDumpDataOnceNames asked for a perf window. Collection that costs per-frame work
+     * waits for this, and it stays armed for the rest of the session, so a game with none of them pays nothing. Any
+     * thread.
      */
     [[nodiscard]] bool isArmed();
 
@@ -102,9 +103,15 @@ namespace f4cf::devbench
         };
 
         /**
-         * Register the mod's tool with devbench, if devbench is installed. Game thread, once the game has loaded.
+         * Register the mod's tool with devbench, if devbench is installed, which arms it. Game thread, once the game has
+         * loaded.
          */
         void registerTool(const ToolSettings& settings);
+
+        /**
+         * Arm the tool for the rest of the session (see isArmed), for a reader devbench doesn't know about. Any thread.
+         */
+        void arm();
 
         /**
          * Run the game-thread actions queued since the last frame. Game thread, before the mod's onFrameUpdate.

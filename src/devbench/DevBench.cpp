@@ -32,7 +32,7 @@ namespace f4cf::devbench
         // "devbench is stalled"
         constexpr auto GAME_THREAD_TIMEOUT = std::chrono::milliseconds(2000);
 
-        // the free probe every mod answers: the one action that never arms the tool
+        // the free probe every mod answers
         constexpr auto HEALTH_ACTION = "health";
 
         // the generic action whose description the mod's state provider extends
@@ -348,8 +348,8 @@ namespace f4cf::devbench
             }
 
             /**
-             * Someone is using the tool, so switch on what costs per-frame work, once: every perf site starts
-             * recording what the perf action reads.
+             * Something can read what costs per-frame work, so switch it on, once: every perf site starts recording what
+             * the perf action reads, and the state provider captures every frame.
              */
             void arm()
             {
@@ -386,10 +386,12 @@ namespace f4cf::devbench
                 // release: a thread that sees it registered also sees _name and _interface
                 _registered.store(true, std::memory_order_release);
                 logger::info("devbench build {}: registered the '{}' tool", _hostBuild, _name);
+                // devbench is installed, so its events and actions have a reader from now on
+                arm();
             }
 
             /**
-             * Listener thread. Any action but health arms the tool, since that is someone using it; health stays a free probe.
+             * Listener thread.
              */
             std::string invoke(const char* argsJson)
             {
@@ -409,7 +411,7 @@ namespace f4cf::devbench
                 } catch (const std::exception& ex) {
                     return errorJson(ex.what());
                 }
-                // required rather than defaulted: a call that names nothing should not quietly arm the tool
+                // required rather than defaulted: a call that names nothing is a mistake, not a request for some default
                 if (name.empty()) {
                     return errorJson(std::format("missing 'action' ({})", joinedActionNames()));
                 }
@@ -419,9 +421,6 @@ namespace f4cf::devbench
                     return errorJson(std::format("unknown action '{}' ({})", name, joinedActionNames()));
                 }
 
-                if (name != HEALTH_ACTION) {
-                    arm();
-                }
                 if (action->runOn == RunOn::Listener) {
                     return runHandler(*action, args);
                 }
@@ -460,12 +459,15 @@ namespace f4cf::devbench
             /**
              * Game thread, at the end of every frame, including the frames the mod's update returned early from: a
              * snapshot frozen at its last good value through a loading screen would be a lie. One relaxed load while
-             * the tool is not armed.
+             * the tool is not armed, plus one in a Tracy build, where a viewer connecting arms it.
              */
             void publishState()
             {
                 if (!isArmed()) {
-                    return;
+                    if (!perf::isTracyConnected()) {
+                        return;
+                    }
+                    arm();
                 }
                 // what the tool costs each frame while it is in use, which is also while perf records
                 F4CF_PERF_FUNCTION();
@@ -517,8 +519,8 @@ namespace f4cf::devbench
                 const auto key = argument("string", "config/set/clear: the setting name");
 
                 addAction({ HEALTH_ACTION,
-                              "which mod and framework this is, the devbench build it talks to, and whether the tool is in use. Answered without the game "
-                              "thread, so it replies while the game is stalled, and it never arms the tool",
+                              "which mod and framework this is, the devbench build it talks to, and whether the tool is armed. Answered without the game "
+                              "thread, so it replies while the game is stalled",
                               json::object(),
                               handler(&Tool::health),
                               RunOn::Listener },
@@ -526,8 +528,7 @@ namespace f4cf::devbench
                 addAction({ STATE_ACTION,
                               "what the mod is doing as of its last frame. Read 'liveness' first: frame counts the frames published since the tool "
                               "was armed and ageMs is how old the latest is, so a growing ageMs means the game thread has stopped. Answered from a "
-                              "snapshot published every frame, so it replies while the game is stalled; the call that arms the tool waits for the "
-                              "first one",
+                              "snapshot published every frame, so it replies while the game is stalled; a call before the first one waits for it",
                               json::object(),
                               handler(&Tool::readState),
                               RunOn::Listener },
@@ -843,8 +844,8 @@ namespace f4cf::devbench
             }
 
             /**
-             * The latest snapshot. The call that armed the tool finds none yet, so it waits for the one the end of the
-             * next frame publishes rather than failing.
+             * The latest snapshot. A call right after the tool armed finds none yet, so it waits for the one the end of
+             * the next frame publishes rather than failing.
              */
             std::shared_ptr<const Snapshot> waitForSnapshot() const
             {
@@ -1053,6 +1054,11 @@ namespace f4cf::devbench
         void registerTool(const ToolSettings& settings)
         {
             tool().registerTool(settings);
+        }
+
+        void arm()
+        {
+            tool().arm();
         }
 
         void onFrameStart()

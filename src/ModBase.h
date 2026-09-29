@@ -46,7 +46,8 @@ namespace f4cf
             // for mods that draw panels, activation-sphere icons or other f4cf::render overlays
             bool preloadRendering = false;
             // register this mod's devbench tool, named after the mod, when devbench is installed (see devbench/README.md);
-            // costs two relaxed atomic loads per frame until someone uses the tool
+            // costs two relaxed atomic loads per frame while devbench isn't installed; once it is, the tool is armed and
+            // records perf and a state snapshot every frame
             bool devbenchTool = true;
 
             Settings(const std::string_view& name, const std::string_view& version, ConfigBase* config);

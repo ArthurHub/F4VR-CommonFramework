@@ -175,7 +175,8 @@ runs** so a later file reload doesn't repeat it. Names are comma-separated.
 | `perf`      | The [perf sites](../src/perf/README.md) since the last reset, as an indented table (the devbench `perf` action's `text` format) |
 | `perf_reset` | Like `perf`, then starts a new window. When recording is off, it only switches it on |
 
-Recording is off unless the mod's devbench tool switched it on, so start with `perf_reset`, hold
+Recording is off until the mod's devbench tool arms, which it does as soon as devbench is
+installed or a Tracy viewer connects. Without either, start with `perf_reset`, hold
 the condition being measured, then use `perf`, or `perf_reset` again to log that window and start
 the next one.
 

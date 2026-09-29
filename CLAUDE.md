@@ -51,7 +51,7 @@ After cloning, run `pre-commit install` once to enforce clang-format on every co
 - `f4cf::imgui` — Dear ImGui panels as world-space quads (compiled out by `F4CF_WITH_IMGUI_UI=OFF`)
 - `f4cf::common` — math (quaternions, matrices) and shared utilities
 - `f4cf::devbench` — each mod's devbench tool (MCP/REST actions an agent or script calls in the running game), registered by `ModBase`
-- `f4cf::perf` — hot-path timing: `F4CF_PERF_FUNCTION()` / `F4CF_PERF_SCOPE("label")` sites on any thread, a lock-free histogram each, nested by the site each ran inside (self time = total - children), read against the frame context (frame interval, refresh-rate budget, VR compositor GPU time and reprojection, polled on the game thread); the framework times its own frame work, controller polls and overlay drawing (see the perf README); GPU sites (`perf::GpuTimer`) hold the GPU time of work the mod issues itself, from timestamps read back 1-3 frames late, which the Submit host records for every overlay layer; off until `perf::setEnabled(true)`, which the devbench tool does on first use; in the `Tracy` build configuration every site is also a Tracy zone, with frame marks, the frame context as plots and devbench events as messages (`perf/Tracy.h`)
+- `f4cf::perf` — hot-path timing: `F4CF_PERF_FUNCTION()` / `F4CF_PERF_SCOPE("label")` sites on any thread, a lock-free histogram each, nested by the site each ran inside (self time = total - children), read against the frame context (frame interval, refresh-rate budget, VR compositor GPU time and reprojection, polled on the game thread); the framework times its own frame work, controller polls and overlay drawing (see the perf README); GPU sites (`perf::GpuTimer`) hold the GPU time of work the mod issues itself, from timestamps read back 1-3 frames late, which the Submit host records for every overlay layer; off until `perf::setEnabled(true)`, which the devbench tool does when it arms (devbench installed, a Tracy viewer connected, or `perf_reset`); in the `Tracy` build configuration every site is also a Tracy zone, with frame marks, the frame context as plots and devbench events as messages (`perf/Tracy.h`)
 
 ### Plugin Lifecycle (`src/ModBase.h`)
 `ModBase` is the base class every mod derives from. Override these hooks:
@@ -174,7 +174,8 @@ from inside the game. `ModBase` registers one tool per mod after `onGameLoaded`,
   queued and run by `ModBase` right before `onFrameUpdate`, with a 2s timeout. `RunOn::Listener`
   actions (`health`, `state`, `perf`) must not touch game or mod state.
 - `state` answers from a snapshot `ModBase` publishes after every `onFrameUpdate` once the tool is
-  armed; the provider's struct must hold **plain values only**, since a snapshot outlives its frame.
+  armed, which happens as soon as devbench is installed, a Tracy viewer connects or `perf_reset` asks
+  for perf; the provider's struct must hold **plain values only**, since a snapshot outlives its frame.
 - `devbench::emit(topic)` publishes `<tool>.<topic>` into a 256-event ring every mod shares: emit on
   changes, never per frame. The framework emits `sessionLoaded`, `config.reloaded`, `config.override`
   (any source, including other mods) and `input.suppression` (per owner, only on a real mask change).

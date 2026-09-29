@@ -10,8 +10,9 @@ children), and the site that opened it, so the sites nest into a tree per thread
 Recording is off until something switches it on with `perf::setEnabled(true)`; while off, a site
 costs one relaxed atomic load and takes no timestamp. Two things read it:
 
-- The mod's [devbench tool](../devbench/README.md) switches recording on when it is first used,
-  and its `perf` action reads every site as a JSON tree, a flat map or a text table.
+- The mod's [devbench tool](../devbench/README.md) switches recording on when it arms: when
+  devbench is installed, a Tracy viewer connects, or `perf_reset` asks for it. Its `perf` action
+  reads every site as a JSON tree, a flat map or a text table.
 - Without devbench, `[Debug] sDumpDataOnceNames` does it through the INI: `perf` writes the text
   table to the mod log, and `perf_reset` does too, then starts a new window; the first
   `perf_reset` switches recording on ([debug-config.md](../../docs/debug-config.md)).
@@ -153,7 +154,8 @@ buffered before. A capture holds:
   timed is a plot too, 1-3 frames after the frame it times: `gpu.drawMs`, `gpu.draw.setupMs` and
   `gpu.draw.<callback>Ms` for the overlay drawing.
 - **Messages**: every [devbench event](../devbench/README.md#events), with its topic and payload,
-  even without devbench.
+  even without devbench. A viewer connecting arms the devbench tool, so events that come from the
+  mod's state capture (a flag changing) show from then on too.
 
 Code that wants more includes [`Tracy.h`](Tracy.h): `tracyPlot()`, `tracyMessage()` and
 `isTracyConnected()` (to skip building what only a viewer would see) compile to nothing in the other

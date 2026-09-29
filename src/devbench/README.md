@@ -14,13 +14,12 @@ their own tools to it through a small C ABI. This folder is the framework's side
 and carries on.
 
 Everything the tool does is an **action**, chosen by its required `action` argument. There is no
-default, so a call that names none is an error and never arms the tool. Every framework mod has the
-same generic actions:
+default, so a call that names none is an error. Every framework mod has the same generic actions:
 
 | Action | Arguments | What it does |
 |--------|-----------|--------------|
 | `health` | — | Which mod and framework version this is, the tool's `contract` number, the devbench build, whether the tool is armed, whether a state snapshot exists and its `liveness`, whether this is a [Tracy](../perf/README.md#tracy) build and a Tracy viewer is connected (`tracy`: `built`, `connected`), and the actions. Answered without the game thread, so it replies while the game is stalled. |
-| `state` | — | What the mod is doing as of its last frame: `liveness` plus the mod's own state (see below). Answered from a snapshot without the game thread; the call that arms the tool waits for the first one. |
+| `state` | — | What the mod is doing as of its last frame: `liveness` plus the mod's own state (see below). Answered from a snapshot without the game thread; a call before the first one waits for it. |
 | `config` | `key`, `section` | One INI value as the mod sees it: the session override if one is set, otherwise the file's. |
 | `set` | `key`, `value`, `section` | Override one INI value for the session (`ConfigBase::setConfigOverride`); the file is not written. |
 | `clear` | `key`, `section`, or `all` | Drop one session override, or all of them. |
@@ -67,7 +66,8 @@ the game thread (the one `ModBase::onFrameUpdateSafe` runs on) first:
   CPU one.
 - `key` is the site's name in the `flat` view: its function, plus the label for a block.
 - A site that recorded nothing since the reset is left out, unless a site under it recorded.
-- `windowMs` counts from the last reset; the call that arms the tool is that reset.
+- `windowMs` counts from the last reset; arming the tool is that reset, so without one it counts from
+  when the game loaded.
 
 `format: "text"` puts the same tree in `text` as a table, which is also what the `perf` debug dump
 (`sDumpDataOnceNames`) writes to the log. An excerpt from FRIK, sites under a caller in the order
@@ -125,10 +125,14 @@ void MyMod::onModLoaded(const F4SE::LoadInterface*)
   the queue in, so its actions go through F4SE's task interface.
 - **Answers.** A handler returns a JSON object and gets `"ok": true` added; throwing turns the
   call into `{ "ok": false, "error": "<message>" }`, which carries no other keys.
-- **Arming.** The first call of any action but `health` arms the tool (`devbench::isArmed()`) for
-  the rest of the session, and anything that costs per-frame work waits for it: arming is what
-  switches on perf site recording, so a perf window starts at the first use, and the per-frame
-  state snapshot. `health` never arms, so probing every mod is free.
+- **Arming.** Anything that costs per-frame work waits for the tool to be armed
+  (`devbench::isArmed()`): perf site recording, the per-frame state snapshot, and whatever the
+  mod's state provider does with it, such as emitting an event when a value changes. It arms, for
+  the rest of the session, as soon as something can read that: devbench is installed (the tool
+  registers when the game loads), a [Tracy](../perf/README.md#tracy) viewer connects, or
+  `perf_reset` in `sDumpDataOnceNames` starts a perf window. A game with none of them pays two
+  relaxed loads a frame. Arming does not wait for a devbench client: the plugin can't tell whether
+  one is attached, so a trace sees the mod's state events from the start.
 - **Arguments.** All actions share one flat input schema, so start each argument's description
   with the actions that read it (`"surface: ..."`). An argument several actions share is declared
   once; the first declaration wins.
@@ -177,6 +181,8 @@ devbench::setStateProvider<SwimState>(
   pointer pointed to may be gone by the time a reader formats it.
 - The description goes into the `state` action's description, so an agent knows what the keys mean.
 - Capturing costs one allocation and a copy per frame, and only while the tool is armed.
+- The capture is also the place to emit an event when a value changes: it runs every armed frame,
+  so the event reaches a devbench trace or the Tracy timeline without any action called first.
 
 ### Events
 
