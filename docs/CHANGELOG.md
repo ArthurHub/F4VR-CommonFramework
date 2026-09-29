@@ -23,8 +23,8 @@ major version is `0`, a minor bump may break the API; the **Upgrading** notes sa
   nest into a tree with self time. Every read comes with the frame context of the same window:
   the frame interval, the budget at the headset's refresh rate, and the VR compositor's GPU time,
   late starts and reprojected frames. The framework times its own per-frame work, every
-  controller-state poll (the mod's own apart from everyone else's) and overlay drawing on the
-  render thread. Recording is off until `perf::setEnabled(true)`, which the
+  controller-state poll (the mod's own apart from everyone else's) and overlay drawing in the
+  Submit hook. Recording is off until `perf::setEnabled(true)`, which the
   devbench tool does on first use; the log level no longer turns it on. Without devbench, the
   `sDumpDataOnceNames` names `perf_reset` and `perf` start a window and log it as a table.
 - **Tracy**: a `Tracy` build configuration next to Debug and Release, a Release build with the

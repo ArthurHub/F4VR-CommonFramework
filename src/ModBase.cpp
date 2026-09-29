@@ -15,6 +15,7 @@
 
 #include "f4vr/PlayerNodes.h"
 #include "render/PrimitiveDrawRenderer.h"
+#include "render/SubmitHook.h"
 #include "render/TextFont.h"
 #include "vrcf/VRControllersHaptic.h"
 #include "vrcf/VRControllersManager.h"
@@ -203,6 +204,12 @@ namespace f4cf
                 s_threadNamed = true;
                 perf::tracyThreadName("game");
             }
+        }
+        // the thread the Submit hook checks it is called on
+        static bool s_gameThreadNoted = false;
+        if (!s_gameThreadNoted) {
+            s_gameThreadNoted = true;
+            render::internal::noteGameThread();
         }
 
         // the mod's whole frame: perf readers count frames by it and call its thread the game thread

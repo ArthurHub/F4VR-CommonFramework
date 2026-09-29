@@ -84,7 +84,7 @@ Every mod gets these sites without code of its own:
 | `internal::sampleFrame`, `Tool::publishState`, `Tool::runQueuedCommands` | under the frame | what measuring and the devbench tool cost the frame, on the frames they do work |
 | `VRControllersManager::update`, `VRControllersSuppressor::update`, `VRControllersHaptic::update`, `DebugDraw::onFrameStart` / `onFrameEnd`, `DebugAdjuster::onFrameUpdate`, `frameEndCallbacks` | under the frame | the framework's per-frame work; debug draw only once something has drawn |
 | `GetControllerState:own` / `:other`, `GetControllerStateWithPose:own` / `:other` | under the site that polls, or a root | every controller-state poll through the suppressor's vtable hooks, the mod's own apart from everyone else's; `/frame` is how often each reads |
-| `render::drawToSubmittedTexture`, each draw callback under it by its registered name | the render thread's root | overlay drawing in the Submit hook, CPU time only; absent while nothing draws |
+| `render::drawToSubmittedTexture`, each draw callback under it by its registered name | a root on the game thread, after the frame | overlay drawing in the Submit hook, which FO4VR calls on the game thread about a millisecond after the mod's frame (on the loading screen's own thread during a load); CPU time only; absent while nothing draws |
 | `UIManager::onFrameUpdate` | where the mod calls it | vrui, while a UI is attached |
 
 ## Tracy
@@ -107,8 +107,9 @@ buffered before. A capture holds:
 - **Zones**: every site, named by its label, with the function, file and line.
 - **Frames**: one per call of `ModBase::onFrameUpdateSafe`. The first frame of a capture spans from
   the plugin loading to the connection; skip it.
-- **Threads**: the render thread is named `render` once the Submit hook draws. The game thread shows
-  as *Main thread*, since Tracy names the thread that started it so, whatever it is called later.
+- **Threads**: the game thread shows as *Main thread*, since Tracy names the thread that started it
+  so, whatever it is called later. The Submit hook's drawing is on it too during play, after the
+  mod's frame; during a loading screen it comes from the loading screen's own thread.
 - **Plots**: `frame.intervalMs` every frame, and one point per compositor frame for `vr.gpuMs`,
   `vr.gameGpuMs`, `vr.lateStartMs`, `vr.headroomMs`, `vr.reprojectedCpu`, `vr.reprojectedGpu` and
   `vr.dropped` (the frame context's numbers), whether perf recording is on or not.
@@ -143,7 +144,7 @@ configurations.
 - **Nesting is per site, not per call path.** A site records the first site it ran inside as its
   caller. A site called from several places keeps one set of stats and one caller, the first seen,
   and `hasMultipleCallers()` says so. Self time is still right, since each call charges its own
-  caller. Each thread has its own roots, so a render-thread site never nests under a game-thread one.
+  caller. Each thread has its own roots, so a site on another thread never nests under a game-thread one.
   A report lists the sites under a caller in the order they run in a frame (`Site::runOrder`), not
   the order they were constructed.
 - **Threads and frames.** A site remembers the thread it first ran on, which is how a report groups

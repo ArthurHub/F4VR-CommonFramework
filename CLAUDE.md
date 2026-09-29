@@ -131,8 +131,10 @@ render thread. `vrui::UIPanel`, `f4cf::imgui`, `f4cf::debug` and the activation-
 layers on it.
 
 Rules that cause bugs if missed:
-- A draw callback runs on the **render thread**: never touch nodes/forms/config there, never call
-  into OpenVR, and restore anything you bind beyond the shared `ScopedPipelineState`.
+- A draw callback runs on the **render thread**, meaning Submit's thread: never touch nodes/forms/config there, never call
+  into OpenVR, and restore anything you bind beyond the shared `ScopedPipelineState`. In FO4VR Submit is called on the game
+  thread during play, right after the mods' frames, and from the loading screen's own thread while one is up; the hook
+  logs each thread it is called on once. The game → render handoff is what keeps a layer correct on both.
 - Draw order is **declared** (`DRAW_ORDER_HINTS` 50 / `PANELS` 100 / `DEFAULT` 500 / `DEBUG` 900),
   not inherited from registration order — registration is lazy.
 - Callbacks are **never unregistered** and the vtable patch is never removed, so a layer must outlive

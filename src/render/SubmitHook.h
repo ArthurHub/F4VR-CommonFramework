@@ -37,11 +37,14 @@ namespace f4cf::render
     };
 
     /**
-     * A draw callback, invoked on the RENDER thread from inside the Submit hook.
+     * A draw callback, invoked from inside the Submit hook, on whatever thread the game submits from. In FO4VR that is
+     * the game thread during play, between the mod's frames, and the loading screen's own thread while one is up. The
+     * hook logs each thread it is called on once.
      *
      * Contract, and it is not negotiable:
      * - Never touch game-thread-owned state (nodes, forms, config). Snapshot it game-side and hand
-     *   the snapshot over yourself; reading node->world here races the skeleton update.
+     *   the snapshot over yourself; were Submit on another thread, reading node->world here would race the skeleton
+     *   update.
      * - Never call into OpenVR. Two overlays both querying the runtime every frame double-drive
      *   vrclient; the engine's own matrices in SubmitFrame::camera are there so nobody has to.
      * - Leave the pipeline as you found it only for what you bind beyond the shared save/restore
@@ -95,4 +98,13 @@ namespace f4cf::render
     bool ensureInstalled();
 
     bool isInstalled();
+
+    namespace internal
+    {
+        /**
+         * Record the calling thread as the game thread, for the Submit hook's check of the thread it is called on.
+         * ModBase calls it from its first frame.
+         */
+        void noteGameThread();
+    }
 }

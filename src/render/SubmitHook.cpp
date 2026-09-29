@@ -10,7 +10,6 @@
 #include "../../external/openvr/openvr.h"
 #include "../ModBase.h"
 #include "../perf/Perf.h"
-#include "../perf/Tracy.h"
 #include "SceneDepthCapture.h"
 #include "SceneDepthDiagnostics.h"
 
@@ -52,8 +51,8 @@ namespace f4cf::render
         // the function the draw is timed as, which the draw callbacks' sites share
         constexpr const char* DRAW_PERF_FUNCTION = "f4cf::render::drawToSubmittedTexture";
 
-        // Constructed with the DLL rather than on the render thread's first draw, which would take the perf registry's
-        // lock there. A root of its own: the render thread runs no other site around it.
+        // Constructed with the DLL rather than on the first draw, which would take the perf registry's lock inside
+        // Submit. A root of its own: Submit runs outside the mod's frame, so no other site is open around it.
         perf::Site s_drawPerfSite(DRAW_PERF_FUNCTION, nullptr, __FILE__, __LINE__);
 
         /**
@@ -71,16 +70,23 @@ namespace f4cf::render
 
         // --- shared by both threads -------------------------------------------------------------
         // The hook reads only these atomics plus the callback table, which is append-only and
-        // published with release/acquire, so it never blocks or allocates on the render thread.
+        // published with release/acquire, so it never blocks or allocates inside Submit. Both do happen:
+        // in FO4VR Submit is called on the game thread during play, and from the loading screen's own
+        // thread while one is up (checkSubmitThread).
         std::atomic<std::uint32_t> s_activeMask{ 0 };
         std::atomic<std::size_t> s_callbackCount{ 0 };
         std::atomic<std::uint64_t> s_hookRuns{ 0 };
         std::atomic<bool> s_fenced{ false };
         std::array<DrawCallbackEntry, MAX_DRAW_CALLBACKS> s_callbacks;
+        // the game thread, noted by ModBase's first frame; 0 until then
+        std::atomic<DWORD> s_gameThreadId{ 0 };
+        std::atomic<bool> s_loggedGameThreadSubmit{ false };
+        // the other threads Submit was called on, each logged once; a thread past these is not logged
+        constexpr std::size_t MAX_LOGGED_SUBMIT_THREADS = 8;
+        std::array<std::atomic<DWORD>, MAX_LOGGED_SUBMIT_THREADS> s_loggedSubmitThreads{};
 
-        // --- render thread only -----------------------------------------------------------------
+        // --- Submit's thread only ---------------------------------------------------------------
         thread_local int s_hookDepth = 0;
-        bool s_renderThreadNamed = false;
         CachedRenderTargetView s_submittedTextureRtv{};
         bool s_loggedDrawFailure = false;
         bool s_loggedReentry = false;
@@ -144,13 +150,6 @@ namespace f4cf::render
          */
         void drawToSubmittedTexture(const vr::Texture_t* texture)
         {
-            if constexpr (perf::TRACY_BUILT) {
-                // once, and only in a Tracy build: naming the thread allocates
-                if (!s_renderThreadNamed) {
-                    s_renderThreadNamed = true;
-                    perf::tracyThreadName("render");
-                }
-            }
             const perf::Scope perfScope(s_drawPerfSite);
 
             auto* device = getDevice();
@@ -253,9 +252,43 @@ namespace f4cf::render
          * The Submit hook. Every path chains: a skipped original Submit black-screens the headset,
          * so the chain call is the last statement and nothing between here and it may throw.
          */
+        /**
+         * Which threads the game calls Submit on, each logged once, from when the game thread is known. In FO4VR it is
+         * the game thread during play, about a millisecond after the mods' frames, and another thread while a loading
+         * screen is up: the game draws that from its own thread while the game thread loads. The draw path is safe on
+         * any of them; the log keeps what the docs and the perf reports say about it honest.
+         */
+        void checkSubmitThread()
+        {
+            const DWORD gameThread = s_gameThreadId.load(std::memory_order_relaxed);
+            if (gameThread == 0) {
+                return;
+            }
+            const DWORD thread = GetCurrentThreadId();
+            if (thread == gameThread) {
+                if (!s_loggedGameThreadSubmit.load(std::memory_order_relaxed) && !s_loggedGameThreadSubmit.exchange(true, std::memory_order_relaxed)) {
+                    logger::info("Submit called on the game thread {}", thread);
+                }
+                return;
+            }
+            for (auto& slot : s_loggedSubmitThreads) {
+                DWORD seen = slot.load(std::memory_order_relaxed);
+                if (seen == thread) {
+                    return;
+                }
+                // a slot another thread claimed first moves this one on to the next
+                if (seen == 0 && slot.compare_exchange_strong(seen, thread, std::memory_order_relaxed)) {
+                    logger::info("Submit also called on thread {}, not the game thread {}", thread, gameThread);
+                    return;
+                }
+            }
+        }
+
         vr::EVRCompositorError vrSubmitHook(vr::IVRCompositor* compositor, const vr::EVREye eye, const vr::Texture_t* texture, const vr::VRTextureBounds_t* bounds,
             const vr::EVRSubmitFlags flags)
         {
+            checkSubmitThread();
+
             // Re-entry means a foreign hook re-installed itself over us without an idempotence
             // check and is now calling back through this function - one TLS counter turns what
             // would be an infinite recursion into a log line.
@@ -421,12 +454,12 @@ namespace f4cf::render
             return INVALID_DRAW_CALLBACK;
         }
 
-        // looked up here on the registering thread, so the render thread never takes the perf registry's lock
+        // looked up here on the registering thread, so Submit never takes the perf registry's lock
         s_callbacks[index].perfSite = &perf::dynamicSite(DRAW_PERF_FUNCTION, name);
         s_callbacks[index].name = std::move(name);
         s_callbacks[index].callback = std::move(callback);
         s_callbacks[index].order = order;
-        // publish the entry before the count that makes the render thread look at it
+        // publish the entry before the count that makes the hook look at it
         s_callbackCount.store(index + 1, std::memory_order_release);
         return static_cast<DrawCallbackId>(index);
     }
@@ -501,5 +534,13 @@ namespace f4cf::render
     bool isInstalled()
     {
         return s_installed;
+    }
+
+    namespace internal
+    {
+        void noteGameThread()
+        {
+            s_gameThreadId.store(GetCurrentThreadId(), std::memory_order_relaxed);
+        }
     }
 }

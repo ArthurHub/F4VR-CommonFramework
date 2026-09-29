@@ -178,11 +178,18 @@ failure modes they address:
 
 ## The render-thread contract
 
-A draw callback runs on the **render thread**, inside the Submit hook, and the rules are not
+A draw callback runs inside the Submit hook, on whatever thread the game submits from. "The render
+thread" in this module means that thread. **In FO4VR that is the game thread during play**: the game
+calls Submit once per frame, about a millisecond after the mods' frame updates. **While a loading
+screen is up it is another thread**: the game draws the loading screen from its own thread while the
+game thread loads, so a layer still active then draws from there. The hook logs each thread it is
+called on once (`Submit called on the game thread`, `Submit also called on thread ...`). The game →
+render handoff is what keeps every layer correct on both, at a cost of microseconds. The rules are not
 negotiable:
 
 - **Never touch game-thread state** — nodes, forms, config. Snapshot it game-side and hand the
-  snapshot over; reading `node->world` here races the skeleton update.
+  snapshot over; were Submit on another thread, reading `node->world` there would race the skeleton
+  update.
 - **Never call into OpenVR.** Two overlays both querying the runtime every frame double-drive
   vrclient; the engine's own matrices in `SubmitFrame::camera` are there so nobody has to.
 - **Restore what you bind** beyond the shared save/restore. The host snapshots and restores the

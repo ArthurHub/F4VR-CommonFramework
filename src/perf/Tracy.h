@@ -36,8 +36,8 @@ namespace f4cf::perf
     void tracyFrameMark();
 
     /**
-     * What the viewer calls the calling thread ("game", "render"). The name must be a string literal or otherwise
-     * outlive the process.
+     * What the viewer calls the calling thread ("game"). The name must be a string literal or otherwise outlive the
+     * process.
      */
     void tracyThreadName(const char* name);
 
