@@ -75,7 +75,7 @@ TODO: add a row for each component as the mod grows.
 
 ### Config
 
-[data/config/MyMod.ini](data/config/MyMod.ini) is the shipped default config. It is embedded in the DLL (resource `IDR_CONFIG_INI`) and written on first run to `%USERPROFILE%\Documents\My Games\Fallout4VR\Mods_Config\MyMod\MyMod.ini`; `MyMod_Custom.ini` beside it is merged on top.
+[data/config/MyMod.ini](data/config/MyMod.ini) is the shipped default config. It is embedded in the DLL (resource `IDR_CONFIG_INI`) and written on first run to `%USERPROFILE%\Documents\My Games\Fallout4VR\Mods_Config\MyMod\MyMod.ini`.
 
 - The main section is `[MyMod]`; it must match `NAME` in `CMakeLists.txt`, which the config reads back as both the INI file name and the default section.
 - `[Debug]` holds the framework's keys (log level and pattern, flow flags, data dumps, debug draw).

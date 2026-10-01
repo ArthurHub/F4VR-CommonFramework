@@ -420,9 +420,6 @@ It's created from the DLL's embedded default on first run. Change `sGreeting` to
 the file, and pull the trigger again — the new text shows **without restarting**. `ConfigBase` watches
 the file and re-runs `loadIniConfigInternal()` on every save.
 
-> There's also a `{ModName}_Custom.ini` in the same folder that layers on top of the main INI — handy
-> for user overrides that survive a mod update. See [`ConfigBase.h`](../src/ConfigBase.h).
-
 **Want the *button* itself configurable too?** Swap the hard-coded `isPressed` for a data-driven
 binding: declare an `f4cf::vrcf::InputBinding` in your config, load it with
 `getInputBindingValue(ini, "HelloVR", "sGreetButton", …)`, and evaluate it each frame with

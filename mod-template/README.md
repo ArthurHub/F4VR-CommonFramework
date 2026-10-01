@@ -41,8 +41,7 @@ Settings live in an INI created on first run at:
 %USERPROFILE%\Documents\My Games\Fallout4VR\Mods_Config\MyMod\MyMod.ini
 ```
 
-Edits apply **live** while the game is running — no restart needed. Put user overrides that should
-survive updates in `MyMod_Custom.ini` in the same folder.
+Edits apply **live** while the game is running — no restart needed.
 
 - Controller-binding syntax: [input-binding guide](https://github.com/ArthurHub/F4VR-CommonFramework/blob/main/docs/input-binding.md)
 - Logging / debug keys: [debug-config guide](https://github.com/ArthurHub/F4VR-CommonFramework/blob/main/docs/debug-config.md)

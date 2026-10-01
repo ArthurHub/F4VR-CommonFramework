@@ -70,7 +70,6 @@ A global singleton `f4cf::g_mod` holds the active mod instance.
 `ConfigBase` wraps simpleini with file watching for hot-reload. Derive from it, override `loadIniConfigInternal()`, and call `setupConfig(path)`.
 
 - **INI base path:** `%USERPROFILE%\Documents\My Games\Fallout4VR\Mods_Config\{ModName}\`
-- **Override file:** `{ModName}_Custom.ini` is merged on top of the main INI automatically
 - **Default INI** is embedded in the DLL as RCDATA resource ID 101 and extracted on first run
 - **Config version migration:** use `[Version] iVersion` key; compare in `loadIniConfigInternal()` to handle upgrades
 - File watcher triggers `loadIniConfigInternal()` automatically on disk change — no restart needed
