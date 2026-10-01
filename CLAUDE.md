@@ -227,6 +227,9 @@ Copy the entire `mod-template/` directory into the new mod's repo. Then replace 
 | `data/config/MyMod.ini` | Rename file; update `[MyMod]` section header |
 | `cmake/Version.h.in` | (no change needed — driven by CMakeLists.txt) |
 | `README.md` | Update links, description |
+| `CLAUDE.md` | The mod's own Claude Code guidance; rename the tokens (`MyMod`, `My Mod`, `my_mod`, `g_myMod`) and fill in its TODOs |
+
+The template also carries the repo automation, used as it came: `.pre-commit-config.yaml` (clang-format over `src/` plus basic checks; `data/` and `external/` excluded), `.github/workflows/maintenance.yml` (pre-commit on GitHub with auto-fix commits) and `build.yml` (Release build), and `.vscode/settings.json` (no hook bypass from the commit UI). Run `pre-commit install` once in the new repo.
 
 Also rename `CMakeUserPresets.json.template` → `CMakeUserPresets.json` (git-ignored) and fill in:
 - `POST_BUILD_COPY_PLUGIN`: `true` to auto-copy DLL/PDB after build

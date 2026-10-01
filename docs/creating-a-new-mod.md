@@ -25,6 +25,7 @@ The finished layout of your mod repo:
 
 ```
 HelloVR/
+├── .github/workflows/            # CI: a Release build, and pre-commit with auto-fix
 ├── external/
 │   └── F4VR-CommonFramework/     # the framework, as a git submodule
 ├── cmake/                        # version + resource templates (from the template)
@@ -39,6 +40,8 @@ HelloVR/
 │   ├── Config.h / Config.cpp     # your INI-backed settings
 │   ├── PCH.h                     # precompiled header
 │   └── Resources.h               # embedded-resource IDs
+├── .pre-commit-config.yaml       # clang-format + basic checks, run on every commit
+├── CLAUDE.md                     # guidance for Claude Code working in the repo
 ├── CMakeLists.txt                # NAME / FRIENDLY_NAME / VERSION live at the top
 ├── CMakeUserPresets.json         # your local build settings (git-ignored)
 └── vcpkg.json                    # dependency manifest
@@ -116,6 +119,25 @@ mv CMakeUserPresets.json.template CMakeUserPresets.json
 `CMakeUserPresets.json` is git-ignored on purpose — it holds *your* machine's paths, not something you
 commit. We'll fill it in at step 4.
 
+### Code style checks and CI
+
+The template also brought the repo's automation, which works as it came:
+
+| File | What it does |
+| ---- | ------------ |
+| `.pre-commit-config.yaml` | [pre-commit](https://pre-commit.com/) hooks: clang-format over `src/`, plus whitespace, YAML/JSON and large-file checks. `data/` and `external/` are skipped. |
+| `.github/workflows/maintenance.yml` | Runs those hooks on GitHub for every push and pull request to `main` and commits the fixes back (pull requests from forks are only checked). |
+| `.github/workflows/build.yml` | Configures and builds Release on GitHub for every push and pull request to `main`. |
+| `.vscode/settings.json` | Stops VS Code's commit UI from offering to skip the hooks. |
+| `CLAUDE.md` | Guidance for [Claude Code](https://claude.com/claude-code) working in the repo; fill in its TODOs as the mod grows, or delete it. |
+
+The hooks are per clone, so install them once in yours:
+
+```sh
+python -m pip install pre-commit
+pre-commit install
+```
+
 You now have a **complete, buildable mod** — it just says `MyMod` everywhere. Renaming is next.
 
 ---
@@ -149,6 +171,7 @@ knowing):
 | `data/config/HelloVR.ini` | the `[MyMod]` section header and the `[MyMod_AnActivationSphere]` section |
 | `vcpkg.json` | `"name": "f4vr-my-mod"` (cosmetic) |
 | `README.md` | the template README's placeholders |
+| `CLAUDE.md` | the mod name, `namespace my_mod`, `g_myMod` and the paths to the renamed files |
 
 > **Why the INI section name matters.** `CMakeLists.txt`'s `NAME` becomes `Version::PROJECT`, which the
 > config reads back as *both* the INI file name (`HelloVR.ini`) **and** the default section header. So
