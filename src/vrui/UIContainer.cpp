@@ -296,27 +296,21 @@ namespace f4cf::vrui
     }
 
     /**
-     * Write the layout properties of the element to the given map.
+     * Write the layout properties of the container, then of every child under it, to the given map.
      * Used for development layout setting to be able to adjust the properties via config files at runtime.
      */
     void UIContainer::writeDevLayoutProperties(const std::string& namePrefix, std::map<std::string, std::string>& propertiesMap) const
     {
-        const auto key = namePrefix + _name;
-        propertiesMap[key] = std::format("Pos:({:.2f},{:.2f},{:.2f}), Scale:({:.2f}), Padding:({:.2f}), Layout:({})",
-            getPosition().x,
-            getPosition().y,
-            getPosition().z,
-            getScale(),
-            getPadding(),
-            static_cast<int>(getLayout()));
+        UIElement::writeDevLayoutProperties(namePrefix, propertiesMap);
 
+        const auto key = namePrefix + _name;
         for (const auto& childElm : _childElements) {
             childElm->writeDevLayoutProperties(key + ".", propertiesMap);
         }
     }
 
     /**
-     * Read the layout properties of the element to the given map.
+     * Read the layout properties of the container, then of every child under it, from the given map.
      * Used for development layout setting to be able to adjust the properties via config files at runtime.
      */
     void UIContainer::readDevLayoutProperties(const std::string& namePrefix, const std::map<std::string, std::string>& propertiesMap)
@@ -325,23 +319,31 @@ namespace f4cf::vrui
         if (!propertiesMap.contains(key)) {
             return;
         }
-
-        try {
-            float x, y, z, scale, padding;
-            int layout;
-            if (std::sscanf(propertiesMap.at(key).c_str(), "Pos:(%f,%f,%f), Scale:(%f), Padding:(%f), Layout:(%d)", &x, &y, &z, &scale, &padding, &layout) ==
-                6) { // NOLINT(cert-err34-c)
-                setPosition(x, y, z);
-                setScale(scale);
-                setPadding(padding);
-                setLayout(static_cast<UIContainerLayout>(layout));
-            }
-        } catch (std::exception& e) {
-            logger::warn("Failed to read VRUI properties in element '{}': {}", _name, e.what());
-        }
+        UIElement::readDevLayoutProperties(namePrefix, propertiesMap);
 
         for (const auto& childElm : _childElements) {
             childElm->readDevLayoutProperties(key + ".", propertiesMap);
+        }
+    }
+
+    /**
+     * The placement, then the padding between children as Padding:(units) and the layout as Layout:(number),
+     * a UIContainerLayout value. No Size: a container's size comes from its children.
+     */
+    void UIContainer::writeDevLayoutFields(std::string& line) const
+    {
+        writeDevLayoutPlacementFields(line);
+        line += std::format(", Padding:({:.2f}), Layout:({})", getPadding(), static_cast<int>(getLayout()));
+    }
+
+    void UIContainer::readDevLayoutFields(const DevLayoutFields& fields)
+    {
+        UIElement::readDevLayoutFields(fields);
+        if (const auto padding = fields.find("Padding"); padding != fields.end() && padding->second.size() == 1) {
+            setPadding(padding->second[0]);
+        }
+        if (const auto layout = fields.find("Layout"); layout != fields.end() && layout->second.size() == 1) {
+            setLayout(static_cast<UIContainerLayout>(static_cast<int>(layout->second[0])));
         }
     }
 }

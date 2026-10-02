@@ -72,6 +72,15 @@ namespace f4cf::vrui
         void updatePosition(const float x, const float y, const float z);
         const RE::NiPoint3& getPosition() const;
 
+        /**
+         * Turn the element relative to its parent; for a root, relative to the node it is attached to.
+         * Everything under the element turns with it, around the element's own position.
+         * Containers lay their children out as if none of them is turned.
+         * @param rotation as NiTransform holds it, e.g. from MatrixUtils::getMatrixFromEulerAnglesDegrees
+         */
+        void setRotation(const RE::NiMatrix3& rotation);
+        const RE::NiMatrix3& getRotation() const;
+
         float getScale() const;
         void setScale(const float scale);
 
@@ -124,6 +133,11 @@ namespace f4cf::vrui
          * looks - so the line stays short enough to edit.
          */
         virtual void writeDevLayoutFields(std::string& line) const;
+
+        /**
+         * The fields every element starts its line with: Pos, Rot as degrees around x, y and z, and Scale.
+         */
+        void writeDevLayoutPlacementFields(std::string& line) const;
 
         /**
          * Apply the dev-layout fields this element knows. A field that is missing, or has the wrong number of

@@ -65,6 +65,8 @@ namespace f4cf::vrui
 
         virtual void writeDevLayoutProperties(const std::string& namePrefix, std::map<std::string, std::string>& propertiesMap) const override;
         virtual void readDevLayoutProperties(const std::string& namePrefix, const std::map<std::string, std::string>& propertiesMap) override;
+        virtual void writeDevLayoutFields(std::string& line) const override;
+        virtual void readDevLayoutFields(const DevLayoutFields& fields) override;
 
         // how to lay out the child elements
         UIContainerLayout _layout = UIContainerLayout::Manual;
