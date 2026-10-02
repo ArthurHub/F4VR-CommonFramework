@@ -44,6 +44,16 @@ namespace f4cf::vrui
         return _transform.translate;
     }
 
+    void UIElement::setRotation(const RE::NiMatrix3& rotation)
+    {
+        _transform.rotate = rotation;
+    }
+
+    const RE::NiMatrix3& UIElement::getRotation() const
+    {
+        return _transform.rotate;
+    }
+
     float UIElement::getScale() const
     {
         return _transform.scale;
@@ -133,6 +143,8 @@ namespace f4cf::vrui
 
     /**
      * calculate the transform of the element with respect to all parents.
+     * The element's position is an offset along its parent's axes, so a turned parent carries it around.
+     * The parent's scale is not applied to it: layouts already position children in scaled units.
      */
     RE::NiTransform UIElement::calculateTransform() const
     {
@@ -142,9 +154,9 @@ namespace f4cf::vrui
 
         auto calTransform = _transform;
         const auto parentTransform = _parent->calculateTransform();
-        calTransform.translate += parentTransform.translate;
+        calTransform.translate = parentTransform.translate + parentTransform.rotate.Transpose() * _transform.translate;
+        calTransform.rotate = _transform.rotate * parentTransform.rotate;
         calTransform.scale *= parentTransform.scale;
-        // TODO: add rotation handling
         return calTransform;
     }
 
@@ -183,13 +195,23 @@ namespace f4cf::vrui
 
     void UIElement::writeDevLayoutFields(std::string& line) const
     {
-        line += std::format("Pos:({:.2f},{:.2f},{:.2f}), Scale:({:.2f}), Size:({:.2f},{:.2f})",
+        writeDevLayoutPlacementFields(line);
+        line += std::format(", Size:({:.2f},{:.2f})", getSize().width, getSize().height);
+    }
+
+    void UIElement::writeDevLayoutPlacementFields(std::string& line) const
+    {
+        float heading = 0.0f, roll = 0.0f, attitude = 0.0f;
+        common::MatrixUtils::getEulerAnglesFromMatrixDegrees(getRotation(), &heading, &roll, &attitude);
+        // adding zero turns a negative zero into a positive one, so an unturned element reads 0.00 and not -0.00
+        line += std::format("Pos:({:.2f},{:.2f},{:.2f}), Rot:({:.2f},{:.2f},{:.2f}), Scale:({:.2f})",
             getPosition().x,
             getPosition().y,
             getPosition().z,
-            getScale(),
-            getSize().width,
-            getSize().height);
+            heading + 0.0f,
+            roll + 0.0f,
+            attitude + 0.0f,
+            getScale());
     }
 
     /**
@@ -208,6 +230,9 @@ namespace f4cf::vrui
     {
         if (const auto position = fields.find("Pos"); position != fields.end() && position->second.size() == 3) {
             setPosition(position->second[0], position->second[1], position->second[2]);
+        }
+        if (const auto rotation = fields.find("Rot"); rotation != fields.end() && rotation->second.size() == 3) {
+            setRotation(common::MatrixUtils::getMatrixFromEulerAnglesDegrees(rotation->second[0], rotation->second[1], rotation->second[2]));
         }
         if (const auto scale = fields.find("Scale"); scale != fields.end() && scale->second.size() == 1) {
             setScale(scale->second[0]);

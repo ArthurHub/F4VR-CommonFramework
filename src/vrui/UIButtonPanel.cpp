@@ -203,11 +203,12 @@ namespace f4cf::vrui
 
     /**
      * Push the drawn button back by how far it is pressed in, which is what makes it follow the finger.
+     * Back is the button's own depth axis, which a turned root turns with it.
      */
     RE::NiTransform UIButtonPanel::calculateTransform() const
     {
         auto transform = UIPanel::calculateTransform();
-        transform.translate += RE::NiPoint3(0.0f, _pressYOffset, 0.0f);
+        transform.translate += transform.rotate.Transpose() * RE::NiPoint3(0.0f, _pressYOffset, 0.0f);
         return transform;
     }
 

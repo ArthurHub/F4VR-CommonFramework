@@ -22,7 +22,7 @@ An element is drawn one of two ways, and they mix freely in the same layout:
 
 | Class | Extends | Description |
 |-------|---------|-------------|
-| [`UIElement`](UIElement.h) | — | Base node: position/scale/visibility/size, parent/child transform, layout + frame-update hooks. Also [`UIPadding`](UIElement.h), the per-side spacing panels take. |
+| [`UIElement`](UIElement.h) | — | Base node: position/rotation/scale/visibility/size, parent/child transform, layout + frame-update hooks. Also [`UIPadding`](UIElement.h), the per-side spacing panels take. |
 | [`UIContainer`](UIContainer.h) | `UIElement` | Groups multiple elements under one transform and lays them out (row/column, centered or directional). |
 | [`UIToggleGroupContainer`](UIToggleGroupContainer.h) | `UIContainer` | Radio-button group (mutually exclusive). Works on [`UIToggleable`](UIToggleable.h), so NIF and panel toggles can share one group. |
 | [`UIManager`](UIManager.h) | — | Singleton scene graph: attach/detach, wand/HMD presets, input dispatch, render. |
@@ -308,6 +308,12 @@ loading).
   centered or directional) — prefer that over positioning each element manually.
 - Coordinates on `UIElement::setPosition(x, y, z)` are **relative to the parent**: x = right(+)/left(−),
   y = forward(+)/back(−), z = up(+)/down(−).
+- A UI faces the way its attach node faces. To turn it, give the root a rotation relative to that
+  node: `root->setRotation(MatrixUtils::getMatrixFromEulerAnglesDegrees(heading, roll, attitude))`,
+  angles around x, y and z. The whole tree turns around the root's position, NIF widgets and panels
+  alike, and a button is still pressed along its own depth. An element under the root can be turned
+  too: it turns around its own position, on top of its parent's rotation. Containers lay their
+  children out as if none of them is turned, so a turned child keeps the room of an unturned one.
 - Detaching mid-frame can be unsafe; `UIManager::detachElement(element, releaseSafe=true)` defers the
   release to the next frame.
 - A dev layout mode tunes placement live through the INI. Calling
@@ -315,6 +321,7 @@ loading).
   `[VRUI_DevLayout]` section and saves it. While that section has anything in it, the manager
   re-applies it to the tree every frame, so editing a line and saving the INI reaches the running
   game on the next one; emptying the section turns the mode off. Each element's line holds
-  `Pos`, `Scale` and `Size`; containers add `Padding` and `Layout`, panels add `Pad:(t,r,b,l)` (and
-  `MaxW` while their width follows the content), and text and button panels add their text sizes as
-  `Text`. Delete a field from a line and it is simply no longer applied.
+  `Pos`, `Rot` (degrees around x, y and z), `Scale` and `Size`; a container's holds `Padding` and
+  `Layout` in place of `Size`, panels add `Pad:(t,r,b,l)` (and `MaxW` while their width follows the
+  content), and text and button panels add their text sizes as `Text`. Delete a field from a line
+  and it is simply no longer applied.

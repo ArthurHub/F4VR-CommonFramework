@@ -119,7 +119,7 @@ namespace f4cf::vrui
             if (_disabled) {
                 _disabledOverlayNode->local = _node->local;
                 // avoid z-fighting between the two coplanar nodes
-                _disabledOverlayNode->local.translate.y -= 0.1f;
+                _disabledOverlayNode->local.translate -= _node->local.rotate.Transpose() * RE::NiPoint3(0, 0.1f, 0);
             }
         }
     }
@@ -130,7 +130,8 @@ namespace f4cf::vrui
     RE::NiTransform UIWidget::calculateTransform() const
     {
         auto trans = UIElement::calculateTransform();
-        trans.translate += RE::NiPoint3(0, _pressYOffset, 0);
+        // along the widget's own depth axis, which a turned root turns with it
+        trans.translate += trans.rotate.Transpose() * RE::NiPoint3(0, _pressYOffset, 0);
         return trans;
     }
 

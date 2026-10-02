@@ -9,6 +9,10 @@ major version is `0`, a minor bump may break the API; the **Upgrading** notes sa
 
 ## 0.5.0 — unreleased
 
+- **vrui rotation**: an element takes a rotation relative to its parent (`UIElement::setRotation`),
+  and everything under it turns with it. On a root it is relative to the attach node, so a UI no
+  longer has to face the way its node faces. The dev layout tunes it live as `Rot`.
+
 **Upgrading**
 
 - `f4vr::PlayerNodes` and `getPlayerNodes()`, deprecated in 0.4.0, are removed. Use
