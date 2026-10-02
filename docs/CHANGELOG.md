@@ -7,7 +7,16 @@ and tooling tweaks are left to the git history.
 Versions follow `set(VERSION ...)` in the root [`CMakeLists.txt`](../CMakeLists.txt). While the
 major version is `0`, a minor bump may break the API; the **Upgrading** notes say what to change.
 
-## 0.4.1 — unreleased
+## 0.5.0 — unreleased
+
+**Upgrading**
+
+- `f4vr::PlayerNodes` and `getPlayerNodes()`, deprecated in 0.4.0, are removed. Use
+  `getVRPlayerNodes()`, which returns CommonLibF4's `RE::VRPlayerNodes`: the same table with
+  camelCase member names, some of them corrected (e.g. `HmdNode` → `hmdNode`,
+  `SecondaryWandNode` → `secondaryWandNode`, `unk750` → `equippedWeaponNode`).
+
+## 0.4.1 — 2026-10-01
 
 - **`f4cf::devbench`**: every mod gets its own [devbench](https://github.com/ArthurHub/devbench)
   tool, so an AI agent or a script can drive it in the running game over MCP or REST. `ModBase`

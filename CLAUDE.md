@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What This Is
 
-F4VR Common Framework is a **static library** (v0.4.1; see [`docs/CHANGELOG.md`](docs/CHANGELOG.md)) for building Fallout 4 VR F4SE plugins. It wraps [CommonLibF4VR](https://github.com/ArthurHub/CommonLibF4VR) and provides plugin lifecycle management, VR controller input, VR UI widgets, an overlay renderer (primitives, text, images, Dear ImGui), config hot-reload, and game-state utilities.
+F4VR Common Framework is a **static library** (v0.5.0; see [`docs/CHANGELOG.md`](docs/CHANGELOG.md)) for building Fallout 4 VR F4SE plugins. It wraps [CommonLibF4VR](https://github.com/ArthurHub/CommonLibF4VR) and provides plugin lifecycle management, VR controller input, VR UI widgets, an overlay renderer (primitives, text, images, Dear ImGui), config hot-reload, and game-state utilities.
 
 ## Build
 
@@ -104,7 +104,7 @@ Suppression constraints that cause bugs if missed:
 Design deep-dive: `knowledge-base/commonframework_vr_input_suppression.md` in the reference library.
 
 ### F4VR Utilities (`src/f4vr/`)
-Game-state helpers: node search/visibility/transform updates, player/weapon/menu state, `getVRPlayerNodes()` (CommonLibF4's `RE::VRPlayerNodes`, the VR reference nodes at `PlayerCharacter + 0x6E0`; the old `PlayerNodes` / `getPlayerNodes()` are deprecated, removed in v0.5.0), `SkellyBones` (100+ bone names + finger poses), Scaleform/HUD (`ScaleformUtils`), `GameMenusHandler`, `F4VRThumbstickControls`, `PlayerRotation` (snap/smooth turning that obeys the player's VR comfort settings and works where vanilla turning is taken away, rotating the VR room transform rather than the actor — design: [`docs/tech/vr-player-rotation.md`](docs/tech/vr-player-rotation.md)), and `F4VROffsets` (all RVAs). Full file list and snippets: [`src/f4vr/README.md`](src/f4vr/README.md). RVA authority + full PlayerNodes layout: `Analysis/gold/F4VR-CommonFramework_RE_REFERENCE.md` in the reference library.
+Game-state helpers: node search/visibility/transform updates, player/weapon/menu state, `getVRPlayerNodes()` (CommonLibF4's `RE::VRPlayerNodes`, the VR reference nodes at `PlayerCharacter + 0x6E0`), `SkellyBones` (100+ bone names + finger poses), Scaleform/HUD (`ScaleformUtils`), `GameMenusHandler`, `F4VRThumbstickControls`, `PlayerRotation` (snap/smooth turning that obeys the player's VR comfort settings and works where vanilla turning is taken away, rotating the VR room transform rather than the actor — design: [`docs/tech/vr-player-rotation.md`](docs/tech/vr-player-rotation.md)), and `F4VROffsets` (all RVAs). Full file list and snippets: [`src/f4vr/README.md`](src/f4vr/README.md). RVA authority + full PlayerNodes layout: `Analysis/gold/F4VR-CommonFramework_RE_REFERENCE.md` in the reference library.
 
 ### Debug Draw Overlay (`src/debug/`)
 `f4cf::debug::DebugDraw` (facade `debug::dd()`) — immediate-mode in-world debug drawing: wire
