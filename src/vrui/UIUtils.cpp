@@ -52,6 +52,14 @@ namespace f4cf::vrui
     }
 
     /**
+     * Get node of the offhand wand to attach UI to.
+     */
+    RE::NiNode* UIUtils::getOffhandWandAttachNode()
+    {
+        return f4vr::getVRPlayerNodes()->secondaryUIOffsetNode;
+    }
+
+    /**
      * Get node of the HMD to attach UI to.
      */
     RE::NiNode* UIUtils::getHMDAttachNode()

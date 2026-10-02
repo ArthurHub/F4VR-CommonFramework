@@ -11,6 +11,7 @@ namespace f4cf::vrui
         static std::string getDisabledOverlayNifName();
 
         static RE::NiNode* getPrimaryWandAttachNode();
+        static RE::NiNode* getOffhandWandAttachNode();
         static RE::NiNode* getHMDAttachNode();
         static bool isLeftHandedMode();
         static void triggerInteractionHeptic();

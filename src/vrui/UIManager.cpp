@@ -92,6 +92,25 @@ namespace f4cf::vrui
     }
 
     /**
+     * Attach the UI on top of the offhand and bound to the hand movement, for the primary hand to press.
+     */
+    void UIManager::attachPresetToOffhandWandTop(const std::shared_ptr<UIElement>& element, const RE::NiPoint3 offset)
+    {
+        element->setPosition(offset.x, offset.y, offset.z);
+        attachElement(element, UIUtils::getOffhandWandAttachNode());
+    }
+
+    /**
+     * Attach the UI on right of the offhand and bound to the hand movement, for the primary hand to press.
+     * The offhand is the left hand, so right is the side toward the other hand; in left-handed mode it is mirrored.
+     */
+    void UIManager::attachPresetToOffhandWandRight(const std::shared_ptr<UIElement>& element, const RE::NiPoint3 offset)
+    {
+        element->setPosition((UIUtils::isLeftHandedMode() ? -1.f : 1.f) * offset.x, offset.y, offset.z);
+        attachElement(element, UIUtils::getOffhandWandAttachNode());
+    }
+
+    /**
      * Attach the UI just below the HMD (head mounted display) direct view. Bound to horizontal but not vertical head movement.
      */
     void UIManager::attachPresetToHMDBottom(const std::shared_ptr<UIElement>& element)
