@@ -16,6 +16,8 @@ namespace f4cf::vrui
 
         void attachPresetToPrimaryWandTop(const std::shared_ptr<UIElement>& element, RE::NiPoint3 offset);
         void attachPresetToPrimaryWandLeft(const std::shared_ptr<UIElement>& element, RE::NiPoint3 offset);
+        void attachPresetToOffhandWandTop(const std::shared_ptr<UIElement>& element, RE::NiPoint3 offset);
+        void attachPresetToOffhandWandRight(const std::shared_ptr<UIElement>& element, RE::NiPoint3 offset);
         void attachPresetToHMDBottom(const std::shared_ptr<UIElement>& element);
         void enableDevLayoutViaConfig() const;
 

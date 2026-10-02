@@ -12,6 +12,9 @@ major version is `0`, a minor bump may break the API; the **Upgrading** notes sa
 - **vrui rotation**: an element takes a rotation relative to its parent (`UIElement::setRotation`),
   and everything under it turns with it. On a root it is relative to the attach node, so a UI no
   longer has to face the way its node faces. The dev layout tunes it live as `Rot`.
+- **vrui on the offhand**: `UIManager::attachPresetToOffhandWandTop` and
+  `attachPresetToOffhandWandRight` attach a UI to the offhand controller, as the primary wand's top
+  and left presets do for the primary hand.
 
 **Upgrading**
 

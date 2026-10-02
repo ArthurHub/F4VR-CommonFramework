@@ -65,7 +65,7 @@ visualizing interaction points.
 1. The mod provides a `UIModAdapter` — it answers *"where is the finger?"*
    (`getInteractionBoneWorldPosition`) and *"point the hand for me"* (`setInteractionHandPointing`).
 2. Build elements (widgets/buttons) and attach them via the global `g_uiManager`, either to an
-   explicit `NiNode*` or with a preset (primary wand top/left, HMD bottom).
+   explicit `NiNode*` or with a preset (primary wand top/left, offhand wand top/right, HMD bottom).
 3. Call `g_uiManager->onFrameUpdate(adapter)` every frame. The manager tests the interaction bone
    against each pressable widget, fires press callbacks, and updates transforms.
 
@@ -314,6 +314,9 @@ loading).
   alike, and a button is still pressed along its own depth. An element under the root can be turned
   too: it turns around its own position, on top of its parent's rotation. Containers lay their
   children out as if none of them is turned, so a turned child keeps the room of an unturned one.
+- `attachPresetToOffhandWandTop(root, offset)` and `attachPresetToOffhandWandRight(root, offset)` put
+  a UI on the offhand controller, for the primary hand to press: the twins of the primary wand's top
+  and left presets. Right is the side toward the other hand, and is mirrored in left-handed mode.
 - Detaching mid-frame can be unsafe; `UIManager::detachElement(element, releaseSafe=true)` defers the
   release to the next frame.
 - A dev layout mode tunes placement live through the INI. Calling
