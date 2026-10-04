@@ -58,11 +58,10 @@ After cloning, run `pre-commit install` once to enforce clang-format on every co
 
 ### Plugin Lifecycle (`src/ModBase.h`)
 `ModBase` is the base class every mod derives from. Override these hooks:
-1. `onF4SEQuery` — called at F4SE query phase
-2. `onF4SELoad` — called at F4SE load phase; register Papyrus functions here
-3. `onGameLoaded` — called once after the game finishes loading
-4. `onGameSessionLoaded` — called each time a save is loaded
-5. `onFrameUpdate` — called every game frame (injected via main loop hook at offset `0xd8405e`)
+1. `onModLoaded` — called at the F4SE load phase; register Papyrus functions and hooks here
+2. `onGameLoaded` — called once after the game finishes loading
+3. `onGameSessionLoaded` — called each time a save is loaded
+4. `onFrameUpdate` — called every game frame (injected via main loop hook at offset `0xd8405e`)
 
 A global singleton `f4cf::g_mod` holds the active mod instance.
 
@@ -71,7 +70,7 @@ A global singleton `f4cf::g_mod` holds the active mod instance.
 
 - **INI base path:** `%USERPROFILE%\Documents\My Games\Fallout4VR\Mods_Config\{ModName}\`
 - **Default INI** is embedded in the DLL as RCDATA resource ID 101 and extracted on first run
-- **Config version migration:** use `[Version] iVersion` key; compare in `loadIniConfigInternal()` to handle upgrades
+- **Config version migration:** the `[Debug] iVersion` key; when the shipped INI's value is higher than the user's, `ConfigBase` rewrites the user's INI into the shipped layout
 - File watcher triggers `loadIniConfigInternal()` automatically on disk change — no restart needed
 
 Standard `[Debug]` INI keys provided by the base class:
