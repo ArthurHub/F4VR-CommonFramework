@@ -29,7 +29,7 @@ namespace f4cf::vrui
 
         virtual void attachToNode(RE::NiNode* attachNode) override;
         virtual void detachFromAttachedNode(bool releaseSafe) override;
-        virtual void onFrameUpdate(UIFrameUpdateContext* adapter) override;
+        virtual void onFrameUpdate(UIFrameUpdateContext* context) override;
         virtual RE::NiTransform calculateTransform() const override;
         virtual void onPressEventFired(UIElement* element, UIFrameUpdateContext* context) override;
         void handlePressEvent(UIFrameUpdateContext* context);

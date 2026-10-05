@@ -1,6 +1,7 @@
 #include "UIManager.h"
 
 #include "ModBase.h"
+#include "UIHandPointing.h"
 #include "perf/Perf.h"
 
 using namespace common;
@@ -11,17 +12,37 @@ namespace f4cf::vrui
     UIManager* g_uiManager;
 
     /**
-     * Run frame update on all the containers.
+     * The framework's call at the start of every frame, after which the frame update can run again.
      */
-    void UIManager::onFrameUpdate(UIModAdapter* adapter)
+    void UIManager::onFrameStart()
     {
+        _frameUpdated = false;
+    }
+
+    /**
+     * Run frame update on all the containers, once in a frame.
+     * The framework calls it after the mod's own frame update. A mod that needs the UI updated at a certain
+     * point of its frame calls it there, and the framework's call then does nothing.
+     * It does not run while the player is not loaded, as there are no hands and no nodes to read.
+     */
+    void UIManager::onFrameUpdate()
+    {
+        if (_frameUpdated) {
+            return;
+        }
+        const auto player = RE::PlayerCharacter::GetSingleton();
+        if (!player || !player->loadedData) {
+            return;
+        }
+        _frameUpdated = true;
+
         const auto config = g_mod->getConfig();
 
         if (!_releaseSafeList.empty()) {
             _releaseSafeList.clear();
-            adapter->setInteractionHandPointing(false, false);
+            setHandPointing(false, false);
             _offhandPointing = false;
-            updateHandPointing(adapter, true, std::nullopt);
+            updateHandPointing(true, std::nullopt);
 
             // remove dev layout properties if used
             if (!config->debugVRUIProperties.empty()) {
@@ -33,8 +54,8 @@ namespace f4cf::vrui
         if (_rootElements.empty()) {
             _skeletonHandler.hideFingerTipMarkers();
             // nothing is left to test a finger against, so a hand that still points is released
-            updateHandPointing(adapter, true, std::nullopt);
-            updateHandPointing(adapter, false, std::nullopt);
+            updateHandPointing(true, std::nullopt);
+            updateHandPointing(false, std::nullopt);
             return;
         }
 
@@ -47,7 +68,7 @@ namespace f4cf::vrui
 
         _skeletonHandler.onFrameUpdate();
 
-        UIFrameUpdateContext context(adapter);
+        UIFrameUpdateContext context;
 
         for (const auto& element : _rootElements) {
             element->onLayoutUpdate(&context);
@@ -57,8 +78,8 @@ namespace f4cf::vrui
             element->onFrameUpdate(&context);
         }
 
-        updateHandPointing(adapter, true, context.isAnyPressableCloseToInteraction(true));
-        updateHandPointing(adapter, false, context.isAnyPressableCloseToInteraction(false));
+        updateHandPointing(true, context.isAnyPressableCloseToInteraction(true));
+        updateHandPointing(false, context.isAnyPressableCloseToInteraction(false));
 
         if (config->checkDebugDumpDataOnceFor("ui_tree")) {
             dumpUITree();
@@ -70,16 +91,37 @@ namespace f4cf::vrui
      * A hand whose finger nothing was tested against in this frame is left alone, unless it was pointed
      * from here: then it is released.
      */
-    void UIManager::updateHandPointing(UIModAdapter* adapter, const bool primaryHand, const std::optional<bool>& isPressableClose)
+    void UIManager::updateHandPointing(const bool primaryHand, const std::optional<bool>& isPressableClose)
     {
         bool& pointing = primaryHand ? _primaryHandPointing : _offhandPointing;
         if (isPressableClose.has_value()) {
-            adapter->setInteractionHandPointing(primaryHand, isPressableClose.value());
+            setHandPointing(primaryHand, isPressableClose.value());
             pointing = isPressableClose.value();
         } else if (pointing) {
-            adapter->setInteractionHandPointing(primaryHand, false);
+            setHandPointing(primaryHand, false);
             pointing = false;
         }
+    }
+
+    /**
+     * Point the given hand or release it: through FRIK's API, unless the mod set a handler of its own.
+     */
+    void UIManager::setHandPointing(const bool primaryHand, const bool toPoint) const
+    {
+        if (_handPointingHandler) {
+            _handPointingHandler(primaryHand, toPoint);
+        } else {
+            setFRIKHandPointing(primaryHand, toPoint);
+        }
+    }
+
+    /**
+     * Replace how a hand is pointed at the UI and released. The framework does it through FRIK's API, so only
+     * a mod that poses the hands itself, as FRIK does, has a reason to set a handler.
+     */
+    void UIManager::setHandPointingHandler(HandPointingHandler handler)
+    {
+        _handPointingHandler = std::move(handler);
     }
 
     /**

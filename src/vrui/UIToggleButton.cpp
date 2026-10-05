@@ -77,9 +77,9 @@ namespace f4cf::vrui
     /**
      * Handle toggle frame visibility.
      */
-    void UIToggleButton::onFrameUpdate(UIFrameUpdateContext* adapter)
+    void UIToggleButton::onFrameUpdate(UIFrameUpdateContext* context)
     {
-        UIWidget::onFrameUpdate(adapter);
+        UIWidget::onFrameUpdate(context);
         if (!_attachNode) {
             return;
         }

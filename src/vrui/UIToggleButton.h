@@ -29,7 +29,7 @@ namespace f4cf::vrui
         virtual void attachToNode(RE::NiNode* node) override;
         virtual void detachFromAttachedNode(bool releaseSafe) override;
         virtual bool isPressable() const override;
-        virtual void onFrameUpdate(UIFrameUpdateContext* adapter) override;
+        virtual void onFrameUpdate(UIFrameUpdateContext* context) override;
         virtual void onPressEventFired(UIElement* element, UIFrameUpdateContext* context) override;
 
         std::function<void(UIToggleButton*, bool)> _onToggleEventHandler;

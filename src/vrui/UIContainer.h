@@ -33,8 +33,8 @@ namespace f4cf::vrui
         explicit UIContainer(const std::string& name, const UIContainerLayout layout = UIContainerLayout::Manual, const float padding = 0, const float scale = 1);
         virtual std::string toString() const override;
 
-        virtual void onFrameUpdate(UIFrameUpdateContext* adapter) override;
-        virtual void onLayoutUpdate(UIFrameUpdateContext* adapter) override;
+        virtual void onFrameUpdate(UIFrameUpdateContext* context) override;
+        virtual void onLayoutUpdate(UIFrameUpdateContext* context) override;
         void addElement(const std::shared_ptr<UIElement>& element);
 
         UIContainerLayout getLayout() const;

@@ -4,26 +4,12 @@
 
 namespace f4cf::vrui
 {
-    class UIModAdapter
+    /**
+     * What the elements share during one frame update: whether a finger is close to something it can press.
+     */
+    class UIFrameUpdateContext
     {
     public:
-        /**
-         * Set the interaction hand to a pointing position for UI interaction where index finger is the interaction bone.
-         * @param primaryHand - true - use primary hand, false - use offhand
-         * @param toPoint true - force hand to point position, false - release
-         */
-        virtual void setInteractionHandPointing(bool primaryHand, bool toPoint) = 0;
-
-        virtual ~UIModAdapter() = default;
-    };
-
-    class UIFrameUpdateContext : public UIModAdapter
-    {
-    public:
-        explicit UIFrameUpdateContext(UIModAdapter* adapter)
-            : _adapter(adapter)
-        {}
-
         /**
          * Whether the finger of the given hand is close to something it can press. Empty if nothing was tested
          * against that finger in this frame.
@@ -39,14 +25,7 @@ namespace f4cf::vrui
             isClose = isClose.value_or(false) || isPressableClose;
         }
 
-        virtual void setInteractionHandPointing(const bool primaryHand, const bool toPoint) override
-        {
-            _adapter->setInteractionHandPointing(primaryHand, toPoint);
-        }
-
     private:
-        UIModAdapter* _adapter;
-
         // Are any of the elements in current frame update close to the hand's interaction bone and can be pressed?
         std::optional<bool> _isAnyPressableCloseToPrimaryHand = std::nullopt;
         std::optional<bool> _isAnyPressableCloseToOffhand = std::nullopt;
