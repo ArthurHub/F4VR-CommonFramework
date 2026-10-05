@@ -13,10 +13,12 @@ add_executable(${PROJECT_NAME}_tests
   HistogramTests.cpp
   PerfReportTests.cpp
   PerfSiteTests.cpp
+  UIDevLayoutFileTests.cpp
   # the plain-std sources under test
   ${SOURCE_DIR}/perf/FrameContext.cpp
   ${SOURCE_DIR}/perf/Perf.cpp
   ${SOURCE_DIR}/perf/Report.cpp
+  ${SOURCE_DIR}/vrui/UIDevLayoutFile.cpp
 )
 
 # EXCLUDE_FROM_ALL FALSE: built with a mod's own build too, which add_subdirectory(... EXCLUDE_FROM_ALL) would leave it out of.
@@ -26,6 +28,10 @@ set_target_properties(${PROJECT_NAME}_tests PROPERTIES EXCLUDE_FROM_ALL FALSE IN
 
 target_compile_features(${PROJECT_NAME}_tests PRIVATE cxx_std_23)
 target_include_directories(${PROJECT_NAME}_tests PRIVATE ${SOURCE_DIR})
+
+# SimpleIni is one header with no CMake target of its own
+find_path(SIMPLEINI_INCLUDE_DIR "SimpleIni.h" REQUIRED)
+target_include_directories(${PROJECT_NAME}_tests SYSTEM PRIVATE ${SIMPLEINI_INCLUDE_DIR})
 target_compile_options(${PROJECT_NAME}_tests PRIVATE /utf-8 /permissive- /W4 /external:anglebrackets /external:W0)
 target_link_libraries(${PROJECT_NAME}_tests PRIVATE Catch2::Catch2WithMain)
 

@@ -38,6 +38,10 @@ major version is `0`, a minor bump may break the API; the **Upgrading** notes sa
   `onFrameUpdate()`, while the player is loaded, so a mod no longer calls it. A press handler then
   runs after the mod's frame. A mod that needs the UI updated at a certain point of its frame calls
   `g_uiManager->onFrameUpdate()` there, and the framework skips its own call in that frame.
+- **vrui dev layout by a flag**: the dev layout is turned on with `[Debug] bVRUIDevLayout`, with
+  nothing for the mod to call, and keeps its lines in `<mod>_DevLayout.ini` beside the mod's INI, a
+  section for each attached root. The lines of a detached root stay, so what was tuned on a screen
+  is still there after going to another screen and back.
 
 **Upgrading**
 
@@ -53,6 +57,9 @@ major version is `0`, a minor bump may break the API; the **Upgrading** notes sa
 - `UIUtils::triggerInteractionHeptic` takes the hand to buzz: pass `true` for the primary hand.
 - `vrui::UIDebugWidget` is removed. To mark a point in the world use the debug draw overlay
   (`debug::dd().sphere(...)`).
+- `UIManager::enableDevLayoutViaConfig` is removed: delete the call, and add `bVRUIDevLayout = true`
+  to the INI's `[Debug]` section while tuning. `ConfigBase::debugVRUIProperties` is removed with it,
+  and a `[VRUI_DevLayout]` section left in an INI is no longer read.
 
 - `f4vr::PlayerNodes` and `getPlayerNodes()`, deprecated in 0.4.0, are removed. Use
   `getVRPlayerNodes()`, which returns CommonLibF4's `RE::VRPlayerNodes`: the same table with

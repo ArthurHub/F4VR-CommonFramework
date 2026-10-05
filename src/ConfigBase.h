@@ -99,6 +99,14 @@ namespace f4cf
 
         void reload();
 
+        /**
+         * Where the INI file is on disk.
+         */
+        const std::string& getIniFilePath() const
+        {
+            return _iniFilePath;
+        }
+
         void applyIniConfigWithOverride(const char* section, const char* key, const char* value);
 
         RE::NiTransform readIniTransformValue(const char* section, const char* key, const RE::NiTransform& defaultValue) const;
@@ -178,6 +186,9 @@ namespace f4cf
             // f4cf::vrui: mark the fingertip that presses the UI with a small sphere. Without it the sphere
             // is shown only while no hand is drawn at the controller, where the controller presses the UI.
             bool vruiShowFingerTip = false;
+            // f4cf::vrui: the dev layout, which tunes the placement of the attached UI through a file of its
+            // own while the game runs, see vrui::UIDevLayout.
+            bool vruiDevLayout = false;
             // One-shot name lists consumed via checkDebugDumpDataOnceFor() / consumeDebugAddItemsOnce();
             // each is cleared (in memory + INI) once consumed so the file-watch reload doesn't re-trigger it.
             std::string dumpDataOnceNames;
@@ -185,8 +196,6 @@ namespace f4cf
         };
 
         Debug debug;
-
-        std::map<std::string, std::string> debugVRUIProperties;
 
     protected:
         // Override to load your config values
@@ -199,14 +208,12 @@ namespace f4cf
         void loadIniConfig();
         int loadEmbeddedResourceIniConfigVersion() const;
         void loadDebugSection(const CSimpleIniA& ini);
-        void loadVRUISection(const CSimpleIniA& ini);
         void loadIniConfigValues();
         void applyIniConfig(const CSimpleIniA& ini);
 
         // Stamp all active session overrides onto the given INI (in-memory only) before it is applied
         // to the typed members. Called on every load path so overrides survive reloads.
         void applyConfigOverrides(CSimpleIniA& ini) const;
-        void saveVRUIIniSection(CSimpleIniA& ini);
         bool loadIniFromFile(CSimpleIniA& ini) const;
         void saveIniToFile(const CSimpleIniA& ini);
         void saveIniConfig();

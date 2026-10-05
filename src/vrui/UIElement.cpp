@@ -312,14 +312,14 @@ namespace f4cf::vrui
     }
 
     /**
-     * Write the layout properties of the element to the given map.
+     * Add the layout properties of the element to the given lines, as one line.
      * Used for development layout setting to be able to adjust the properties via config files at runtime.
      */
-    void UIElement::writeDevLayoutProperties(const std::string& namePrefix, std::map<std::string, std::string>& propertiesMap) const
+    void UIElement::writeDevLayoutProperties(const std::string& namePrefix, DevLayoutLines& lines) const
     {
         std::string line;
         writeDevLayoutFields(line);
-        propertiesMap[namePrefix + _name] = std::move(line);
+        lines.emplace_back(namePrefix + _name, std::move(line));
     }
 
     /**

@@ -296,16 +296,16 @@ namespace f4cf::vrui
     }
 
     /**
-     * Write the layout properties of the container, then of every child under it, to the given map.
+     * Add the layout properties of the container, then of every child under it, to the given lines.
      * Used for development layout setting to be able to adjust the properties via config files at runtime.
      */
-    void UIContainer::writeDevLayoutProperties(const std::string& namePrefix, std::map<std::string, std::string>& propertiesMap) const
+    void UIContainer::writeDevLayoutProperties(const std::string& namePrefix, DevLayoutLines& lines) const
     {
-        UIElement::writeDevLayoutProperties(namePrefix, propertiesMap);
+        UIElement::writeDevLayoutProperties(namePrefix, lines);
 
         const auto key = namePrefix + _name;
         for (const auto& childElm : _childElements) {
-            childElm->writeDevLayoutProperties(key + ".", propertiesMap);
+            childElm->writeDevLayoutProperties(key + ".", lines);
         }
     }
 

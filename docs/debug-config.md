@@ -23,6 +23,7 @@ in, and it's active.
 | [`fFlowFlag1/2/3`, `sFlowText1/2`](#flow-values)       | Mod-defined scratch values read by mod code                        |
 | [`sSceneDepthStrategy`, `bSceneDepthDiagnostics`](#scene-depth-occlusion) | Overlay-occlusion support switches                |
 | [`bVRUIShowFingerTip`](#bvruishowfingertip)            | Mark the fingertip that presses the VR UI with a small sphere      |
+| [`bVRUIDevLayout`](#bvruidevlayout)                    | Tune the placement of the VR UI in a file while the game runs      |
 | [`iVersion`](#iversion)                                | Internal schema version — don't touch                              |
 
 ---
@@ -333,6 +334,32 @@ Set it to see where the framework finds the fingertip:
 [Debug]
 bVRUIShowFingerTip = true
 ```
+
+## `bVRUIDevLayout`
+
+A development tool for a mod's author: it tunes where the mod's VR UI stands, and how big it is, while
+the game runs. It is off by default and is not in the shipped INI, so add the line:
+
+```ini
+[Debug]
+bVRUIDevLayout = true
+```
+
+While it is on, the mod keeps `<mod>_DevLayout.ini` beside its INI, with a section for each UI that is
+shown and a line for each of its elements:
+
+```ini
+[MainConfig]
+MainConfig = Pos:(0.00,0.00,0.00), Rot:(0.00,0.00,0.00), Scale:(1.60), Padding:(0.35), Layout:(5)
+Row1 = Pos:(0.00,0.00,0.00), Rot:(0.00,0.00,0.00), Scale:(1.00), Padding:(0.30), Layout:(1)
+```
+
+Edit a line and save the file, and the UI in the game follows in a fraction of a second. A UI that is
+closed keeps its lines, so going to another screen and back keeps what you tuned. The file is removed
+when the key is turned off, and starts empty on the next run: copy the values you want into the code.
+
+The fields of a line, and what happens to lines you remove:
+[VR UI README](../src/vrui/README.md#notes).
 
 ## `iVersion`
 
