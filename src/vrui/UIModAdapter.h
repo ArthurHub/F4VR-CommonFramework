@@ -8,12 +8,6 @@ namespace f4cf::vrui
     {
     public:
         /**
-         * Get the world position to be used for all UI interactions.
-         * Like knowing if a button is pressed.
-         */
-        virtual RE::NiPoint3 getInteractionBoneWorldPosition() = 0;
-
-        /**
          * Set the interaction hand to a pointing position for UI interaction where index finger is the interaction bone.
          * @param primaryHand - true - use primary hand, false - use offhand
          * @param toPoint true - force hand to point position, false - release
@@ -30,19 +24,19 @@ namespace f4cf::vrui
             : _adapter(adapter)
         {}
 
-        const std::optional<bool>& isAnyPressableCloseToInteraction() const
+        /**
+         * Whether the finger of the given hand is close to something it can press. Empty if nothing was tested
+         * against that finger in this frame.
+         */
+        const std::optional<bool>& isAnyPressableCloseToInteraction(const bool primaryHand) const
         {
-            return _isAnyPressableCloseToInteraction;
+            return primaryHand ? _isAnyPressableCloseToPrimaryHand : _isAnyPressableCloseToOffhand;
         }
 
-        void markAnyPressableCloseToInteraction(const bool isPressableClose)
+        void markAnyPressableCloseToInteraction(const bool primaryHand, const bool isPressableClose)
         {
-            _isAnyPressableCloseToInteraction = _isAnyPressableCloseToInteraction.value_or(false) || isPressableClose;
-        }
-
-        virtual RE::NiPoint3 getInteractionBoneWorldPosition() override
-        {
-            return _adapter->getInteractionBoneWorldPosition();
+            auto& isClose = primaryHand ? _isAnyPressableCloseToPrimaryHand : _isAnyPressableCloseToOffhand;
+            isClose = isClose.value_or(false) || isPressableClose;
         }
 
         virtual void setInteractionHandPointing(const bool primaryHand, const bool toPoint) override
@@ -53,7 +47,8 @@ namespace f4cf::vrui
     private:
         UIModAdapter* _adapter;
 
-        // Are any of the elements in current frame update close to the interaction bone and can be pressed?
-        std::optional<bool> _isAnyPressableCloseToInteraction = std::nullopt;
+        // Are any of the elements in current frame update close to the hand's interaction bone and can be pressed?
+        std::optional<bool> _isAnyPressableCloseToPrimaryHand = std::nullopt;
+        std::optional<bool> _isAnyPressableCloseToOffhand = std::nullopt;
     };
 }

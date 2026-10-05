@@ -7,6 +7,8 @@
 #include <system_error>
 #include <utility>
 
+#include "UIManager.h"
+
 namespace f4cf::vrui
 {
     UIElement::UIElement(std::string name)
@@ -163,6 +165,18 @@ namespace f4cf::vrui
     }
 
     /**
+     * The fingertip to test this element against for a press: of the two index fingers, the one nearer
+     * to the given place. An element attached to a hand is only pressed by the other hand.
+     * @param worldPosition where the element is in the world
+     * @param keepPrimaryHand the hand whose finger is already pressing the element, to stay with it: true for
+     * the primary hand, false for the offhand, nothing to take the nearer finger
+     */
+    UIInteractionFinger UIElement::getInteractionFingerTip(const RE::NiPoint3& worldPosition, const std::optional<bool> keepPrimaryHand) const
+    {
+        return g_uiManager->getInteractionFingerTip(_attachNode.get(), worldPosition, keepPrimaryHand);
+    }
+
+    /**
      * Call "onPressEventFired" on this element and all elements up the UI tree.
      */
     void UIElement::onPressEventFiredPropagate(UIElement* element, UIFrameUpdateContext* context)
@@ -195,6 +209,11 @@ namespace f4cf::vrui
         propertiesMap[namePrefix + _name] = std::move(line);
     }
 
+    /**
+     * Append this element's dev-layout fields to its line, as ", Name:(values)" after whatever is already
+     * there. An override calls its base first, and adds only what is worth tuning live - layout, not
+     * looks - so the line stays short enough to edit.
+     */
     void UIElement::writeDevLayoutFields(std::string& line) const
     {
         writeDevLayoutPlacementFields(line);

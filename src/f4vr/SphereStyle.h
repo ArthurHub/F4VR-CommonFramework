@@ -8,7 +8,7 @@
 namespace f4cf::f4vr
 {
     /**
-     * How a sphere visual (an activation sphere's zone, a vrui debug marker) looks: the mesh cloned for it, the
+     * How a sphere visual (an activation sphere's zone, the vrui fingertip marker) looks: the mesh cloned for it, the
      * values set at runtime on that mesh's effect shader, and its size. One neutral mesh serves every preset, and neither
      * the mesh nor the texture path inside it names a mod, so any mod ships the same files. Start from a named preset
      * (findSphereStylePreset) and override single values on top.
@@ -61,7 +61,7 @@ namespace f4cf::f4vr
     const SphereStyle& getDefaultSphereStyle();
 
     /**
-     * The style of the vrui debug markers: the "debug" preset.
+     * The style of a debug marker: the "debug" preset.
      */
     const SphereStyle& getDebugSphereStyle();
 

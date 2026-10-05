@@ -231,7 +231,10 @@ namespace f4cf::vrui
         const RE::NiMatrix3 toWorld = world.rotate.Transpose(); // the codebase's local->world convention
         const RE::NiPoint3 forward = toWorld * RE::NiPoint3(0.0f, 1.0f, 0.0f);
 
-        const RE::NiPoint3 finger = context->getInteractionBoneWorldPosition();
+        // a button stays with the finger that is close to it, so a press does not jump to the other hand
+        const auto interaction = getInteractionFingerTip(world.translate, _wasPressableCloseToInteraction ? std::optional(_interactionPrimaryHand) : std::nullopt);
+        const RE::NiPoint3 finger = interaction.position;
+        _interactionPrimaryHand = interaction.primaryHand;
         const RE::NiPoint3 vectorToCurr = world.translate - finger;
         const float distance = common::MatrixUtils::vec3Len(vectorToCurr);
         const float yOnlyDistance = common::MatrixUtils::vec3Dot(forward, vectorToCurr);
@@ -239,7 +242,7 @@ namespace f4cf::vrui
         // near enough for the hand to point; leaving takes further than arriving, so the hand does not
         // flicker between poses at the edge
         _wasPressableCloseToInteraction = _wasPressableCloseToInteraction ? yOnlyDistance > -12.0f && distance < 20.0f : yOnlyDistance > -3.0f && distance < 15.0f;
-        context->markAnyPressableCloseToInteraction(_wasPressableCloseToInteraction);
+        context->markAnyPressableCloseToInteraction(_interactionPrimaryHand, _wasPressableCloseToInteraction);
 
         const float radius = 0.5f * std::hypot(_size.width, _size.height) * world.scale;
         if (!_pressEventFired && distance > radius) {
@@ -278,7 +281,7 @@ namespace f4cf::vrui
     {
         _pressYOffset = 0.0f;
         _pressEventFired = true;
-        UIUtils::triggerInteractionHeptic();
+        UIUtils::triggerInteractionHeptic(_interactionPrimaryHand);
         UIPanel::onPressEventFired(element, context);
         if (_onPressHandler) {
             _onPressHandler(this);

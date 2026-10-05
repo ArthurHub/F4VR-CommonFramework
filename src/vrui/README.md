@@ -26,8 +26,8 @@ An element is drawn one of two ways, and they mix freely in the same layout:
 | [`UIContainer`](UIContainer.h) | `UIElement` | Groups multiple elements under one transform and lays them out (row/column, centered or directional). |
 | [`UIToggleGroupContainer`](UIToggleGroupContainer.h) | `UIContainer` | Radio-button group (mutually exclusive). Works on [`UIToggleable`](UIToggleable.h), so NIF and panel toggles can share one group. |
 | [`UIManager`](UIManager.h) | — | Singleton scene graph: attach/detach, wand/wrist/HMD presets, input dispatch, render. |
-| [`UISkeletonHandler`](UISkeletonHandler.h) | — | What the UI reads from the player's skeleton, with bones found by name and again when the skeleton is replaced. Today the manager's wrist preset: it keeps a root on the inner wrist of the offhand arm every frame. |
-| [`UIModAdapter`](UIModAdapter.h) | — | Interface the mod implements so the UI knows the interaction bone + how to point the hand. |
+| [`UISkeletonHandler`](UISkeletonHandler.h) | — | What the UI reads from the player's skeleton, with bones found by name and again when the skeleton is replaced: the tip of the index finger that presses the UI, and the manager's wrist preset, which keeps a root on the inner wrist of the offhand arm every frame. |
+| [`UIModAdapter`](UIModAdapter.h) | — | Interface the mod implements so the UI can point the hand. |
 
 **NIF widgets** - a mesh per element
 
@@ -57,14 +57,13 @@ An element is drawn one of two ways, and they mix freely in the same layout:
 | [`UIPressable`](UIPressable.h) | The disabled state both kinds of button share, so code can enable/disable any mix of them. |
 | [`UIToggleable`](UIToggleable.h) | The on/off state both kinds of toggle share - what `UIToggleGroupContainer` drives. |
 
-Supporting: [`BindingPrompt`](BindingPrompt.h) (a controller binding as a text span with its icon),
-[`UIElement` helpers in `UIUtils.h`](UIUtils.h), and the [`UIDebugWidget`](UIDebugWidget.h) for
-visualizing interaction points.
+Supporting: [`BindingPrompt`](BindingPrompt.h) (a controller binding as a text span with its icon)
+and the [`UIElement` helpers in `UIUtils.h`](UIUtils.h).
 
 ## How it works
 
-1. The mod provides a `UIModAdapter` — it answers *"where is the finger?"*
-   (`getInteractionBoneWorldPosition`) and *"point the hand for me"* (`setInteractionHandPointing`).
+1. The mod provides a `UIModAdapter` — it answers *"point the hand for me"*
+   (`setInteractionHandPointing`). The framework finds the finger itself.
 2. Build elements (widgets/buttons) and attach them via the global `g_uiManager`, either to an
    explicit `NiNode*` or with a preset (primary wand top/left, offhand wand top/right, offhand wrist,
    HMD bottom).
@@ -82,19 +81,14 @@ parts: a `UIModAdapter`, building the panel, then driving and closing it.
 
 ### 1. Implement a `UIModAdapter`
 
-The adapter tells the UI where the "finger" is and how to make the hand point. The interaction bone
-typically comes from [FRIK](https://github.com/rollingrock/Fallout-4-VR-Body) (full-body IK), which
-exposes finger tracking and posing:
+The adapter tells the UI how to make the hand point, which typically goes through
+[FRIK](https://github.com/rollingrock/Fallout-4-VR-Body) (full-body IK), the mod that poses the
+fingers:
 
 ```cpp
 class MyUIAdapter : public vrui::UIModAdapter
 {
 public:
-    RE::NiPoint3 getInteractionBoneWorldPosition() override
-    {
-        return FRIKApi::inst->getIndexFingerTipPosition(FRIKApi::Hand::Offhand);
-    }
-
     void setInteractionHandPointing(bool primaryHand, bool toPoint) override
     {
         const auto hand = primaryHand ? FRIKApi::Hand::Primary : FRIKApi::Hand::Offhand;
@@ -310,6 +304,14 @@ loading).
   centered or directional) — prefer that over positioning each element manually.
 - Coordinates on `UIElement::setPosition(x, y, z)` are **relative to the parent**: x = right(+)/left(−),
   y = forward(+)/back(−), z = up(+)/down(−).
+- A button is pressed by the tip of an index finger, which [`UISkeletonHandler`](UISkeletonHandler.h)
+  reads from the player's skeleton through `f4vr::Skelly`. Either hand can press: a button is tested
+  against the nearer of the two fingers, and that hand points and gets the haptic. While a finger is
+  close to a button the button stays with it, so a press does not jump to the other hand. A UI
+  attached to a hand is the exception: its own hand's finger is always near it and cannot reach it,
+  so only the other hand presses it. It needs a hand drawn at the controller, as FRIK does: while the
+  hand bone is not at the controller, the controller itself presses the button, and a small gold
+  sphere marks the point. `bVRUIShowFingerTip` in `[Debug]` shows the sphere on the fingertip too.
 - A UI faces the way its attach node faces. To turn it, give the root a rotation relative to that
   node: `root->setRotation(MatrixUtils::getMatrixFromEulerAnglesDegrees(heading, roll, attitude))`,
   angles around x, y and z. The whole tree turns around the root's position, NIF widgets and panels

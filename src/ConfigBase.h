@@ -175,6 +175,9 @@ namespace f4cf
             // whoever is looking at the capture, not to everyone who opens the overlay. The capture
             // reports itself to the log either way.
             bool sceneDepthDiagnostics = false;
+            // f4cf::vrui: mark the fingertip that presses the UI with a small sphere. Without it the sphere
+            // is shown only while no hand is drawn at the controller, where the controller presses the UI.
+            bool vruiShowFingerTip = false;
             // One-shot name lists consumed via checkDebugDumpDataOnceFor() / consumeDebugAddItemsOnce();
             // each is cleared (in memory + INI) once consumed so the file-watch reload doesn't re-trigger it.
             std::string dumpDataOnceNames;

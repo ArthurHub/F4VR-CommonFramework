@@ -16,8 +16,22 @@ major version is `0`, a minor bump may break the API; the **Upgrading** notes sa
   `attachPresetToOffhandWandRight` attach a UI to the offhand controller, as the primary wand's top
   and left presets do for the primary hand. `attachPresetToOffhandWrist` lays a UI on the inner
   wrist and keeps it on the forearm as the arm moves, when an arm is drawn at the controller (FRIK).
+- **vrui finds the finger**: the fingertip that presses a button is read from the player's skeleton,
+  and either hand can press: a UI on a hand is pressed by the other hand, any other UI by the nearer
+  finger, and the hand that presses points and gets the haptic. Without a hand drawn at
+  the controller, the controller presses the button and a small gold sphere marks where.
+  `[Debug] bVRUIShowFingerTip` shows the sphere on the fingertip too. `f4vr::Skelly` maps the
+  skeleton's bones by itself, so its fingertip and bone reads no longer need `initBoneTreeMap`
+  called first, and its fingertip is 2.0 units past the last finger bone, up from 1.8.
 
 **Upgrading**
+
+- `UIModAdapter::getInteractionBoneWorldPosition` is removed: delete the override from the mod's
+  adapter. `setInteractionHandPointing` is now called for either hand, so the adapter has to use its
+  `primaryHand` argument.
+- `UIUtils::triggerInteractionHeptic` takes the hand to buzz: pass `true` for the primary hand.
+- `vrui::UIDebugWidget` is removed. To mark a point in the world use the debug draw overlay
+  (`debug::dd().sphere(...)`).
 
 - `f4vr::PlayerNodes` and `getPlayerNodes()`, deprecated in 0.4.0, are removed. Use
   `getVRPlayerNodes()`, which returns CommonLibF4's `RE::VRPlayerNodes`: the same table with

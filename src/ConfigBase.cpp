@@ -401,6 +401,7 @@ namespace f4cf
         debug.drawHudPlacement = ini.GetValue(INI_SECTION_DEBUG, "sDebugDrawHudPlacement", "center");
         debug.sceneDepthStrategy = ini.GetValue(INI_SECTION_DEBUG, "sSceneDepthStrategy", "auto");
         debug.sceneDepthDiagnostics = ini.GetBoolValue(INI_SECTION_DEBUG, "bSceneDepthDiagnostics", false);
+        debug.vruiShowFingerTip = ini.GetBoolValue(INI_SECTION_DEBUG, "bVRUIShowFingerTip", false);
     }
 
     void ConfigBase::loadVRUISection(const CSimpleIniA& ini)
