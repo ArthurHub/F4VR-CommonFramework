@@ -39,6 +39,8 @@ namespace f4cf::vrui
             readDevLayoutFromConfig();
         }
 
+        _skeletonHandler.onFrameUpdate();
+
         UIFrameUpdateContext context(adapter);
 
         for (const auto& element : _rootElements) {
@@ -111,6 +113,28 @@ namespace f4cf::vrui
     }
 
     /**
+     * Attach the UI on the inner wrist of the offhand arm, lying along the forearm, for the primary hand to press.
+     * It follows the forearm, so the arm never covers it. That needs an arm drawn at the offhand controller, as
+     * FRIK does. Without one the UI sits at a fixed place by the controller.
+     * The offset's position and rotation apply from either place; its scale is not used.
+     * They are given for right-handed mode and mirrored in left-handed mode: the x position, and the turns
+     * around y and z.
+     */
+    void UIManager::attachPresetToOffhandWrist(const std::shared_ptr<UIElement>& element, const RE::NiTransform& offset)
+    {
+        RE::NiMatrix3 rotation = offset.rotate;
+        if (UIUtils::isLeftHandedMode()) {
+            rotation.entry[0][1] = -rotation.entry[0][1];
+            rotation.entry[0][2] = -rotation.entry[0][2];
+            rotation.entry[1][0] = -rotation.entry[1][0];
+            rotation.entry[2][0] = -rotation.entry[2][0];
+        }
+        element->setRotation(rotation);
+        attachPresetToOffhandWandRight(element, offset.translate);
+        _skeletonHandler.addWristElement(element);
+    }
+
+    /**
      * Attach the UI just below the HMD (head mounted display) direct view. Bound to horizontal but not vertical head movement.
      */
     void UIManager::attachPresetToHMDBottom(const std::shared_ptr<UIElement>& element)
@@ -152,6 +176,7 @@ namespace f4cf::vrui
     void UIManager::detachElement(const std::shared_ptr<UIElement>& element, const bool releaseSafe)
     {
         element->detachFromAttachedNode(releaseSafe);
+        _skeletonHandler.removeWristElement(element);
 
         // only the root can exists in the manager collection
         if (element->getParent()) {

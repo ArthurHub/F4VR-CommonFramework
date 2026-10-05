@@ -14,7 +14,8 @@ major version is `0`, a minor bump may break the API; the **Upgrading** notes sa
   longer has to face the way its node faces. The dev layout tunes it live as `Rot`.
 - **vrui on the offhand**: `UIManager::attachPresetToOffhandWandTop` and
   `attachPresetToOffhandWandRight` attach a UI to the offhand controller, as the primary wand's top
-  and left presets do for the primary hand.
+  and left presets do for the primary hand. `attachPresetToOffhandWrist` lays a UI on the inner
+  wrist and keeps it on the forearm as the arm moves, when an arm is drawn at the controller (FRIK).
 
 **Upgrading**
 

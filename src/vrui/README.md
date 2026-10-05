@@ -25,7 +25,8 @@ An element is drawn one of two ways, and they mix freely in the same layout:
 | [`UIElement`](UIElement.h) | — | Base node: position/rotation/scale/visibility/size, parent/child transform, layout + frame-update hooks. Also [`UIPadding`](UIElement.h), the per-side spacing panels take. |
 | [`UIContainer`](UIContainer.h) | `UIElement` | Groups multiple elements under one transform and lays them out (row/column, centered or directional). |
 | [`UIToggleGroupContainer`](UIToggleGroupContainer.h) | `UIContainer` | Radio-button group (mutually exclusive). Works on [`UIToggleable`](UIToggleable.h), so NIF and panel toggles can share one group. |
-| [`UIManager`](UIManager.h) | — | Singleton scene graph: attach/detach, wand/HMD presets, input dispatch, render. |
+| [`UIManager`](UIManager.h) | — | Singleton scene graph: attach/detach, wand/wrist/HMD presets, input dispatch, render. |
+| [`UISkeletonHandler`](UISkeletonHandler.h) | — | What the UI reads from the player's skeleton, with bones found by name and again when the skeleton is replaced. Today the manager's wrist preset: it keeps a root on the inner wrist of the offhand arm every frame. |
 | [`UIModAdapter`](UIModAdapter.h) | — | Interface the mod implements so the UI knows the interaction bone + how to point the hand. |
 
 **NIF widgets** - a mesh per element
@@ -65,7 +66,8 @@ visualizing interaction points.
 1. The mod provides a `UIModAdapter` — it answers *"where is the finger?"*
    (`getInteractionBoneWorldPosition`) and *"point the hand for me"* (`setInteractionHandPointing`).
 2. Build elements (widgets/buttons) and attach them via the global `g_uiManager`, either to an
-   explicit `NiNode*` or with a preset (primary wand top/left, offhand wand top/right, HMD bottom).
+   explicit `NiNode*` or with a preset (primary wand top/left, offhand wand top/right, offhand wrist,
+   HMD bottom).
 3. Call `g_uiManager->onFrameUpdate(adapter)` every frame. The manager tests the interaction bone
    against each pressable widget, fires press callbacks, and updates transforms.
 
@@ -317,6 +319,15 @@ loading).
 - `attachPresetToOffhandWandTop(root, offset)` and `attachPresetToOffhandWandRight(root, offset)` put
   a UI on the offhand controller, for the primary hand to press: the twins of the primary wand's top
   and left presets. Right is the side toward the other hand, and is mirrored in left-handed mode.
+- `attachPresetToOffhandWrist(root, offset)` lays a UI on the inner wrist of the offhand arm, along
+  the forearm, and keeps it there as the elbow moves, so the arm never covers it. Bending the wrist
+  does not move it. It needs an arm drawn at the offhand controller, as FRIK does: while the hand
+  bone is not at the controller, the UI sits at a fixed place by the controller. Power armor and
+  left-handed mode have their own placements. The root stays attached to the controller's node, and
+  [`UISkeletonHandler`](UISkeletonHandler.h) gives it a base transform every frame, so a replaced
+  skeleton (a save load, power armor) needs nothing from the mod. The offset is a transform: its
+  position and rotation are set on the root and apply from that base, as do the dev layout's `Pos`
+  and `Rot`.
 - Detaching mid-frame can be unsafe; `UIManager::detachElement(element, releaseSafe=true)` defers the
   release to the next frame.
 - A dev layout mode tunes placement live through the INI. Calling
