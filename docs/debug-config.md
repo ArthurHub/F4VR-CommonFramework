@@ -22,6 +22,7 @@ in, and it's active.
 | [`sLogPattern`](#slogpattern)                          | Format of each log line                                            |
 | [`fFlowFlag1/2/3`, `sFlowText1/2`](#flow-values)       | Mod-defined scratch values read by mod code                        |
 | [`sSceneDepthStrategy`, `bSceneDepthDiagnostics`](#scene-depth-occlusion) | Overlay-occlusion support switches                |
+| [`bVRUIShowFingerTip`](#bvruishowfingertip)            | Mark the fingertip that presses the VR UI with a small sphere      |
 | [`iVersion`](#iversion)                                | Internal schema version — don't touch                              |
 
 ---
@@ -320,6 +321,18 @@ the default log level — so a log is usually enough and neither key needs touch
 
 Design, measurements and the failure modes they address:
 [`docs/tech/scene-depth-occlusion.md`](tech/scene-depth-occlusion.md).
+
+## `bVRUIShowFingerTip`
+
+While a VR UI is shown, a small gold sphere marks the point that presses its buttons. It is off by default,
+and the sphere then appears only while no hand is drawn at the controller (no FRIK, or the hand is
+away from the controller), where the controller presses the buttons and there is no finger to see.
+Set it to see where the framework finds the fingertip:
+
+```ini
+[Debug]
+bVRUIShowFingerTip = true
+```
 
 ## `iVersion`
 

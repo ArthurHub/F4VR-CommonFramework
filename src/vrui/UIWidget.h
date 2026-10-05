@@ -48,5 +48,8 @@ namespace f4cf::vrui
 
         // To handle pressable close to interaction bone margin to fix twitching because of change from true to false
         bool _wasPressableCloseToInteraction = false;
+
+        // The hand whose finger the widget was last tested against
+        bool _interactionPrimaryHand = false;
     };
 }

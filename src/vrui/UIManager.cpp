@@ -20,6 +20,8 @@ namespace f4cf::vrui
         if (!_releaseSafeList.empty()) {
             _releaseSafeList.clear();
             adapter->setInteractionHandPointing(false, false);
+            _offhandPointing = false;
+            updateHandPointing(adapter, true, std::nullopt);
 
             // remove dev layout properties if used
             if (!config->debugVRUIProperties.empty()) {
@@ -29,6 +31,10 @@ namespace f4cf::vrui
         }
 
         if (_rootElements.empty()) {
+            _skeletonHandler.hideFingerTipMarkers();
+            // nothing is left to test a finger against, so a hand that still points is released
+            updateHandPointing(adapter, true, std::nullopt);
+            updateHandPointing(adapter, false, std::nullopt);
             return;
         }
 
@@ -51,14 +57,28 @@ namespace f4cf::vrui
             element->onFrameUpdate(&context);
         }
 
-        // will need to handle exposing which hand we want to handle here
-        const auto isInteractionClose = context.isAnyPressableCloseToInteraction();
-        if (isInteractionClose.has_value()) {
-            adapter->setInteractionHandPointing(false, isInteractionClose.value());
-        }
+        updateHandPointing(adapter, true, context.isAnyPressableCloseToInteraction(true));
+        updateHandPointing(adapter, false, context.isAnyPressableCloseToInteraction(false));
 
         if (config->checkDebugDumpDataOnceFor("ui_tree")) {
             dumpUITree();
+        }
+    }
+
+    /**
+     * Point the hand while its finger is close to something it can press.
+     * A hand whose finger nothing was tested against in this frame is left alone, unless it was pointed
+     * from here: then it is released.
+     */
+    void UIManager::updateHandPointing(UIModAdapter* adapter, const bool primaryHand, const std::optional<bool>& isPressableClose)
+    {
+        bool& pointing = primaryHand ? _primaryHandPointing : _offhandPointing;
+        if (isPressableClose.has_value()) {
+            adapter->setInteractionHandPointing(primaryHand, isPressableClose.value());
+            pointing = isPressableClose.value();
+        } else if (pointing) {
+            adapter->setInteractionHandPointing(primaryHand, false);
+            pointing = false;
         }
     }
 

@@ -146,8 +146,11 @@ namespace f4cf::vrui
             return;
         }
 
-        const auto finger = context->getInteractionBoneWorldPosition();
         const auto widgetCenter = _node->world.translate;
+        // a widget stays with the finger that is close to it, so a press does not jump to the other hand
+        const auto interaction = getInteractionFingerTip(widgetCenter, _wasPressableCloseToInteraction ? std::optional(_interactionPrimaryHand) : std::nullopt);
+        const auto finger = interaction.position;
+        _interactionPrimaryHand = interaction.primaryHand;
 
         const float distance = MatrixUtils::vec3Len(finger - widgetCenter);
 
@@ -204,14 +207,14 @@ namespace f4cf::vrui
     void UIWidget::updatePressableCloseToInteraction(UIFrameUpdateContext* context, const float distance, const float yOnlyDistance)
     {
         _wasPressableCloseToInteraction = _wasPressableCloseToInteraction ? yOnlyDistance > -12 && distance < 20 : yOnlyDistance > -3 && distance < 15;
-        context->markAnyPressableCloseToInteraction(_wasPressableCloseToInteraction);
+        context->markAnyPressableCloseToInteraction(_interactionPrimaryHand, _wasPressableCloseToInteraction);
     }
 
     void UIWidget::onPressEventFired(UIElement* element, UIFrameUpdateContext* context)
     {
         _pressYOffset = 0;
         _pressEventFired = true;
-        UIUtils::triggerInteractionHeptic();
+        UIUtils::triggerInteractionHeptic(_interactionPrimaryHand);
         UIElement::onPressEventFired(element, context);
     }
 }

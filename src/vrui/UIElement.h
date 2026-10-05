@@ -7,6 +7,7 @@
 
 #include "../common/Quaternion.h"
 #include "UIModAdapter.h"
+#include "UISkeletonHandler.h"
 
 namespace f4cf::vrui
 {
@@ -119,6 +120,8 @@ namespace f4cf::vrui
         {}
 
         void onPressEventFiredPropagate(UIElement* element, UIFrameUpdateContext* context);
+
+        UIInteractionFinger getInteractionFingerTip(const RE::NiPoint3& worldPosition, std::optional<bool> keepPrimaryHand) const;
         virtual void onStateChanged(UIElement* element);
 
         // Attach the UI element to the given game node.
@@ -134,11 +137,6 @@ namespace f4cf::vrui
          */
         using DevLayoutFields = std::map<std::string, std::vector<float>, std::less<>>;
 
-        /**
-         * Append this element's dev-layout fields to its line, as ", Name:(values)" after whatever is already
-         * there. An override calls its base first, and adds only what is worth tuning live - layout, not
-         * looks - so the line stays short enough to edit.
-         */
         virtual void writeDevLayoutFields(std::string& line) const;
 
         /**

@@ -216,5 +216,8 @@ namespace f4cf::vrui
         bool _pressEventFired = false;
         float _pressYOffset = 0.0f;
         bool _wasPressableCloseToInteraction = false;
+
+        // the hand whose finger the button was last tested against
+        bool _interactionPrimaryHand = false;
     };
 }

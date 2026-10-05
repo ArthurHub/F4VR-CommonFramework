@@ -24,6 +24,15 @@ namespace f4cf::vrui
         void enableDevLayoutViaConfig() const;
 
     private:
+        // Used by an element to find the fingertip that presses it, see UIElement::getInteractionFingerTip
+        friend class UIElement;
+
+        UIInteractionFinger getInteractionFingerTip(const RE::NiNode* attachNode, const RE::NiPoint3& worldPosition, const std::optional<bool> keepPrimaryHand)
+        {
+            return _skeletonHandler.getInteractionFingerTip(attachNode, worldPosition, keepPrimaryHand);
+        }
+
+        void updateHandPointing(UIModAdapter* adapter, bool primaryHand, const std::optional<bool>& isPressableClose);
         void readDevLayoutFromConfig() const;
         void dumpUITree() const;
         static void dumpUITreeRecursive(UIElement* element, std::string padding);
@@ -33,8 +42,12 @@ namespace f4cf::vrui
         // used to release child elements in a safe way (on the next frame update)
         std::vector<std::shared_ptr<UIElement>> _releaseSafeList;
 
-        // reads the player's skeleton: places the roots attached with the wrist preset
+        // reads the player's skeleton: the fingertip that presses the UI, and the place of the roots attached with the wrist preset
         UISkeletonHandler _skeletonHandler;
+
+        // the hands pointed from here, to release one whose finger is no longer tested
+        bool _primaryHandPointing = false;
+        bool _offhandPointing = false;
     };
 
     // Not a fan of globals but it may be easiest to refactor code right now
