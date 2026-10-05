@@ -15,6 +15,7 @@ namespace f4cf::vrui
         _transform.translate = RE::NiPoint3(0, 0, 0);
         _transform.rotate = common::MatrixUtils::getIdentityMatrix();
         _transform.scale = 1;
+        _baseTransform = _transform;
     }
 
     std::string UIElement::toString() const
@@ -52,6 +53,11 @@ namespace f4cf::vrui
     const RE::NiMatrix3& UIElement::getRotation() const
     {
         return _transform.rotate;
+    }
+
+    void UIElement::setBaseTransform(const RE::NiTransform& base)
+    {
+        _baseTransform = base;
     }
 
     float UIElement::getScale() const
@@ -142,18 +148,14 @@ namespace f4cf::vrui
     }
 
     /**
-     * calculate the transform of the element with respect to all parents.
+     * calculate the transform of the element with respect to all parents; a root's parent is its base.
      * The element's position is an offset along its parent's axes, so a turned parent carries it around.
      * The parent's scale is not applied to it: layouts already position children in scaled units.
      */
     RE::NiTransform UIElement::calculateTransform() const
     {
-        if (!_parent) {
-            return _transform;
-        }
-
         auto calTransform = _transform;
-        const auto parentTransform = _parent->calculateTransform();
+        const auto parentTransform = _parent ? _parent->calculateTransform() : _baseTransform;
         calTransform.translate = parentTransform.translate + parentTransform.rotate.Transpose() * _transform.translate;
         calTransform.rotate = _transform.rotate * parentTransform.rotate;
         calTransform.scale *= parentTransform.scale;

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "UIContainer.h"
+#include "UISkeletonHandler.h"
 #include "UIUtils.h"
 
 #include <vector>
@@ -18,6 +19,7 @@ namespace f4cf::vrui
         void attachPresetToPrimaryWandLeft(const std::shared_ptr<UIElement>& element, RE::NiPoint3 offset);
         void attachPresetToOffhandWandTop(const std::shared_ptr<UIElement>& element, RE::NiPoint3 offset);
         void attachPresetToOffhandWandRight(const std::shared_ptr<UIElement>& element, RE::NiPoint3 offset);
+        void attachPresetToOffhandWrist(const std::shared_ptr<UIElement>& element, const RE::NiTransform& offset);
         void attachPresetToHMDBottom(const std::shared_ptr<UIElement>& element);
         void enableDevLayoutViaConfig() const;
 
@@ -30,6 +32,9 @@ namespace f4cf::vrui
 
         // used to release child elements in a safe way (on the next frame update)
         std::vector<std::shared_ptr<UIElement>> _releaseSafeList;
+
+        // reads the player's skeleton: places the roots attached with the wrist preset
+        UISkeletonHandler _skeletonHandler;
     };
 
     // Not a fan of globals but it may be easiest to refactor code right now

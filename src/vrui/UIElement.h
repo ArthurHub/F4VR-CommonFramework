@@ -81,6 +81,13 @@ namespace f4cf::vrui
         void setRotation(const RE::NiMatrix3& rotation);
         const RE::NiMatrix3& getRotation() const;
 
+        /**
+         * A transform a root starts from, before its own position and rotation: it moves the root from its
+         * attach node to somewhere else, such as the forearm, and the root is then placed and turned from there.
+         * Set by the framework for a preset that follows something other than the attach node.
+         */
+        void setBaseTransform(const RE::NiTransform& base);
+
         float getScale() const;
         void setScale(const float scale);
 
@@ -153,6 +160,9 @@ namespace f4cf::vrui
 
         UIElement* _parent = nullptr;
         RE::NiTransform _transform;
+
+        // where a root starts from, relative to its attach node; identity unless a preset sets it
+        RE::NiTransform _baseTransform;
         bool _visible = true;
 
         // the width (x) and height (y) of the widget
