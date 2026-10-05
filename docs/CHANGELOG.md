@@ -23,12 +23,23 @@ major version is `0`, a minor bump may break the API; the **Upgrading** notes sa
   `[Debug] bVRUIShowFingerTip` shows the sphere on the fingertip too. `f4vr::Skelly` maps the
   skeleton's bones by itself, so its fingertip and bone reads no longer need `initBoneTreeMap`
   called first, and its fingertip is 2.0 units past the last finger bone, up from 1.8.
+- **vrui points the hand**: the hand whose finger is near a button is pointed through FRIK's API by
+  the framework, under the tag `<mod name>_UI`, so a mod with a vrui UI no longer writes an adapter
+  for it. With FRIK's second API table (FRIK 0.79) the pose is set a little above the default
+  priority, to win over a pose the mod itself holds on that hand.
+- **vrui updates itself**: `ModBase` runs the UI manager's frame update after the mod's
+  `onFrameUpdate()`, while the player is loaded, so a mod no longer calls it. A press handler then
+  runs after the mod's frame. A mod that needs the UI updated at a certain point of its frame calls
+  `g_uiManager->onFrameUpdate()` there, and the framework skips its own call in that frame.
 
 **Upgrading**
 
-- `UIModAdapter::getInteractionBoneWorldPosition` is removed: delete the override from the mod's
-  adapter. `setInteractionHandPointing` is now called for either hand, so the adapter has to use its
-  `primaryHand` argument.
+- `vrui::UIModAdapter` is removed: delete the mod's adapter and its
+  `g_uiManager->onFrameUpdate(&adapter)` call, which the framework now makes. A mod that keeps the
+  call, to have the UI updated at a certain point of its frame, passes no argument.
+  `vrui/UIModAdapter.h` is now `vrui/UIFrameUpdateContext.h`. A mod that poses the hands itself
+  gives `g_uiManager->setHandPointingHandler(...)` a function that points a hand and releases it,
+  in place of the adapter.
 - `UIUtils::triggerInteractionHeptic` takes the hand to buzz: pass `true` for the primary hand.
 - `vrui::UIDebugWidget` is removed. To mark a point in the world use the debug draw overlay
   (`debug::dd().sphere(...)`).

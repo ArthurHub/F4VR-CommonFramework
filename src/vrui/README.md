@@ -27,7 +27,7 @@ An element is drawn one of two ways, and they mix freely in the same layout:
 | [`UIToggleGroupContainer`](UIToggleGroupContainer.h) | `UIContainer` | Radio-button group (mutually exclusive). Works on [`UIToggleable`](UIToggleable.h), so NIF and panel toggles can share one group. |
 | [`UIManager`](UIManager.h) | — | Singleton scene graph: attach/detach, wand/wrist/HMD presets, input dispatch, render. |
 | [`UISkeletonHandler`](UISkeletonHandler.h) | — | What the UI reads from the player's skeleton, with bones found by name and again when the skeleton is replaced: the tip of the index finger that presses the UI, and the manager's wrist preset, which keeps a root on the inner wrist of the offhand arm every frame. |
-| [`UIModAdapter`](UIModAdapter.h) | — | Interface the mod implements so the UI can point the hand. |
+| [`setFRIKHandPointing`](UIHandPointing.h) | — | Points the hand whose finger is near a button, and releases it, through FRIK's API. |
 
 **NIF widgets** - a mesh per element
 
@@ -62,46 +62,23 @@ and the [`UIElement` helpers in `UIUtils.h`](UIUtils.h).
 
 ## How it works
 
-1. The mod provides a `UIModAdapter` — it answers *"point the hand for me"*
-   (`setInteractionHandPointing`). The framework finds the finger itself.
-2. Build elements (widgets/buttons) and attach them via the global `g_uiManager`, either to an
+1. Build elements (widgets/buttons) and attach them via the global `g_uiManager`, either to an
    explicit `NiNode*` or with a preset (primary wand top/left, offhand wand top/right, offhand wrist,
    HMD bottom).
-3. Call `g_uiManager->onFrameUpdate(adapter)` every frame. The manager tests the interaction bone
-   against each pressable widget, fires press callbacks, and updates transforms.
+2. The framework runs `g_uiManager->onFrameUpdate()` every frame, after the mod's own
+   `onFrameUpdate()`. The manager tests the interaction bone against each pressable widget, fires
+   press callbacks, and updates transforms. It finds the finger and points the hand itself.
 
 ## Quick start
 
 A small wand-mounted config panel — a toggle and two buttons in a row — modeled on the
-[Immersive Flashlight](https://github.com/ArthurHub/F4VR-ImmersiveFlashlight) config menu. Three
-parts: a `UIModAdapter`, building the panel, then driving and closing it.
+[Immersive Flashlight](https://github.com/ArthurHub/F4VR-ImmersiveFlashlight) config menu. Two
+parts: building the panel, then reacting to it and closing it.
 
 > `g_uiManager` is created **for you** by the framework before `onGameLoaded()` runs — never call
 > `initUIManager()` yourself. Build your UI in/after `onGameLoaded()`.
 
-### 1. Implement a `UIModAdapter`
-
-The adapter tells the UI how to make the hand point, which typically goes through
-[FRIK](https://github.com/rollingrock/Fallout-4-VR-Body) (full-body IK), the mod that poses the
-fingers:
-
-```cpp
-class MyUIAdapter : public vrui::UIModAdapter
-{
-public:
-    void setInteractionHandPointing(bool primaryHand, bool toPoint) override
-    {
-        const auto hand = primaryHand ? FRIKApi::Hand::Primary : FRIKApi::Hand::Offhand;
-        if (toPoint) {
-            FRIKApi::inst->setHandPoseCustomFingerPositions("MyMod_UI", hand, 0, 1, 0, 0, 0);
-        } else {
-            FRIKApi::inst->clearHandPose("MyMod_UI", hand);
-        }
-    }
-};
-```
-
-### 2. Build a panel
+### 1. Build a panel
 
 Each button/toggle here is a `.nif` mesh; swap in the panel classes below to compose one from text
 and a DDS instead, with no mesh to build. A `UIContainer` lays its children out automatically (rows
@@ -151,14 +128,17 @@ panel counterpart of `UIMultiStateToggleButton`: instead of a NIF per state it t
 `std::map<State, UIButtonPanelContent>` - each state's text lines and image - and a press moves to the
 next state in key order.
 
-### 3. Drive it each frame, then tear it down
+### 2. React each frame, then tear it down
+
+The framework updates the UI by itself, with nothing for the mod to call: after the mod's
+`onFrameUpdate()` returns, while the player is loaded, it hit-tests, fires the handlers and renders.
+So a press handler runs after the mod's frame, and what `onFrameUpdate()` does about it happens in
+the next one. A mod that needs the UI updated at a certain point of its own frame calls
+`vrui::g_uiManager->onFrameUpdate()` there, and the framework leaves that frame to it.
 
 ```cpp
 void MyMod::onFrameUpdate()
 {
-    MyUIAdapter adapter;
-    vrui::g_uiManager->onFrameUpdate(&adapter);   // hit-tests, fires handlers, renders
-
     // per-frame UI logic, e.g. react to current state:
     if (_panel) {
         _statusMsg->setVisibility(_modeTgl->isToggleOn());
@@ -312,6 +292,12 @@ loading).
   so only the other hand presses it. It needs a hand drawn at the controller, as FRIK does: while the
   hand bone is not at the controller, the controller itself presses the button, and a small gold
   sphere marks the point. `bVRUIShowFingerTip` in `[Debug]` shows the sphere on the fingertip too.
+- The hand whose finger is near a button points, its index finger out. The pose is asked from
+  [FRIK](https://github.com/rollingrock/Fallout-4-VR-Body), the mod that draws and poses the hands,
+  through its API ([`UIHandPointing.cpp`](UIHandPointing.cpp)): under the tag `<mod name>_UI`, and
+  a little above FRIK's default priority, so it wins over a pose the mod itself holds on that hand.
+  The mod does nothing for it, and without FRIK nothing is posed. A mod that poses the hands itself
+  takes it over with `g_uiManager->setHandPointingHandler(...)`.
 - A UI faces the way its attach node faces. To turn it, give the root a rotation relative to that
   node: `root->setRotation(MatrixUtils::getMatrixFromEulerAnglesDegrees(heading, roll, attitude))`,
   angles around x, y and z. The whole tree turns around the root's position, NIF widgets and panels

@@ -6,7 +6,7 @@
 #include <vector>
 
 #include "../common/Quaternion.h"
-#include "UIModAdapter.h"
+#include "UIFrameUpdateContext.h"
 #include "UISkeletonHandler.h"
 
 namespace f4cf::vrui

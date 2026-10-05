@@ -4,6 +4,7 @@
 #include "UISkeletonHandler.h"
 #include "UIUtils.h"
 
+#include <functional>
 #include <vector>
 
 namespace f4cf::vrui
@@ -11,7 +12,11 @@ namespace f4cf::vrui
     class UIManager
     {
     public:
-        void onFrameUpdate(UIModAdapter* adapter);
+        using HandPointingHandler = std::function<void(bool primaryHand, bool toPoint)>;
+
+        void onFrameStart();
+        void onFrameUpdate();
+        void setHandPointingHandler(HandPointingHandler handler);
         void attachElement(const std::shared_ptr<UIElement>& element, RE::NiNode* attachNode);
         void detachElement(const std::shared_ptr<UIElement>& element, bool releaseSafe);
 
@@ -32,7 +37,8 @@ namespace f4cf::vrui
             return _skeletonHandler.getInteractionFingerTip(attachNode, worldPosition, keepPrimaryHand);
         }
 
-        void updateHandPointing(UIModAdapter* adapter, bool primaryHand, const std::optional<bool>& isPressableClose);
+        void updateHandPointing(bool primaryHand, const std::optional<bool>& isPressableClose);
+        void setHandPointing(bool primaryHand, bool toPoint) const;
         void readDevLayoutFromConfig() const;
         void dumpUITree() const;
         static void dumpUITreeRecursive(UIElement* element, std::string padding);
@@ -48,6 +54,12 @@ namespace f4cf::vrui
         // the hands pointed from here, to release one whose finger is no longer tested
         bool _primaryHandPointing = false;
         bool _offhandPointing = false;
+
+        // the frame update ran in this frame, so another call in the same frame does nothing
+        bool _frameUpdated = false;
+
+        // points a hand and releases it in place of the framework's own way, which goes through FRIK's API
+        HandPointingHandler _handPointingHandler;
     };
 
     // Not a fan of globals but it may be easiest to refactor code right now

@@ -94,7 +94,7 @@ namespace f4cf::vrui
     /**
      * Handle widget visibility, location, and press handling.
      */
-    void UIWidget::onFrameUpdate(UIFrameUpdateContext* adapter)
+    void UIWidget::onFrameUpdate(UIFrameUpdateContext* context)
     {
         if (!_attachNode) {
             return;
@@ -109,7 +109,7 @@ namespace f4cf::vrui
             return;
         }
 
-        handlePressEvent(adapter);
+        handlePressEvent(context);
 
         _node->local = calculateTransform();
 

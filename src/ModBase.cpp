@@ -235,7 +235,19 @@ namespace f4cf
             // consumes it; a single relaxed load when nothing is queued
             devbench::internal::onFrameStart();
 
+            // the VR UI's frame update runs once in a frame, and from here it can run again
+            if (vrui::g_uiManager) {
+                vrui::g_uiManager->onFrameStart();
+            }
+
             onFrameUpdate();
+
+            // the VR UI's frame update, which does nothing if the mod ran it at a point of its own in its update; after
+            // the mod's update so a UI it attached is laid out and drawn in this frame, and before the panels are
+            // published below
+            if (vrui::g_uiManager) {
+                vrui::g_uiManager->onFrameUpdate();
+            }
 
             // this frame's devbench state snapshot, after every exit path of the mod's update; a single relaxed load
             // (two in a Tracy build) until the mod's devbench tool is armed
