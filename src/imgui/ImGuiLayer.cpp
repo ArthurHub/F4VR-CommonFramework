@@ -10,6 +10,7 @@
 #include "../f4vr/PlayerNodes.h"
 #include "../render/RenderUtils.h"
 #include "ImGuiFonts.h"
+#include "ImGuiPointer.h"
 #include "ImGuiRenderer.h"
 #include "ImGuiSettings.h"
 
@@ -240,6 +241,7 @@ namespace f4cf::imgui::internal
     void unregisterCanvas(Canvas* canvas)
     {
         std::erase(canvases(), canvas);
+        pointer().onCanvasRemoved(canvas);
     }
 
     void onFrameEnd()
@@ -252,6 +254,7 @@ namespace f4cf::imgui::internal
             }
         }
         if (active.empty()) {
+            pointer().clearState();
             renderer::publish({});
             return;
         }
@@ -275,6 +278,7 @@ namespace f4cf::imgui::internal
             int x;
             int y;
             CanvasPlacement placement;
+            CanvasQuad quad;
         };
 
         std::vector<PackedCanvas> packed;
@@ -290,19 +294,43 @@ namespace f4cf::imgui::internal
                 logger::sample(5000, "Canvas '{}' does not fit the {}x{} atlas; skipped", canvas->name(), ATLAS_WIDTH, ATLAS_HEIGHT);
                 continue;
             }
-            packed.push_back(PackedCanvas{ .canvas = canvas, .x = x, .y = y, .placement = placement });
+            packed.push_back(PackedCanvas{ .canvas = canvas,
+                .x = x,
+                .y = y,
+                .placement = placement,
+                .quad = buildQuad(placement, x, y, canvas->pixelWidth(), canvas->pixelHeight(), viewer, canvas->isOccluded()) });
         }
         if (packed.empty()) {
+            pointer().clearState();
             renderer::publish({});
             return;
+        }
+
+        // The pointer can be on the interactive canvases that are shown. With none the vector stays empty,
+        // which allocates nothing, and nothing is read from the game for the pointer.
+        std::vector<PointerTarget> pointerTargets;
+        for (const auto& entry : packed) {
+            if (entry.canvas->isInteractive() && entry.placement.show) {
+                pointerTargets.push_back(PointerTarget{ .canvas = entry.canvas,
+                    .topLeft = entry.quad.topLeft,
+                    .topRight = entry.quad.topRight,
+                    .bottomLeft = entry.quad.bottomLeft,
+                    .displayX = static_cast<float>(entry.x),
+                    .displayY = static_cast<float>(entry.y) });
+            }
         }
 
         auto& io = ImGui::GetIO();
         io.DisplaySize = ImVec2(static_cast<float>(ATLAS_WIDTH), static_cast<float>(ATLAS_HEIGHT));
         io.DeltaTime = frameDeltaSeconds();
 
+        // before the frame begins, so its widgets see where the pointer is now
+        pointer().update(pointerTargets);
+
         ImGui_ImplDX11_NewFrame();
         ImGui::NewFrame();
+        pointer().setWanted(io.WantCaptureMouse);
+
         // no scrollbar: the content child can be given more room than the window, and a scrollbar is what
         // ImGui would otherwise answer that with
         constexpr ImGuiWindowFlags CANVAS_FLAGS = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse |
@@ -419,7 +447,7 @@ namespace f4cf::imgui::internal
             if (!entry.placement.show) {
                 continue; // laid out to be measured, not to be seen
             }
-            frame.quads.push_back(buildQuad(entry.placement, entry.x, entry.y, entry.canvas->pixelWidth(), entry.canvas->pixelHeight(), viewer, entry.canvas->isOccluded()));
+            frame.quads.push_back(entry.quad);
         }
 
         // Occluded quads first, so each group is one contiguous run the renderer can draw with one

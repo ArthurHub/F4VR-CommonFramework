@@ -7,6 +7,7 @@
 #include <utility>
 
 #include "../common/MatrixUtils.h"
+#include "ImGuiPointer.h"
 
 namespace f4cf::imgui
 {
@@ -220,6 +221,24 @@ namespace f4cf::imgui
     void UIImGuiPanel::setOccluded(const bool occluded)
     {
         _canvas->setOccluded(occluded);
+    }
+
+    /**
+     * Whether the panel's widgets can be operated: hovered, pressed and dragged with the ray of a wand and
+     * its trigger. Off by default, and the panel then only shows its content. See Canvas::setInteractive.
+     */
+    void UIImGuiPanel::setInteractive(const bool interactive)
+    {
+        _canvas->setInteractive(interactive);
+    }
+
+    /**
+     * Whether the pointer is on this panel in the ImGui frame that was built last. imgui::pointer().state()
+     * has the rest: where on the panel, which hand, and whether its trigger is down.
+     */
+    bool UIImGuiPanel::isPointedAt() const
+    {
+        return pointer().state().canvas == _canvas.get();
     }
 
     void UIImGuiPanel::setStyle(const vrui::UIPanelStyle& style)

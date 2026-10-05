@@ -27,7 +27,7 @@ This creates a VS solution in `build/`. Open and build there. All project config
 - `F4CF_BUILD_TESTS` — build the unit tests in `tests/` (default: ON when the framework is the top-level project, OFF under a mod's `add_subdirectory`). A mod turns it on to build and run them with its own; it then needs `catch2` in its own `vcpkg.json`.
 - `COMMON_LIB_F4VR_PATH` — override path to CommonLibF4VR (default: `external/CommonLibF4VR`)
 
-**Tests:** `ctest --test-dir build -C Release` after a build. Catch2 unit tests in `tests/` for the game-independent logic (today `f4cf::perf`). The test binary compiles the plain-std `.cpp` files it covers directly, without the PCH, so only code free of F4SE and CommonLibF4 can be tested; keep pure logic in such files so it can be. Add a new test file and any source it covers to `tests/CMakeLists.txt`.
+**Tests:** `ctest --test-dir build -C Release` after a build. Catch2 unit tests in `tests/` for the game-independent logic (today `f4cf::perf`, the vrui dev layout file and the imgui pointer logic). The test binary compiles the plain-std `.cpp` files it covers directly, without the PCH, so only code free of F4SE and CommonLibF4 can be tested; keep pure logic in such files so it can be. Add a new test file and any source it covers to `tests/CMakeLists.txt`.
 
 ## Code Style
 
@@ -155,8 +155,10 @@ and composited as one quad, so N canvases cost one ImGui frame and one draw call
 
 - Content and placement callbacks run on the **game thread**; the draw data is cloned across to the
   render thread, since ImGui recycles its own buffers on the next `NewFrame`.
-- **Not interactive** — vrui's finger-collision press handling does not reach ImGui widgets. Put the
-  buttons beside the panel, in vrui.
+- **Display only until `setInteractive(true)`** — then a wand's ray is ImGui's mouse on the canvas and
+  its trigger the left button (`imgui::pointer()` in `ImGuiPointer.h`: `state`, `setHands`,
+  `setOffset`). One hand owns the pointer at a time. vrui's finger-collision press handling
+  does not reach ImGui widgets: buttons to press by touch go beside the panel, in vrui.
 - Content can only be measured by drawing it, which happens after vrui lays the frame out, so a panel
   sized to its content is laid out at **last frame's** size.
 - `setFontSizePixels` / `setSupersample` are process-wide and read when the first canvas draws.

@@ -52,6 +52,17 @@ namespace f4cf::imgui
         _occluded = occluded;
     }
 
+    /**
+     * Whether the canvas takes the pointer. Off by default: the canvas then only shows its content.
+     * With it on, the ray of a wand moves ImGui's mouse over the canvas and the wand's trigger is the mouse
+     * button, so its widgets are hovered, pressed and dragged as ImGui does it. imgui::pointer() says what the
+     * pointer does, and sets which hand points and from where.
+     */
+    void Canvas::setInteractive(const bool interactive)
+    {
+        _interactive = interactive;
+    }
+
     void Canvas::setTextColor(const render::Color& color)
     {
         _textColor = color;

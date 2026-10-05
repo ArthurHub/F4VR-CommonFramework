@@ -20,6 +20,8 @@ and a `vrui::UITextPanel` standing side by side read as one UI.
 | ----------------------- | -------------------------------------------------------------------- |
 | [`ImGuiCanvas.h`](ImGuiCanvas.h) / [`.cpp`](ImGuiCanvas.cpp) | `Canvas` — one ImGui window placed in the world by a provider you write. Content, placement, chrome (background, border, rounding, padding), sizing and occlusion. |
 | [`UIImGuiPanel.h`](UIImGuiPanel.h) / [`.cpp`](UIImGuiPanel.cpp) | The vrui adapter: a `UIElement` whose rectangle a `Canvas` fills. Takes `vrui::UIPanelStyle` and the vrui sizing modes, in vrui units. |
+| [`ImGuiPointer.h`](ImGuiPointer.h) / [`.cpp`](ImGuiPointer.cpp) | `Pointer`, reached as `imgui::pointer()` — the one pointer of the interactive canvases: a wand's ray as ImGui's mouse, its trigger as the mouse button. Its state, which hands point, and where the ray is. |
+| [`ImGuiPointerLogic.h`](ImGuiPointerLogic.h) | The pointer's logic apart from the game, so it is unit tested: where a ray meets a quad, and which hand owns the pointer. |
 | [`ImGuiSettings.h`](ImGuiSettings.h) / [`.cpp`](ImGuiSettings.cpp) | The two process-wide knobs: `setFontSizePixels` and `setSupersample`. |
 | [`ImGuiFonts.h`](ImGuiFonts.h) / [`.cpp`](ImGuiFonts.cpp) | Loads the framework's text font into the ImGui atlas, from the same bytes the primitive renderer draws with. |
 | [`ImGuiLayer.h`](ImGuiLayer.h) / [`.cpp`](ImGuiLayer.cpp) | Game-thread pump: one ImGui frame holding every visible canvas, cloned and published with each canvas's quad. |
@@ -57,8 +59,9 @@ Three things set it apart from its neighbours:
 
 - It draws through the overlay path rather than the scene graph, so what hides it is the depth test
   (`setOccluded`), not the scene's own draw order.
-- **It is not interactive.** vrui's finger-collision press handling does not apply — the content is
-  pixels, not widgets. Put the buttons beside it, in vrui.
+- **It is not pressed by a finger.** vrui's finger-collision press handling does not apply — the
+  content is pixels, not widgets. It is operated from a distance instead, with a wand's ray: see
+  [Interactive canvases](#interactive-canvases). Buttons to press by touch go beside it, in vrui.
 - It is **not** a `vrui::UIPanel`, whatever the name suggests: it takes the same `vrui::UIPanelStyle`
   and sizing modes, but ImGui draws its chrome and lays out its content.
 
@@ -97,6 +100,46 @@ drawn, and does not run its content callback.
 `setPixelSize` is cheap and safe at any time (the atlas is repacked every frame), so a canvas that
 grows or shrinks in the world can hold its pixel density instead of being stretched.
 
+## Interactive canvases
+
+A canvas only shows its content until it is made interactive. Then a wand's ray is its pointer: where
+the ray meets the canvas is ImGui's mouse position, and the wand's trigger is the left mouse button.
+ImGui does the rest, so the content is written as for a screen.
+
+```cpp
+panel->setInteractive(true);            // Canvas::setInteractive for a canvas placed by hand
+panel->setContent([this] {
+    if (ImGui::Button("Reset")) {
+        reset();
+    }
+    ImGui::SliderFloat("FOV", &_fov, 10.0f, 120.0f);
+});
+```
+
+- **Which hand points.** ImGui has one pointer, so one hand owns it at a time. A hand whose ray is
+  alone on an interactive canvas owns it. With both rays on a canvas it is the hand that pressed its
+  trigger on a canvas last, and the primary hand before either has. The owner keeps the pointer while
+  it holds its trigger down, so a press of the other hand does not take a drag over.
+  `imgui::pointer().setHands` limits pointing to one hand.
+- **Where the ray is.** It is placed from the wand's UI node (`primaryUIAttachNode`,
+  `secondaryUIOffsetNode`), whose +Y is the way the hand aims a weapon: the node a weapon hangs on is
+  turned the same, and the wand's own node points 59 degrees above that. By default the ray starts a
+  little in front of the wand and points 18 degrees above that aim and 5 degrees inward, which is
+  where the hand points. `imgui::pointer().setOffset` replaces the default: the ray starts at the
+  offset's position and runs along its +Y. The offset is given for the right hand and mirrored for
+  the left.
+- **What it meets.** The ray meets a canvas only from its front, and the nearest interactive canvas
+  takes it. It passes through the canvases that are not interactive, and through the world.
+- **What the pointer does.** `imgui::pointer().state()` has the canvas the pointer is on, where on it
+  in the canvas's pixels, the hand, whether its trigger is down, the ray in the world, and whether
+  ImGui uses the pointer (`io.WantCaptureMouse`). `UIImGuiPanel::isPointedAt()` says whether it is on
+  that panel. The state is updated when the ImGui frame is built, after the mod's frame update: a
+  content callback reads this frame's, and `onFrameUpdate` the one before.
+- **What it costs.** A canvas that is not interactive costs nothing more. While no interactive canvas
+  is shown, nothing is read from the game for the pointer.
+
+Not there yet: the ray is not drawn, the trigger still reaches the game, and nothing scrolls.
+
 ## Sizes, pixels and legibility
 
 Three separate things, deliberately:
@@ -130,10 +173,13 @@ a warning.
 game thread (frame end)                         render thread (Submit hook)
 ──────────────────────────────────              ─────────────────────────────────
 imgui::internal::onFrameEnd()                   draw callback (DRAW_ORDER_PANELS)
-  ├─ one ImGui frame, every visible canvas        ├─ rasterize the frame into the atlas
-  │    as its own window packed into the atlas    ├─ group quads by occluded / on-top
-  ├─ measure each canvas's content                └─ composite each canvas's atlas slice
-  ├─ resolve placements → world quads                  as a world quad, back to front
+  ├─ resolve placements → world quads             ├─ rasterize the frame into the atlas
+  ├─ the pointer: a wand's ray on the quads       ├─ group quads by occluded / on-top
+  │    of the interactive canvases → ImGui's      └─ composite each canvas's atlas slice
+  │    mouse                                           as a world quad, back to front
+  ├─ one ImGui frame, every visible canvas
+  │    as its own window packed into the atlas
+  ├─ measure each canvas's content
   └─ clone the draw data + publish  ────────────►
 ```
 
