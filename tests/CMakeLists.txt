@@ -11,6 +11,7 @@ endif()
 add_executable(${PROJECT_NAME}_tests
   FrameContextTests.cpp
   HistogramTests.cpp
+  ImGuiPointerLogicTests.cpp
   PerfReportTests.cpp
   PerfSiteTests.cpp
   UIDevLayoutFileTests.cpp

@@ -54,10 +54,11 @@ namespace f4cf::imgui
      *
      * Three things set it apart from its neighbours. It draws through the framework's overlay path
      * rather than the scene graph, so what hides it is the depth test described at setOccluded, not
-     * the scene's own draw order. It is not interactive: vrui's finger-collision press handling
-     * does not apply, since the content is pixels rather than widgets (see the interactivity work in
-     * the design docs). And it is not a vrui::UIPanel, whatever the name suggests: it takes the same
-     * vrui::UIPanelStyle and sizing modes, but ImGui draws its chrome and lays out its content.
+     * the scene's own draw order. It is not pressed by a finger: vrui's finger-collision press handling
+     * does not apply, since the content is pixels rather than widgets. With setInteractive it is
+     * operated from a distance instead, with the ray of a wand and its trigger. And it is not a
+     * vrui::UIPanel, whatever the name suggests: it takes the same vrui::UIPanelStyle and sizing modes,
+     * but ImGui draws its chrome and lays out its content.
      *
      * Lives under imgui/ rather than vrui/ because it is the adapter BETWEEN the two: building it
      * with vrui would make every vrui consumer depend on Dear ImGui, and it has to disappear along
@@ -129,6 +130,10 @@ namespace f4cf::imgui
          * readable whatever is in front of it. See imgui::Canvas::setOccluded.
          */
         void setOccluded(bool occluded);
+
+        void setInteractive(bool interactive);
+
+        bool isPointedAt() const;
 
         /**
          * The whole look in one go - content colour, background, border, rounding and padding; see

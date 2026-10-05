@@ -107,6 +107,9 @@ namespace f4cf::imgui
      * By default the world hides the parts of a canvas that geometry is in front of - see
      * setOccluded. Canvases never write depth, so they do not hide each other: overlapping ones are
      * drawn back to front by distance to the viewer.
+     *
+     * A canvas only shows its content until setInteractive is called. Then the ray of a wand is its
+     * pointer, and its widgets are hovered, pressed and dragged with it - see ImGuiPointer.h.
      */
     class Canvas
     {
@@ -148,6 +151,13 @@ namespace f4cf::imgui
         bool isOccluded() const
         {
             return _occluded;
+        }
+
+        void setInteractive(bool interactive);
+
+        bool isInteractive() const
+        {
+            return _interactive;
         }
 
         /**
@@ -279,6 +289,9 @@ namespace f4cf::imgui
         int _pixelHeight;
         bool _visible = true;
         bool _occluded = true;
+
+        // takes the pointer, so its widgets can be hovered, pressed and dragged
+        bool _interactive = false;
         render::Color _textColor = render::colors::White;
 
         // alpha 0 is what "no background" means; ImGui skips a fully transparent fill outright

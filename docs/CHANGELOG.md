@@ -42,6 +42,13 @@ major version is `0`, a minor bump may break the API; the **Upgrading** notes sa
   nothing for the mod to call, and keeps its lines in `<mod>_DevLayout.ini` beside the mod's INI, a
   section for each attached root. The lines of a detached root stay, so what was tuned on a screen
   is still there after going to another screen and back.
+- **imgui pointer**: an ImGui canvas can be operated. `Canvas::setInteractive` and
+  `UIImGuiPanel::setInteractive` make a wand's ray the pointer of the canvas and its trigger the
+  mouse button, so buttons, checkboxes, sliders and lists work as ImGui does them. One hand owns the
+  pointer at a time: the one that pressed last, and the primary hand before either has.
+  `imgui::pointer()` is that pointer: `state()` says what it does, `setHands` limits pointing to one
+  hand, and `setOffset` sets where the ray is on the wand. The ray is not drawn yet, and the trigger
+  still reaches the game.
 
 **Upgrading**
 
