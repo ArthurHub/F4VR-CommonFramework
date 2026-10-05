@@ -224,8 +224,6 @@ namespace f4cf::config
 
 namespace f4cf
 {
-    constexpr auto INI_SECTION_VRUI = "VRUI_DevLayout";
-
     /**
      * Load the config from the INI file.
      */
@@ -269,7 +267,6 @@ namespace f4cf
         }
 
         loadDebugSection(ini);
-        loadVRUISection(ini);
         loadIniConfigInternal(ini);
     }
 
@@ -402,16 +399,7 @@ namespace f4cf
         debug.sceneDepthStrategy = ini.GetValue(INI_SECTION_DEBUG, "sSceneDepthStrategy", "auto");
         debug.sceneDepthDiagnostics = ini.GetBoolValue(INI_SECTION_DEBUG, "bSceneDepthDiagnostics", false);
         debug.vruiShowFingerTip = ini.GetBoolValue(INI_SECTION_DEBUG, "bVRUIShowFingerTip", false);
-    }
-
-    void ConfigBase::loadVRUISection(const CSimpleIniA& ini)
-    {
-        const auto& vruiSection = ini.GetSection(INI_SECTION_VRUI);
-        if (vruiSection && !vruiSection->empty()) {
-            for (const auto& [entry, value] : *vruiSection) {
-                debugVRUIProperties[entry.pItem] = value;
-            }
-        }
+        debug.vruiDevLayout = ini.GetBoolValue(INI_SECTION_DEBUG, "bVRUIDevLayout", false);
     }
 
     /**
@@ -432,7 +420,7 @@ namespace f4cf
     }
 
     /**
-     * Apply an already-loaded INI to all in-memory config members (debug section, logger, VRUI, and
+     * Apply an already-loaded INI to all in-memory config members (debug section, logger, and
      * the inherited mod values). Shared by loadIniConfigValues and applyIniConfigWithOverride so both
      * the on-disk reload and the in-memory live override run the exact same propagation path.
      */
@@ -442,8 +430,6 @@ namespace f4cf
 
         // set log after loading from config
         logger::setLogLevelAndPattern(_logLevel, _logPattern);
-
-        loadVRUISection(ini);
 
         // let inherited class load all its values
         loadIniConfigInternal(ini);
@@ -587,20 +573,6 @@ namespace f4cf
     }
 
     /**
-     * Save or clear the VRUI dev layout section in the INI file depending on if we have VRUI properties.
-     */
-    void ConfigBase::saveVRUIIniSection(CSimpleIniA& ini)
-    {
-        if (debugVRUIProperties.empty()) {
-            ini.Delete(INI_SECTION_VRUI, nullptr);
-        } else {
-            for (const auto& [entry, value] : debugVRUIProperties) {
-                ini.SetValue(INI_SECTION_VRUI, entry.c_str(), value.c_str());
-            }
-        }
-    }
-
-    /**
      * Save the config values into the INI config file.
      * Load the file first to never lose existing values.
      */
@@ -613,9 +585,6 @@ namespace f4cf
 
         // let inherited class save all its values
         saveIniConfigInternal(ini);
-
-        // handle VRUI section by either clearing it or writing all values
-        saveVRUIIniSection(ini);
 
         saveIniToFile(ini);
     }

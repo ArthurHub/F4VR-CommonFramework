@@ -1,6 +1,7 @@
 #pragma once
 
 #include "UIContainer.h"
+#include "UIDevLayout.h"
 #include "UISkeletonHandler.h"
 #include "UIUtils.h"
 
@@ -26,7 +27,6 @@ namespace f4cf::vrui
         void attachPresetToOffhandWandRight(const std::shared_ptr<UIElement>& element, RE::NiPoint3 offset);
         void attachPresetToOffhandWrist(const std::shared_ptr<UIElement>& element, const RE::NiTransform& offset);
         void attachPresetToHMDBottom(const std::shared_ptr<UIElement>& element);
-        void enableDevLayoutViaConfig() const;
 
     private:
         // Used by an element to find the fingertip that presses it, see UIElement::getInteractionFingerTip,
@@ -45,7 +45,6 @@ namespace f4cf::vrui
 
         void updateHandPointing(bool primaryHand, const std::optional<UIFingerProximity>& fingerProximity);
         void setHandPointing(bool primaryHand, bool toPoint) const;
-        void readDevLayoutFromConfig() const;
         void dumpUITree() const;
         static void dumpUITreeRecursive(UIElement* element, std::string padding);
 
@@ -56,6 +55,9 @@ namespace f4cf::vrui
 
         // reads the player's skeleton: the fingertip that presses the UI, and the place of the roots attached with the wrist preset
         UISkeletonHandler _skeletonHandler;
+
+        // tunes the placement of the attached roots through a file, while the config's debug flag is on
+        UIDevLayout _devLayout;
 
         // the hands pointed from here, to release one whose finger is no longer tested
         bool _primaryHandPointing = false;

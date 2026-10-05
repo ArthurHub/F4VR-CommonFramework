@@ -3,6 +3,7 @@
 #include <map>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include "../common/Quaternion.h"
@@ -144,7 +145,13 @@ namespace f4cf::vrui
         virtual void attachToNode(RE::NiNode* attachNode);
         virtual void detachFromAttachedNode(bool releaseSafe);
 
-        virtual void writeDevLayoutProperties(const std::string& namePrefix, std::map<std::string, std::string>& propertiesMap) const;
+        /**
+         * The dev-layout lines of a tree, in the order of the tree: for each element its path, which is the
+         * names from the root down to it joined by dots, and its fields.
+         */
+        using DevLayoutLines = std::vector<std::pair<std::string, std::string>>;
+
+        virtual void writeDevLayoutProperties(const std::string& namePrefix, DevLayoutLines& lines) const;
         virtual void readDevLayoutProperties(const std::string& namePrefix, const std::map<std::string, std::string>& propertiesMap);
 
         /**
@@ -188,5 +195,8 @@ namespace f4cf::vrui
         // Used to allow hiding attachToNode, detachFromAttachedNode from public API
         friend class UIManager;
         friend class UIContainer;
+
+        // Writes the dev-layout lines of the attached trees and reads them back
+        friend class UIDevLayout;
     };
 }

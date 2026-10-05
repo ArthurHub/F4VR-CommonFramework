@@ -334,12 +334,28 @@ loading).
   and `Rot`.
 - Detaching mid-frame can be unsafe; `UIManager::detachElement(element, releaseSafe=true)` defers the
   release to the next frame.
-- A dev layout mode tunes placement live through the INI. Calling
-  `UIManager::enableDevLayoutViaConfig()` writes the attached tree out to the config's
-  `[VRUI_DevLayout]` section and saves it. While that section has anything in it, the manager
-  re-applies it to the tree every frame, so editing a line and saving the INI reaches the running
-  game on the next one; emptying the section turns the mode off. Each element's line holds
-  `Pos`, `Rot` (degrees around x, y and z), `Scale` and `Size`; a container's holds `Padding` and
-  `Layout` in place of `Size`, panels add `Pad:(t,r,b,l)` (and `MaxW` while their width follows the
-  content), and text and button panels add their text sizes as `Text`. Delete a field from a line
-  and it is simply no longer applied.
+- A dev layout mode tunes placement live through a file of its own, with nothing for the mod to
+  call. It is on while `bVRUIDevLayout` in the config's `[Debug]` section is true; the key is not in
+  the shipped INI, so add the line. [`UIDevLayout`](UIDevLayout.h) then keeps
+  `<mod>_DevLayout.ini`, beside the mod's INI:
+  - Every attached root is a section named after it, with a line for the root, keyed by its name,
+    and one for each element under it, keyed by its path below the root (`Row1.SaveButton`). So the
+    roots of a mod need different names.
+  - The lines are applied to the attached elements on every frame, so editing a line and saving the
+    file reaches the running game in a fraction of a second, and a line wins over a value the code
+    sets every frame.
+  - The lines of a detached root stay, and apply again when a root of that name is attached. Going
+    from one screen to another and back keeps what was tuned on each, also when a screen is built
+    again from code.
+  - A line an attached element is missing is added with the element's current values: a new screen
+    gets its section at the end of the file, in the order of its tree, and a line added to a
+    section that is already there goes to the section's end. A removed line, section or file comes
+    back the same way. To get the code's values back, remove a section while its root is detached.
+  - Comments written by hand stay, each with the line or section below it.
+  - The file starts empty when the mode is turned on, so the lines of an earlier run are never
+    applied, and it is removed when the mode is turned off.
+
+  Each element's line holds `Pos`, `Rot` (degrees around x, y and z), `Scale` and `Size`; a
+  container's holds `Padding` and `Layout` in place of `Size`, panels add `Pad:(t,r,b,l)` (and
+  `MaxW` while their width follows the content), and text and button panels add their text sizes
+  as `Text`. Delete a field from a line and it is simply no longer applied.
