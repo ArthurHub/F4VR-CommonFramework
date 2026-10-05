@@ -49,7 +49,7 @@ namespace f4cf::vrui
         if (_disabled) {
             // snap back any in-progress soft-press so a half-pressed button doesn't stay pushed in
             _pressYOffset = 0;
-            _pressEventFired = false;
+            _pressArmed = false;
 
             // lazily create the overlay on first disable, attaching it now if already attached to a node
             if (!_disabledOverlayNode) {
@@ -103,6 +103,9 @@ namespace f4cf::vrui
         const auto visible = calcVisibility();
         UIUtils::setNodeVisibility(_node.get(), visible, getScale());
         if (!visible) {
+            _pressYOffset = 0;
+            _pressArmed = false;
+            _finger = {};
             if (_disabledOverlayNode) {
                 UIUtils::setNodeVisibility(_disabledOverlayNode.get(), false, getScale());
             }
@@ -139,38 +142,33 @@ namespace f4cf::vrui
      * Handle pressing even on the UI.
      * Detect if interaction bone is close to the widget node and fire press event ONCE when it is.
      * Only allow firing of the press event again when interaction bone move away enough from the widget.
+     * Only a finger that interacts with the widget pushes it, see UIElement::updateFinger, and only from in
+     * front of it: a finger that went in beside the widget does not push it as it comes up under it.
      */
     void UIWidget::handlePressEvent(UIFrameUpdateContext* context)
     {
         if (_disabled || !isPressable()) {
+            _finger = {};
             return;
         }
 
         const auto widgetCenter = _node->world.translate;
-        // a widget stays with the finger that is close to it, so a press does not jump to the other hand
-        const auto interaction = getInteractionFingerTip(widgetCenter, _wasPressableCloseToInteraction ? std::optional(_interactionPrimaryHand) : std::nullopt);
-        const auto finger = interaction.position;
-        _interactionPrimaryHand = interaction.primaryHand;
-
-        const float distance = MatrixUtils::vec3Len(finger - widgetCenter);
-
-        // calculate the distance only in the y-axis
         const RE::NiPoint3 forward = _node->world.rotate.Transpose() * (RE::NiPoint3(0, 1, 0));
-        const RE::NiPoint3 vectorToCurr = widgetCenter - finger;
-        const float yOnlyDistance = MatrixUtils::vec3Dot(forward, vectorToCurr);
 
-        updatePressableCloseToInteraction(context, distance, yOnlyDistance);
-
-        // Generally outside the bounds of the widget
-        if (!_pressEventFired && distance > _node->worldBound.fRadius) {
+        const auto finger = updateFinger(_finger, context, widgetCenter, forward);
+        if (!_finger.interacting) {
             _pressYOffset = 0;
+            _pressArmed = false;
             return;
         }
 
-        // clear press state only when finger in-front of the widget
-        if (_pressEventFired) {
-            // far enough to clear press flag used to prevent multi-press
-            _pressEventFired = yOnlyDistance > 0.4 ? false : _pressEventFired;
+        // calculate the distance only in the y-axis
+        const RE::NiPoint3 vectorToCurr = widgetCenter - finger;
+        const float yOnlyDistance = MatrixUtils::vec3Dot(forward, vectorToCurr);
+
+        // arm the widget only when finger is far enough in-front of it: after it fired, and after the finger went in beside it
+        if (!_pressArmed) {
+            _pressArmed = yOnlyDistance > 0.4;
             return;
         }
 
@@ -183,16 +181,20 @@ namespace f4cf::vrui
             return;
         }
 
-        static constexpr int PRESS_TRIGGER_DISTANCE = 2;
-
-        // mimic soft press of the UI, extra check to make sure button is not pressed when moving hand backwards
-        const float prevYOff = _pressYOffset;
-        if (prevYOff != 0.f || pressDistance < PRESS_TRIGGER_DISTANCE / 2.0) {
-            // mimic soft press, smoothing with prev value
-            _pressYOffset = pressDistance + (prevYOff - pressDistance) / 2;
+        // past the plane but outside the bounds of the widget, measured along the plane: the finger went in beside the widget
+        const float radius = _node->worldBound.fRadius;
+        const float sideDistanceSquared = MatrixUtils::vec3Dot(vectorToCurr, vectorToCurr) - yOnlyDistance * yOnlyDistance;
+        if (sideDistanceSquared > radius * radius) {
+            _pressYOffset = 0;
+            _pressArmed = false;
+            return;
         }
 
-        // use previous position to prevent press when moving hand backwards
+        static constexpr int PRESS_TRIGGER_DISTANCE = 2;
+
+        // mimic soft press of the UI, smoothing with prev value
+        _pressYOffset = pressDistance + (_pressYOffset - pressDistance) / 2;
+
         if (_pressYOffset > PRESS_TRIGGER_DISTANCE) {
             // widget pushed enough, fire press event
             logger::info("UI Widget '{}' pressed", _node->name.c_str());
@@ -200,21 +202,11 @@ namespace f4cf::vrui
         }
     }
 
-    /**
-     * is interaction bone is relatively close to widget for hand pose to change.
-     * Use previously set value to create a safe buffer where the pressable won't rapidly change from true to false and back.
-     */
-    void UIWidget::updatePressableCloseToInteraction(UIFrameUpdateContext* context, const float distance, const float yOnlyDistance)
-    {
-        _wasPressableCloseToInteraction = _wasPressableCloseToInteraction ? yOnlyDistance > -12 && distance < 20 : yOnlyDistance > -3 && distance < 15;
-        context->markAnyPressableCloseToInteraction(_interactionPrimaryHand, _wasPressableCloseToInteraction);
-    }
-
     void UIWidget::onPressEventFired(UIElement* element, UIFrameUpdateContext* context)
     {
         _pressYOffset = 0;
-        _pressEventFired = true;
-        UIUtils::triggerInteractionHeptic(_interactionPrimaryHand);
+        _pressArmed = false;
+        UIUtils::triggerInteractionHeptic(_finger.primaryHand);
         UIElement::onPressEventFired(element, context);
     }
 }

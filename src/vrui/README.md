@@ -292,7 +292,23 @@ loading).
   so only the other hand presses it. It needs a hand drawn at the controller, as FRIK does: while the
   hand bone is not at the controller, the controller itself presses the button, and a small gold
   sphere marks the point. `bVRUIShowFingerTip` in `[Debug]` shows the sphere on the fingertip too.
-- The hand whose finger is near a button points, its index finger out. The pose is asked from
+- A finger starts to interact with a button only from in front of the button's face, within 15
+  units of it, and only while the player looks at the button: the head is in front of the face,
+  and the button is within 40 degrees of where the head faces. Only then does the hand point, and
+  only then can the finger push the button. A finger behind a UI, or near a UI the player does
+  not look at, does neither. The finger interacts until it is 20 units away or 12 units behind the
+  face, or the button is 55 degrees from where the head faces, so a press can take the finger
+  through the button and back out. The values are in [`UIElement.cpp`](UIElement.cpp).
+- A hand that comes to a UI from behind it does not point as its finger comes out in front of the
+  buttons. It points once the finger turns back toward a button, by 0.7 units, or after the finger
+  has moved 15 units away from the buttons and come back.
+- A button is pushed only by a finger that crossed its face from the front, on the button. After a
+  press, and after the finger went in beside the button, the finger has to come back out in front
+  of the button before it can push it. So a finger that comes up from behind a button does not
+  move it, also not the button next to the one it pressed.
+- The hand whose finger interacts with a button points, its index finger out, and keeps pointing
+  while the finger is near any button. So it does not let go between two presses, or when the
+  button it pressed is replaced by another. The pose is asked from
   [FRIK](https://github.com/rollingrock/Fallout-4-VR-Body), the mod that draws and poses the hands,
   through its API ([`UIHandPointing.cpp`](UIHandPointing.cpp)): under the tag `<mod name>_UI`, and
   a little above FRIK's default priority, so it wins over a pose the mod itself holds on that hand.

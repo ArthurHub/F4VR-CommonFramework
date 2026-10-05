@@ -78,8 +78,8 @@ namespace f4cf::vrui
             element->onFrameUpdate(&context);
         }
 
-        updateHandPointing(true, context.isAnyPressableCloseToInteraction(true));
-        updateHandPointing(false, context.isAnyPressableCloseToInteraction(false));
+        updateHandPointing(true, context.getFingerProximity(true));
+        updateHandPointing(false, context.getFingerProximity(false));
 
         if (config->checkDebugDumpDataOnceFor("ui_tree")) {
             dumpUITree();
@@ -87,19 +87,29 @@ namespace f4cf::vrui
     }
 
     /**
-     * Point the hand while its finger is close to something it can press.
+     * Point the hand when its finger starts to interact with something it can press, and keep it pointing
+     * while the finger is near a pressable. So the hand does not let go when the button it pressed is
+     * replaced by another, which the finger is then behind.
+     * A hand that does not point, and whose finger is behind a pressable, came to the UI from behind:
+     * that is kept for the pressables, see UIElement::updateFinger.
      * A hand whose finger nothing was tested against in this frame is left alone, unless it was pointed
      * from here: then it is released.
      */
-    void UIManager::updateHandPointing(const bool primaryHand, const std::optional<bool>& isPressableClose)
+    void UIManager::updateHandPointing(const bool primaryHand, const std::optional<UIFingerProximity>& fingerProximity)
     {
         bool& pointing = primaryHand ? _primaryHandPointing : _offhandPointing;
-        if (isPressableClose.has_value()) {
-            setHandPointing(primaryHand, isPressableClose.value());
-            pointing = isPressableClose.value();
-        } else if (pointing) {
-            setHandPointing(primaryHand, false);
-            pointing = false;
+        bool& fromBehind = primaryHand ? _primaryHandFromBehind : _offhandFromBehind;
+        if (fingerProximity.has_value()) {
+            const bool toPoint = fingerProximity == UIFingerProximity::Interacting || (pointing && fingerProximity != UIFingerProximity::Away);
+            setHandPointing(primaryHand, toPoint);
+            pointing = toPoint;
+            fromBehind = !toPoint && fingerProximity == UIFingerProximity::Behind;
+        } else {
+            if (pointing) {
+                setHandPointing(primaryHand, false);
+                pointing = false;
+            }
+            fromBehind = false;
         }
     }
 
