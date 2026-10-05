@@ -33,7 +33,6 @@ namespace f4cf::vrui
         virtual RE::NiTransform calculateTransform() const override;
         virtual void onPressEventFired(UIElement* element, UIFrameUpdateContext* context) override;
         void handlePressEvent(UIFrameUpdateContext* context);
-        void updatePressableCloseToInteraction(UIFrameUpdateContext* context, float distance, float yOnlyDistance);
 
         // UI node to render
         RE::NiPointer<RE::NiNode> _node;
@@ -42,14 +41,12 @@ namespace f4cf::vrui
         bool _disabled = false;
         RE::NiPointer<RE::NiNode> _disabledOverlayNode;
 
-        // Press handling
-        bool _pressEventFired = false;
+        // Press handling: whether the finger has been in front of the widget since it last fired or went in
+        // beside it, so it can push it, and how far the widget is pushed in
+        bool _pressArmed = false;
         float _pressYOffset = 0;
 
-        // To handle pressable close to interaction bone margin to fix twitching because of change from true to false
-        bool _wasPressableCloseToInteraction = false;
-
-        // The hand whose finger the widget was last tested against
-        bool _interactionPrimaryHand = false;
+        // The finger the widget is tested against
+        UIFingerState _finger;
     };
 }

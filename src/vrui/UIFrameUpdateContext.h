@@ -1,33 +1,50 @@
 #pragma once
 
+#include <algorithm>
 #include <optional>
 
 namespace f4cf::vrui
 {
     /**
-     * What the elements share during one frame update: whether a finger is close to something it can press.
+     * How a finger stands to a pressable, see UIElement::updateFinger.
+     */
+    enum class UIFingerProximity
+    {
+        // too far from the pressable, too far behind it, or the player does not look at it
+        Away,
+        // near the pressable but not interacting with it: the finger cannot press it, and only a hand that
+        // already points keeps pointing
+        Near,
+        // near the pressable and behind its face, or on its way out from behind it: as near, and the hand
+        // does not start to point for another pressable either
+        Behind,
+        // came to the pressable from its front while the player looks at it: the hand points and the finger can press it
+        Interacting,
+    };
+
+    /**
+     * What the elements share during one frame update: how close each hand's finger is to something it can press.
      */
     class UIFrameUpdateContext
     {
     public:
         /**
-         * Whether the finger of the given hand is close to something it can press. Empty if nothing was tested
-         * against that finger in this frame.
+         * The closest the finger of the given hand is to any pressable. Empty if nothing was tested against
+         * that finger in this frame.
          */
-        const std::optional<bool>& isAnyPressableCloseToInteraction(const bool primaryHand) const
+        const std::optional<UIFingerProximity>& getFingerProximity(const bool primaryHand) const
         {
-            return primaryHand ? _isAnyPressableCloseToPrimaryHand : _isAnyPressableCloseToOffhand;
+            return primaryHand ? _primaryFingerProximity : _offhandFingerProximity;
         }
 
-        void markAnyPressableCloseToInteraction(const bool primaryHand, const bool isPressableClose)
+        void markFingerProximity(const bool primaryHand, const UIFingerProximity proximity)
         {
-            auto& isClose = primaryHand ? _isAnyPressableCloseToPrimaryHand : _isAnyPressableCloseToOffhand;
-            isClose = isClose.value_or(false) || isPressableClose;
+            auto& closest = primaryHand ? _primaryFingerProximity : _offhandFingerProximity;
+            closest = (std::max)(closest.value_or(UIFingerProximity::Away), proximity);
         }
 
     private:
-        // Are any of the elements in current frame update close to the hand's interaction bone and can be pressed?
-        std::optional<bool> _isAnyPressableCloseToPrimaryHand = std::nullopt;
-        std::optional<bool> _isAnyPressableCloseToOffhand = std::nullopt;
+        std::optional<UIFingerProximity> _primaryFingerProximity = std::nullopt;
+        std::optional<UIFingerProximity> _offhandFingerProximity = std::nullopt;
     };
 }

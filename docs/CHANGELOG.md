@@ -27,6 +27,13 @@ major version is `0`, a minor bump may break the API; the **Upgrading** notes sa
   the framework, under the tag `<mod name>_UI`, so a mod with a vrui UI no longer writes an adapter
   for it. With FRIK's second API table (FRIK 0.79) the pose is set a little above the default
   priority, to win over a pose the mod itself holds on that hand.
+- **vrui presses from the front**: a finger interacts with a button only when it comes to it from
+  in front of the button's face while the player looks at the button. A hand behind a UI, or near
+  a UI the player does not look at, no longer points and cannot push a button, and a hand that
+  comes out from behind a UI points only once its finger turns back toward a button. A hand that
+  points keeps pointing while its finger is near a button, so it holds the pose between presses.
+  A button is pushed only by a finger that crossed its face from the front, so a finger coming up
+  from behind a button no longer moves it.
 - **vrui updates itself**: `ModBase` runs the UI manager's frame update after the mod's
   `onFrameUpdate()`, while the player is loaded, so a mod no longer calls it. A press handler then
   runs after the mod's frame. A mod that needs the UI updated at a certain point of its frame calls
@@ -40,6 +47,9 @@ major version is `0`, a minor bump may break the API; the **Upgrading** notes sa
   `vrui/UIModAdapter.h` is now `vrui/UIFrameUpdateContext.h`. A mod that poses the hands itself
   gives `g_uiManager->setHandPointingHandler(...)` a function that points a hand and releases it,
   in place of the adapter.
+- A mod's own pressable element finds its finger with `UIElement::updateFinger`, which also reports
+  it for the hand to point, in place of `getInteractionFingerTip` and
+  `UIFrameUpdateContext::markAnyPressableCloseToInteraction`.
 - `UIUtils::triggerInteractionHeptic` takes the hand to buzz: pass `true` for the primary hand.
 - `vrui::UIDebugWidget` is removed. To mark a point in the world use the debug draw overlay
   (`debug::dd().sphere(...)`).

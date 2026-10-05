@@ -211,13 +211,12 @@ namespace f4cf::vrui
         std::function<void(UIButtonPanel*)> _onPressHandler;
         bool _disabled = false;
 
-        // press state, kept the way UIWidget keeps it: whether this push already fired, how far the
-        // button is pushed in, and whether the bone is near enough for the hand to point
-        bool _pressEventFired = false;
+        // press state, kept the way UIWidget keeps it: whether the bone has been in front of the button
+        // since it last fired or went in beside it, so it can push it, and how far the button is pushed in
+        bool _pressArmed = false;
         float _pressYOffset = 0.0f;
-        bool _wasPressableCloseToInteraction = false;
 
-        // the hand whose finger the button was last tested against
-        bool _interactionPrimaryHand = false;
+        // the finger the button is tested against
+        UIFingerState _finger;
     };
 }

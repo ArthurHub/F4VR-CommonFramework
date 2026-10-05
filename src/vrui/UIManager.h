@@ -29,7 +29,8 @@ namespace f4cf::vrui
         void enableDevLayoutViaConfig() const;
 
     private:
-        // Used by an element to find the fingertip that presses it, see UIElement::getInteractionFingerTip
+        // Used by an element to find the fingertip that presses it, see UIElement::getInteractionFingerTip,
+        // and how the finger stands to it, see UIElement::updateFinger
         friend class UIElement;
 
         UIInteractionFinger getInteractionFingerTip(const RE::NiNode* attachNode, const RE::NiPoint3& worldPosition, const std::optional<bool> keepPrimaryHand)
@@ -37,7 +38,12 @@ namespace f4cf::vrui
             return _skeletonHandler.getInteractionFingerTip(attachNode, worldPosition, keepPrimaryHand);
         }
 
-        void updateHandPointing(bool primaryHand, const std::optional<bool>& isPressableClose);
+        bool isHandFromBehind(const bool primaryHand) const
+        {
+            return primaryHand ? _primaryHandFromBehind : _offhandFromBehind;
+        }
+
+        void updateHandPointing(bool primaryHand, const std::optional<UIFingerProximity>& fingerProximity);
         void setHandPointing(bool primaryHand, bool toPoint) const;
         void readDevLayoutFromConfig() const;
         void dumpUITree() const;
@@ -54,6 +60,10 @@ namespace f4cf::vrui
         // the hands pointed from here, to release one whose finger is no longer tested
         bool _primaryHandPointing = false;
         bool _offhandPointing = false;
+
+        // the hands that came to the UI from behind it, which do not start to point as they come out in front
+        bool _primaryHandFromBehind = false;
+        bool _offhandFromBehind = false;
 
         // the frame update ran in this frame, so another call in the same frame does nothing
         bool _frameUpdated = false;

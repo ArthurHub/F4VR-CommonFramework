@@ -56,6 +56,21 @@ namespace f4cf::vrui
         }
     };
 
+    /**
+     * What a pressable keeps between frames about the finger it is tested against, see UIElement::updateFinger.
+     */
+    struct UIFingerState
+    {
+        // the hand the finger belongs to: true for the primary hand
+        bool primaryHand = false;
+
+        // the finger interacts with the pressable: its hand points, and it can push the pressable
+        bool interacting = false;
+
+        // the furthest in front of the pressable the finger got on its way out from behind it
+        float frontPeak = 0.0f;
+    };
+
     class UIElement
     {
     public:
@@ -122,6 +137,7 @@ namespace f4cf::vrui
         void onPressEventFiredPropagate(UIElement* element, UIFrameUpdateContext* context);
 
         UIInteractionFinger getInteractionFingerTip(const RE::NiPoint3& worldPosition, std::optional<bool> keepPrimaryHand) const;
+        RE::NiPoint3 updateFinger(UIFingerState& state, UIFrameUpdateContext* context, const RE::NiPoint3& worldPosition, const RE::NiPoint3& worldForward) const;
         virtual void onStateChanged(UIElement* element);
 
         // Attach the UI element to the given game node.

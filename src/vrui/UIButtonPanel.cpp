@@ -89,7 +89,7 @@ namespace f4cf::vrui
         if (disabled) {
             // snap back a half-done push, so a button disabled mid-press does not stay pushed in
             _pressYOffset = 0.0f;
-            _pressEventFired = false;
+            _pressArmed = false;
         }
     }
 
@@ -196,6 +196,8 @@ namespace f4cf::vrui
     {
         if (!_attachNode || !calcVisibility()) {
             _pressYOffset = 0.0f;
+            _pressArmed = false;
+            _finger = {};
             return;
         }
         handlePress(context);
@@ -217,6 +219,9 @@ namespace f4cf::vrui
      * mesh node: fire once when the interaction bone has pushed the button in far enough, and only
      * re-arm once the bone is back in front of it.
      *
+     * Only a finger that interacts with the button pushes it, see UIElement::updateFinger, and only from in
+     * front of it: a finger that went in beside the button does not push it as it comes up under it.
+     *
      * The world frame is composed from the attach node and this element's transform - the one the
      * rectangle is drawn with, press offset included - and the NIF's bounding sphere becomes the
      * rectangle's half diagonal.
@@ -224,6 +229,7 @@ namespace f4cf::vrui
     void UIButtonPanel::handlePress(UIFrameUpdateContext* context)
     {
         if (!isPressable()) {
+            _finger = {};
             return;
         }
 
@@ -231,28 +237,20 @@ namespace f4cf::vrui
         const RE::NiMatrix3 toWorld = world.rotate.Transpose(); // the codebase's local->world convention
         const RE::NiPoint3 forward = toWorld * RE::NiPoint3(0.0f, 1.0f, 0.0f);
 
-        // a button stays with the finger that is close to it, so a press does not jump to the other hand
-        const auto interaction = getInteractionFingerTip(world.translate, _wasPressableCloseToInteraction ? std::optional(_interactionPrimaryHand) : std::nullopt);
-        const RE::NiPoint3 finger = interaction.position;
-        _interactionPrimaryHand = interaction.primaryHand;
-        const RE::NiPoint3 vectorToCurr = world.translate - finger;
-        const float distance = common::MatrixUtils::vec3Len(vectorToCurr);
-        const float yOnlyDistance = common::MatrixUtils::vec3Dot(forward, vectorToCurr);
-
-        // near enough for the hand to point; leaving takes further than arriving, so the hand does not
-        // flicker between poses at the edge
-        _wasPressableCloseToInteraction = _wasPressableCloseToInteraction ? yOnlyDistance > -12.0f && distance < 20.0f : yOnlyDistance > -3.0f && distance < 15.0f;
-        context->markAnyPressableCloseToInteraction(_interactionPrimaryHand, _wasPressableCloseToInteraction);
-
-        const float radius = 0.5f * std::hypot(_size.width, _size.height) * world.scale;
-        if (!_pressEventFired && distance > radius) {
+        const RE::NiPoint3 finger = updateFinger(_finger, context, world.translate, forward);
+        if (!_finger.interacting) {
             _pressYOffset = 0.0f;
+            _pressArmed = false;
             return;
         }
 
-        // after firing, re-arm only once the bone is back far enough in front of the button
-        if (_pressEventFired) {
-            _pressEventFired = !(yOnlyDistance > PRESS_RELEASE_DISTANCE);
+        const RE::NiPoint3 vectorToCurr = world.translate - finger;
+        const float yOnlyDistance = common::MatrixUtils::vec3Dot(forward, vectorToCurr);
+
+        // arm the button only once the bone is far enough in front of it: after it fired, and after the
+        // bone went in beside it
+        if (!_pressArmed) {
+            _pressArmed = yOnlyDistance > PRESS_RELEASE_DISTANCE;
             return;
         }
 
@@ -264,12 +262,17 @@ namespace f4cf::vrui
             return;
         }
 
-        // follow the bone in, smoothed against the previous frame - but only start while it is less than
-        // half the travel in, so a hand arriving from behind the button does not press it
-        const float previousOffset = _pressYOffset;
-        if (previousOffset != 0.0f || pressDistance < PRESS_TRIGGER_DISTANCE / 2.0f) {
-            _pressYOffset = pressDistance + (previousOffset - pressDistance) / 2.0f;
+        // past the plane but off the button, measured along the plane: the bone went in beside the button
+        const float radius = 0.5f * std::hypot(_size.width, _size.height) * world.scale;
+        const float sideDistanceSquared = common::MatrixUtils::vec3Dot(vectorToCurr, vectorToCurr) - yOnlyDistance * yOnlyDistance;
+        if (sideDistanceSquared > radius * radius) {
+            _pressYOffset = 0.0f;
+            _pressArmed = false;
+            return;
         }
+
+        // follow the bone in, smoothed against the previous frame
+        _pressYOffset = pressDistance + (_pressYOffset - pressDistance) / 2.0f;
 
         if (_pressYOffset > PRESS_TRIGGER_DISTANCE) {
             logger::info("UI button panel '{}' pressed", _name);
@@ -280,8 +283,8 @@ namespace f4cf::vrui
     void UIButtonPanel::onPressEventFired(UIElement* element, UIFrameUpdateContext* context)
     {
         _pressYOffset = 0.0f;
-        _pressEventFired = true;
-        UIUtils::triggerInteractionHeptic(_interactionPrimaryHand);
+        _pressArmed = false;
+        UIUtils::triggerInteractionHeptic(_finger.primaryHand);
         UIPanel::onPressEventFired(element, context);
         if (_onPressHandler) {
             _onPressHandler(this);
