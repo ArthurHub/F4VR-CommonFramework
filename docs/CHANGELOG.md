@@ -60,6 +60,10 @@ major version is `0`, a minor bump may break the API; the **Upgrading** notes sa
   so a list or a child window that is longer than its room scrolls while the ray is on it, and the
   player does not move. `PointerStyle::scrollSpeed` is the speed at a full push, in lines of text a
   second.
+- **imgui content has ImGui's padding**: the zero padding and border of the canvas window no longer
+  reach what the content opens. A combo's list, a popup, a dialog and a bordered child window have
+  ImGui's own window padding and border, where they had none, so the content of a bordered child
+  moves in by that padding.
 - **config color**: `ConfigBase::getColorValue` reads a color from the INI, written as `r,g,b` or
   `r,g,b,a` in 0 to 255, as `getTransformValue` reads a transform.
 - **render gradients**: a fill takes a color for each corner and blends between them
