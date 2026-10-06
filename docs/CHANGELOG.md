@@ -49,6 +49,8 @@ major version is `0`, a minor bump may break the API; the **Upgrading** notes sa
   `imgui::pointer()` is that pointer: `state()` says what it does, `setHands` limits pointing to one
   hand, and `setOffset` sets where the ray is on the wand. The ray is not drawn yet, and the trigger
   still reaches the game.
+- **config color**: `ConfigBase::getColorValue` reads a color from the INI, written as `r,g,b` or
+  `r,g,b,a` in 0 to 255, as `getTransformValue` reads a transform.
 
 **Upgrading**
 
