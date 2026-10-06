@@ -149,6 +149,22 @@ namespace f4cf::imgui::internal
         State _state = State::Away;
     };
 
+    /**
+     * How much a thumbstick scrolls, from -1 to 1, for how far it is pushed along one axis, from -1 to 1.
+     * Nothing inside the dead zone around its center, and from there evenly up to 1 at a full push, so the
+     * scrolling starts slow at the edge of the dead zone instead of at a jump.
+     */
+    inline float scrollFromThumbstick(const float push, const float deadZone)
+    {
+        const float past = (push < 0.0f ? -push : push) - deadZone;
+        // negated so a NaN scrolls nothing
+        if (!(past > 0.0f) || !(deadZone < 1.0f)) {
+            return 0.0f;
+        }
+        const float amount = past < 1.0f - deadZone ? past / (1.0f - deadZone) : 1.0f;
+        return push < 0.0f ? -amount : amount;
+    }
+
     enum class PointerOwner : std::uint8_t
     {
         None,

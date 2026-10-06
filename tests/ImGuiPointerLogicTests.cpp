@@ -1,6 +1,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 
+#include <limits>
 #include <optional>
 
 #include "imgui/ImGuiPointerLogic.h"
@@ -12,6 +13,7 @@ using f4cf::imgui::internal::PointerHandLatch;
 using f4cf::imgui::internal::PointerOwner;
 using f4cf::imgui::internal::PointerOwnership;
 using f4cf::imgui::internal::QuadHit;
+using f4cf::imgui::internal::scrollFromThumbstick;
 
 namespace
 {
@@ -216,6 +218,35 @@ TEST_CASE("a trigger pulled in the frame its ray comes to a canvas is the game's
     latch.update(ON_DOWN);
     CHECK_FALSE(latch.operates());
     CHECK_FALSE(latch.pressing());
+}
+
+TEST_CASE("a thumbstick inside its dead zone scrolls nothing", "[imgui][pointer]")
+{
+    CHECK(scrollFromThumbstick(0.0f, 0.2f) == 0.0f);
+    CHECK(scrollFromThumbstick(0.1f, 0.2f) == 0.0f);
+    CHECK(scrollFromThumbstick(-0.19f, 0.2f) == 0.0f);
+    CHECK(scrollFromThumbstick(0.2f, 0.2f) == 0.0f);
+}
+
+TEST_CASE("a thumbstick scrolls evenly from the edge of its dead zone to a full push", "[imgui][pointer]")
+{
+    CHECK_THAT(scrollFromThumbstick(0.21f, 0.2f), WithinAbs(0.0125, 1e-5));
+    CHECK_THAT(scrollFromThumbstick(0.6f, 0.2f), WithinAbs(0.5, 1e-5));
+    CHECK_THAT(scrollFromThumbstick(1.0f, 0.2f), WithinAbs(1.0, 1e-5));
+    // a push that reads past its end scrolls no faster
+    CHECK_THAT(scrollFromThumbstick(1.2f, 0.2f), WithinAbs(1.0, 1e-5));
+}
+
+TEST_CASE("a thumbstick pushed the other way scrolls the other way", "[imgui][pointer]")
+{
+    CHECK_THAT(scrollFromThumbstick(-0.6f, 0.2f), WithinAbs(-0.5, 1e-5));
+    CHECK_THAT(scrollFromThumbstick(-1.0f, 0.2f), WithinAbs(-1.0, 1e-5));
+}
+
+TEST_CASE("a push that is not a number, or a dead zone that leaves no room, scrolls nothing", "[imgui][pointer]")
+{
+    CHECK(scrollFromThumbstick(std::numeric_limits<float>::quiet_NaN(), 0.2f) == 0.0f);
+    CHECK(scrollFromThumbstick(1.0f, 1.0f) == 0.0f);
 }
 
 TEST_CASE("no hand owns the pointer while no ray is on a canvas", "[imgui][pointer]")

@@ -21,7 +21,7 @@ and a `vrui::UITextPanel` standing side by side read as one UI.
 | [`ImGuiCanvas.h`](ImGuiCanvas.h) / [`.cpp`](ImGuiCanvas.cpp) | `Canvas` — one ImGui window placed in the world by a provider you write. Content, placement, chrome (background, border, rounding, padding), sizing and occlusion. |
 | [`UIImGuiPanel.h`](UIImGuiPanel.h) / [`.cpp`](UIImGuiPanel.cpp) | The vrui adapter: a `UIElement` whose rectangle a `Canvas` fills. Takes `vrui::UIPanelStyle` and the vrui sizing modes, in vrui units. |
 | [`ImGuiPointer.h`](ImGuiPointer.h) / [`.cpp`](ImGuiPointer.cpp) | `Pointer`, reached as `imgui::pointer()` — the one pointer of the interactive canvases: a wand's ray as ImGui's mouse, its trigger as the mouse button, and that wand hidden from the game. Its state, which hands point, and its `PointerStyle`: where the ray is on the hand, and how the ray and its mark are drawn. |
-| [`ImGuiPointerLogic.h`](ImGuiPointerLogic.h) | The pointer's logic apart from the game, so it is unit tested: where a ray meets a quad and its plane, whether a hand operates the UI and presses it, and which hand owns the pointer. |
+| [`ImGuiPointerLogic.h`](ImGuiPointerLogic.h) | The pointer's logic apart from the game, so it is unit tested: where a ray meets a quad and its plane, whether a hand operates the UI and presses it, which hand owns the pointer, and how much a thumbstick scrolls. |
 | [`ImGuiSettings.h`](ImGuiSettings.h) / [`.cpp`](ImGuiSettings.cpp) | The two process-wide knobs: `setFontSizePixels` and `setSupersample`. |
 | [`ImGuiFonts.h`](ImGuiFonts.h) / [`.cpp`](ImGuiFonts.cpp) | Loads the framework's text font into the ImGui atlas, from the same bytes the primitive renderer draws with. |
 | [`ImGuiLayer.h`](ImGuiLayer.h) / [`.cpp`](ImGuiLayer.cpp) | Game-thread pump: one ImGui frame holding every visible canvas, cloned and published with each canvas's quad. |
@@ -145,6 +145,11 @@ panel->setContent([this] {
 - **A pull from outside is the game's.** A trigger that is already down when the ray comes to a
   canvas presses nothing, and its wand is not hidden. The hand has no pointer until the trigger is
   released.
+- **The thumbstick scrolls.** The thumbstick of the hand that owns the pointer is ImGui's mouse
+  wheel: pushed up or down it scrolls what the pointer is on, a list, a child window or an open
+  combo, as the wheel does on a screen. The speed follows how far it is pushed, from nothing near
+  its center up to the style's `scrollSpeed` at a full push, in lines of text a second. The player
+  does not move or turn, since the wand is hidden from the game.
 - **What is drawn.** While the pointer is on a canvas: the owner's ray, and a mark on the canvas
   where the ray meets it. The ray is no longer than a set length, so it ends before a canvas that
   is further away and at the mark of a nearer one, and it fades in and out at its two ends. The
@@ -161,8 +166,9 @@ panel->setContent([this] {
 
 ### How the pointer looks
 
-[`PointerStyle`](ImGuiPointer.h) holds where the ray is on the hand and the whole look, and its own
-defaults are the default pointer, so the values are in one place. Lengths are in world units.
+[`PointerStyle`](ImGuiPointer.h) holds where the ray is on the hand, the whole look and the speed of
+scrolling, and its own defaults are the default pointer, so the values are in one place. Lengths are
+in world units.
 
 | Field | Default | What it is |
 | ----- | ------- | ---------- |
@@ -176,6 +182,7 @@ defaults are the default pointer, so the values are in one place. Lengths are in
 | `markSize` | 0.7 | the mark's radius at 100 units from the head, its border included; it grows and shrinks with its distance |
 | `markBorderColor` | 215,255,215,100 | the color of the border around the mark |
 | `markBorderWidth` | 0.1 | the border's width, measured as the mark's size is; 0 for no border |
+| `scrollSpeed` | 30 | how fast the thumbstick scrolls, in lines of text a second at a full push; 0 for no scrolling |
 
 A mod changes a part by starting from the current style:
 
@@ -188,8 +195,6 @@ imgui::pointer().setStyle(style);
 A mod that wants the player to set these reads the fields from its own INI and calls `setStyle`
 with them: `ConfigBase::getColorValue` reads a color written as `r,g,b,a`, and `getTransformValue`
 the offset. The framework has no INI keys for it.
-
-Not there yet: nothing scrolls.
 
 ## Sizes, pixels and legibility
 

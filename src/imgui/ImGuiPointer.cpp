@@ -30,6 +30,12 @@ namespace f4cf::imgui
         // how far past the edges of its canvas a press follows the ray, in sizes of the canvas
         constexpr float PRESS_REACH = 1.0f;
 
+        // the thumbstick scrolls from this far off its center, of 1 for a full push
+        constexpr float SCROLL_DEAD_ZONE = 0.2f;
+
+        // the lines of text ImGui scrolls for one step of the mouse wheel
+        constexpr float LINES_PER_WHEEL_STEP = 5.0f;
+
         // the mark is a disc of this many triangles
         constexpr int MARK_SEGMENTS = 20;
 
@@ -127,6 +133,9 @@ namespace f4cf::imgui
         auto& io = ImGui::GetIO();
         io.AddMousePosEvent(hand.target->displayX + x, hand.target->displayY + y);
         io.AddMouseButtonEvent(ImGuiMouseButton_Left, hand.pressed);
+        if (const float wheel = wheelFromThumbstick(owner == internal::PointerOwner::Primary, io.DeltaTime); wheel != 0.0f) {
+            io.AddMouseWheelEvent(0.0f, wheel);
+        }
         _given = true;
 
         _state.canvas = hand.target->canvas;
@@ -262,6 +271,21 @@ namespace f4cf::imgui
         _suppressing = true;
         vrcf::VRControllersSuppress.setAllSuppressed(SUPPRESS_KEY, vrcf::Hand::Primary, primary);
         vrcf::VRControllersSuppress.setAllSuppressed(SUPPRESS_KEY, vrcf::Hand::Offhand, offhand);
+    }
+
+    /**
+     * ImGui's mouse wheel for this frame, from the thumbstick of the hand that owns the pointer: pushed up it
+     * scrolls up, as a wheel turned away does. The speed follows how far the thumbstick is pushed past a
+     * dead zone around its center, up to the style's speed at a full push.
+     * The game does not get the thumbstick: the wand of the hand that points is hidden from it.
+     */
+    float Pointer::wheelFromThumbstick(const bool primaryHand, const float deltaSeconds) const
+    {
+        if (_style.scrollSpeed <= 0.0f) {
+            return 0.0f;
+        }
+        const float push = vrcf::VRControllers.getThumbstickValue(primaryHand ? vrcf::Hand::Primary : vrcf::Hand::Offhand).y;
+        return internal::scrollFromThumbstick(push, SCROLL_DEAD_ZONE) * _style.scrollSpeed / LINES_PER_WHEEL_STEP * deltaSeconds;
     }
 
     /**

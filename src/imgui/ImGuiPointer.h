@@ -50,7 +50,8 @@ namespace f4cf::imgui
     /**
      * Where the pointer's ray is on the hand, and how the pointer is drawn while it is on a canvas: the ray
      * from the hand toward the canvas, and a mark on the canvas where the ray meets it. Both are drawn over
-     * the panels and are not hidden by the world. Lengths are in world units.
+     * the panels and are not hidden by the world. Lengths are in world units. It also has how fast the
+     * pointer scrolls.
      *
      * Its own defaults are the default pointer, so they are in one place. A mod changes a part by starting
      * from them:
@@ -94,6 +95,10 @@ namespace f4cf::imgui
         // the border around the mark: its color, and its width, measured as the mark's size is. 0 for no border.
         render::Color markBorderColor = render::Color::rgba(215, 255, 215, 100);
         float markBorderWidth = 0.1f;
+
+        // how fast the thumbstick of the pointing hand scrolls what the pointer is on, in lines of text a
+        // second at a full push. 0 for no scrolling.
+        float scrollSpeed = 30.0f;
     };
 }
 
@@ -152,6 +157,9 @@ namespace f4cf::imgui
      * released: also when the ray slides off the canvas, and when the canvas is hidden. A trigger that is
      * already down when the ray comes to a canvas stays the game's until it is released, and the hand has
      * no pointer before that.
+     *
+     * The thumbstick of the hand that owns the pointer is ImGui's mouse wheel: pushed up or down it scrolls
+     * what the pointer is on.
      *
      *     imgui::pointer().setHands(imgui::PointerHands::Primary);
      *     if (imgui::pointer().state().canvas) { ... }
@@ -212,6 +220,7 @@ namespace f4cf::imgui
         internal::PointerSample sampleWand(bool primaryHand, bool pressing) const;
         HandPointer pointHand(bool primaryHand, const std::vector<internal::PointerTarget>& targets);
         void suppressWands(bool primary, bool offhand);
+        float wheelFromThumbstick(bool primaryHand, float deltaSeconds) const;
         void release();
         void draw(const HandPointer* hand);
 
