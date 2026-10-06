@@ -39,6 +39,7 @@ namespace f4cf::imgui
      * code mean the same at any factor; only the detail changes. The atlas texture is
      * MAX_CANVAS_PIXEL_SIZE times this on each side, so memory grows with the square - about 9MB at
      * 1.5, 16MB at 2 - and past the headset's own resolution a larger factor adds nothing visible.
+     * The texture of a dedicated canvas is the canvas's own pixels times this on each side.
      *
      * Process-wide, and read when the first canvas draws, since the atlas texture and the font raster
      * are built from it then: set it before that - later calls do nothing.
