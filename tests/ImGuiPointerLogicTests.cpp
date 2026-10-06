@@ -1,14 +1,18 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 
+#include <cmath>
 #include <limits>
+#include <numbers>
 #include <optional>
 
 #include "imgui/ImGuiPointerLogic.h"
 
 using Catch::Matchers::WithinAbs;
+using f4cf::imgui::internal::CurvedQuad;
 using f4cf::imgui::internal::intersectPlaneFront;
 using f4cf::imgui::internal::intersectQuadFront;
+using f4cf::imgui::internal::intersectSurfaceFront;
 using f4cf::imgui::internal::PointerHandLatch;
 using f4cf::imgui::internal::PointerOwner;
 using f4cf::imgui::internal::PointerOwnership;
@@ -29,6 +33,9 @@ namespace
     constexpr Vec TOP_RIGHT{ 2.0f, 10.0f, 1.0f };
     constexpr Vec BOTTOM_LEFT{ -2.0f, 10.0f, -1.0f };
     constexpr Vec ORIGIN{ 0.0f, 0.0f, 0.0f };
+
+    // curved at its distance from the origin, so the axis it is bent around is upright through the origin
+    constexpr float CURVE_RADIUS = 10.0f;
 
     std::optional<QuadHit> hitFrom(const Vec& origin, const Vec& direction)
     {
@@ -126,6 +133,169 @@ TEST_CASE("a ray does not meet the plane of a quad from behind, along it or past
     CHECK_FALSE(intersectPlaneFront(Vec{ 5.0f, 20.0f, 0.0f }, Vec{ 0.0f, -1.0f, 0.0f }, TOP_LEFT, TOP_RIGHT, BOTTOM_LEFT));
     CHECK_FALSE(intersectPlaneFront(ORIGIN, Vec{ 1.0f, 0.0f, 0.0f }, TOP_LEFT, TOP_RIGHT, BOTTOM_LEFT));
     CHECK_FALSE(intersectPlaneFront(Vec{ 5.0f, 11.0f, 0.0f }, Vec{ 0.0f, 1.0f, 0.0f }, TOP_LEFT, TOP_RIGHT, BOTTOM_LEFT));
+}
+
+TEST_CASE("a curved quad keeps its middle where it is, and its sides come toward its front", "[imgui][pointer]")
+{
+    const CurvedQuad curve(TOP_LEFT, TOP_RIGHT, BOTTOM_LEFT, CURVE_RADIUS);
+
+    const Vec topMiddle = curve.pointAt(0.5f, 0.0f);
+    CHECK_THAT(topMiddle.x, WithinAbs(0.0, 1e-5));
+    CHECK_THAT(topMiddle.y, WithinAbs(10.0, 1e-5));
+    CHECK_THAT(topMiddle.z, WithinAbs(1.0, 1e-5));
+
+    // the width of 4 is kept along the curve: 0.2 of a radian to each side at a radius of 10
+    CHECK_THAT(curve.arc(), WithinAbs(0.4, 1e-6));
+    const Vec left = curve.pointAt(0.0f, 0.5f);
+    CHECK_THAT(left.x, WithinAbs(-10.0 * std::sin(0.2), 1e-5));
+    CHECK_THAT(left.y, WithinAbs(10.0 * std::cos(0.2), 1e-5));
+    CHECK_THAT(left.z, WithinAbs(0.0, 1e-5));
+    const Vec bottomRight = curve.pointAt(1.0f, 1.0f);
+    CHECK_THAT(bottomRight.x, WithinAbs(10.0 * std::sin(0.2), 1e-5));
+    CHECK_THAT(bottomRight.y, WithinAbs(10.0 * std::cos(0.2), 1e-5));
+    CHECK_THAT(bottomRight.z, WithinAbs(-1.0, 1e-5));
+}
+
+TEST_CASE("every point of a curved quad is at the radius from the axis", "[imgui][pointer]")
+{
+    // the axis is upright through the origin: the quad's front faces it from 10 away, which is the radius
+    const CurvedQuad curve(TOP_LEFT, TOP_RIGHT, BOTTOM_LEFT, CURVE_RADIUS);
+    for (const float u : { 0.0f, 0.2f, 0.5f, 0.9f, 1.0f }) {
+        const Vec point = curve.pointAt(u, 0.3f);
+        CHECK_THAT(std::hypot(point.x, point.y), WithinAbs(10.0, 1e-4));
+    }
+}
+
+TEST_CASE("the width of a curved quad runs along the curve", "[imgui][pointer]")
+{
+    const CurvedQuad curve(TOP_LEFT, TOP_RIGHT, BOTTOM_LEFT, CURVE_RADIUS);
+
+    const Vec middle = curve.rightAt(0.5f);
+    CHECK_THAT(middle.x, WithinAbs(1.0, 1e-5));
+    CHECK_THAT(middle.y, WithinAbs(0.0, 1e-5));
+    CHECK_THAT(middle.z, WithinAbs(0.0, 1e-5));
+
+    // at the right side it turns toward the front, and stays square to the line from the axis
+    const Vec side = curve.rightAt(1.0f);
+    CHECK_THAT(side.x, WithinAbs(std::cos(0.2), 1e-5));
+    CHECK_THAT(side.y, WithinAbs(-std::sin(0.2), 1e-5));
+    CHECK_THAT(side.z, WithinAbs(0.0, 1e-5));
+    const Vec point = curve.pointAt(1.0f, 0.5f);
+    CHECK_THAT(side.x * point.x + side.y * point.y, WithinAbs(0.0, 1e-4));
+}
+
+TEST_CASE("a quad that faces another way is bent toward its own front", "[imgui][pointer]")
+{
+    // stands 5 away along +X and faces the origin, so its right is -Y
+    const CurvedQuad curve(Vec{ 5.0f, 1.0f, 1.0f }, Vec{ 5.0f, -1.0f, 1.0f }, Vec{ 5.0f, 1.0f, -1.0f }, 5.0f);
+
+    const Vec left = curve.pointAt(0.0f, 0.5f);
+    CHECK_THAT(left.x, WithinAbs(5.0 * std::cos(0.2), 1e-5));
+    CHECK_THAT(left.y, WithinAbs(5.0 * std::sin(0.2), 1e-5));
+    CHECK_THAT(left.z, WithinAbs(0.0, 1e-5));
+}
+
+TEST_CASE("a ray meets a curved quad where the quad is drawn", "[imgui][pointer]")
+{
+    const CurvedQuad curve(TOP_LEFT, TOP_RIGHT, BOTTOM_LEFT, CURVE_RADIUS);
+
+    // from the axis, from beside it inside the cylinder, and from outside the cylinder on the side of the front
+    for (const Vec& origin : { ORIGIN, Vec{ 3.0f, 4.0f, -0.5f }, Vec{ -2.0f, -15.0f, 0.8f } }) {
+        for (const float u : { 0.0f, 0.25f, 0.5f, 0.8f, 1.0f }) {
+            for (const float v : { 0.0f, 0.4f, 1.0f }) {
+                // the surface and not the quad: a point of the quad's edge can be met a rounding beside it
+                const Vec point = curve.pointAt(u, v);
+                const auto hit = intersectSurfaceFront(origin, Vec{ point.x - origin.x, point.y - origin.y, point.z - origin.z }, TOP_LEFT, TOP_RIGHT, BOTTOM_LEFT, CURVE_RADIUS);
+                REQUIRE(hit);
+                CHECK_THAT(hit->u, WithinAbs(u, 1e-4));
+                CHECK_THAT(hit->v, WithinAbs(v, 1e-4));
+                // in lengths of the direction, which runs from the origin to the point
+                CHECK_THAT(hit->distance, WithinAbs(1.0, 1e-4));
+            }
+        }
+    }
+}
+
+TEST_CASE("a ray from the axis meets a curved quad at the radius, by the angle it is turned", "[imgui][pointer]")
+{
+    // turned 0.1 of a radian to the right, of the 0.2 the quad takes up to each side
+    const auto hit = intersectQuadFront(ORIGIN, Vec{ std::sin(0.1f), std::cos(0.1f), 0.0f }, TOP_LEFT, TOP_RIGHT, BOTTOM_LEFT, CURVE_RADIUS);
+    REQUIRE(hit);
+    CHECK_THAT(hit->u, WithinAbs(0.75, 1e-5));
+    CHECK_THAT(hit->v, WithinAbs(0.5, 1e-5));
+    CHECK_THAT(hit->distance, WithinAbs(10.0, 1e-4));
+}
+
+TEST_CASE("a ray that passes beside a curved quad does not meet it, and meets its cylinder there", "[imgui][pointer]")
+{
+    // 0.3 of a radian to the right, past the quad's 0.2, and half a unit over its top edge
+    const Vec beside{ 10.0f * std::sin(0.3f), 10.0f * std::cos(0.3f), 1.5f };
+    CHECK_FALSE(intersectQuadFront(ORIGIN, beside, TOP_LEFT, TOP_RIGHT, BOTTOM_LEFT, CURVE_RADIUS));
+
+    const auto hit = intersectSurfaceFront(ORIGIN, beside, TOP_LEFT, TOP_RIGHT, BOTTOM_LEFT, CURVE_RADIUS);
+    REQUIRE(hit);
+    CHECK_THAT(hit->u, WithinAbs(1.25, 1e-5));
+    CHECK_THAT(hit->v, WithinAbs(-0.25, 1e-5));
+    CHECK_THAT(hit->distance, WithinAbs(1.0, 1e-5));
+}
+
+TEST_CASE("a ray does not meet a curved quad from behind, along its axis or past it", "[imgui][pointer]")
+{
+    // from behind: it passes through the quad and meets the cylinder across from it, far beside the quad
+    CHECK_FALSE(intersectQuadFront(Vec{ 0.0f, 20.0f, 0.0f }, Vec{ 0.0f, -1.0f, 0.0f }, TOP_LEFT, TOP_RIGHT, BOTTOM_LEFT, CURVE_RADIUS));
+    // along the axis
+    CHECK_FALSE(intersectSurfaceFront(ORIGIN, Vec{ 0.0f, 0.0f, 1.0f }, TOP_LEFT, TOP_RIGHT, BOTTOM_LEFT, CURVE_RADIUS));
+    // starting past it
+    CHECK_FALSE(intersectSurfaceFront(Vec{ 0.0f, 11.0f, 0.0f }, Vec{ 0.0f, 1.0f, 0.0f }, TOP_LEFT, TOP_RIGHT, BOTTOM_LEFT, CURVE_RADIUS));
+    // from outside the cylinder, passing beside it
+    CHECK_FALSE(intersectSurfaceFront(Vec{ 11.0f, -20.0f, 0.0f }, Vec{ 0.0f, 1.0f, 0.0f }, TOP_LEFT, TOP_RIGHT, BOTTOM_LEFT, CURVE_RADIUS));
+}
+
+TEST_CASE("a ray from outside passes through the near part of a curved quad and meets the inside of the far part", "[imgui][pointer]")
+{
+    // half of a cylinder of radius 10 around the upright axis through the origin, open toward -Y
+    const float halfWidth = 5.0f * std::numbers::pi_v<float>;
+    const Vec topLeft{ -halfWidth, 10.0f, 1.0f };
+    const Vec topRight{ halfWidth, 10.0f, 1.0f };
+    const Vec bottomLeft{ -halfWidth, 10.0f, -1.0f };
+
+    // comes to the left part from behind at 60 degrees left of the middle, and leaves at 60 degrees right of it
+    const auto hit = intersectQuadFront(Vec{ -20.0f, 5.0f, 0.0f }, Vec{ 1.0f, 0.0f, 0.0f }, topLeft, topRight, bottomLeft, CURVE_RADIUS);
+    REQUIRE(hit);
+    CHECK_THAT(hit->u, WithinAbs(0.5 + 1.0 / 3.0, 1e-4));
+    CHECK_THAT(hit->v, WithinAbs(0.5, 1e-5));
+    CHECK_THAT(hit->distance, WithinAbs(20.0 + std::sqrt(75.0), 1e-3));
+}
+
+TEST_CASE("a curved quad is at most half of its cylinder", "[imgui][pointer]")
+{
+    // a radius too small for the width of 4 is taken as 4 over pi
+    const CurvedQuad curve(TOP_LEFT, TOP_RIGHT, BOTTOM_LEFT, 0.1f);
+    const float radius = 4.0f / std::numbers::pi_v<float>;
+    CHECK_THAT(curve.arc(), WithinAbs(std::numbers::pi, 1e-5));
+
+    // its sides are level with the axis, which is the radius in front of the middle
+    const Vec left = curve.pointAt(0.0f, 0.5f);
+    CHECK_THAT(left.x, WithinAbs(-radius, 1e-4));
+    CHECK_THAT(left.y, WithinAbs(10.0 - radius, 1e-4));
+    const Vec right = curve.pointAt(1.0f, 0.5f);
+    CHECK_THAT(right.x, WithinAbs(radius, 1e-4));
+    CHECK_THAT(right.y, WithinAbs(10.0 - radius, 1e-4));
+}
+
+TEST_CASE("a curved quad with no width or height is not met", "[imgui][pointer]")
+{
+    CHECK_FALSE(intersectSurfaceFront(ORIGIN, Vec{ 0.0f, 1.0f, 0.0f }, TOP_LEFT, TOP_LEFT, BOTTOM_LEFT, CURVE_RADIUS));
+    CHECK_FALSE(intersectSurfaceFront(ORIGIN, Vec{ 0.0f, 1.0f, 0.0f }, TOP_LEFT, TOP_RIGHT, TOP_LEFT, CURVE_RADIUS));
+}
+
+TEST_CASE("a quad with no curve radius is met on its plane", "[imgui][pointer]")
+{
+    // one unit past the right edge: on the plane that is 10 away there, where the cylinder is nearer
+    const auto hit = intersectSurfaceFront(ORIGIN, Vec{ 3.0f, 10.0f, 0.0f }, TOP_LEFT, TOP_RIGHT, BOTTOM_LEFT, 0.0f);
+    REQUIRE(hit);
+    CHECK_THAT(hit->u, WithinAbs(1.25, 1e-5));
+    CHECK_THAT(hit->distance, WithinAbs(1.0, 1e-5));
 }
 
 TEST_CASE("a hand operates the UI while its ray is on a canvas", "[imgui][pointer]")

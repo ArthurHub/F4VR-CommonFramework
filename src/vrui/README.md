@@ -367,5 +367,6 @@ loading).
 
   Each element's line holds `Pos`, `Rot` (degrees around x, y and z), `Scale` and `Size`; a
   container's holds `Padding` and `Layout` in place of `Size`, panels add `Pad:(t,r,b,l)` (and
-  `MaxW` while their width follows the content), and text and button panels add their text sizes
-  as `Text`. Delete a field from a line and it is simply no longer applied.
+  `MaxW` while their width follows the content), text and button panels add their text sizes
+  as `Text`, and an ImGui panel adds the radius it is curved at as `Curve`, 0 for a flat one.
+  Delete a field from a line and it is simply no longer applied.

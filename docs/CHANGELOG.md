@@ -77,6 +77,12 @@ major version is `0`, a minor bump may break the API; the **Upgrading** notes sa
   ImGui has one display, so while a dedicated panel is shown it is the only canvas the mod draws.
   The atlas texture is now created when a canvas is first drawn into it, so a mod with only a
   dedicated panel does not have it.
+- **imgui curved panel**: `UIImGuiPanel::setCurveRadius` bends a panel toward the player, around a
+  cylinder of that radius whose axis runs along the panel's height in front of its middle
+  (`CanvasPlacement::curveRadius` for a canvas placed by hand). With the radius as the distance the
+  panel stands at, its sides are as far from the player as its middle and face them, so a wide panel
+  reads the same all over. The pointer meets the panel where it is drawn, and the dev layout tunes
+  the radius live as `Curve`.
 - **config color**: `ConfigBase::getColorValue` reads a color from the INI, written as `r,g,b` or
   `r,g,b,a` in 0 to 255, as `getTransformValue` reads a transform.
 - **render gradients**: a fill takes a color for each corner and blends between them

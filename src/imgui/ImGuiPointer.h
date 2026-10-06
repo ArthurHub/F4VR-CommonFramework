@@ -122,8 +122,8 @@ namespace f4cf::imgui::internal
     };
 
     /**
-     * An interactive canvas the pointer can be on in a frame: three corners of its quad in the world, and
-     * where its pixels start in ImGui's display.
+     * An interactive canvas the pointer can be on in a frame: three corners of its quad in the world, the
+     * radius it is curved at, and where its pixels start in ImGui's display.
      */
     struct PointerTarget
     {
@@ -131,6 +131,10 @@ namespace f4cf::imgui::internal
         RE::NiPoint3 topLeft;
         RE::NiPoint3 topRight;
         RE::NiPoint3 bottomLeft;
+
+        // 0 for a flat canvas. The corners of a curved one are of its quad as it is when flat (CurvedQuad).
+        float curveRadius = 0.0f;
+
         float displayX = 0.0f;
         float displayY = 0.0f;
     };
@@ -212,7 +216,7 @@ namespace f4cf::imgui
             internal::PointerHandLatch latch;
 
             // the canvas its press began on. nullptr once that canvas is not shown or the ray no longer
-            // meets its plane: the press then has no canvas to come back to.
+            // meets its surface: the press then has no canvas to come back to.
             const Canvas* canvas = nullptr;
         };
 

@@ -134,6 +134,13 @@ namespace f4cf::imgui
 
         void setDedicated(bool dedicated);
 
+        void setCurveRadius(float units);
+
+        float getCurveRadius() const
+        {
+            return _curveRadiusUnits;
+        }
+
         void setInteractive(bool interactive);
 
         bool isPointedAt() const;
@@ -213,5 +220,8 @@ namespace f4cf::imgui
 
         vrui::UIPanelSizing _sizing = vrui::UIPanelSizing::Fixed;
         float _maxWidthUnits = 0.0f;
+
+        // 0 for a flat panel
+        float _curveRadiusUnits = 0.0f;
     };
 }

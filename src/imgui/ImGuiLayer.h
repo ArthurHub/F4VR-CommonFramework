@@ -42,7 +42,8 @@ namespace f4cf::imgui::internal
     /**
      * One canvas's composited quad: four world-space corners (resolved game-side) and the sub-rect of
      * the frame's texture that holds its pixels. Every placement mode reduces to this, which is why
-     * the renderer needs to know nothing about vrui, nodes or billboards.
+     * the renderer needs to know nothing about vrui, nodes or billboards. A curved canvas reduces to
+     * several of them, side by side.
      */
     struct CanvasQuad
     {

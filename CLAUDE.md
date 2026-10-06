@@ -171,6 +171,9 @@ and composited as one quad, so N canvases cost one ImGui frame and one draw call
   place of a part of the atlas, so it keeps its pixels past the atlas's 1024, and while it is shown
   it is ImGui's display, so the combos, popups and dialogs of its content open inside it. ImGui has
   one display: while a dedicated panel is shown, the mod's other canvases are not drawn.
+- **A wide panel is curved** (`setCurveRadius`): bent toward the player around a cylinder, so its
+  sides read as its middle does. It is drawn as flat pieces side by side, and the pointer meets it
+  on the cylinder, both from `CurvedQuad` in `ImGuiPointerLogic.h`. vrui still lays it out flat.
 - Content can only be measured by drawing it, which happens after vrui lays the frame out, so a panel
   sized to its content is laid out at **last frame's** size.
 - `setFontSizePixels` / `setSupersample` are process-wide and read when the first canvas draws.
