@@ -53,6 +53,11 @@ major version is `0`, a minor bump may break the API; the **Upgrading** notes sa
   turned off for a mod that draws its own. The trigger still reaches the game.
 - **config color**: `ConfigBase::getColorValue` reads a color from the INI, written as `r,g,b` or
   `r,g,b,a` in 0 to 255, as `getTransformValue` reads a transform.
+- **render gradients**: a fill takes a color for each corner and blends between them
+  (`PrimitiveDraw::addTriangle` and `addQuad` with a color per corner), so a gradient or a fade is
+  one shape. Every vertex carries its color, so a change of color no longer starts a new draw call:
+  the lines of a layer go out in one draw, its screen text in one, and its fills and world text in
+  one for each texture.
 
 **Upgrading**
 
@@ -71,6 +76,8 @@ major version is `0`, a minor bump may break the API; the **Upgrading** notes sa
 - `UIManager::enableDevLayoutViaConfig` is removed: delete the call, and add `bVRUIDevLayout = true`
   to the INI's `[Debug]` section while tuning. `ConfigBase::debugVRUIProperties` is removed with it,
   and a `[VRUI_DevLayout]` section left in an INI is no longer read.
+- `render::FillTriangle` has a color for each corner, `colorA`, `colorB` and `colorC`, in place of
+  `color`. `addTriangle` and `addQuad` with one color are unchanged.
 
 - `f4vr::PlayerNodes` and `getPlayerNodes()`, deprecated in 0.4.0, are removed. Use
   `getVRPlayerNodes()`, which returns CommonLibF4's `RE::VRPlayerNodes`: the same table with

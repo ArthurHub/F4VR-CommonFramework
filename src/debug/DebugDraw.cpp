@@ -90,14 +90,6 @@ namespace f4cf::debug
             outU = MatrixUtils::vec3Norm(MatrixUtils::vec3Cross(dir, reference));
             outV = MatrixUtils::vec3Norm(MatrixUtils::vec3Cross(outU, dir));
         }
-
-        /**
-         * Strict ordering on colors so the publish sort groups equal-color lines into single draws.
-         */
-        bool colorLess(const Color& lhs, const Color& rhs)
-        {
-            return std::tie(lhs.r, lhs.g, lhs.b, lhs.a) < std::tie(rhs.r, rhs.g, rhs.b, rhs.a);
-        }
     }
 
     DebugDraw& DebugDraw::get()
@@ -794,10 +786,6 @@ namespace f4cf::debug
         // hand this frame's head position to the render thread for orienting billboard labels
         self._building.viewerPosition = self._cameraPos;
 
-        // group same-color lines into contiguous runs so the renderer draws each run in one call
-        std::ranges::stable_sort(self._building.lines, [](const render::LineSegment& lhs, const render::LineSegment& rhs) {
-            return colorLess(lhs.color, rhs.color);
-        });
         s_renderer.publish(std::move(self._building));
         self._building = {};
     }

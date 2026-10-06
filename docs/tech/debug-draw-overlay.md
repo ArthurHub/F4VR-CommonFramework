@@ -96,8 +96,8 @@ this overlay.
   instances), input layout, topology, rasterizer, depth-stencil, blend, RTVs, DSV, viewports, and
   vertex/index buffers. We draw in the middle of the game's pipeline; a missed field visibly
   corrupts the frame (ROCK :1187-1231).
-- **Line batching**: producer publishes segments sorted by color; the renderer uploads one dynamic
-  VB and issues one `DrawInstanced` per same-color run.
+- **Line batching**: each vertex carries its color, so the renderer uploads one dynamic VB and
+  issues one `DrawInstanced` for all the segments.
 - **Text**: a real typeface (the embedded Roboto Medium, or the mod's own TTF) rasterized into a
   signed-distance-field atlas, so glyphs stay sharp at any size, distance or angle. ROCK's
   self-contained 5×7 bitmap font (one quad per lit pixel; ROCK :2129-2314) was the original and was

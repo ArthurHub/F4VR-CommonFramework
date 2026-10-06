@@ -17,9 +17,6 @@ namespace f4cf::imgui
 {
     namespace
     {
-        // A fill has one color, so a fade is drawn as this many pieces, each more opaque than the one before.
-        constexpr int RAY_FADE_STEPS = 8;
-
         // the mark is a disc of this many triangles
         constexpr int MARK_SEGMENTS = 20;
 
@@ -218,8 +215,7 @@ namespace f4cf::imgui
      * The ray is a ribbon turned to face the head, since a line is drawn one pixel wide whatever is asked. It
      * runs from the ray's start for the style's longest length, or up to the mark when the canvas is nearer.
      * It fades in and out over the style's length at its two ends, or over half of the ray when it is shorter
-     * than both. A piece of the fade at the start and its mirror at the end have one color and are added
-     * together, so the two go out in one draw.
+     * than both. Each fade is one piece, clear at the ray's end and the ray's color at its other side.
      *
      * The mark is a disc that lies on the canvas, with its border as a ring around it. The size of both is
      * given at a set distance from the head and grows with the distance, so the mark looks the same size
@@ -248,25 +244,21 @@ namespace f4cf::imgui
         if (length > 0.0f && _style.rayWidth > 0.0f && _style.rayColor.a > 0.0f &&
             common::MatrixUtils::tryVec3Norm(common::MatrixUtils::vec3Cross(direction, origin - head), across)) {
             const RE::NiPoint3 half = across * (_style.rayWidth * 0.5f);
-            const auto addPiece = [&](const float from, const float to, const float opacity) {
-                render::Color color = _style.rayColor;
-                color.a *= opacity;
+            const render::Color& solid = _style.rayColor;
+            const render::Color clear{ solid.r, solid.g, solid.b, 0.0f };
+            const auto addPiece = [&](const float from, const float to, const render::Color& fromColor, const render::Color& toColor) {
                 const RE::NiPoint3 start = origin + direction * from;
                 const RE::NiPoint3 end = origin + direction * to;
-                frame.addQuad(start - half, start + half, end + half, end - half, color);
+                frame.addQuad(start - half, start + half, end + half, end - half, fromColor, fromColor, toColor, toColor);
             };
 
             const float fade = std::clamp(_style.rayFade, 0.0f, length * 0.5f);
             if (fade > 0.0f) {
-                const float step = fade / static_cast<float>(RAY_FADE_STEPS);
-                for (int i = 0; i < RAY_FADE_STEPS; ++i) {
-                    const float opacity = (static_cast<float>(i) + 0.5f) / static_cast<float>(RAY_FADE_STEPS);
-                    addPiece(step * static_cast<float>(i), step * static_cast<float>(i + 1), opacity);
-                    addPiece(length - step * static_cast<float>(i + 1), length - step * static_cast<float>(i), opacity);
-                }
+                addPiece(0.0f, fade, clear, solid);
+                addPiece(length - fade, length, solid, clear);
             }
             if (length > fade * 2.0f) {
-                addPiece(fade, length - fade, 1.0f);
+                addPiece(fade, length - fade, solid, solid);
             }
         }
 
