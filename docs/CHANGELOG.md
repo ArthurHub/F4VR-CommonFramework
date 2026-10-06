@@ -56,6 +56,10 @@ major version is `0`, a minor bump may break the API; the **Upgrading** notes sa
   press that began on a canvas stays on that canvas and stays hidden from the game until the trigger
   is released, also when the ray slides off the canvas or the canvas is hidden. A trigger that is
   already down when the ray comes to a canvas stays the game's until it is released.
+- **imgui pointer scrolls**: the thumbstick of the hand that owns the pointer is ImGui's mouse wheel,
+  so a list or a child window that is longer than its room scrolls while the ray is on it, and the
+  player does not move. `PointerStyle::scrollSpeed` is the speed at a full push, in lines of text a
+  second.
 - **config color**: `ConfigBase::getColorValue` reads a color from the INI, written as `r,g,b` or
   `r,g,b,a` in 0 to 255, as `getTransformValue` reads a transform.
 - **render gradients**: a fill takes a color for each corner and blends between them

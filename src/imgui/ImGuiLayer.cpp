@@ -107,6 +107,10 @@ namespace f4cf::imgui::internal
             io.IniFilename = nullptr;
             io.LogFilename = nullptr;
             io.MouseDrawCursor = false;
+            // Every event is taken in the frame it is given in. ImGui's own way takes a moved mouse and a
+            // turned wheel in separate frames, and the pointer gives both in every frame while it scrolls,
+            // so they would pile up and the pointer would fall behind the hand.
+            io.ConfigInputTrickleEventQueue = false;
             io.DisplaySize = ImVec2(static_cast<float>(ATLAS_WIDTH), static_cast<float>(ATLAS_HEIGHT));
             // glyphs are rasterized at the atlas scale and laid out at 1x
             io.FontGlobalScale = 1.0f / s_atlasScale;
