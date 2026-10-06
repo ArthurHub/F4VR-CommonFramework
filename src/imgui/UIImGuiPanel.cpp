@@ -249,6 +249,24 @@ namespace f4cf::imgui
     }
 
     /**
+     * Curve the panel toward the player: it is bent around a cylinder of this radius, whose axis runs along
+     * the panel's height in front of its middle. 0, the default, is a flat panel.
+     * - The radius is in vrui units and is scaled with the panel, as its size is. A panel that stands as far
+     *   from the player as its radius has every part at that distance, facing the player, so its sides read
+     *   as its middle does.
+     * - The panel's middle stays where vrui puts it. Its width is kept along the curve, so its sides come
+     *   toward the player and it is a little narrower from side to side.
+     * - It is drawn and pointed at as curved, with nothing else to do. vrui lays it out as the flat rectangle
+     *   of its size, so it is for a panel that is a root by itself: in a container its sides leave the plane
+     *   of the elements beside it.
+     * See CanvasPlacement::curveRadius.
+     */
+    void UIImGuiPanel::setCurveRadius(const float units)
+    {
+        _curveRadiusUnits = (std::max)(0.0f, units);
+    }
+
+    /**
      * Whether the panel's widgets can be operated: hovered, pressed and dragged with the ray of a wand and
      * its trigger. Off by default, and the panel then only shows its content. See Canvas::setInteractive.
      */
@@ -336,7 +354,8 @@ namespace f4cf::imgui
 
     /**
      * The element's fields, then the ones a vrui::UIPanel adds: the padding, as Pad:(top,right,bottom,left),
-     * and while the width follows the content its cap, as MaxW:(width).
+     * and while the width follows the content its cap, as MaxW:(width). Then the panel's own: the radius it
+     * is curved at, as Curve:(radius), 0 for a flat panel.
      */
     void UIImGuiPanel::writeDevLayoutFields(std::string& line) const
     {
@@ -346,6 +365,7 @@ namespace f4cf::imgui
         if (widthFollowsContent(_sizing)) {
             line += std::format(", MaxW:({:.2f})", _maxWidthUnits);
         }
+        line += std::format(", Curve:({:.2f})", _curveRadiusUnits);
     }
 
     void UIImGuiPanel::readDevLayoutFields(const DevLayoutFields& fields)
@@ -357,6 +377,9 @@ namespace f4cf::imgui
         }
         if (const auto maxWidth = fields.find("MaxW"); maxWidth != fields.end() && maxWidth->second.size() == 1) {
             setMaxWidth(maxWidth->second[0]);
+        }
+        if (const auto curve = fields.find("Curve"); curve != fields.end() && curve->second.size() == 1) {
+            setCurveRadius(curve->second[0]);
         }
     }
 
@@ -385,6 +408,7 @@ namespace f4cf::imgui
         // panel grows and shrinks with its neighbours instead of drifting out of the layout
         out.worldWidth = _size.width * out.transform.scale;
         out.worldHeight = _size.height * out.transform.scale;
+        out.curveRadius = _curveRadiusUnits * out.transform.scale;
         out.show = _sizing == vrui::UIPanelSizing::Fixed || _canvas->measuredContentSize().has_value();
         return true;
     }

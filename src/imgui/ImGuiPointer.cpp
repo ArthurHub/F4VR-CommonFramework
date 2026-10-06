@@ -207,9 +207,10 @@ namespace f4cf::imgui
     /**
      * A hand in this frame: its pointer, the target it is on, and whether it presses it.
      * The hand is on the nearest of the targets its ray is on. While it holds a press it stays on the canvas
-     * the press began on, wherever its ray meets that canvas's plane. When that canvas is no longer a target,
-     * or the ray no longer meets its plane, the press has no canvas to come back to: the hand is on no
-     * target, so the UI gets the release, and it still operates the UI until its trigger is released.
+     * the press began on, wherever its ray meets that canvas's surface: its plane, or the cylinder of a curved
+     * canvas. When that canvas is no longer a target, or the ray no longer meets its surface, the press has no
+     * canvas to come back to: the hand is on no target, so the UI gets the release, and it still operates the
+     * UI until its trigger is released.
      * A hand that does not operate the UI is on no target, and a hand that may not point has no pointer.
      */
     Pointer::HandPointer Pointer::pointHand(const bool primaryHand, const std::vector<internal::PointerTarget>& targets)
@@ -224,9 +225,10 @@ namespace f4cf::imgui
 
         if (wasPressing) {
             const auto target = std::ranges::find(targets, hold.canvas, &internal::PointerTarget::canvas);
-            const auto hit = target != targets.end() && hand.sample.valid
-                                 ? internal::intersectPlaneFront(hand.sample.origin, hand.sample.direction, target->topLeft, target->topRight, target->bottomLeft)
-                                 : std::nullopt;
+            const auto hit =
+                target != targets.end() && hand.sample.valid
+                    ? internal::intersectSurfaceFront(hand.sample.origin, hand.sample.direction, target->topLeft, target->topRight, target->bottomLeft, target->curveRadius)
+                    : std::nullopt;
             if (hit) {
                 hand.target = &*target;
                 hand.hit = *hit;
@@ -235,7 +237,7 @@ namespace f4cf::imgui
             }
         } else if (hand.sample.valid) {
             for (const auto& target : targets) {
-                const auto hit = internal::intersectQuadFront(hand.sample.origin, hand.sample.direction, target.topLeft, target.topRight, target.bottomLeft);
+                const auto hit = internal::intersectQuadFront(hand.sample.origin, hand.sample.direction, target.topLeft, target.topRight, target.bottomLeft, target.curveRadius);
                 if (hit && (!hand.target || hit->distance < hand.hit.distance)) {
                     hand.target = &target;
                     hand.hit = *hit;
@@ -383,7 +385,7 @@ namespace f4cf::imgui
 
     /**
      * Add the mark of a hand, where its ray meets its canvas: a disc that lies on the canvas, with its border
-     * as a ring around it.
+     * as a ring around it. On a curved canvas it is flat, and lies on the canvas where the ray meets it.
      * Its size is the style's, in the world, whatever the distance to it. So it keeps its size on the canvas
      * as the player comes nearer or steps back.
      */
@@ -397,8 +399,10 @@ namespace f4cf::imgui
         const float inside = radius - std::clamp(_style.markBorderWidth, 0.0f, radius);
 
         // the directions from the center to the points around the mark, the last one the first again
-        const RE::NiPoint3 right = common::MatrixUtils::vec3Norm(hand.target->topRight - hand.target->topLeft);
-        const RE::NiPoint3 down = common::MatrixUtils::vec3Norm(hand.target->bottomLeft - hand.target->topLeft);
+        const internal::PointerTarget& target = *hand.target;
+        const RE::NiPoint3 right = target.curveRadius > 0.0f ? internal::CurvedQuad(target.topLeft, target.topRight, target.bottomLeft, target.curveRadius).rightAt(hand.hit.u)
+                                                             : common::MatrixUtils::vec3Norm(target.topRight - target.topLeft);
+        const RE::NiPoint3 down = common::MatrixUtils::vec3Norm(target.bottomLeft - target.topLeft);
         std::array<RE::NiPoint3, MARK_SEGMENTS + 1> around;
         for (int i = 0; i <= MARK_SEGMENTS; ++i) {
             const float angle = 2.0f * std::numbers::pi_v<float> * static_cast<float>(i % MARK_SEGMENTS) / static_cast<float>(MARK_SEGMENTS);

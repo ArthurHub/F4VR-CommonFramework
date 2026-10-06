@@ -1,6 +1,9 @@
 #pragma once
 
+#include <algorithm>
+#include <cmath>
 #include <cstdint>
+#include <numbers>
 #include <optional>
 
 // The pointer's logic, apart from the game: plain std only, so it is unit tested.
@@ -60,13 +63,171 @@ namespace f4cf::imgui::internal
     }
 
     /**
-     * Where a ray meets the front of a quad, if it does: on the quad's plane, and not beside the quad.
+     * A quad bent around a cylinder, which is how a curved canvas is drawn and how the pointer meets it. Both
+     * take it from here, so the pointer is on the canvas where the canvas is drawn.
+     * The cylinder's axis runs along the quad's height, on the side of the quad's front, at the radius from
+     * the quad's middle. So the middle of the quad stays where it is, its sides come toward whoever faces it,
+     * and its width is kept along the curve.
+     * The quad is a rectangle given by three of its corners as it is when flat, as seen from its front. A
+     * radius under the quad's width over pi is taken as that, so the quad is at most half of the cylinder.
+     * Vec is any type with x, y and z.
+     */
+    template <class Vec>
+    class CurvedQuad
+    {
+    public:
+        CurvedQuad(const Vec& topLeft, const Vec& topRight, const Vec& bottomLeft, const float radius)
+        {
+            const Vec3 right = subtract(topRight, topLeft);
+            const Vec3 down = subtract(bottomLeft, topLeft);
+            _width = std::sqrt(dot(right, right));
+            _height = std::sqrt(dot(down, down));
+            // a quad with no width or height has no direction there: it is met by no ray, and all its points are finite
+            _right = _width > 0.0f ? scale(right, 1.0f / _width) : Vec3{};
+            _down = _height > 0.0f ? scale(down, 1.0f / _height) : Vec3{};
+            // right x down: the way the quad faces away from its front
+            _forward = Vec3{ _right.y * _down.z - _right.z * _down.y, _right.z * _down.x - _right.x * _down.z, _right.x * _down.y - _right.y * _down.x };
+            _radius = (std::max)(radius, _width / std::numbers::pi_v<float>);
+
+            // on the axis, level with the quad's top edge
+            _axisTop =
+                Vec3{ topLeft.x + right.x * 0.5f - _forward.x * _radius, topLeft.y + right.y * 0.5f - _forward.y * _radius, topLeft.z + right.z * 0.5f - _forward.z * _radius };
+        }
+
+        /**
+         * The angle the quad takes up around the axis, in radians.
+         */
+        float arc() const
+        {
+            return _width / _radius;
+        }
+
+        /**
+         * The point at the given fractions of the quad's width and height from its top left corner.
+         */
+        Vec pointAt(const float u, const float v) const
+        {
+            const float angle = (u - 0.5f) * arc();
+            const float across = std::sin(angle) * _radius;
+            const float out = std::cos(angle) * _radius;
+            const float along = v * _height;
+            return Vec{ _axisTop.x + _right.x * across + _forward.x * out + _down.x * along,
+                _axisTop.y + _right.y * across + _forward.y * out + _down.y * along,
+                _axisTop.z + _right.z * across + _forward.z * out + _down.z * along };
+        }
+
+        /**
+         * The way the quad's width runs at the given fraction of its width, of length 1: the quad's right
+         * there, which turns along the curve.
+         */
+        Vec rightAt(const float u) const
+        {
+            const float angle = (u - 0.5f) * arc();
+            const float across = std::cos(angle);
+            const float out = -std::sin(angle);
+            return Vec{ _right.x * across + _forward.x * out, _right.y * across + _forward.y * out, _right.z * across + _forward.z * out };
+        }
+
+        /**
+         * Where a ray meets the cylinder from the quad's front, which is the cylinder's inside, if it does.
+         * The place is given as on the quad, measured along the curve, and is under 0 or over 1 where the ray
+         * passes beside the quad. A ray that starts inside the cylinder meets it unless it runs along the
+         * axis. A ray from outside meets the inside of the far part, and passes through the near part, which
+         * it comes to from behind.
+         */
+        std::optional<QuadHit> intersectFront(const Vec& origin, const Vec& direction) const
+        {
+            if (!(_width > 0.0f && _height > 0.0f)) {
+                return std::nullopt;
+            }
+            const Vec3 fromAxis = subtract(origin, _axisTop);
+            const float originAcross = dot(fromAxis, _right);
+            const float originOut = dot(fromAxis, _forward);
+            const float directionAcross = dot(direction, _right);
+            const float directionOut = dot(direction, _forward);
+
+            // seen along the axis the cylinder is a circle, and the ray meets it where it is at the radius from the axis
+            const float a = directionAcross * directionAcross + directionOut * directionOut;
+            const float halfB = originAcross * directionAcross + originOut * directionOut;
+            const float c = originAcross * originAcross + originOut * originOut - _radius * _radius;
+            const float discriminant = halfB * halfB - a * c;
+            // negated so a NaN is rejected as well
+            if (!(a > 0.0f) || !(discriminant >= 0.0f)) {
+                return std::nullopt;
+            }
+
+            // the further of the two places is where the ray leaves the cylinder, so there it meets the inside
+            const float distance = (-halfB + std::sqrt(discriminant)) / a;
+            if (!(distance > 0.0f)) {
+                return std::nullopt;
+            }
+
+            const float angle = std::atan2(originAcross + directionAcross * distance, originOut + directionOut * distance);
+            const float along = dot(fromAxis, _down) + dot(direction, _down) * distance;
+            return QuadHit{ .u = 0.5f + angle / arc(), .v = along / _height, .distance = distance };
+        }
+
+    private:
+        struct Vec3
+        {
+            float x = 0.0f;
+            float y = 0.0f;
+            float z = 0.0f;
+        };
+
+        template <class B>
+        static Vec3 subtract(const Vec& a, const B& b)
+        {
+            return Vec3{ a.x - b.x, a.y - b.y, a.z - b.z };
+        }
+
+        static Vec3 scale(const Vec3& a, const float factor)
+        {
+            return Vec3{ a.x * factor, a.y * factor, a.z * factor };
+        }
+
+        template <class A>
+        static float dot(const A& a, const Vec3& b)
+        {
+            return a.x * b.x + a.y * b.y + a.z * b.z;
+        }
+
+        // the quad's own directions, of length 1: along its width in its middle, along its height, and away from its front
+        Vec3 _right;
+        Vec3 _down;
+        Vec3 _forward;
+
+        Vec3 _axisTop;
+        float _width = 0.0f;
+        float _height = 0.0f;
+        float _radius = 0.0f;
+    };
+
+    /**
+     * Where a ray meets the surface of a canvas from its front, if it does: the plane of its quad, or for a
+     * canvas with a curve radius the cylinder its quad is bent around (CurvedQuad).
+     * The quad and the ray are given as for intersectPlaneFront, and so is the place: on the quad, and under
+     * 0 or over 1 where the ray passes beside it.
+     */
+    template <class Vec>
+    std::optional<QuadHit> intersectSurfaceFront(const Vec& origin, const Vec& direction, const Vec& topLeft, const Vec& topRight, const Vec& bottomLeft, const float curveRadius)
+    {
+        if (curveRadius > 0.0f) {
+            return CurvedQuad(topLeft, topRight, bottomLeft, curveRadius).intersectFront(origin, direction);
+        }
+        return intersectPlaneFront(origin, direction, topLeft, topRight, bottomLeft);
+    }
+
+    /**
+     * Where a ray meets the front of a quad, if it does: on the quad's surface, and not beside the quad.
+     * The surface is the quad's plane, or with a curve radius the cylinder the quad is bent around.
      * The quad and the ray are given as for intersectPlaneFront.
      */
     template <class Vec>
-    std::optional<QuadHit> intersectQuadFront(const Vec& origin, const Vec& direction, const Vec& topLeft, const Vec& topRight, const Vec& bottomLeft)
+    std::optional<QuadHit> intersectQuadFront(const Vec& origin, const Vec& direction, const Vec& topLeft, const Vec& topRight, const Vec& bottomLeft,
+        const float curveRadius = 0.0f)
     {
-        const auto hit = intersectPlaneFront(origin, direction, topLeft, topRight, bottomLeft);
+        const auto hit = intersectSurfaceFront(origin, direction, topLeft, topRight, bottomLeft, curveRadius);
         // negated so a NaN is rejected as well
         if (!hit || !(hit->u >= 0.0f && hit->u <= 1.0f && hit->v >= 0.0f && hit->v <= 1.0f)) {
             return std::nullopt;

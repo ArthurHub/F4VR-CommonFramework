@@ -72,6 +72,14 @@ namespace f4cf::imgui
         float worldWidth = 30.0f;
         float worldHeight = 20.0f;
 
+        // The radius the canvas is curved at, in world units. 0, the default, is a flat canvas.
+        // A curved canvas is bent around a cylinder whose axis runs along its height, that far in front of
+        // its middle, on the side it is seen from. With the radius as the distance it is seen from, every
+        // part of it is as far from the viewer and faces them. Its middle stays at the transform's translate,
+        // its sides come toward the viewer, and its width is kept along the curve.
+        // A radius under the width over pi is taken as that: the canvas is at most half of a cylinder.
+        float curveRadius = 0.0f;
+
         // false still lays the content out and measures it, but shows nothing this frame - how a canvas
         // sized to its content stays out of sight until it knows that size
         bool show = true;

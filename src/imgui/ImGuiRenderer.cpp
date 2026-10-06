@@ -29,7 +29,9 @@ namespace f4cf::imgui::internal::renderer
         };
 
         constexpr UINT VERTICES_PER_QUAD = 6;
-        constexpr UINT MAX_QUADS = 64;
+
+        // a flat canvas is one quad, and a curved one is up to 90, for half of a cylinder
+        constexpr UINT MAX_QUADS = 256;
         constexpr UINT MAX_QUAD_VERTICES = MAX_QUADS * VERTICES_PER_QUAD;
 
         // Same stereo split the rest of the framework's overlays use: FO4VR renders both eyes into

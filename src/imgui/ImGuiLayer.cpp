@@ -181,6 +181,7 @@ namespace f4cf::imgui::internal
          * The canvas's four world corners from its placement: local +X is right, local +Z is up, and
          * the quad is centred on the transform's translate. Its part of the display's texture is the
          * canvas's rectangle in the display, at the atlas scale.
+         * For a curved canvas this is the quad as it is when flat: see appendDrawnQuads.
          */
         CanvasQuad buildQuad(const CanvasPlacement& placement, const FrameDisplay& display, const int x, const int y, const int width, const int height, const RE::NiPoint3& viewer,
             const bool occluded)
@@ -204,6 +205,49 @@ namespace f4cf::imgui::internal
             quad.viewerDistance = common::MatrixUtils::vec3Len(centre - viewer);
             quad.occluded = occluded;
             return quad;
+        }
+
+        // a curved canvas is drawn as flat pieces side by side, each turned this much from the one beside it
+        constexpr float CURVE_PIECE_DEGREES = 2.0f;
+
+        /**
+         * Add the quads a canvas is drawn with. A flat canvas is drawn with its own quad. A curved one is that
+         * quad bent around a cylinder (CurvedQuad), drawn as flat pieces side by side, each with its part of
+         * the canvas's texture.
+         * A piece has its own distance to the viewer, so the far pieces of a canvas are drawn before its near
+         * ones.
+         */
+        void appendDrawnQuads(std::vector<CanvasQuad>& quads, const CanvasQuad& quad, const float curveRadius, const RE::NiPoint3& viewer)
+        {
+            if (!(curveRadius > 0.0f)) {
+                quads.push_back(quad);
+                return;
+            }
+
+            const CurvedQuad curve(quad.topLeft, quad.topRight, quad.bottomLeft, curveRadius);
+            const int pieces = (std::max)(1, static_cast<int>(std::ceil(common::MatrixUtils::radsToDegrees(curve.arc()) / CURVE_PIECE_DEGREES)));
+            RE::NiPoint3 top = curve.pointAt(0.0f, 0.0f);
+            RE::NiPoint3 bottom = curve.pointAt(0.0f, 1.0f);
+            for (int i = 1; i <= pieces; ++i) {
+                // a piece starts at the very points the one before it ends at, so no gap shows between them
+                const float from = static_cast<float>(i - 1) / static_cast<float>(pieces);
+                const float to = static_cast<float>(i) / static_cast<float>(pieces);
+                const RE::NiPoint3 nextTop = curve.pointAt(to, 0.0f);
+                const RE::NiPoint3 nextBottom = curve.pointAt(to, 1.0f);
+
+                CanvasQuad piece = quad;
+                piece.topLeft = top;
+                piece.topRight = nextTop;
+                piece.bottomRight = nextBottom;
+                piece.bottomLeft = bottom;
+                piece.u0 = std::lerp(quad.u0, quad.u1, from);
+                piece.u1 = std::lerp(quad.u0, quad.u1, to);
+                piece.viewerDistance = common::MatrixUtils::vec3Len((top + nextBottom) * 0.5f - viewer);
+                quads.push_back(piece);
+
+                top = nextTop;
+                bottom = nextBottom;
+            }
         }
     }
 
@@ -380,6 +424,7 @@ namespace f4cf::imgui::internal
                     .topLeft = entry.quad.topLeft,
                     .topRight = entry.quad.topRight,
                     .bottomLeft = entry.quad.bottomLeft,
+                    .curveRadius = entry.placement.curveRadius,
                     .displayX = static_cast<float>(entry.x),
                     .displayY = static_cast<float>(entry.y) });
             }
@@ -520,7 +565,7 @@ namespace f4cf::imgui::internal
             if (!entry.placement.show) {
                 continue; // laid out to be measured, not to be seen
             }
-            frame.quads.push_back(entry.quad);
+            appendDrawnQuads(frame.quads, entry.quad, entry.placement.curveRadius, viewer);
         }
 
         // Occluded quads first, so each group is one contiguous run the renderer can draw with one

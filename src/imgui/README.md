@@ -18,10 +18,10 @@ and a `vrui::UITextPanel` standing side by side read as one UI.
 
 | File | What it is |
 | ----------------------- | -------------------------------------------------------------------- |
-| [`ImGuiCanvas.h`](ImGuiCanvas.h) / [`.cpp`](ImGuiCanvas.cpp) | `Canvas` — one ImGui window placed in the world by a provider you write. Content, placement, chrome (background, border, rounding, padding), sizing and occlusion, and whether it is dedicated. |
+| [`ImGuiCanvas.h`](ImGuiCanvas.h) / [`.cpp`](ImGuiCanvas.cpp) | `Canvas` — one ImGui window placed in the world by a provider you write. Content, placement and curve, chrome (background, border, rounding, padding), sizing and occlusion, and whether it is dedicated. |
 | [`UIImGuiPanel.h`](UIImGuiPanel.h) / [`.cpp`](UIImGuiPanel.cpp) | The vrui adapter: a `UIElement` whose rectangle a `Canvas` fills. Takes `vrui::UIPanelStyle` and the vrui sizing modes, in vrui units. |
 | [`ImGuiPointer.h`](ImGuiPointer.h) / [`.cpp`](ImGuiPointer.cpp) | `Pointer`, reached as `imgui::pointer()` — the one pointer of the interactive canvases: a wand's ray as ImGui's mouse, its trigger as the mouse button, and that wand hidden from the game. Its state, which hands point, and its `PointerStyle`: where the ray is on the hand, and how the ray and its mark are drawn. |
-| [`ImGuiPointerLogic.h`](ImGuiPointerLogic.h) | The pointer's logic apart from the game, so it is unit tested: where a ray meets a quad and its plane, whether a hand operates the UI and presses it, which hand owns the pointer, and how much a thumbstick scrolls. |
+| [`ImGuiPointerLogic.h`](ImGuiPointerLogic.h) | The pointer's logic apart from the game, so it is unit tested: where a ray meets a quad and its plane, the quad of a curved canvas bent around its cylinder, whether a hand operates the UI and presses it, which hand owns the pointer, and how much a thumbstick scrolls. |
 | [`ImGuiSettings.h`](ImGuiSettings.h) / [`.cpp`](ImGuiSettings.cpp) | The two process-wide knobs: `setFontSizePixels` and `setSupersample`. |
 | [`ImGuiFonts.h`](ImGuiFonts.h) / [`.cpp`](ImGuiFonts.cpp) | Loads the framework's text font into the ImGui atlas, from the same bytes the primitive renderer draws with. |
 | [`ImGuiLayer.h`](ImGuiLayer.h) / [`.cpp`](ImGuiLayer.cpp) | Game-thread pump: one ImGui frame holding every visible canvas, or the dedicated canvas alone, cloned and published with each canvas's quad. |
@@ -141,8 +141,8 @@ panel->setContent([this] {
   wand.
 - **A press is held.** A press that began on a canvas is the UI's until the trigger is released. It
   stays on that canvas while the ray slides off it: the pointer follows the ray on the canvas's
-  plane, up to a canvas's size past its edges, so a slider is dragged to its end and a press is
-  given up by releasing beside the canvas. The wand stays hidden from the game until the release,
+  plane, or on the cylinder of a [curved one](#a-curved-panel), up to a canvas's size past its
+  edges, so a slider is dragged to its end and a press is given up by releasing beside the canvas. The wand stays hidden from the game until the release,
   also when the canvas is hidden in the middle of the press, so the game never gets a trigger that
   is already down. The press ends when the trigger is back near its rest, a little after the end of
   its click.
@@ -231,6 +231,35 @@ panel->setDedicated(true);              // Canvas::setDedicated for a canvas pla
   first drawn, and again when the panel's size changes, so a panel sized to its content gets a new
   one whenever its content changes size. The atlas is not created for a mod that draws only a
   dedicated panel.
+
+## A curved panel
+
+A wide flat panel in front of the player has its sides further away than its middle and turned away
+from the player, so the text there reads smaller. A curved panel is bent toward the player:
+
+```cpp
+panel->setCurveRadius(20.0f);           // CanvasPlacement::curveRadius, in world units, for a canvas placed by hand
+```
+
+- **The curve.** The panel is bent around a cylinder of that radius, whose axis runs along the
+  panel's height in front of its middle. A panel that stands as far from the player as its radius
+  has every part at that distance, facing the player. The radius is in vrui units and is scaled with
+  the panel, as its size is: a panel put 120 units away at a scale of 6 takes a radius of 20.
+- **What stays.** The panel's middle stays where it is placed. Its width is kept along the curve, so
+  it has the same pixels for its size. Its sides come toward the player, and it is a little narrower
+  from side to side.
+- **How far.** 0, the default, is a flat panel. A radius under the panel's width over pi is taken as
+  that, so a panel is at most half of a cylinder.
+- **The pointer.** The ray meets the panel where it is drawn, and its mark lies on the panel there. A
+  press that slides off the panel follows the ray on the cylinder, as it follows it on the plane of
+  a flat one.
+- **How it is drawn.** As flat pieces side by side, one for each 2 degrees of the curve, each with
+  its part of the panel's texture: 29 pieces for a panel as wide as its radius. The content is laid
+  out and rasterized flat as before.
+- **The layout.** vrui lays a curved panel out as the flat rectangle of its size. So it is for a
+  panel that is a root by itself: in a container its sides leave the plane of the elements beside it.
+- **Tuning.** The [dev layout](../vrui/README.md) has the radius as `Curve`, so it is tuned in the
+  headset.
 
 ## Sizes, pixels and legibility
 
