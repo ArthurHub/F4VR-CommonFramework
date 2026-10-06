@@ -5,6 +5,7 @@
 #include <cfloat>
 #include <cmath>
 #include <numbers>
+#include <string_view>
 
 #include <imgui.h>
 
@@ -12,11 +13,23 @@
 #include "../f4vr/PlayerNodes.h"
 #include "../render/PrimitiveDrawRenderer.h"
 #include "../vrcf/VRControllersManager.h"
+#include "../vrcf/VRControllersSuppressor.h"
 
 namespace f4cf::imgui
 {
     namespace
     {
+        // the owner the wands are hidden from the game under (vrcf::VRControllersSuppress)
+        constexpr std::string_view SUPPRESS_KEY = "ImGuiPointer";
+
+        // A press ends when its trigger is back under this, of 1 for a full pull. The game takes a pull from
+        // how far the trigger is pulled too, at a threshold of its own, so the wand is given back to it
+        // only with the trigger near its rest.
+        constexpr float TRIGGER_REST = 0.2f;
+
+        // how far past the edges of its canvas a press follows the ray, in sizes of the canvas
+        constexpr float PRESS_REACH = 1.0f;
+
         // the mark is a disc of this many triangles
         constexpr int MARK_SEGMENTS = 20;
 
@@ -77,43 +90,50 @@ namespace f4cf::imgui
     /**
      * Give ImGui the pointer for the frame that is about to begin: where the pointing hand's ray meets an
      * interactive canvas, as ImGui's mouse position, and that hand's trigger as the left mouse button.
-     * Called before ImGui::NewFrame(), so the widgets of this frame see it. The pointer is drawn from here too.
-     * With no target nothing is read from the game.
+     * Called before ImGui::NewFrame(), so the widgets of this frame see it, and with no target in a frame
+     * that builds no ImGui frame. The pointer is drawn from here too, and the wand of a hand that operates
+     * the UI is hidden from the game.
+     * With no target and no press held, nothing is read from the game.
      */
     void Pointer::update(const std::vector<internal::PointerTarget>& targets)
     {
         _state = {};
-        if (targets.empty()) {
-            release();
-            draw(nullptr);
-            return;
-        }
 
-        const HandPointer primary = pointHand(true, targets);
-        const HandPointer offhand = pointHand(false, targets);
+        HandPointer primary;
+        HandPointer offhand;
+        if (!targets.empty() || _primaryHold.latch.pressing() || _offhandHold.latch.pressing()) {
+            primary = pointHand(true, targets);
+            offhand = pointHand(false, targets);
+        } else {
+            _primaryHold = {};
+            _offhandHold = {};
+        }
+        suppressWands(_primaryHold.latch.operates(), _offhandHold.latch.operates());
+
         const internal::PointerOwner owner =
-            _ownership.update({ .onCanvas = primary.target != nullptr, .down = primary.sample.down }, { .onCanvas = offhand.target != nullptr, .down = offhand.sample.down });
+            _ownership.update({ .onCanvas = primary.target != nullptr, .down = primary.pressed }, { .onCanvas = offhand.target != nullptr, .down = offhand.pressed });
         if (owner == internal::PointerOwner::None) {
             release();
             draw(nullptr);
             return;
         }
 
+        // a press follows the ray past the edges of its canvas, but not without end
         const HandPointer& hand = owner == internal::PointerOwner::Primary ? primary : offhand;
-        const float x = hand.hit.u * static_cast<float>(hand.target->canvas->pixelWidth());
-        const float y = hand.hit.v * static_cast<float>(hand.target->canvas->pixelHeight());
+        const float x = std::clamp(hand.hit.u, -PRESS_REACH, 1.0f + PRESS_REACH) * static_cast<float>(hand.target->canvas->pixelWidth());
+        const float y = std::clamp(hand.hit.v, -PRESS_REACH, 1.0f + PRESS_REACH) * static_cast<float>(hand.target->canvas->pixelHeight());
 
         // the position before the button, so a press lands where the pointer is now
         auto& io = ImGui::GetIO();
         io.AddMousePosEvent(hand.target->displayX + x, hand.target->displayY + y);
-        io.AddMouseButtonEvent(ImGuiMouseButton_Left, hand.sample.down);
+        io.AddMouseButtonEvent(ImGuiMouseButton_Left, hand.pressed);
         _given = true;
 
         _state.canvas = hand.target->canvas;
         _state.x = x;
         _state.y = y;
         _state.primaryHand = owner == internal::PointerOwner::Primary;
-        _state.down = hand.sample.down;
+        _state.down = hand.pressed;
         _state.rayOrigin = hand.sample.origin;
         _state.hitPosition = hand.sample.origin + hand.sample.direction * hand.hit.distance;
         draw(&hand);
@@ -128,21 +148,19 @@ namespace f4cf::imgui
     }
 
     /**
-     * No ImGui frame is built in this frame, so the pointer is on nothing and is not drawn.
-     */
-    void Pointer::clearState()
-    {
-        _state = {};
-        draw(nullptr);
-    }
-
-    /**
-     * A canvas is destroyed: the state must not keep pointing to it.
+     * A canvas is destroyed: nothing must keep pointing to it. A press held on it has no canvas to come
+     * back to, also when another canvas is created at its address.
      */
     void Pointer::onCanvasRemoved(const Canvas* canvas)
     {
         if (_state.canvas == canvas) {
             _state = {};
+        }
+        if (_primaryHold.canvas == canvas) {
+            _primaryHold.canvas = nullptr;
+        }
+        if (_offhandHold.canvas == canvas) {
+            _offhandHold.canvas = nullptr;
         }
     }
 
@@ -152,8 +170,10 @@ namespace f4cf::imgui
      * The UI node is at the wand's node, turned the way the hand aims a weapon: the node a weapon hangs on
      * and the game's own aim node of the offhand are turned the same. The wand's node itself points 59
      * degrees above that.
+     * The trigger is down from its click. For a hand that presses the UI it stays down until it is back
+     * near its rest, which is later than the end of the click.
      */
-    internal::PointerSample Pointer::sampleWand(const bool primaryHand) const
+    internal::PointerSample Pointer::sampleWand(const bool primaryHand, const bool pressing) const
     {
         const auto* nodes = f4vr::getVRPlayerNodes();
         const auto* wand = nodes ? (primaryHand ? nodes->primaryUIAttachNode : nodes->secondaryUIOffsetNode) : nullptr;
@@ -162,35 +182,86 @@ namespace f4cf::imgui
         }
         const bool rightHand = primaryHand != f4vr::isLeftHandedMode();
         const RE::NiTransform ray = common::MatrixUtils::localToWorldTransform(wand->world, rightHand ? _style.rayOffset : mirrorLeftToRight(_style.rayOffset));
+        const vrcf::Hand hand = primaryHand ? vrcf::Hand::Primary : vrcf::Hand::Offhand;
         return {
             .valid = true,
             .origin = ray.translate,
             .direction = ray.rotate.Transpose() * RE::NiPoint3(0.0f, 1.0f, 0.0f), // the codebase's local->world convention
-            .down = vrcf::VRControllers.isPressHeldDown(primaryHand ? vrcf::Hand::Primary : vrcf::Hand::Offhand, vr::k_EButton_SteamVR_Trigger),
+            .down = vrcf::VRControllers.isPressHeldDown(hand, vr::k_EButton_SteamVR_Trigger) ||
+                    (pressing && vrcf::VRControllers.getAxisValue(hand, vrcf::Axis::Trigger).x > TRIGGER_REST),
         };
     }
 
     /**
-     * A hand's pointer and the nearest of the targets its ray is on. A hand that may not point has neither.
+     * A hand in this frame: its pointer, the target it is on, and whether it presses it.
+     * The hand is on the nearest of the targets its ray is on. While it holds a press it stays on the canvas
+     * the press began on, wherever its ray meets that canvas's plane. When that canvas is no longer a target,
+     * or the ray no longer meets its plane, the press has no canvas to come back to: the hand is on no
+     * target, so the UI gets the release, and it still operates the UI until its trigger is released.
+     * A hand that does not operate the UI is on no target, and a hand that may not point has no pointer.
      */
-    Pointer::HandPointer Pointer::pointHand(const bool primaryHand, const std::vector<internal::PointerTarget>& targets) const
+    Pointer::HandPointer Pointer::pointHand(const bool primaryHand, const std::vector<internal::PointerTarget>& targets)
     {
+        HandHold& hold = primaryHand ? _primaryHold : _offhandHold;
+        const bool wasPressing = hold.latch.pressing();
+
         HandPointer hand;
-        if (_hands != PointerHands::Both && (_hands == PointerHands::Primary) != primaryHand) {
-            return hand;
+        if (_hands == PointerHands::Both || (_hands == PointerHands::Primary) == primaryHand) {
+            hand.sample = sampleWand(primaryHand, wasPressing);
         }
-        hand.sample = sampleWand(primaryHand);
-        if (!hand.sample.valid) {
-            return hand;
-        }
-        for (const auto& target : targets) {
-            const auto hit = internal::intersectQuadFront(hand.sample.origin, hand.sample.direction, target.topLeft, target.topRight, target.bottomLeft);
-            if (hit && (!hand.target || hit->distance < hand.hit.distance)) {
-                hand.target = &target;
+
+        if (wasPressing) {
+            const auto target = std::ranges::find(targets, hold.canvas, &internal::PointerTarget::canvas);
+            const auto hit = target != targets.end() && hand.sample.valid
+                                 ? internal::intersectPlaneFront(hand.sample.origin, hand.sample.direction, target->topLeft, target->topRight, target->bottomLeft)
+                                 : std::nullopt;
+            if (hit) {
+                hand.target = &*target;
                 hand.hit = *hit;
+            } else {
+                hold.canvas = nullptr;
+            }
+        } else if (hand.sample.valid) {
+            for (const auto& target : targets) {
+                const auto hit = internal::intersectQuadFront(hand.sample.origin, hand.sample.direction, target.topLeft, target.topRight, target.bottomLeft);
+                if (hit && (!hand.target || hit->distance < hand.hit.distance)) {
+                    hand.target = &target;
+                    hand.hit = *hit;
+                }
             }
         }
+
+        hold.latch.update({ .onCanvas = hand.target != nullptr, .down = hand.sample.down });
+        if (!hold.latch.operates()) {
+            hand.target = nullptr;
+        } else if (hold.latch.pressing()) {
+            // a press begins on a target
+            if (!wasPressing) {
+                hold.canvas = hand.target->canvas;
+            }
+            hand.pressed = hand.target != nullptr;
+        }
         return hand;
+    }
+
+    /**
+     * Hide from the game the whole wand of each hand that operates the UI: every button and every axis, so
+     * nothing done on a canvas reaches the game or another mod. The mod's own reads still see the wand.
+     * It is set in every frame a hand operates the UI: that costs a lookup while nothing changes, and
+     * brings the suppression back after a session load has reset it. With no hand it is released, once.
+     */
+    void Pointer::suppressWands(const bool primary, const bool offhand)
+    {
+        if (!primary && !offhand) {
+            if (_suppressing) {
+                _suppressing = false;
+                vrcf::VRControllersSuppress.release(SUPPRESS_KEY);
+            }
+            return;
+        }
+        _suppressing = true;
+        vrcf::VRControllersSuppress.setAllSuppressed(SUPPRESS_KEY, vrcf::Hand::Primary, primary);
+        vrcf::VRControllersSuppress.setAllSuppressed(SUPPRESS_KEY, vrcf::Hand::Offhand, offhand);
     }
 
     /**

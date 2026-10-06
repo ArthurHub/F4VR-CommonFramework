@@ -6,7 +6,9 @@
 #include "imgui/ImGuiPointerLogic.h"
 
 using Catch::Matchers::WithinAbs;
+using f4cf::imgui::internal::intersectPlaneFront;
 using f4cf::imgui::internal::intersectQuadFront;
+using f4cf::imgui::internal::PointerHandLatch;
 using f4cf::imgui::internal::PointerOwner;
 using f4cf::imgui::internal::PointerOwnership;
 using f4cf::imgui::internal::QuadHit;
@@ -105,6 +107,115 @@ TEST_CASE("a quad with no width or height is not met", "[imgui][pointer]")
 {
     CHECK_FALSE(intersectQuadFront(ORIGIN, Vec{ 0.0f, 1.0f, 0.0f }, TOP_LEFT, TOP_LEFT, BOTTOM_LEFT));
     CHECK_FALSE(intersectQuadFront(ORIGIN, Vec{ 0.0f, 1.0f, 0.0f }, TOP_LEFT, TOP_RIGHT, TOP_LEFT));
+}
+
+TEST_CASE("a ray that passes beside a quad meets its plane there", "[imgui][pointer]")
+{
+    // one unit past the right edge and half a unit over the top edge
+    const auto hit = intersectPlaneFront(ORIGIN, Vec{ 3.0f, 10.0f, 1.5f }, TOP_LEFT, TOP_RIGHT, BOTTOM_LEFT);
+    REQUIRE(hit);
+    CHECK_THAT(hit->u, WithinAbs(1.25, 1e-5));
+    CHECK_THAT(hit->v, WithinAbs(-0.25, 1e-5));
+    CHECK_THAT(hit->distance, WithinAbs(1.0, 1e-5));
+}
+
+TEST_CASE("a ray does not meet the plane of a quad from behind, along it or past it", "[imgui][pointer]")
+{
+    CHECK_FALSE(intersectPlaneFront(Vec{ 5.0f, 20.0f, 0.0f }, Vec{ 0.0f, -1.0f, 0.0f }, TOP_LEFT, TOP_RIGHT, BOTTOM_LEFT));
+    CHECK_FALSE(intersectPlaneFront(ORIGIN, Vec{ 1.0f, 0.0f, 0.0f }, TOP_LEFT, TOP_RIGHT, BOTTOM_LEFT));
+    CHECK_FALSE(intersectPlaneFront(Vec{ 5.0f, 11.0f, 0.0f }, Vec{ 0.0f, 1.0f, 0.0f }, TOP_LEFT, TOP_RIGHT, BOTTOM_LEFT));
+}
+
+TEST_CASE("a hand operates the UI while its ray is on a canvas", "[imgui][pointer]")
+{
+    PointerHandLatch latch;
+    CHECK_FALSE(latch.operates());
+
+    latch.update(ON);
+    CHECK(latch.operates());
+    CHECK_FALSE(latch.pressing());
+
+    latch.update(AWAY);
+    CHECK_FALSE(latch.operates());
+}
+
+TEST_CASE("a trigger pulled on a canvas presses the UI until it is released", "[imgui][pointer]")
+{
+    PointerHandLatch latch;
+    latch.update(ON);
+    latch.update(ON_DOWN);
+    CHECK(latch.operates());
+    CHECK(latch.pressing());
+
+    latch.update(ON);
+    CHECK(latch.operates());
+    CHECK_FALSE(latch.pressing());
+}
+
+TEST_CASE("a press is the UI's until it is released, also with the ray off the canvas", "[imgui][pointer]")
+{
+    PointerHandLatch latch;
+    latch.update(ON);
+    latch.update(ON_DOWN);
+
+    // the ray slides off the canvas in the middle of the press
+    latch.update(AWAY_DOWN);
+    CHECK(latch.operates());
+    CHECK(latch.pressing());
+
+    // and comes back
+    latch.update(ON_DOWN);
+    CHECK(latch.pressing());
+
+    // released off the canvas: the hand is the game's again, with its trigger up
+    latch.update(AWAY_DOWN);
+    latch.update(AWAY);
+    CHECK_FALSE(latch.operates());
+    CHECK_FALSE(latch.pressing());
+}
+
+TEST_CASE("a trigger that is down when the ray comes to a canvas is the game's until it is released", "[imgui][pointer]")
+{
+    PointerHandLatch latch;
+    latch.update(AWAY_DOWN);
+    CHECK_FALSE(latch.operates());
+
+    // on the canvas with the pull of before: no press, and the hand is not taken from the game
+    latch.update(ON_DOWN);
+    CHECK_FALSE(latch.operates());
+    CHECK_FALSE(latch.pressing());
+    latch.update(ON_DOWN);
+    CHECK_FALSE(latch.operates());
+
+    // released on the canvas: from here the hand operates the UI
+    latch.update(ON);
+    CHECK(latch.operates());
+    CHECK_FALSE(latch.pressing());
+    latch.update(ON_DOWN);
+    CHECK(latch.pressing());
+}
+
+TEST_CASE("a pull that passes over a canvas stays the game's", "[imgui][pointer]")
+{
+    PointerHandLatch latch;
+    latch.update(AWAY_DOWN);
+    latch.update(ON_DOWN);
+    latch.update(AWAY_DOWN);
+    CHECK_FALSE(latch.operates());
+
+    // back on the canvas, still the same pull
+    latch.update(ON_DOWN);
+    CHECK_FALSE(latch.operates());
+    CHECK_FALSE(latch.pressing());
+}
+
+TEST_CASE("a trigger pulled in the frame its ray comes to a canvas is the game's", "[imgui][pointer]")
+{
+    PointerHandLatch latch;
+    latch.update(AWAY);
+    latch.update(ON_DOWN);
+    CHECK_FALSE(latch.operates());
+    CHECK_FALSE(latch.pressing());
 }
 
 TEST_CASE("no hand owns the pointer while no ray is on a canvas", "[imgui][pointer]")

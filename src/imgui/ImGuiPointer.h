@@ -24,17 +24,19 @@ namespace f4cf::imgui
      */
     struct PointerState
     {
-        // the interactive canvas the pointer is on, nullptr while it is on none
+        // the interactive canvas the pointer is on, nullptr while it is on none. A press stays on the canvas
+        // it began on until it is released, also while the ray is beside that canvas.
         const Canvas* canvas = nullptr;
 
-        // where the pointer is on that canvas, in its layout pixels from its top left corner
+        // where the pointer is on that canvas, in its layout pixels from its top left corner. During a
+        // press the ray can be beside the canvas, and this is then under 0 or over the canvas's size.
         float x = 0.0f;
         float y = 0.0f;
 
         // the hand that points: true for the primary hand, false for the offhand
         bool primaryHand = true;
 
-        // the trigger of that hand is down
+        // that hand presses the canvas: its trigger, from a pull that began on a canvas until its release
         bool down = false;
 
         // the ray in the world: where it starts, and where it meets the canvas
@@ -143,6 +145,14 @@ namespace f4cf::imgui
      * The owner's ray and a mark on the canvas are drawn while the pointer is on a canvas. PointerStyle has
      * how they look, and where the ray is on the hand.
      *
+     * A hand operates the UI while its ray is on an interactive canvas, and its whole wand is then hidden
+     * from the game and from other mods: every button and axis, so a pull of the trigger on a canvas fires
+     * no weapon. The mod's own reads (vrcf::VRControllers) still see the wand.
+     * A press that began on a canvas stays on that canvas, and its wand stays hidden, until the trigger is
+     * released: also when the ray slides off the canvas, and when the canvas is hidden. A trigger that is
+     * already down when the ray comes to a canvas stays the game's until it is released, and the hand has
+     * no pointer before that.
+     *
      *     imgui::pointer().setHands(imgui::PointerHands::Primary);
      *     if (imgui::pointer().state().canvas) { ... }
      */
@@ -171,24 +181,37 @@ namespace f4cf::imgui
         // Internal: used by the layer while building a frame.
         void update(const std::vector<internal::PointerTarget>& targets);
         void setWanted(bool wanted);
-        void clearState();
         void onCanvasRemoved(const Canvas* canvas);
 
     private:
         /**
-         * One hand in a frame: its pointer, and the nearest target its ray is on, if any.
+         * One hand in a frame: its pointer, the target it is on, if any, and whether it presses it.
          */
         struct HandPointer
         {
             internal::PointerSample sample;
             const internal::PointerTarget* target = nullptr;
             internal::QuadHit hit;
+            bool pressed = false;
+        };
+
+        /**
+         * What is kept of a hand from one frame to the next.
+         */
+        struct HandHold
+        {
+            internal::PointerHandLatch latch;
+
+            // the canvas its press began on. nullptr once that canvas is not shown or the ray no longer
+            // meets its plane: the press then has no canvas to come back to.
+            const Canvas* canvas = nullptr;
         };
 
         Pointer() = default;
 
-        internal::PointerSample sampleWand(bool primaryHand) const;
-        HandPointer pointHand(bool primaryHand, const std::vector<internal::PointerTarget>& targets) const;
+        internal::PointerSample sampleWand(bool primaryHand, bool pressing) const;
+        HandPointer pointHand(bool primaryHand, const std::vector<internal::PointerTarget>& targets);
+        void suppressWands(bool primary, bool offhand);
         void release();
         void draw(const HandPointer* hand);
 
@@ -196,6 +219,11 @@ namespace f4cf::imgui
         PointerStyle _style;
         PointerState _state;
         internal::PointerOwnership _ownership;
+        HandHold _primaryHold;
+        HandHold _offhandHold;
+
+        // a wand is hidden from the game, and was not yet given back
+        bool _suppressing = false;
 
         // ImGui was given a pointer position, and was not yet told that the pointer is gone
         bool _given = false;

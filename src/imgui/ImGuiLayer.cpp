@@ -254,7 +254,8 @@ namespace f4cf::imgui::internal
             }
         }
         if (active.empty()) {
-            pointer().clearState();
+            // no ImGui frame is built: the pointer is on nothing, and only a press that is still held is waited out
+            pointer().update({});
             renderer::publish({});
             return;
         }
@@ -301,7 +302,7 @@ namespace f4cf::imgui::internal
                 .quad = buildQuad(placement, x, y, canvas->pixelWidth(), canvas->pixelHeight(), viewer, canvas->isOccluded()) });
         }
         if (packed.empty()) {
-            pointer().clearState();
+            pointer().update({});
             renderer::publish({});
             return;
         }

@@ -234,7 +234,7 @@ namespace f4cf::imgui
 
     /**
      * Whether the pointer is on this panel in the ImGui frame that was built last. imgui::pointer().state()
-     * has the rest: where on the panel, which hand, and whether its trigger is down.
+     * has the rest: where on the panel, which hand, and whether it presses the panel.
      */
     bool UIImGuiPanel::isPointedAt() const
     {

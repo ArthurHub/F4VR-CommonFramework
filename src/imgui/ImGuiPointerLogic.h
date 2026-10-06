@@ -18,13 +18,14 @@ namespace f4cf::imgui::internal
     };
 
     /**
-     * Where a ray meets the front of a quad, if it does.
-     * The quad is a rectangle given by three of its corners, as seen from its front. A ray that comes from
-     * behind the quad, runs along it, starts past it or passes beside it does not meet it.
+     * Where a ray meets the plane of a quad from the quad's front, if it does.
+     * The quad is a rectangle given by three of its corners, as seen from its front. The place is given as
+     * on the quad, and is under 0 or over 1 where the ray passes beside the quad. A ray that comes from
+     * behind the plane, runs along it or starts past it does not meet it.
      * Vec is any type with x, y and z.
      */
     template <class Vec>
-    std::optional<QuadHit> intersectQuadFront(const Vec& origin, const Vec& direction, const Vec& topLeft, const Vec& topRight, const Vec& bottomLeft)
+    std::optional<QuadHit> intersectPlaneFront(const Vec& origin, const Vec& direction, const Vec& topLeft, const Vec& topRight, const Vec& bottomLeft)
     {
         struct Vec3
         {
@@ -55,13 +56,22 @@ namespace f4cf::imgui::internal
         }
 
         const Vec3 fromTopLeft{ origin.x + direction.x * distance - topLeft.x, origin.y + direction.y * distance - topLeft.y, origin.z + direction.z * distance - topLeft.z };
-        const float u = dot(fromTopLeft, right) / dot(right, right);
-        const float v = dot(fromTopLeft, down) / dot(down, down);
+        return QuadHit{ .u = dot(fromTopLeft, right) / dot(right, right), .v = dot(fromTopLeft, down) / dot(down, down), .distance = distance };
+    }
+
+    /**
+     * Where a ray meets the front of a quad, if it does: on the quad's plane, and not beside the quad.
+     * The quad and the ray are given as for intersectPlaneFront.
+     */
+    template <class Vec>
+    std::optional<QuadHit> intersectQuadFront(const Vec& origin, const Vec& direction, const Vec& topLeft, const Vec& topRight, const Vec& bottomLeft)
+    {
+        const auto hit = intersectPlaneFront(origin, direction, topLeft, topRight, bottomLeft);
         // negated so a NaN is rejected as well
-        if (!(u >= 0.0f && u <= 1.0f && v >= 0.0f && v <= 1.0f)) {
+        if (!hit || !(hit->u >= 0.0f && hit->u <= 1.0f && hit->v >= 0.0f && hit->v <= 1.0f)) {
             return std::nullopt;
         }
-        return QuadHit{ .u = u, .v = v, .distance = distance };
+        return hit;
     }
 
     /**
@@ -74,6 +84,69 @@ namespace f4cf::imgui::internal
 
         // its trigger is down
         bool down = false;
+    };
+
+    /**
+     * Whether a hand operates the UI, and whether its trigger presses it. One for each hand.
+     * A hand operates the UI while its ray is on a canvas, and a pull of its trigger there is a press.
+     * A press is the UI's until the trigger is released, wherever the ray is by then. Without that, a ray
+     * that slides off the canvas in the middle of a press gives the game a trigger that is already down,
+     * and the UI never gets the release.
+     * A trigger that is already down when the ray comes to a canvas is the game's until it is released, and
+     * the hand does not operate the UI before that: the pull makes no press on arrival, and is not taken
+     * from the game in its middle.
+     */
+    class PointerHandLatch
+    {
+    public:
+        void update(const PointerHandInput& hand)
+        {
+            if (_state == State::Pressing && hand.down) {
+                return;
+            }
+            if (!hand.onCanvas) {
+                _state = State::Away;
+            } else if (_state == State::Over || _state == State::Pressing) {
+                // a press gets here when it is released
+                _state = hand.down ? State::Pressing : State::Over;
+            } else {
+                _state = hand.down ? State::Waiting : State::Over;
+            }
+        }
+
+        /**
+         * The hand is the UI's, and not the game's: its ray is on a canvas, or it holds a press.
+         */
+        bool operates() const
+        {
+            return _state == State::Over || _state == State::Pressing;
+        }
+
+        /**
+         * Its trigger presses the UI.
+         */
+        bool pressing() const
+        {
+            return _state == State::Pressing;
+        }
+
+    private:
+        enum class State : std::uint8_t
+        {
+            // the ray is on no canvas
+            Away,
+
+            // the ray came to a canvas with the trigger down, which is the game's until it is released
+            Waiting,
+
+            // the ray is on a canvas
+            Over,
+
+            // the trigger was pulled on a canvas and has not been released since
+            Pressing,
+        };
+
+        State _state = State::Away;
     };
 
     enum class PointerOwner : std::uint8_t
@@ -89,6 +162,8 @@ namespace f4cf::imgui::internal
      * its trigger on a canvas last, and the primary hand before either has.
      * The owner keeps the pointer while it holds its trigger down on a canvas, so a press of the other hand
      * does not take a drag over.
+     * The hands are given as the UI has them (PointerHandLatch): on a canvas only while the hand operates
+     * the UI, and down only for a press that began on a canvas.
      */
     class PointerOwnership
     {
