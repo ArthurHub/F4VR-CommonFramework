@@ -27,8 +27,24 @@ namespace f4cf::vrui
         void attachPresetToOffhandWandRight(const std::shared_ptr<UIElement>& element, RE::NiPoint3 offset);
         void attachPresetToOffhandWrist(const std::shared_ptr<UIElement>& element, const RE::NiTransform& offset);
         void attachPresetToHMDBottom(const std::shared_ptr<UIElement>& element);
+        void attachPresetToWorldAtHMD(const std::shared_ptr<UIElement>& element, float recenterDistance = 0.0f);
+        void recenterWorldElement(const std::shared_ptr<UIElement>& element);
 
     private:
+        /**
+         * A root that stays where it was put in the world, see attachPresetToWorldAtHMD.
+         */
+        struct WorldElement
+        {
+            std::shared_ptr<UIElement> element;
+
+            // the world transform its attach node had when the root was put there
+            RE::NiTransform world;
+
+            // the root is put where the HMD is again when the player is further than this from it. 0 for never.
+            float recenterDistance = 0.0f;
+        };
+
         // Used by an element to find the fingertip that presses it, see UIElement::getInteractionFingerTip,
         // and how the finger stands to it, see UIElement::updateFinger
         friend class UIElement;
@@ -45,6 +61,7 @@ namespace f4cf::vrui
 
         void updateHandPointing(bool primaryHand, const std::optional<UIFingerProximity>& fingerProximity);
         void setHandPointing(bool primaryHand, bool toPoint) const;
+        void updateWorldElements();
         void dumpUITree() const;
         static void dumpUITreeRecursive(UIElement* element, std::string padding);
 
@@ -55,6 +72,9 @@ namespace f4cf::vrui
 
         // reads the player's skeleton: the fingertip that presses the UI, and the place of the roots attached with the wrist preset
         UISkeletonHandler _skeletonHandler;
+
+        // the roots that stay in the world, which get their base transform every frame and are recentered when left
+        std::vector<WorldElement> _worldElements;
 
         // tunes the placement of the attached roots through a file, while the config's debug flag is on
         UIDevLayout _devLayout;

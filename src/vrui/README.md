@@ -25,7 +25,7 @@ An element is drawn one of two ways, and they mix freely in the same layout:
 | [`UIElement`](UIElement.h) | — | Base node: position/rotation/scale/visibility/size, parent/child transform, layout + frame-update hooks. Also [`UIPadding`](UIElement.h), the per-side spacing panels take. |
 | [`UIContainer`](UIContainer.h) | `UIElement` | Groups multiple elements under one transform and lays them out (row/column, centered or directional). |
 | [`UIToggleGroupContainer`](UIToggleGroupContainer.h) | `UIContainer` | Radio-button group (mutually exclusive). Works on [`UIToggleable`](UIToggleable.h), so NIF and panel toggles can share one group. |
-| [`UIManager`](UIManager.h) | — | Singleton scene graph: attach/detach, wand/wrist/HMD presets, input dispatch, render. |
+| [`UIManager`](UIManager.h) | — | Singleton scene graph: attach/detach, wand/wrist/HMD/world presets, input dispatch, render. |
 | [`UISkeletonHandler`](UISkeletonHandler.h) | — | What the UI reads from the player's skeleton, with bones found by name and again when the skeleton is replaced: the tip of the index finger that presses the UI, and the manager's wrist preset, which keeps a root on the inner wrist of the offhand arm every frame. |
 | [`setFRIKHandPointing`](UIHandPointing.h) | — | Points the hand whose finger is near a button, and releases it, through FRIK's API. |
 
@@ -64,7 +64,7 @@ and the [`UIElement` helpers in `UIUtils.h`](UIUtils.h).
 
 1. Build elements (widgets/buttons) and attach them via the global `g_uiManager`, either to an
    explicit `NiNode*` or with a preset (primary wand top/left, offhand wand top/right, offhand wrist,
-   HMD bottom).
+   HMD bottom, the world at the HMD).
 2. The framework runs `g_uiManager->onFrameUpdate()` every frame, after the mod's own
    `onFrameUpdate()`. The manager tests the interaction bone against each pressable widget, fires
    press callbacks, and updates transforms. It finds the finger and points the hand itself.
@@ -332,6 +332,16 @@ loading).
   skeleton (a save load, power armor) needs nothing from the mod. The offset is a transform: its
   position and rotation are set on the root and apply from that base, as do the dev layout's `Pos`
   and `Rot`.
+- `attachPresetToWorldAtHMD(root)` puts a UI where the HMD is and leaves it there: it stays in the
+  world while the player walks and turns, so it does not move under a ray as the head moves. The
+  root's own position and rotation apply from that place as they do on the HMD's node, level and
+  from the way the head faced: `root->setPosition(0, 120, -20)` is 120 units in front of where the
+  head was and 20 below it. `recenterWorldElement(root)` puts it where the HMD is now, which brings
+  it back in front of the player. With a distance, `attachPresetToWorldAtHMD(root, 350)`, the
+  manager does that by itself when the player walks further than that from the root, so a UI that
+  was left behind comes back. It is measured from the HMD's node to the root's own position, and a
+  hidden root is left where it is. The root stays attached to the HMD's node, and the manager gives
+  it a base transform every frame that moves it back to where the node was.
 - Detaching mid-frame can be unsafe; `UIManager::detachElement(element, releaseSafe=true)` defers the
   release to the next frame.
 - A dev layout mode tunes placement live through a file of its own, with nothing for the mod to
