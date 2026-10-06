@@ -64,6 +64,8 @@ namespace f4cf::render
     // by a hint that sits behind it
     inline constexpr int DRAW_ORDER_HINTS = 50;
     inline constexpr int DRAW_ORDER_PANELS = 100;
+    // what points at the panels (the ray and mark of the ImGui pointer): over them
+    inline constexpr int DRAW_ORDER_POINTERS = 150;
     inline constexpr int DRAW_ORDER_DEFAULT = 500;
     // deliberately last, i.e. on top: diagnostics must never end up hidden behind a mod's UI
     inline constexpr int DRAW_ORDER_DEBUG = 900;
