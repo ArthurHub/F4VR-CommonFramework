@@ -83,6 +83,12 @@ major version is `0`, a minor bump may break the API; the **Upgrading** notes sa
   panel stands at, its sides are as far from the player as its middle and face them, so a wide panel
   reads the same all over. The pointer meets the panel where it is drawn, and the dev layout tunes
   the radius live as `Curve`.
+- **vrui in the world moved by the player**: `UIManager::setWorldMoveButton` lets the player move a
+  UI that stays in the world. They point at it and hold that button on the hand that points, and the
+  UI moves and turns with the hand, kept level, until the button is released. It follows the hand
+  smoothly, which steadies the hand's shake: `setWorldMoveSmoothing` is how smoothly. It stays there
+  until `recenterWorldElement` or the recenter distance puts it in front of the player again. A UI
+  is moved by a ray on it, which an interactive `UIImGuiPanel` tells vrui of by itself.
 - **config color**: `ConfigBase::getColorValue` reads a color from the INI, written as `r,g,b` or
   `r,g,b,a` in 0 to 255, as `getTransformValue` reads a transform.
 - **render gradients**: a fill takes a color for each corner and blends between them

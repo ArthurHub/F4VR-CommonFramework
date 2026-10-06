@@ -342,6 +342,34 @@ loading).
   was left behind comes back. It is measured from the HMD's node to the root's own position, and a
   hidden root is left where it is. The root stays attached to the HMD's node, and the manager gives
   it a base transform every frame that moves it back to where the node was.
+- The player can move a root in the world. `setWorldMoveButton(vr::k_EButton_Grip)` sets the button:
+  they point at the root, hold that button on the hand that points, and the root follows the hand
+  until the button is released. Nothing by default, and the roots are then not moved.
+  - It is one button for every root in the world. It is a button and not a binding: a binding names
+    a hand, and this is the button of the hand that points, whichever it is. `vrcf::parseButton`
+    reads one from an INI value.
+  - The root moves and turns with that hand's wand around the point the ray meets it, as a thing at
+    the end of a stick. It stays level: it turns to the sides and tilts up and down with the hand,
+    and does not roll with it.
+  - It follows the hand smoothly. `setWorldMoveSmoothing(seconds)` is the time it takes to come
+    about two thirds of the way to where the hand has it, at any frame rate, 0.05 by default. A
+    root held from a distance needs that, as the shake of the hand is many times larger there: at
+    0.05 seconds about a third of a fast shake gets through, and the root trails a moving hand by
+    the way the hand goes in that time. A longer time is steadier and trails more: at 0.15 seconds
+    about an eighth gets through. 0 follows the hand at once.
+  - The whole wand of the hand that moves a root is hidden from the game from the press to the
+    release (`VRControllersSuppress`, under the owner `UIWorldMove`), also while the ray is beside
+    the root, which trails it. A button that is already down when the ray comes to the root moves
+    nothing until it is released.
+  - When the button is released the root stays where it is, and `recenterWorldElement` and the
+    recenter distance put it where the HMD is again as before. One hand moves a root at a time, and
+    a hidden root is let go.
+  - vrui has no ray of its own: an element says that a hand's ray is on it, and where
+    (`UIFrameUpdateContext::markPointedAt`). An interactive
+    [`imgui::UIImGuiPanel`](../imgui/README.md#a-panel-the-player-moves) does, for the hand that
+    owns its pointer.
+  - The log says when a hand takes hold of a root, and when it lets go and why. At the debug level
+    it also says why a press of the button moved nothing.
 - Detaching mid-frame can be unsafe; `UIManager::detachElement(element, releaseSafe=true)` defers the
   release to the next frame.
 - A dev layout mode tunes placement live through a file of its own, with nothing for the mod to

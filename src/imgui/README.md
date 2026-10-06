@@ -261,6 +261,28 @@ panel->setCurveRadius(20.0f);           // CanvasPlacement::curveRadius, in worl
 - **Tuning.** The [dev layout](../vrui/README.md) has the radius as `Curve`, so it is tuned in the
   headset.
 
+## A panel the player moves
+
+A panel that stays in the world (`UIManager::attachPresetToWorldAtHMD`) can be moved by the player,
+with the ray that operates it. vrui does the moving, for every root in the world, and the mod sets
+the button on the UI manager:
+
+```cpp
+panel->setInteractive(true);
+g_uiManager->setWorldMoveButton(vr::k_EButton_Grip);
+g_uiManager->attachPresetToWorldAtHMD(panel, 350.0f);
+```
+
+- **How.** The player points at the panel and holds the button on the hand that owns the pointer.
+  The panel then follows that hand smoothly, around the point the ray meets it, and stays level. It
+  stays where it is when the button is released. The [vrui README](../vrui/README.md) has the rest:
+  the smoothing, what the game gets, and what puts the panel back.
+- **The panel's part.** An interactive panel tells vrui in every frame that the pointer is on it,
+  and where (`UIFrameUpdateContext::markPointedAt`), with nothing for the mod to call. It is the ray
+  of the hand that owns the pointer, so with both rays on the panel the other hand does not move it.
+- **What is moved.** The panel's root, so a panel in a container moves with everything beside it. A
+  panel whose root is attached in another way, to a hand or to the HMD, is not moved.
+
 ## Sizes, pixels and legibility
 
 Three separate things, deliberately:
