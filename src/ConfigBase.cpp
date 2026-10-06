@@ -7,6 +7,7 @@
 #include "common/MatrixUtils.h"
 #include "devbench/DevBench.h"
 #include "f4vr/WandActivationSphere.h"
+#include "render/PrimitiveDraw.h"
 #include "vrcf/InputBindingParser.h"
 #include "vrcf/VRControllersHaptic.h"
 
@@ -687,6 +688,26 @@ namespace f4cf
         result.rotate = common::MatrixUtils::getMatrixFromEulerAnglesDegrees(heading, roll, attitude);
         result.scale = scale;
         return result;
+    }
+
+    /**
+     * Parse a color from "r,g,b" or "r,g,b,a", each a whole number in 0..255, where a is the opacity. Without
+     * the a, the default's opacity stays.
+     * Returns defaultValue if the key is missing or empty, and with a warning if the value is malformed.
+     */
+    render::Color ConfigBase::getColorValue(const CSimpleIniA& ini, const char* section, const char* key, const render::Color& defaultValue)
+    {
+        const char* raw = ini.GetValue(section, key, nullptr);
+        if (raw == nullptr || *raw == '\0') {
+            return defaultValue;
+        }
+
+        std::array<float, 4> channels{ defaultValue.r, defaultValue.g, defaultValue.b, defaultValue.a };
+        if (!parseColor255(raw, channels)) {
+            logger::warn("Config: malformed color value for '{}.{}' = '{}' (expected 'r,g,b' or 'r,g,b,a' in 0..255). Using default.", section, key, raw);
+            return defaultValue;
+        }
+        return { channels[0], channels[1], channels[2], channels[3] };
     }
 
     /**
