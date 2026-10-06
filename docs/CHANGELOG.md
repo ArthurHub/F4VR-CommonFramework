@@ -53,6 +53,7 @@ major version is `0`, a minor bump may break the API; the **Upgrading** notes sa
   `imgui::pointer()` is that pointer: `state()` says what it does, and `setHands` limits pointing to
   one hand. While the pointer is on a canvas its ray is drawn, up to a set length and with a fade at
   both ends, and a mark with a border on the canvas, over the panels and not hidden by the world.
+  The ray of the other hand is drawn fainter, and with no mark, while it is on a canvas too.
   `setStyle` takes a `PointerStyle`: where the ray is on the hand and the whole look, or the look
   turned off for a mod that draws its own.
 - **imgui pointer hides the wand**: while a hand's ray is on an interactive canvas, its whole wand is

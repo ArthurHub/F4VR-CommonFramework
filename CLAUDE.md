@@ -158,9 +158,10 @@ and composited as one quad, so N canvases cost one ImGui frame and one draw call
 - **Display only until `setInteractive(true)`** — then a wand's ray is ImGui's mouse on the canvas and
   its trigger the left button (`imgui::pointer()` in `ImGuiPointer.h`: `state`, `setHands`,
   `setStyle`). One hand owns the pointer at a time, and while it is on a canvas its ray and a mark
-  on the canvas are drawn over the panels. `PointerStyle` has where the ray is on the hand and how
-  both look, with its defaults as the default pointer. vrui's finger-collision press handling
-  does not reach ImGui widgets: buttons to press by touch go beside the panel, in vrui.
+  on the canvas are drawn over the panels, with the other hand's ray fainter beside it.
+  `PointerStyle` has where the ray is on the hand and how both look, with its defaults as the
+  default pointer. vrui's finger-collision press handling does not reach ImGui widgets: buttons to
+  press by touch go beside the panel, in vrui.
 - **The wand that points is hidden from the game**: every button and axis of a hand whose ray is on
   an interactive canvas, through `VRControllersSuppress` under the owner `ImGuiPointer`. A press
   that began on a canvas keeps its wand hidden until the trigger is released, wherever the ray is
