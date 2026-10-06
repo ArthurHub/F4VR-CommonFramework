@@ -161,6 +161,10 @@ and composited as one quad, so N canvases cost one ImGui frame and one draw call
   on the canvas are drawn over the panels. `PointerStyle` has where the ray is on the hand and how
   both look, with its defaults as the default pointer. vrui's finger-collision press handling
   does not reach ImGui widgets: buttons to press by touch go beside the panel, in vrui.
+- **The wand that points is hidden from the game**: every button and axis of a hand whose ray is on
+  an interactive canvas, through `VRControllersSuppress` under the owner `ImGuiPointer`. A press
+  that began on a canvas keeps its wand hidden until the trigger is released, wherever the ray is
+  and whether or not the canvas is still shown. The mod's own `VRControllers` reads still see it.
 - Content can only be measured by drawing it, which happens after vrui lays the frame out, so a panel
   sized to its content is laid out at **last frame's** size.
 - `setFontSizePixels` / `setSupersample` are process-wide and read when the first canvas draws.

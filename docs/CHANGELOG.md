@@ -50,7 +50,12 @@ major version is `0`, a minor bump may break the API; the **Upgrading** notes sa
   one hand. While the pointer is on a canvas its ray is drawn, up to a set length and with a fade at
   both ends, and a mark with a border on the canvas, over the panels and not hidden by the world.
   `setStyle` takes a `PointerStyle`: where the ray is on the hand and the whole look, or the look
-  turned off for a mod that draws its own. The trigger still reaches the game.
+  turned off for a mod that draws its own.
+- **imgui pointer hides the wand**: while a hand's ray is on an interactive canvas, its whole wand is
+  hidden from the game and from other mods, so a pull of the trigger on a canvas fires no weapon. A
+  press that began on a canvas stays on that canvas and stays hidden from the game until the trigger
+  is released, also when the ray slides off the canvas or the canvas is hidden. A trigger that is
+  already down when the ray comes to a canvas stays the game's until it is released.
 - **config color**: `ConfigBase::getColorValue` reads a color from the INI, written as `r,g,b` or
   `r,g,b,a` in 0 to 255, as `getTransformValue` reads a transform.
 - **render gradients**: a fill takes a color for each corner and blends between them

@@ -20,8 +20,8 @@ and a `vrui::UITextPanel` standing side by side read as one UI.
 | ----------------------- | -------------------------------------------------------------------- |
 | [`ImGuiCanvas.h`](ImGuiCanvas.h) / [`.cpp`](ImGuiCanvas.cpp) | `Canvas` — one ImGui window placed in the world by a provider you write. Content, placement, chrome (background, border, rounding, padding), sizing and occlusion. |
 | [`UIImGuiPanel.h`](UIImGuiPanel.h) / [`.cpp`](UIImGuiPanel.cpp) | The vrui adapter: a `UIElement` whose rectangle a `Canvas` fills. Takes `vrui::UIPanelStyle` and the vrui sizing modes, in vrui units. |
-| [`ImGuiPointer.h`](ImGuiPointer.h) / [`.cpp`](ImGuiPointer.cpp) | `Pointer`, reached as `imgui::pointer()` — the one pointer of the interactive canvases: a wand's ray as ImGui's mouse, its trigger as the mouse button. Its state, which hands point, and its `PointerStyle`: where the ray is on the hand, and how the ray and its mark are drawn. |
-| [`ImGuiPointerLogic.h`](ImGuiPointerLogic.h) | The pointer's logic apart from the game, so it is unit tested: where a ray meets a quad, and which hand owns the pointer. |
+| [`ImGuiPointer.h`](ImGuiPointer.h) / [`.cpp`](ImGuiPointer.cpp) | `Pointer`, reached as `imgui::pointer()` — the one pointer of the interactive canvases: a wand's ray as ImGui's mouse, its trigger as the mouse button, and that wand hidden from the game. Its state, which hands point, and its `PointerStyle`: where the ray is on the hand, and how the ray and its mark are drawn. |
+| [`ImGuiPointerLogic.h`](ImGuiPointerLogic.h) | The pointer's logic apart from the game, so it is unit tested: where a ray meets a quad and its plane, whether a hand operates the UI and presses it, and which hand owns the pointer. |
 | [`ImGuiSettings.h`](ImGuiSettings.h) / [`.cpp`](ImGuiSettings.cpp) | The two process-wide knobs: `setFontSizePixels` and `setSupersample`. |
 | [`ImGuiFonts.h`](ImGuiFonts.h) / [`.cpp`](ImGuiFonts.cpp) | Loads the framework's text font into the ImGui atlas, from the same bytes the primitive renderer draws with. |
 | [`ImGuiLayer.h`](ImGuiLayer.h) / [`.cpp`](ImGuiLayer.cpp) | Game-thread pump: one ImGui frame holding every visible canvas, cloned and published with each canvas's quad. |
@@ -129,19 +129,35 @@ panel->setContent([this] {
   position and runs along its +Y. It is given for the right hand and mirrored for the left.
 - **What it meets.** The ray meets a canvas only from its front, and the nearest interactive canvas
   takes it. It passes through the canvases that are not interactive, and through the world.
+- **What the game gets.** A hand operates the UI while its ray is on an interactive canvas, and its
+  whole wand is then hidden from the game and from other mods: every button and axis
+  (`VRControllersSuppress`, under the owner `ImGuiPointer`). A pull of the trigger on a canvas fires
+  no weapon, and the game has the wand back when the ray leaves. This goes for each hand by its own
+  ray, whether or not it owns the pointer. The mod's own reads through `VRControllers` still see the
+  wand.
+- **A press is held.** A press that began on a canvas is the UI's until the trigger is released. It
+  stays on that canvas while the ray slides off it: the pointer follows the ray on the canvas's
+  plane, up to a canvas's size past its edges, so a slider is dragged to its end and a press is
+  given up by releasing beside the canvas. The wand stays hidden from the game until the release,
+  also when the canvas is hidden in the middle of the press, so the game never gets a trigger that
+  is already down. The press ends when the trigger is back near its rest, a little after the end of
+  its click.
+- **A pull from outside is the game's.** A trigger that is already down when the ray comes to a
+  canvas presses nothing, and its wand is not hidden. The hand has no pointer until the trigger is
+  released.
 - **What is drawn.** While the pointer is on a canvas: the owner's ray, and a mark on the canvas
   where the ray meets it. The ray is no longer than a set length, so it ends before a canvas that
   is further away and at the mark of a nearer one, and it fades in and out at its two ends. The
   mark is a disc with a border, and looks the same size at any distance. Both are drawn over the
   panels (`DRAW_ORDER_POINTERS`) and are not hidden by the world. Nothing is drawn while the pointer
-  is on no canvas.
+  is on no canvas, so a ray that is drawn says its wand is the UI's.
 - **What the pointer does.** `imgui::pointer().state()` has the canvas the pointer is on, where on it
-  in the canvas's pixels, the hand, whether its trigger is down, the ray in the world, and whether
+  in the canvas's pixels, the hand, whether it presses the canvas, the ray in the world, and whether
   ImGui uses the pointer (`io.WantCaptureMouse`). `UIImGuiPanel::isPointedAt()` says whether it is on
   that panel. The state is updated when the ImGui frame is built, after the mod's frame update: a
   content callback reads this frame's, and `onFrameUpdate` the one before.
 - **What it costs.** A canvas that is not interactive costs nothing more. While no interactive canvas
-  is shown, nothing is read from the game for the pointer.
+  is shown and no press is held, nothing is read from the game for the pointer.
 
 ### How the pointer looks
 
@@ -173,7 +189,7 @@ A mod that wants the player to set these reads the fields from its own INI and c
 with them: `ConfigBase::getColorValue` reads a color written as `r,g,b,a`, and `getTransformValue`
 the offset. The framework has no INI keys for it.
 
-Not there yet: the trigger still reaches the game, and nothing scrolls.
+Not there yet: nothing scrolls.
 
 ## Sizes, pixels and legibility
 
@@ -211,8 +227,9 @@ imgui::internal::onFrameEnd()                   draw callback (DRAW_ORDER_PANELS
   ├─ resolve placements → world quads             ├─ rasterize the frame into the atlas
   ├─ the pointer: a wand's ray on the quads       ├─ group quads by occluded / on-top
   │    of the interactive canvases → ImGui's      └─ composite each canvas's atlas slice
-  │    mouse, and its ray and mark → their own         as a world quad, back to front
-  │    layer over the panels
+  │    mouse, its ray and mark → their own             as a world quad, back to front
+  │    layer over the panels, and the wand
+  │    hidden from the game
   ├─ one ImGui frame, every visible canvas
   │    as its own window packed into the atlas
   ├─ measure each canvas's content
