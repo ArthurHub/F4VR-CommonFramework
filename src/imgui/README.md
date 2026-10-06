@@ -157,9 +157,12 @@ panel->setContent([this] {
 - **What is drawn.** While the pointer is on a canvas: the owner's ray, and a mark on the canvas
   where the ray meets it. The ray is no longer than a set length, so it ends before a canvas that
   is further away and at the mark of a nearer one, and it fades in and out at its two ends. The
-  mark is a disc with a border, and looks the same size at any distance. Both are drawn over the
-  panels (`DRAW_ORDER_POINTERS`) and are not hidden by the world. Nothing is drawn while the pointer
-  is on no canvas, so a ray that is drawn says its wand is the UI's.
+  mark is a disc with a border. Its size is set in the world, so it keeps its size on the canvas as
+  the player comes nearer or steps back. While the other hand's ray is on a canvas too, that ray is
+  drawn at 0.3 of the opacity and with no mark, so the player sees that the hand points and that the
+  pointer is not its own. All of it is drawn over the panels (`DRAW_ORDER_POINTERS`) and is not
+  hidden by the world. Nothing is drawn while the pointer is on no canvas, so a ray that is drawn
+  says its wand is the UI's.
 - **What the pointer does.** `imgui::pointer().state()` has the canvas the pointer is on, where on it
   in the canvas's pixels, the hand, whether it presses the canvas, the ray in the world, and whether
   ImGui uses the pointer (`io.WantCaptureMouse`). `UIImGuiPanel::isPointedAt()` says whether it is on
@@ -183,9 +186,9 @@ in world units.
 | `rayMaxLength` | 25 | the longest the ray is drawn: it ends there, or at the mark when the canvas is nearer |
 | `rayFade` | 1 | the length the ray fades in over at its start and out over at its end; 0 for no fade |
 | `markColor` | 215,255,215,180 | the mark's color, with its opacity as the alpha |
-| `markSize` | 0.7 | the mark's radius at 100 units from the head, its border included; it grows and shrinks with its distance |
+| `markSize` | 0.45 | the mark's radius, its border included; the same at any distance |
 | `markBorderColor` | 215,255,215,100 | the color of the border around the mark |
-| `markBorderWidth` | 0.1 | the border's width, measured as the mark's size is; 0 for no border |
+| `markBorderWidth` | 0.08 | the border's width, the outer part of the mark's radius; 0 for no border |
 | `scrollSpeed` | 30 | how fast the thumbstick scrolls, in lines of text a second at a full push; 0 for no scrolling |
 
 A mod changes a part by starting from the current style:

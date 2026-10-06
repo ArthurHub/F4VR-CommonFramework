@@ -88,13 +88,13 @@ namespace f4cf::imgui
         // the mark's color, with its opacity as the alpha
         render::Color markColor = render::Color::rgba(215, 255, 215, 180);
 
-        // the mark's radius at 100 units from the head, its border included. It grows and shrinks with its
-        // distance, so it looks the same size on a panel on the hand and on one across the room.
-        float markSize = 0.7f;
+        // the mark's radius, its border included. It is the same at any distance, so the mark keeps its size
+        // on the canvas as the player comes nearer or steps back.
+        float markSize = 0.45f;
 
-        // the border around the mark: its color, and its width, measured as the mark's size is. 0 for no border.
+        // the border around the mark: its color, and its width, the outer part of the mark's radius. 0 for no border.
         render::Color markBorderColor = render::Color::rgba(215, 255, 215, 100);
-        float markBorderWidth = 0.1f;
+        float markBorderWidth = 0.08f;
 
         // how fast the thumbstick of the pointing hand scrolls what the pointer is on, in lines of text a
         // second at a full push. 0 for no scrolling.
@@ -148,7 +148,8 @@ namespace f4cf::imgui
      * holds its trigger down.
      *
      * The owner's ray and a mark on the canvas are drawn while the pointer is on a canvas. PointerStyle has
-     * how they look, and where the ray is on the hand.
+     * how they look, and where the ray is on the hand. While the other hand's ray is on a canvas too, it is
+     * drawn fainter and with no mark, so it shows that the hand points and does not own the pointer.
      *
      * A hand operates the UI while its ray is on an interactive canvas, and its whole wand is then hidden
      * from the game and from other mods: every button and axis, so a pull of the trigger on a canvas fires
@@ -222,7 +223,9 @@ namespace f4cf::imgui
         void suppressWands(bool primary, bool offhand);
         float wheelFromThumbstick(bool primaryHand, float deltaSeconds) const;
         void release();
-        void draw(const HandPointer* hand);
+        void draw(const HandPointer* owner, const HandPointer* other);
+        void addRay(render::PrimitiveDraw& frame, const RE::NiPoint3& head, const HandPointer& hand, float opacity) const;
+        void addMark(render::PrimitiveDraw& frame, const HandPointer& hand) const;
 
         PointerHands _hands = PointerHands::Both;
         PointerStyle _style;

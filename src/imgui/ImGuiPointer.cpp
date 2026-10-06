@@ -39,8 +39,8 @@ namespace f4cf::imgui
         // the mark is a disc of this many triangles
         constexpr int MARK_SEGMENTS = 20;
 
-        // the distance from the head at which the mark has the radius of the style
-        constexpr float MARK_SIZE_DISTANCE = 100.0f;
+        // the part of the ray's opacity that the ray of the hand that does not own the pointer has
+        constexpr float OTHER_RAY_OPACITY = 0.3f;
 
         /**
          * The layer the pointer is drawn in: over the panels it points at, and not hidden by the world.
@@ -120,7 +120,7 @@ namespace f4cf::imgui
             _ownership.update({ .onCanvas = primary.target != nullptr, .down = primary.pressed }, { .onCanvas = offhand.target != nullptr, .down = offhand.pressed });
         if (owner == internal::PointerOwner::None) {
             release();
-            draw(nullptr);
+            draw(nullptr, nullptr);
             return;
         }
 
@@ -145,7 +145,10 @@ namespace f4cf::imgui
         _state.down = hand.pressed;
         _state.rayOrigin = hand.sample.origin;
         _state.hitPosition = hand.sample.origin + hand.sample.direction * hand.hit.distance;
-        draw(&hand);
+
+        // the other hand has a ray to draw while it is on a canvas too
+        const HandPointer& other = owner == internal::PointerOwner::Primary ? offhand : primary;
+        draw(&hand, other.target ? &other : nullptr);
     }
 
     /**
@@ -304,21 +307,15 @@ namespace f4cf::imgui
     }
 
     /**
-     * Draw the pointer of the given hand, whose ray is on a canvas: the ray and the mark of the style. With no
-     * hand, or a style that is not drawn, the layer is given nothing, once.
-     *
-     * The ray is a ribbon turned to face the head, since a line is drawn one pixel wide whatever is asked. It
-     * runs from the ray's start for the style's longest length, or up to the mark when the canvas is nearer.
-     * It fades in and out over the style's length at its two ends, or over half of the ray when it is shorter
-     * than both. Each fade is one piece, clear at the ray's end and the ray's color at its other side.
-     *
-     * The mark is a disc that lies on the canvas, with its border as a ring around it. The size of both is
-     * given at a set distance from the head and grows with the distance, so the mark looks the same size
-     * wherever the canvas is.
+     * Draw the pointer: the ray and the mark of the hand that owns it, and the ray of the other hand while
+     * that one is on a canvas too. With no owner, or a style that is not drawn, the layer is given nothing,
+     * once.
+     * The other hand's ray is fainter and has no mark: it shows that the hand points at the UI, and that the
+     * pointer is not its own.
      */
-    void Pointer::draw(const HandPointer* hand)
+    void Pointer::draw(const HandPointer* owner, const HandPointer* other)
     {
-        const auto* nodes = hand && _style.drawn ? f4vr::getVRPlayerNodes() : nullptr;
+        const auto* nodes = owner && _style.drawn ? f4vr::getVRPlayerNodes() : nullptr;
         if (!nodes || !nodes->hmdNode) {
             // the layer is touched only to take away what it draws, so it is never built if it never draws
             if (_drawn) {
@@ -328,65 +325,11 @@ namespace f4cf::imgui
             return;
         }
         const RE::NiPoint3 head = nodes->hmdNode->world.translate;
-        const RE::NiPoint3& origin = hand->sample.origin;
-        const RE::NiPoint3& direction = hand->sample.direction;
         render::PrimitiveDraw frame;
-
-        // the ribbon's width runs across both the ray and the line of sight to it; a ray that points
-        // straight from the head has no such direction, and shows as its mark alone
-        const float length = (std::min)(hand->hit.distance, _style.rayMaxLength);
-        RE::NiPoint3 across;
-        if (length > 0.0f && _style.rayWidth > 0.0f && _style.rayColor.a > 0.0f &&
-            common::MatrixUtils::tryVec3Norm(common::MatrixUtils::vec3Cross(direction, origin - head), across)) {
-            const RE::NiPoint3 half = across * (_style.rayWidth * 0.5f);
-            const render::Color& solid = _style.rayColor;
-            const render::Color clear{ solid.r, solid.g, solid.b, 0.0f };
-            const auto addPiece = [&](const float from, const float to, const render::Color& fromColor, const render::Color& toColor) {
-                const RE::NiPoint3 start = origin + direction * from;
-                const RE::NiPoint3 end = origin + direction * to;
-                frame.addQuad(start - half, start + half, end + half, end - half, fromColor, fromColor, toColor, toColor);
-            };
-
-            const float fade = std::clamp(_style.rayFade, 0.0f, length * 0.5f);
-            if (fade > 0.0f) {
-                addPiece(0.0f, fade, clear, solid);
-                addPiece(length - fade, length, solid, clear);
-            }
-            if (length > fade * 2.0f) {
-                addPiece(fade, length - fade, solid, solid);
-            }
-        }
-
-        if (_style.markSize > 0.0f) {
-            const RE::NiPoint3 center = origin + direction * hand->hit.distance;
-            const float scale = common::MatrixUtils::vec3Len(center - head) / MARK_SIZE_DISTANCE;
-            const float radius = _style.markSize * scale;
-            const float inside = radius - std::clamp(_style.markBorderWidth * scale, 0.0f, radius);
-
-            // the directions from the center to the points around the mark, the last one the first again
-            const RE::NiPoint3 right = common::MatrixUtils::vec3Norm(hand->target->topRight - hand->target->topLeft);
-            const RE::NiPoint3 down = common::MatrixUtils::vec3Norm(hand->target->bottomLeft - hand->target->topLeft);
-            std::array<RE::NiPoint3, MARK_SEGMENTS + 1> around;
-            for (int i = 0; i <= MARK_SEGMENTS; ++i) {
-                const float angle = 2.0f * std::numbers::pi_v<float> * static_cast<float>(i % MARK_SEGMENTS) / static_cast<float>(MARK_SEGMENTS);
-                around[i] = right * std::cos(angle) + down * std::sin(angle);
-            }
-
-            // the border is beside the disc, not over it, so its opacity is its own
-            if (inside > 0.0f && _style.markColor.a > 0.0f) {
-                for (int i = 0; i < MARK_SEGMENTS; ++i) {
-                    frame.addTriangle(center, center + around[i] * inside, center + around[i + 1] * inside, _style.markColor);
-                }
-            }
-            if (inside < radius && _style.markBorderColor.a > 0.0f) {
-                for (int i = 0; i < MARK_SEGMENTS; ++i) {
-                    frame.addQuad(center + around[i] * inside,
-                        center + around[i] * radius,
-                        center + around[i + 1] * radius,
-                        center + around[i + 1] * inside,
-                        _style.markBorderColor);
-                }
-            }
+        addRay(frame, head, *owner, 1.0f);
+        addMark(frame, *owner);
+        if (other) {
+            addRay(frame, head, *other, OTHER_RAY_OPACITY);
         }
 
         if (frame.empty() && !_drawn) {
@@ -397,5 +340,81 @@ namespace f4cf::imgui
             pointerLayer().ensureInstalled();
         }
         pointerLayer().publish(std::move(frame));
+    }
+
+    /**
+     * Add the ray of a hand that is on a canvas, at the given part of the style's opacity.
+     * The ray is a ribbon turned to face the head, since a line is drawn one pixel wide whatever is asked. It
+     * runs from the ray's start for the style's longest length, or up to the canvas when that is nearer.
+     * It fades in and out over the style's length at its two ends, or over half of the ray when it is shorter
+     * than both. Each fade is one piece, clear at the ray's end and the ray's color at its other side.
+     */
+    void Pointer::addRay(render::PrimitiveDraw& frame, const RE::NiPoint3& head, const HandPointer& hand, const float opacity) const
+    {
+        const RE::NiPoint3& origin = hand.sample.origin;
+        const RE::NiPoint3& direction = hand.sample.direction;
+
+        // the ribbon's width runs across both the ray and the line of sight to it; a ray that points
+        // straight from the head has no such direction, and is not drawn
+        const float length = (std::min)(hand.hit.distance, _style.rayMaxLength);
+        RE::NiPoint3 across;
+        if (!(length > 0.0f && _style.rayWidth > 0.0f && _style.rayColor.a > 0.0f) ||
+            !common::MatrixUtils::tryVec3Norm(common::MatrixUtils::vec3Cross(direction, origin - head), across)) {
+            return;
+        }
+        const RE::NiPoint3 half = across * (_style.rayWidth * 0.5f);
+        const render::Color solid{ _style.rayColor.r, _style.rayColor.g, _style.rayColor.b, _style.rayColor.a * opacity };
+        const render::Color clear{ solid.r, solid.g, solid.b, 0.0f };
+        const auto addPiece = [&](const float from, const float to, const render::Color& fromColor, const render::Color& toColor) {
+            const RE::NiPoint3 start = origin + direction * from;
+            const RE::NiPoint3 end = origin + direction * to;
+            frame.addQuad(start - half, start + half, end + half, end - half, fromColor, fromColor, toColor, toColor);
+        };
+
+        const float fade = std::clamp(_style.rayFade, 0.0f, length * 0.5f);
+        if (fade > 0.0f) {
+            addPiece(0.0f, fade, clear, solid);
+            addPiece(length - fade, length, solid, clear);
+        }
+        if (length > fade * 2.0f) {
+            addPiece(fade, length - fade, solid, solid);
+        }
+    }
+
+    /**
+     * Add the mark of a hand, where its ray meets its canvas: a disc that lies on the canvas, with its border
+     * as a ring around it.
+     * Its size is the style's, in the world, whatever the distance to it. So it keeps its size on the canvas
+     * as the player comes nearer or steps back.
+     */
+    void Pointer::addMark(render::PrimitiveDraw& frame, const HandPointer& hand) const
+    {
+        const float radius = _style.markSize;
+        if (!(radius > 0.0f)) {
+            return;
+        }
+        const RE::NiPoint3 center = hand.sample.origin + hand.sample.direction * hand.hit.distance;
+        const float inside = radius - std::clamp(_style.markBorderWidth, 0.0f, radius);
+
+        // the directions from the center to the points around the mark, the last one the first again
+        const RE::NiPoint3 right = common::MatrixUtils::vec3Norm(hand.target->topRight - hand.target->topLeft);
+        const RE::NiPoint3 down = common::MatrixUtils::vec3Norm(hand.target->bottomLeft - hand.target->topLeft);
+        std::array<RE::NiPoint3, MARK_SEGMENTS + 1> around;
+        for (int i = 0; i <= MARK_SEGMENTS; ++i) {
+            const float angle = 2.0f * std::numbers::pi_v<float> * static_cast<float>(i % MARK_SEGMENTS) / static_cast<float>(MARK_SEGMENTS);
+            around[i] = right * std::cos(angle) + down * std::sin(angle);
+        }
+
+        // the border is beside the disc, not over it, so its opacity is its own
+        if (inside > 0.0f && _style.markColor.a > 0.0f) {
+            for (int i = 0; i < MARK_SEGMENTS; ++i) {
+                frame.addTriangle(center, center + around[i] * inside, center + around[i + 1] * inside, _style.markColor);
+            }
+        }
+        if (inside < radius && _style.markBorderColor.a > 0.0f) {
+            for (int i = 0; i < MARK_SEGMENTS; ++i) {
+                frame.addQuad(center + around[i] * inside, center + around[i] * radius, center + around[i + 1] * radius, center + around[i + 1] * inside, _style.markBorderColor);
+            }
+        }
     }
 }
