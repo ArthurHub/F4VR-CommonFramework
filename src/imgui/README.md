@@ -93,6 +93,10 @@ freely (that is the whole point — `node->world` must never be read render-side
 callback runs inside the framework's `NewFrame`/`Render` pair and inside a `Begin`/`End` for this
 canvas, so it calls ImGui widget functions only — no `Begin`/`End` of its own, no D3D.
 
+The canvas's padding and border are the canvas's alone. What the content opens, a combo's list, a
+popup, a dialog or a bordered child window, has ImGui's own window padding and border, as in any
+ImGui program.
+
 The canvas is a plain game-thread object: construct it, and the framework pumps it every frame;
 destroy it and it is gone. `setVisible(false)` costs nothing — a hidden canvas is not packed, not
 drawn, and does not run its content callback.

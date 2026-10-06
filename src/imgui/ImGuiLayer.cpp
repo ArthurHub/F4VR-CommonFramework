@@ -371,10 +371,15 @@ namespace f4cf::imgui::internal
             // The window gets none and the content goes in a child sized to the padded rectangle,
             // which also gives stretch-to-fit items (a separator, a full-width progress bar) the
             // right edge to stretch to.
+            //
+            // Begin takes the padding and the border for the canvas window, so both are popped right
+            // after it: a popup, a dialog or a bordered child the content opens has ImGui's own.
             ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(textColor.r, textColor.g, textColor.b, textColor.a));
             ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
             ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
-            if (ImGui::Begin(entry.canvas->name().c_str(), nullptr, CANVAS_FLAGS)) {
+            const bool windowOpen = ImGui::Begin(entry.canvas->name().c_str(), nullptr, CANVAS_FLAGS);
+            ImGui::PopStyleVar(2);
+            if (windowOpen) {
                 // ImGui draws a window's own background and border inside Begin, before its draw list
                 // can take the fringe scale, so the canvas draws them here instead - the same two
                 // calls. One radius rounds both, so no background shows past the border at a corner;
@@ -438,7 +443,6 @@ namespace f4cf::imgui::internal
                 ImGui::PopClipRect();
             }
             ImGui::End();
-            ImGui::PopStyleVar(2);
             ImGui::PopStyleColor();
         }
         ImGui::Render();
