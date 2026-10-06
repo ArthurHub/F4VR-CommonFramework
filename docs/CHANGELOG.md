@@ -64,6 +64,14 @@ major version is `0`, a minor bump may break the API; the **Upgrading** notes sa
   reach what the content opens. A combo's list, a popup, a dialog and a bordered child window have
   ImGui's own window padding and border, where they had none, so the content of a bordered child
   moves in by that padding.
+- **imgui dedicated panel**: `UIImGuiPanel::setDedicated` and `Canvas::setDedicated` are for the one
+  large panel that is a mod's whole UI. It has a texture of its own size in place of a part of the
+  shared atlas, so it keeps 48 pixels per vrui unit up to 4096 pixels a side, where a panel in the
+  atlas is scaled down past 1024. While it is shown it is ImGui's display, so a combo's list, a
+  popup and a dialog that its content opens stay inside the panel, and a dialog is centered on it.
+  ImGui has one display, so while a dedicated panel is shown it is the only canvas the mod draws.
+  The atlas texture is now created when a canvas is first drawn into it, so a mod with only a
+  dedicated panel does not have it.
 - **config color**: `ConfigBase::getColorValue` reads a color from the INI, written as `r,g,b` or
   `r,g,b,a` in 0 to 255, as `getTransformValue` reads a transform.
 - **render gradients**: a fill takes a color for each corner and blends between them

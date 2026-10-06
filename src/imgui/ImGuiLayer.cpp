@@ -28,6 +28,7 @@ namespace f4cf::imgui::internal
         // frame a canvas draws: the texture and the font raster are built from them, so they cannot
         // follow a later setSupersample. The scale is taken from the whole-pixel texture size rather
         // than the requested factor, so the scaled frame lands exactly on what the quads' UVs address.
+        // A dedicated canvas is rasterized at the same scale, into a texture of its own.
         int s_atlasTextureSize = 0;
         float s_atlasScale = 1.0f;
 
@@ -38,6 +39,39 @@ namespace f4cf::imgui::internal
             }
             s_atlasTextureSize = static_cast<int>(std::ceil(static_cast<float>(ATLAS_WIDTH) * supersample()));
             s_atlasScale = static_cast<float>(s_atlasTextureSize) / static_cast<float>(ATLAS_WIDTH);
+        }
+
+        /**
+         * What a frame is laid out in and rasterized into: ImGui's display, in layout pixels, and the
+         * texture behind it, which is larger by the atlas scale.
+         */
+        struct FrameDisplay
+        {
+            int width = 0;
+            int height = 0;
+            int textureWidth = 0;
+            int textureHeight = 0;
+
+            // the display is one dedicated canvas, and the texture is that canvas's own
+            bool dedicated = false;
+        };
+
+        FrameDisplay atlasDisplay()
+        {
+            return { .width = ATLAS_WIDTH, .height = ATLAS_HEIGHT, .textureWidth = s_atlasTextureSize, .textureHeight = s_atlasTextureSize };
+        }
+
+        /**
+         * The display that is the given dedicated canvas. Its texture is a whole number of pixels, so the
+         * canvas can end a part of a pixel before the texture's edge.
+         */
+        FrameDisplay dedicatedDisplay(const Canvas& canvas)
+        {
+            return { .width = canvas.pixelWidth(),
+                .height = canvas.pixelHeight(),
+                .textureWidth = static_cast<int>(std::ceil(static_cast<float>(canvas.pixelWidth()) * s_atlasScale)),
+                .textureHeight = static_cast<int>(std::ceil(static_cast<float>(canvas.pixelHeight()) * s_atlasScale)),
+                .dedicated = true };
         }
 
         // ImGui asserts on a non-positive delta; also stops a load-hitch from animating wildly.
@@ -125,7 +159,7 @@ namespace f4cf::imgui::internal
 
             s_lastFrameTime = std::chrono::steady_clock::now();
             s_contextReady = true;
-            logger::info("ImGui context ready ({}x{} atlas, {:.2f}x supersampled)", s_atlasTextureSize, s_atlasTextureSize, s_atlasScale);
+            logger::info("ImGui context ready ({:.2f}x supersampled)", s_atlasScale);
             return true;
         }
 
@@ -145,9 +179,10 @@ namespace f4cf::imgui::internal
 
         /**
          * The canvas's four world corners from its placement: local +X is right, local +Z is up, and
-         * the quad is centred on the transform's translate.
+         * the quad is centred on the transform's translate. Its part of the display's texture is the
+         * canvas's rectangle in the display, at the atlas scale.
          */
-        CanvasQuad buildQuad(const CanvasPlacement& placement, const int atlasX, const int atlasY, const int atlasW, const int atlasH, const RE::NiPoint3& viewer,
+        CanvasQuad buildQuad(const CanvasPlacement& placement, const FrameDisplay& display, const int x, const int y, const int width, const int height, const RE::NiPoint3& viewer,
             const bool occluded)
         {
             const RE::NiMatrix3 toWorld = placement.transform.rotate.Transpose(); // the codebase's local->world convention
@@ -160,10 +195,12 @@ namespace f4cf::imgui::internal
             quad.topRight = centre + right + up;
             quad.bottomRight = centre + right - up;
             quad.bottomLeft = centre - right - up;
-            quad.u0 = static_cast<float>(atlasX) / ATLAS_WIDTH;
-            quad.v0 = static_cast<float>(atlasY) / ATLAS_HEIGHT;
-            quad.u1 = static_cast<float>(atlasX + atlasW) / ATLAS_WIDTH;
-            quad.v1 = static_cast<float>(atlasY + atlasH) / ATLAS_HEIGHT;
+            const float toU = s_atlasScale / static_cast<float>(display.textureWidth);
+            const float toV = s_atlasScale / static_cast<float>(display.textureHeight);
+            quad.u0 = static_cast<float>(x) * toU;
+            quad.v0 = static_cast<float>(y) * toV;
+            quad.u1 = static_cast<float>(x + width) * toU;
+            quad.v1 = static_cast<float>(y + height) * toV;
             quad.viewerDistance = common::MatrixUtils::vec3Len(centre - viewer);
             quad.occluded = occluded;
             return quad;
@@ -265,7 +302,7 @@ namespace f4cf::imgui::internal
         }
 
         latchAtlasScale();
-        if (!renderer::ensureInstalled(s_atlasTextureSize, s_atlasTextureSize) || !ensureContext()) {
+        if (!renderer::ensureInstalled() || !ensureContext()) {
             if (!s_contextReady && !s_loggedContextFailed) {
                 s_loggedContextFailed = true;
                 logger::warn("ImGui context not ready yet; canvases will retry on frame update");
@@ -286,24 +323,47 @@ namespace f4cf::imgui::internal
             CanvasQuad quad;
         };
 
-        std::vector<PackedCanvas> packed;
-        ShelfPacker packer;
-        for (Canvas* canvas : active) {
-            CanvasPlacement placement;
-            if (canvas->placement() && !canvas->placement()(placement)) {
-                continue;
-            }
-            int x = 0;
-            int y = 0;
-            if (!packer.place(canvas->pixelWidth(), canvas->pixelHeight(), x, y)) {
-                logger::sample(5000, "Canvas '{}' does not fit the {}x{} atlas; skipped", canvas->name(), ATLAS_WIDTH, ATLAS_HEIGHT);
-                continue;
-            }
-            packed.push_back(PackedCanvas{ .canvas = canvas,
+        const auto resolvePlacement = [](const Canvas* canvas, CanvasPlacement& placement) {
+            return !canvas->placement() || canvas->placement()(placement);
+        };
+        const auto packCanvas = [&viewer](Canvas* canvas, const CanvasPlacement& placement, const FrameDisplay& display, const int x, const int y) {
+            return PackedCanvas{ .canvas = canvas,
                 .x = x,
                 .y = y,
                 .placement = placement,
-                .quad = buildQuad(placement, x, y, canvas->pixelWidth(), canvas->pixelHeight(), viewer, canvas->isOccluded()) });
+                .quad = buildQuad(placement, display, x, y, canvas->pixelWidth(), canvas->pixelHeight(), viewer, canvas->isOccluded()) };
+        };
+
+        // A dedicated canvas that is shown is ImGui's display, and ImGui has one display: the frame then
+        // holds that canvas alone, and the other canvases are not drawn until it is hidden. Of two that
+        // are shown it is the one created first.
+        std::vector<PackedCanvas> packed;
+        FrameDisplay display = atlasDisplay();
+        for (Canvas* canvas : active) {
+            CanvasPlacement placement;
+            if (canvas->isDedicated() && resolvePlacement(canvas, placement)) {
+                display = dedicatedDisplay(*canvas);
+                packed.push_back(packCanvas(canvas, placement, display, 0, 0));
+                break;
+            }
+        }
+
+        // with none, the display is the atlas and every canvas is packed into it
+        if (!display.dedicated) {
+            ShelfPacker packer;
+            for (Canvas* canvas : active) {
+                CanvasPlacement placement;
+                if (canvas->isDedicated() || !resolvePlacement(canvas, placement)) {
+                    continue;
+                }
+                int x = 0;
+                int y = 0;
+                if (!packer.place(canvas->pixelWidth(), canvas->pixelHeight(), x, y)) {
+                    logger::sample(5000, "Canvas '{}' does not fit the {}x{} atlas; skipped", canvas->name(), ATLAS_WIDTH, ATLAS_HEIGHT);
+                    continue;
+                }
+                packed.push_back(packCanvas(canvas, placement, display, x, y));
+            }
         }
         if (packed.empty()) {
             pointer().update({});
@@ -325,8 +385,9 @@ namespace f4cf::imgui::internal
             }
         }
 
+        // ImGui keeps what the content opens inside its display: a combo's list, a popup, a dialog
         auto& io = ImGui::GetIO();
-        io.DisplaySize = ImVec2(static_cast<float>(ATLAS_WIDTH), static_cast<float>(ATLAS_HEIGHT));
+        io.DisplaySize = ImVec2(static_cast<float>(display.width), static_cast<float>(display.height));
         io.DeltaTime = frameDeltaSeconds();
 
         // before the frame begins, so its widgets see where the pointer is now
@@ -451,6 +512,9 @@ namespace f4cf::imgui::internal
         frame.drawData = std::make_shared<ClonedDrawData>();
         frame.drawData->copyFrom(*ImGui::GetDrawData());
         frame.drawData->scale(s_atlasScale);
+        frame.dedicated = display.dedicated;
+        frame.textureWidth = display.textureWidth;
+        frame.textureHeight = display.textureHeight;
         frame.quads.reserve(packed.size());
         for (const auto& entry : packed) {
             if (!entry.placement.show) {

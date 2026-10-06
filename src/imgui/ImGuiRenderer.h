@@ -7,8 +7,9 @@ namespace f4cf::imgui::internal
 {
     /**
      * Render-thread half of the ImGui layer: rasterizes a published ImGui frame into an offscreen
-     * atlas texture, then composites each canvas's slice of that atlas as a world-space quad on the
-     * submitted eye texture, through the engine's own per-eye matrices.
+     * texture, the atlas the canvases share or the dedicated canvas's own, then composites each
+     * canvas's slice of that texture as a world-space quad on the submitted eye texture, through the
+     * engine's own per-eye matrices.
      *
      * ImGui emits per-command SCISSOR RECTANGLES in 2D screen space - that is how scrolling regions,
      * child windows and tables clip - and there is no scissor for an arbitrarily oriented 3D quad.
@@ -18,17 +19,15 @@ namespace f4cf::imgui::internal
     namespace renderer
     {
         /**
-         * Create the atlas + quad pipeline and register the draw callback on the shared Submit hook
+         * Create the quad pipeline and register the draw callback on the shared Submit hook
          * (idempotent). False while the D3D device or the OpenVR compositor is unavailable - safe to
          * retry every frame from the game thread.
-         *
-         * @param atlasWidth / atlasHeight size of the shared canvas texture; all canvases pack into it.
          */
-        bool ensureInstalled(int atlasWidth, int atlasHeight);
+        bool ensureInstalled();
 
         /**
          * Hand this frame's ImGui pixels and quads to the render thread (game thread). An empty
-         * frame goes dormant.
+         * frame goes dormant. The texture the frame names is created when its first frame is drawn.
          */
         void publish(RenderFrame&& frame);
     }

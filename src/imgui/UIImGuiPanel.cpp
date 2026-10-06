@@ -14,40 +14,32 @@ namespace f4cf::imgui
     namespace
     {
         /**
-         * How far a panel of this size is scaled down to fit the shared atlas: 1 when it fits, otherwise
-         * one factor for both dimensions.
+         * How far a panel of this size is scaled down to fit the most pixels its canvas may have a side,
+         * the shared atlas unless the panel is dedicated: 1 when it fits, otherwise one factor for both
+         * dimensions.
          */
-        float atlasFitFor(const float width, const float height)
+        float pixelFitFor(const float width, const float height, const int maxPixelSize)
         {
             const float requestedWidth = (std::max)(1.0f, width * CANVAS_PIXELS_PER_UNIT);
             const float requestedHeight = (std::max)(1.0f, height * CANVAS_PIXELS_PER_UNIT);
-            constexpr float limit = static_cast<float>(MAX_CANVAS_PIXEL_SIZE);
+            const float limit = static_cast<float>(maxPixelSize);
             return (std::min)(1.0f, (std::min)(limit / requestedWidth, limit / requestedHeight));
         }
 
         /**
-         * Resolution for a panel of this size, scaled down to fit the shared atlas if need be.
+         * Resolution for a panel of this size, scaled down to fit the most pixels its canvas may have if
+         * need be.
          *
          * Both dimensions are scaled by the same factor, so an oversized panel loses detail rather
          * than shape - the aspect ratio is derived from the vrui size and stays derived, which is the
          * whole point of not asking the caller for pixels. It does cost the text its size relative to
          * the panel, since the font's pixel size is not scaled with it: past this size the text reads
-         * larger against the panel. A panel that big is asking for more than one atlas can serve.
+         * larger against the panel. A panel that big is asking for more than one atlas can serve, and
+         * is a case for a dedicated panel.
          */
-        std::pair<int, int> pixelSizeFor(const std::string& name, const float width, const float height)
+        std::pair<int, int> pixelSizeFor(const float width, const float height, const int maxPixelSize)
         {
-            const float fit = atlasFitFor(width, height);
-            if (fit < 1.0f) {
-                // sampled: the size is re-evaluated every frame, so a persistently oversized panel
-                // would otherwise say so on every one of them
-                logger::sample(5000,
-                    "ImGui panel '{}' at {:.1f}x{:.1f} units needs more than the {}px atlas; resolution reduced to {:.0f}%",
-                    name,
-                    width,
-                    height,
-                    MAX_CANVAS_PIXEL_SIZE,
-                    fit * 100.0f);
-            }
+            const float fit = pixelFitFor(width, height, maxPixelSize);
             const float requestedWidth = (std::max)(1.0f, width * CANVAS_PIXELS_PER_UNIT);
             const float requestedHeight = (std::max)(1.0f, height * CANVAS_PIXELS_PER_UNIT);
             return { static_cast<int>(std::lround(requestedWidth * fit)), static_cast<int>(std::lround(requestedHeight * fit)) };
@@ -55,11 +47,11 @@ namespace f4cf::imgui
 
         /**
          * The canvas pixels a panel of this size has per vrui unit - CANVAS_PIXELS_PER_UNIT, less for a
-         * panel scaled down to fit the atlas.
+         * panel scaled down to fit.
          */
-        float pixelsPerUnitFor(const float width, const float height)
+        float pixelsPerUnitFor(const float width, const float height, const int maxPixelSize)
         {
-            return CANVAS_PIXELS_PER_UNIT * atlasFitFor(width, height);
+            return CANVAS_PIXELS_PER_UNIT * pixelFitFor(width, height, maxPixelSize);
         }
 
         bool widthFollowsContent(const vrui::UIPanelSizing sizing)
@@ -101,7 +93,7 @@ namespace f4cf::imgui
         : UIElement(name),
           _canvas(nullptr)
     {
-        const auto [pixelWidth, pixelHeight] = pixelSizeFor(name, width, height);
+        const auto [pixelWidth, pixelHeight] = pixelSizeFor(width, height, MAX_CANVAS_PIXEL_SIZE);
         _canvas = std::make_unique<Canvas>(name, pixelWidth, pixelHeight);
 
         setSize(width, height);
@@ -133,7 +125,7 @@ namespace f4cf::imgui
             return;
         }
 
-        const float pixelsPerUnit = pixelsPerUnitFor(_size.width, _size.height);
+        const float pixelsPerUnit = pixelsPerUnitFor(_size.width, _size.height, _canvas->maxPixelSize());
         const CanvasSize room = contentRoomPixels(pixelsPerUnit);
         const CanvasSize content = _canvas->measuredContentSize().value_or(CanvasSize{});
         if (widthFollowsContent(_sizing)) {
@@ -147,10 +139,24 @@ namespace f4cf::imgui
     /**
      * Runs before the ImGui layer builds its frame (vrui is pumped from the mod's onFrameUpdate, the
      * layer after it), so the canvas is in step by the time it is packed.
+     *
+     * A panel that is scaled down to fit says so here, and not where its size is set: a panel that is made
+     * dedicated after it is created is then not reported at the atlas's size.
      */
     void UIImGuiPanel::onFrameUpdate(vrui::UIFrameUpdateContext*)
     {
         refreshCanvas();
+
+        if (const float fit = pixelFitFor(_size.width, _size.height, _canvas->maxPixelSize()); fit < 1.0f) {
+            // sampled: a persistently oversized panel would otherwise say so on every frame
+            logger::sample(5000,
+                "ImGui panel '{}' at {:.1f}x{:.1f} units needs more than the {}px a side it may have; resolution reduced to {:.0f}%",
+                _name,
+                _size.width,
+                _size.height,
+                _canvas->maxPixelSize(),
+                fit * 100.0f);
+        }
     }
 
     /**
@@ -164,12 +170,12 @@ namespace f4cf::imgui
      */
     void UIImGuiPanel::refreshCanvas()
     {
-        const auto [pixelWidth, pixelHeight] = pixelSizeFor(_name, _size.width, _size.height);
+        const auto [pixelWidth, pixelHeight] = pixelSizeFor(_size.width, _size.height, _canvas->maxPixelSize());
         if (pixelWidth != _canvas->pixelWidth() || pixelHeight != _canvas->pixelHeight()) {
             _canvas->setPixelSize(pixelWidth, pixelHeight);
         }
 
-        const float pixelsPerUnit = pixelsPerUnitFor(_size.width, _size.height);
+        const float pixelsPerUnit = pixelsPerUnitFor(_size.width, _size.height, _canvas->maxPixelSize());
         _canvas->setAvailableContentSize(contentRoomPixels(pixelsPerUnit));
         _canvas->setTextColor(_style.color);
         _canvas->setBackgroundColor(_style.background);
@@ -183,7 +189,8 @@ namespace f4cf::imgui
     /**
      * The room the content is laid out in, in canvas pixels: for each dimension that follows it, as far
      * as that dimension may grow - the max width, or the atlas - less the border and padding; 0, the
-     * canvas's own room, for a dimension the caller sized.
+     * canvas's own room, for a dimension the caller sized. For a dedicated panel the atlas here is the
+     * most pixels its own texture may have.
      *
      * The atlas is measured in this panel's own pixels, so a panel is only ever scaled down to fit it
      * by a size its caller chose. Were the content to scale it down, the content would take up more of
@@ -191,7 +198,7 @@ namespace f4cf::imgui
      */
     CanvasSize UIImGuiPanel::contentRoomPixels(const float pixelsPerUnit) const
     {
-        constexpr float atlas = static_cast<float>(MAX_CANVAS_PIXEL_SIZE);
+        const float atlas = static_cast<float>(_canvas->maxPixelSize());
         CanvasSize room;
         if (widthFollowsContent(_sizing)) {
             const float maxWidth = _maxWidthUnits > 0.0f ? (std::min)(_maxWidthUnits * pixelsPerUnit, atlas) : atlas;
@@ -221,6 +228,24 @@ namespace f4cf::imgui
     void UIImGuiPanel::setOccluded(const bool occluded)
     {
         _canvas->setOccluded(occluded);
+    }
+
+    /**
+     * Whether the panel has a texture of its own in place of a part of the atlas the canvases share. Off by
+     * default. It is for the one large panel that is a mod's whole UI:
+     * - It keeps CANVAS_PIXELS_PER_UNIT up to MAX_DEDICATED_CANVAS_PIXEL_SIZE a side, about 85 units, where
+     *   a panel in the atlas is scaled down past about 21 units.
+     * - A combo's list, a popup and a dialog that its content opens stay inside the panel, and a dialog is
+     *   centered on it.
+     * - While it is shown it is the only ImGui panel the mod draws.
+     * See Canvas::setDedicated.
+     */
+    void UIImGuiPanel::setDedicated(const bool dedicated)
+    {
+        _canvas->setDedicated(dedicated);
+
+        // the most pixels the panel may have changed with it
+        refreshCanvas();
     }
 
     /**

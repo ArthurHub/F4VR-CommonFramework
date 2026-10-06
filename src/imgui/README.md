@@ -18,14 +18,14 @@ and a `vrui::UITextPanel` standing side by side read as one UI.
 
 | File | What it is |
 | ----------------------- | -------------------------------------------------------------------- |
-| [`ImGuiCanvas.h`](ImGuiCanvas.h) / [`.cpp`](ImGuiCanvas.cpp) | `Canvas` — one ImGui window placed in the world by a provider you write. Content, placement, chrome (background, border, rounding, padding), sizing and occlusion. |
+| [`ImGuiCanvas.h`](ImGuiCanvas.h) / [`.cpp`](ImGuiCanvas.cpp) | `Canvas` — one ImGui window placed in the world by a provider you write. Content, placement, chrome (background, border, rounding, padding), sizing and occlusion, and whether it is dedicated. |
 | [`UIImGuiPanel.h`](UIImGuiPanel.h) / [`.cpp`](UIImGuiPanel.cpp) | The vrui adapter: a `UIElement` whose rectangle a `Canvas` fills. Takes `vrui::UIPanelStyle` and the vrui sizing modes, in vrui units. |
 | [`ImGuiPointer.h`](ImGuiPointer.h) / [`.cpp`](ImGuiPointer.cpp) | `Pointer`, reached as `imgui::pointer()` — the one pointer of the interactive canvases: a wand's ray as ImGui's mouse, its trigger as the mouse button, and that wand hidden from the game. Its state, which hands point, and its `PointerStyle`: where the ray is on the hand, and how the ray and its mark are drawn. |
 | [`ImGuiPointerLogic.h`](ImGuiPointerLogic.h) | The pointer's logic apart from the game, so it is unit tested: where a ray meets a quad and its plane, whether a hand operates the UI and presses it, which hand owns the pointer, and how much a thumbstick scrolls. |
 | [`ImGuiSettings.h`](ImGuiSettings.h) / [`.cpp`](ImGuiSettings.cpp) | The two process-wide knobs: `setFontSizePixels` and `setSupersample`. |
 | [`ImGuiFonts.h`](ImGuiFonts.h) / [`.cpp`](ImGuiFonts.cpp) | Loads the framework's text font into the ImGui atlas, from the same bytes the primitive renderer draws with. |
-| [`ImGuiLayer.h`](ImGuiLayer.h) / [`.cpp`](ImGuiLayer.cpp) | Game-thread pump: one ImGui frame holding every visible canvas, cloned and published with each canvas's quad. |
-| [`ImGuiRenderer.h`](ImGuiRenderer.h) / [`.cpp`](ImGuiRenderer.cpp) | Render-thread half: rasterizes the frame into the shared atlas texture, then composites each canvas's slice as a world-space quad. |
+| [`ImGuiLayer.h`](ImGuiLayer.h) / [`.cpp`](ImGuiLayer.cpp) | Game-thread pump: one ImGui frame holding every visible canvas, or the dedicated canvas alone, cloned and published with each canvas's quad. |
+| [`ImGuiRenderer.h`](ImGuiRenderer.h) / [`.cpp`](ImGuiRenderer.cpp) | Render-thread half: rasterizes the frame into the shared atlas texture, or into the dedicated canvas's own, then composites each canvas's slice as a world-space quad. |
 
 ## A panel in a vrui layout
 
@@ -200,6 +200,35 @@ A mod that wants the player to set these reads the fields from its own INI and c
 with them: `ConfigBase::getColorValue` reads a color written as `r,g,b,a`, and `getTransformValue`
 the offset. The framework has no INI keys for it.
 
+## A dedicated panel
+
+The canvases share one atlas of 1024 by 1024 layout pixels, which is also ImGui's display. That suits
+several small panels. A mod whose UI is one large panel makes that panel dedicated:
+
+```cpp
+panel->setDedicated(true);              // Canvas::setDedicated for a canvas placed by hand
+```
+
+- **A texture of its own.** The panel is rasterized into a texture of the panel's size, not into the
+  atlas. It keeps 48 pixels per vrui unit up to `MAX_DEDICATED_CANVAS_PIXEL_SIZE` (4096) a side,
+  about 85 units, where a panel in the atlas is scaled down past 1024 pixels, about 21 units.
+- **It is ImGui's display.** ImGui keeps what the content opens inside its display, and while a
+  dedicated panel is shown the display is that panel. A combo near the panel's bottom edge opens
+  upward, and a dialog (`ImGui::BeginPopupModal`) is centered on the panel. The content calls
+  `ImGui::BeginCombo`, `ImGui::BeginPopup` and `ImGui::BeginPopupModal` as in any ImGui program. In
+  the atlas these are placed against the atlas, and the part beside the canvas's own rectangle is
+  not shown.
+- **It is the only ImGui panel.** ImGui has one display, so while a dedicated panel is shown the
+  mod's other canvases are not drawn and their content does not run. They are drawn again when it is
+  hidden. Of two dedicated panels that are shown, the one created first is drawn. vrui buttons and
+  vrui text panels are not ImGui and are not affected, and neither are other mods: each has its own
+  copy of the framework.
+- **What it costs.** The texture is the panel's pixels times the supersample factor on each side: a
+  panel of 38 by 30 units at 1.5 is 2736 by 2160 pixels, about 24MB. It is created when the panel is
+  first drawn, and again when the panel's size changes, so a panel sized to its content gets a new
+  one whenever its content changes size. The atlas is not created for a mod that draws only a
+  dedicated panel.
+
 ## Sizes, pixels and legibility
 
 Three separate things, deliberately:
@@ -217,7 +246,9 @@ which resamples the raster rather than rebuilding it.
 
 The atlas texture is `MAX_CANVAS_PIXEL_SIZE` (1024) times the supersample factor on each side, so
 memory grows with the square — about 9MB at 1.5, 16MB at 2 — and past the headset's own resolution a
-larger factor adds nothing visible. Nothing is allocated until the first canvas draws.
+larger factor adds nothing visible. Nothing is allocated until the first canvas draws. A
+[dedicated panel](#a-dedicated-panel) has a texture of its own size in place of the atlas, at the
+same factor.
 
 ## Font
 
@@ -249,6 +280,9 @@ imgui::internal::onFrameEnd()                   draw callback (DRAW_ORDER_PANELS
   own sub-rect and composited as one textured quad. The quads are sorted so each occlusion group is
   contiguous, so compositing is one draw for the occluded canvases and one for the rest — two at
   most, however many canvases there are.
+- **A dedicated canvas is a frame by itself.** While one is shown the frame holds that canvas alone,
+  ImGui's display is the canvas, and the frame is rasterized into the canvas's own texture in place
+  of the atlas. The rest of the path is the same.
 - **Why rasterize flat first?** ImGui emits per-command *scissor rectangles* in 2D screen space —
   that is how scrolling regions, child windows and tables clip — and there is no scissor for an
   arbitrarily oriented 3D quad. So the draw data is rasterized into a texture and only then placed in

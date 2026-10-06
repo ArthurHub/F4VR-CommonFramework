@@ -50,7 +50,8 @@ namespace f4cf::imgui
      * The price is density: in a container scaled 1.6 the panel has 1.6x fewer atlas pixels per world
      * unit and reads correspondingly softer, which setSupersample buys back at a memory cost.
      * A panel too large to fit the shared atlas is scaled down to fit, keeping its aspect, and says
-     * so in the log - it never silently distorts.
+     * so in the log - it never silently distorts. The one large panel that is a mod's whole UI is
+     * made dedicated instead (setDedicated): it has a texture of its own, which the atlas does not limit.
      *
      * Three things set it apart from its neighbours. It draws through the framework's overlay path
      * rather than the scene graph, so what hides it is the depth test described at setOccluded, not
@@ -130,6 +131,8 @@ namespace f4cf::imgui
          * readable whatever is in front of it. See imgui::Canvas::setOccluded.
          */
         void setOccluded(bool occluded);
+
+        void setDedicated(bool dedicated);
 
         void setInteractive(bool interactive);
 

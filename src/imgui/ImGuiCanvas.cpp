@@ -43,8 +43,30 @@ namespace f4cf::imgui
 
     void Canvas::setPixelSize(const int pixelWidth, const int pixelHeight)
     {
-        _pixelWidth = std::clamp(pixelWidth, 1, MAX_CANVAS_PIXEL_SIZE);
-        _pixelHeight = std::clamp(pixelHeight, 1, MAX_CANVAS_PIXEL_SIZE);
+        _pixelWidth = std::clamp(pixelWidth, 1, maxPixelSize());
+        _pixelHeight = std::clamp(pixelHeight, 1, maxPixelSize());
+    }
+
+    /**
+     * Whether the canvas has a texture of its own, of the canvas's size, in place of a part of the atlas the
+     * canvases share. Off by default. It is for the one large canvas that is a mod's whole UI:
+     * - It can be as large as MAX_DEDICATED_CANVAS_PIXEL_SIZE a side, where the atlas holds
+     *   MAX_CANVAS_PIXEL_SIZE.
+     * - While it is shown it is ImGui's display. ImGui keeps what the content opens inside its display, so
+     *   a combo's list, a popup and a dialog stay inside the canvas, and a dialog is centered on it. In the
+     *   atlas they are placed against the atlas, and the part beside the canvas's own rectangle is not shown.
+     * - ImGui has one display, so while it is shown it is the only canvas the mod draws: the others are not
+     *   drawn, and their content does not run, until it is hidden. Of two dedicated canvases that are shown,
+     *   the one created first is drawn.
+     * The texture is created when the canvas is first drawn, and again when its size changes.
+     */
+    void Canvas::setDedicated(const bool dedicated)
+    {
+        _dedicated = dedicated;
+
+        // back inside what it may have now
+        setPixelSize(_pixelWidth, _pixelHeight);
+        setAvailableContentSize(_availableContentSize);
     }
 
     void Canvas::setOccluded(const bool occluded)
@@ -106,7 +128,7 @@ namespace f4cf::imgui
 
     void Canvas::setAvailableContentSize(const CanvasSize& size)
     {
-        constexpr float limit = static_cast<float>(MAX_CANVAS_PIXEL_SIZE);
+        const float limit = static_cast<float>(maxPixelSize());
         _availableContentSize = { .width = std::clamp(size.width, 0.0f, limit), .height = std::clamp(size.height, 0.0f, limit) };
     }
 

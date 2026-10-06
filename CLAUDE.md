@@ -166,6 +166,10 @@ and composited as one quad, so N canvases cost one ImGui frame and one draw call
   that began on a canvas keeps its wand hidden until the trigger is released, wherever the ray is
   and whether or not the canvas is still shown. The mod's own `VRControllers` reads still see it.
   The thumbstick of the hand that owns the pointer is ImGui's mouse wheel.
+- **One large panel is made dedicated** (`setDedicated(true)`): it has a texture of its own size in
+  place of a part of the atlas, so it keeps its pixels past the atlas's 1024, and while it is shown
+  it is ImGui's display, so the combos, popups and dialogs of its content open inside it. ImGui has
+  one display: while a dedicated panel is shown, the mod's other canvases are not drawn.
 - Content can only be measured by drawing it, which happens after vrui lays the frame out, so a panel
   sized to its content is laid out at **last frame's** size.
 - `setFontSizePixels` / `setSupersample` are process-wide and read when the first canvas draws.
