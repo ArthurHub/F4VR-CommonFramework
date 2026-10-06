@@ -28,12 +28,15 @@ namespace f4cf::render
     namespace
     {
         /**
-         * Vertex layout shared by every pipeline (POS float3, TEXCOORD float2).
+         * Vertex layout shared by every pipeline (POS float3, TEXCOORD float2, COLOR four bytes).
          *
          * Everything samples a texture: text the font atlas for its glyphs, lines and fills the
          * atlas's solid block, which comes out fully opaque, and images their own texture. One shader
          * therefore draws all four, so a fill and the text over it stay in one batch instead of
          * splitting on a shader change.
+         *
+         * The color is on the vertex and blended across the primitive: it is what makes a gradient,
+         * and a change of color does not need a new draw.
          */
         struct Vertex
         {
@@ -42,6 +45,9 @@ namespace f4cf::render
             float z;
             float u;
             float v;
+
+            // red, green, blue, alpha, a byte each; see packColor
+            std::uint32_t color;
         };
 
         /**
@@ -59,13 +65,13 @@ namespace f4cf::render
         };
 
         /**
-         * Per-draw constants (register b1): model matrix + flat color for the vertex shader, and the
-         * shade mode for the pixel shader. ROCK DebugBodyOverlay.cpp:162-166, plus the mode.
+         * Per-draw constants (register b1): the model matrix for the vertex shader, and the shade mode
+         * for the pixel shader. ROCK DebugBodyOverlay.cpp:162-166, with the mode in place of its flat
+         * color, which the vertices carry.
          */
         struct alignas(16) PerObjectVSData
         {
             DirectX::XMMATRIX matModel;
-            float color[4];
             // x: the ShadeMode; the rest pads to the 16-byte boundary constant buffers are laid out on
             float params[4];
         };
@@ -100,11 +106,24 @@ namespace f4cf::render
         float s_solidV = 0.0f;
 
         /**
-         * A vertex for untextured geometry: it samples the atlas's solid block, so it draws opaque.
+         * A color as the four bytes a vertex carries, red in the lowest. A component outside [0,1] is
+         * clamped into it.
          */
-        Vertex solidVertex(const RE::NiPoint3& p)
+        std::uint32_t packColor(const Color& color)
         {
-            return Vertex{ p.x, p.y, p.z, s_solidU, s_solidV };
+            const auto toByte = [](const float component) {
+                return static_cast<std::uint32_t>(std::clamp(component, 0.0f, 1.0f) * 255.0f + 0.5f);
+            };
+            return toByte(color.r) | toByte(color.g) << 8 | toByte(color.b) << 16 | toByte(color.a) << 24;
+        }
+
+        /**
+         * A vertex for untextured geometry: it samples the atlas's solid block, so it draws in its own
+         * color alone.
+         */
+        Vertex solidVertex(const RE::NiPoint3& p, const std::uint32_t color)
+        {
+            return Vertex{ p.x, p.y, p.z, s_solidU, s_solidV, color };
         }
 
         // Stereo-instancing vertex shader: FO4VR renders both eyes into one double-wide target, so
@@ -114,6 +133,7 @@ namespace f4cf::render
 struct VS_INPUT {
     float3 vPos : POS;
     float2 vUV : TEXCOORD0;
+    float4 vColor : COLOR0;
     uint instanceId : SV_InstanceID;
 };
 
@@ -132,7 +152,6 @@ cbuffer Camera : register(b0) {
 
 cbuffer Model : register(b1) {
     row_major float4x4 matModel;
-    float4 color;
     float4 params;
 };
 
@@ -146,7 +165,7 @@ VS_OUTPUT main(VS_INPUT input) {
     pos = mul(matProjView[input.instanceId], pos);
 
     VS_OUTPUT output;
-    output.vColor = color;
+    output.vColor = input.vColor;
     output.vUV = input.vUV;
     output.clipDistance = dot(pos, eyeClipEdge[input.instanceId]);
     output.cullDistance = output.clipDistance;
@@ -162,6 +181,7 @@ VS_OUTPUT main(VS_INPUT input) {
 struct VS_INPUT {
     float3 vPos : POS;
     float2 vUV : TEXCOORD0;
+    float4 vColor : COLOR0;
 };
 
 struct VS_OUTPUT {
@@ -170,16 +190,10 @@ struct VS_OUTPUT {
     float2 vUV : TEXCOORD0;
 };
 
-cbuffer Model : register(b1) {
-    row_major float4x4 matModel;
-    float4 color;
-    float4 params;
-};
-
 VS_OUTPUT main(VS_INPUT input) {
     VS_OUTPUT output;
     output.vPos = float4(input.vPos.xy, 0.0f, 1.0f);
-    output.vColor = color;
+    output.vColor = input.vColor;
     output.vUV = input.vUV;
     return output;
 }
@@ -206,7 +220,6 @@ SamplerState textureSampler : register(s0);
 
 cbuffer Model : register(b1) {
     row_major float4x4 matModel;
-    float4 color;
     float4 params;
 };
 
@@ -329,6 +342,7 @@ float4 main(PS_INPUT input) : SV_Target {
             const D3D11_INPUT_ELEMENT_DESC layoutDesc[] = {
                 { "POS", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0 },
                 { "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, static_cast<UINT>(offsetof(Vertex, u)), D3D11_INPUT_PER_VERTEX_DATA, 0 },
+                { "COLOR", 0, DXGI_FORMAT_R8G8B8A8_UNORM, 0, static_cast<UINT>(offsetof(Vertex, color)), D3D11_INPUT_PER_VERTEX_DATA, 0 },
             };
             hr = device->CreateInputLayout(layoutDesc, static_cast<UINT>(std::size(layoutDesc)), vsBlob->GetBufferPointer(), vsBlob->GetBufferSize(), &s_inputLayout);
             vsBlob->Release();
@@ -457,19 +471,16 @@ float4 main(PS_INPUT input) : SV_Target {
         }
 
         /**
-         * Upload the per-draw model matrix, color and shade mode, and bind them to both stages - the
-         * pixel shader reads the mode. ROCK DebugBodyOverlay.cpp:1248-1261.
+         * Upload the per-draw constants and bind them to both stages - the pixel shader reads the
+         * mode. The model matrix is the identity: every vertex is already where it is drawn.
+         * ROCK DebugBodyOverlay.cpp:1248-1261.
          */
-        void uploadColorModel(ID3D11DeviceContext* context, const DirectX::XMMATRIX& model, const Color& color, const ShadeMode mode = ShadeMode::DistanceField)
+        void uploadDrawConstants(ID3D11DeviceContext* context, const ShadeMode mode = ShadeMode::DistanceField)
         {
             D3D11_MAPPED_SUBRESOURCE mapped{};
             if (SUCCEEDED(context->Map(s_modelCB, 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped))) {
                 auto* data = static_cast<PerObjectVSData*>(mapped.pData);
-                data->matModel = model;
-                data->color[0] = color.r;
-                data->color[1] = color.g;
-                data->color[2] = color.b;
-                data->color[3] = color.a;
+                data->matModel = DirectX::XMMatrixIdentity();
                 data->params[0] = static_cast<float>(mode);
                 data->params[1] = 0.0f;
                 data->params[2] = 0.0f;
@@ -481,8 +492,8 @@ float4 main(PS_INPUT input) : SV_Target {
         }
 
         /**
-         * Draw all wire segments: one VB upload, then one instanced draw per same-color run (the
-         * producer publishes the list color-sorted). ROCK DebugBodyOverlay.cpp:1961-2006.
+         * Draw all wire segments: one VB upload and one instanced draw, whatever their colors.
+         * ROCK DebugBodyOverlay.cpp:1961-2006.
          */
         void drawLines(ID3D11DeviceContext* context, const std::vector<LineSegment>& lines)
         {
@@ -502,8 +513,9 @@ float4 main(PS_INPUT input) : SV_Target {
             auto* vertices = static_cast<Vertex*>(mapped.pData);
             const std::size_t lineCount = (std::min)(lines.size(), MAX_LINE_VERTICES / 2);
             for (std::size_t i = 0; i < lineCount; ++i) {
-                vertices[i * 2] = solidVertex(lines[i].start);
-                vertices[i * 2 + 1] = solidVertex(lines[i].end);
+                const std::uint32_t color = packColor(lines[i].color);
+                vertices[i * 2] = solidVertex(lines[i].start, color);
+                vertices[i * 2 + 1] = solidVertex(lines[i].end, color);
             }
             context->Unmap(s_lineVB, 0);
 
@@ -513,16 +525,8 @@ float4 main(PS_INPUT input) : SV_Target {
             context->IASetVertexBuffers(0, 1, &vertexBuffer, &stride, &offset);
             context->IASetIndexBuffer(nullptr, DXGI_FORMAT_UNKNOWN, 0);
 
-            std::size_t runStart = 0;
-            while (runStart < lineCount) {
-                std::size_t runEnd = runStart + 1;
-                while (runEnd < lineCount && lines[runEnd].color == lines[runStart].color) {
-                    ++runEnd;
-                }
-                uploadColorModel(context, DirectX::XMMatrixIdentity(), lines[runStart].color);
-                context->DrawInstanced(static_cast<UINT>((runEnd - runStart) * 2), 2, static_cast<UINT>(runStart * 2), 0);
-                runStart = runEnd;
-            }
+            uploadDrawConstants(context);
+            context->DrawInstanced(static_cast<UINT>(lineCount * 2), 2, 0, 0); // ×2: the shader splits the eyes
         }
 
         float screenTextHeight(const TextEntry& entry)
@@ -609,10 +613,11 @@ float4 main(PS_INPUT input) : SV_Target {
             const float inkWidth = internal::layoutText(entry.text, (limitX - baseX) / textHeight, quads);
             appendDecoration(quads, entry.decoration, inkWidth);
 
+            const std::uint32_t color = packColor(entry.color);
             const auto toClip = [&](const float x, const float y, const float u, const float v) {
                 const float px = baseX + x * textHeight;
                 const float py = baseY + y * textHeight;
-                return Vertex{ (px / textureWidth) * 2.0f - 1.0f, 1.0f - (py / textureHeight) * 2.0f, 0.0f, u, v };
+                return Vertex{ (px / textureWidth) * 2.0f - 1.0f, 1.0f - (py / textureHeight) * 2.0f, 0.0f, u, v, color };
             };
             for (const auto& quad : quads) {
                 if (vertices.size() + 6 > TEXT_VERTEX_CAPACITY) {
@@ -705,16 +710,17 @@ float4 main(PS_INPUT input) : SV_Target {
          * is who picks the basis and the text height. The vertex budget is checked per glyph, so a
          * run that would overflow stops mid-string rather than dropping the whole label.
          */
-        void appendPlanarGlyphs(std::vector<Vertex>& vertices, const std::string& text, const RE::NiPoint3& cursor, const RE::NiPoint3& right, const RE::NiPoint3& up,
-            const float textHeight, const TextDecoration decoration)
+        void appendPlanarGlyphs(std::vector<Vertex>& vertices, const TextEntry& entry, const RE::NiPoint3& cursor, const RE::NiPoint3& right, const RE::NiPoint3& up,
+            const float textHeight)
         {
             auto& quads = glyphScratch();
-            const float inkWidth = internal::layoutText(text, (std::numeric_limits<float>::max)(), quads);
-            appendDecoration(quads, decoration, inkWidth);
+            const float inkWidth = internal::layoutText(entry.text, (std::numeric_limits<float>::max)(), quads);
+            appendDecoration(quads, entry.decoration, inkWidth);
 
+            const std::uint32_t color = packColor(entry.color);
             const auto at = [&](const float x, const float y, const float u, const float v) {
                 const RE::NiPoint3 point = cursor + right * (x * textHeight) - up * (y * textHeight);
-                return Vertex{ point.x, point.y, point.z, u, v };
+                return Vertex{ point.x, point.y, point.z, u, v, color };
             };
             for (const auto& quad : quads) {
                 if (vertices.size() + 6 > TEXT_VERTEX_CAPACITY) {
@@ -756,7 +762,7 @@ float4 main(PS_INPUT input) : SV_Target {
             const float textHeight = dist * BILLBOARD_TEXT_HEIGHT_PER_DISTANCE * (std::max)(1.0f, entry.size);
             const float textWidth = measureText(entry.text, textHeight);
             const RE::NiPoint3 cursor = entry.worldAnchor + up * (textHeight * 0.5f) - right * (textWidth * 0.5f);
-            appendPlanarGlyphs(vertices, entry.text, cursor, right, up, textHeight, entry.decoration);
+            appendPlanarGlyphs(vertices, entry, cursor, right, up, textHeight);
         }
 
         /**
@@ -784,7 +790,7 @@ float4 main(PS_INPUT input) : SV_Target {
             }
 
             const RE::NiPoint3 cursor = entry.worldAnchor + right * (entry.x + alignShift) + up * entry.y;
-            appendPlanarGlyphs(vertices, entry.text, cursor, right, up, entry.size, entry.decoration);
+            appendPlanarGlyphs(vertices, entry, cursor, right, up, entry.size);
         }
 
         /**
@@ -793,11 +799,12 @@ float4 main(PS_INPUT input) : SV_Target {
          * shares the exact projection and depth of the shapes. Camera CB (b0) must already be
          * uploaded, and the font atlas bound.
          *
-         * Everything goes into ONE vertex-buffer upload, and consecutive runs of the same texture,
-         * shading and color collapse into a single draw: those are constant-buffer and binding
-         * changes rather than vertex attributes, so a CHANGE of any of them is what forces a new
-         * draw, not a new shape. A bordered text panel therefore costs two draws - one for the
-         * border, one for the rows - not one per row, and each distinct image one more.
+         * Everything goes into ONE vertex-buffer upload, and consecutive runs of the same texture and
+         * shading collapse into a single draw: those are constant-buffer and binding changes rather
+         * than vertex attributes, so a CHANGE of either is what forces a new draw, not a new shape.
+         * The color is a vertex attribute, so it never does. Fills and world text both sample the font
+         * atlas, so a layer of bordered text panels in any colors costs one draw; with images it is
+         * one for the fills, one for each run of images of one texture, and one for the text.
          *
          * Fills, images and world text share the one vertex buffer, so they also share its budget;
          * whichever would overflow it stops early rather than growing the buffer.
@@ -815,7 +822,6 @@ float4 main(PS_INPUT input) : SV_Target {
                 std::size_t count;
                 ID3D11ShaderResourceView* texture;
                 ShadeMode mode;
-                Color color;
             };
 
             // enough for a bordered panel of text without a reallocation; it grows if a frame needs
@@ -825,14 +831,14 @@ float4 main(PS_INPUT input) : SV_Target {
             std::vector<DrawRun> runs;
 
             // runs are appended in buffer order, so extending the last one keeps it contiguous
-            const auto appendRun = [&runs](const std::size_t start, const std::size_t count, ID3D11ShaderResourceView* texture, const ShadeMode mode, const Color& color) {
+            const auto appendRun = [&runs](const std::size_t start, const std::size_t count, ID3D11ShaderResourceView* texture, const ShadeMode mode) {
                 if (count == 0) {
                     return; // degenerate or budget-exhausted, and merging it would corrupt the runs
                 }
-                if (!runs.empty() && runs.back().texture == texture && runs.back().mode == mode && runs.back().color == color) {
+                if (!runs.empty() && runs.back().texture == texture && runs.back().mode == mode) {
                     runs.back().count += count;
                 } else {
-                    runs.push_back(DrawRun{ .start = start, .count = count, .texture = texture, .mode = mode, .color = color });
+                    runs.push_back(DrawRun{ .start = start, .count = count, .texture = texture, .mode = mode });
                 }
             };
 
@@ -843,10 +849,10 @@ float4 main(PS_INPUT input) : SV_Target {
                     break;
                 }
                 const std::size_t start = vertices.size();
-                vertices.push_back(solidVertex(triangle.a));
-                vertices.push_back(solidVertex(triangle.b));
-                vertices.push_back(solidVertex(triangle.c));
-                appendRun(start, 3, s_fontView, ShadeMode::DistanceField, triangle.color);
+                vertices.push_back(solidVertex(triangle.a, packColor(triangle.colorA)));
+                vertices.push_back(solidVertex(triangle.b, packColor(triangle.colorB)));
+                vertices.push_back(solidVertex(triangle.c, packColor(triangle.colorC)));
+                appendRun(start, 3, s_fontView, ShadeMode::DistanceField);
             }
 
             // images between the two, so a panel's image sits on its background and under its labels.
@@ -860,17 +866,18 @@ float4 main(PS_INPUT input) : SV_Target {
                     continue;
                 }
                 const std::size_t start = vertices.size();
-                const Vertex topLeft{ image.topLeft.x, image.topLeft.y, image.topLeft.z, image.u0, image.v0 };
-                const Vertex topRight{ image.topRight.x, image.topRight.y, image.topRight.z, image.u1, image.v0 };
-                const Vertex bottomRight{ image.bottomRight.x, image.bottomRight.y, image.bottomRight.z, image.u1, image.v1 };
-                const Vertex bottomLeft{ image.bottomLeft.x, image.bottomLeft.y, image.bottomLeft.z, image.u0, image.v1 };
+                const std::uint32_t tint = packColor(image.tint);
+                const Vertex topLeft{ image.topLeft.x, image.topLeft.y, image.topLeft.z, image.u0, image.v0, tint };
+                const Vertex topRight{ image.topRight.x, image.topRight.y, image.topRight.z, image.u1, image.v0, tint };
+                const Vertex bottomRight{ image.bottomRight.x, image.bottomRight.y, image.bottomRight.z, image.u1, image.v1, tint };
+                const Vertex bottomLeft{ image.bottomLeft.x, image.bottomLeft.y, image.bottomLeft.z, image.u0, image.v1, tint };
                 vertices.push_back(topLeft);
                 vertices.push_back(topRight);
                 vertices.push_back(bottomRight);
                 vertices.push_back(topLeft);
                 vertices.push_back(bottomRight);
                 vertices.push_back(bottomLeft);
-                appendRun(start, 6, image.texture.Get(), image.srgb ? ShadeMode::ImageSRGB : ShadeMode::Image, image.tint);
+                appendRun(start, 6, image.texture.Get(), image.srgb ? ShadeMode::ImageSRGB : ShadeMode::Image);
             }
 
             for (const auto& entry : frame.texts) {
@@ -883,7 +890,7 @@ float4 main(PS_INPUT input) : SV_Target {
                 } else {
                     appendOrientedGlyphs(vertices, entry);
                 }
-                appendRun(start, vertices.size() - start, s_fontView, ShadeMode::DistanceField, entry.color);
+                appendRun(start, vertices.size() - start, s_fontView, ShadeMode::DistanceField);
             }
             if (runs.empty()) {
                 return;
@@ -915,7 +922,7 @@ float4 main(PS_INPUT input) : SV_Target {
                     context->PSSetShaderResources(0, 1, &run.texture);
                     boundTexture = run.texture;
                 }
-                uploadColorModel(context, DirectX::XMMatrixIdentity(), run.color, run.mode);
+                uploadDrawConstants(context, run.mode);
                 context->DrawInstanced(static_cast<UINT>(run.count), 2, static_cast<UINT>(run.start), 0); // ×2: the shader splits the eyes
             }
             if (boundTexture != s_fontView) {
@@ -927,6 +934,9 @@ float4 main(PS_INPUT input) : SV_Target {
          * Draw all text entries as glyph quads; screen-space entries are duplicated into both eye
          * halves, world-anchored entries projected per eye. Billboard and Oriented entries are
          * world-space geometry, drawn by drawWorldGeometry. ROCK DebugBodyOverlay.cpp:2350-2410.
+         *
+         * Every entry goes into one vertex-buffer upload and one draw, whatever its color. They share
+         * the buffer's budget, which is checked per glyph, so text that would overflow it stops there.
          */
         void drawTextEntries(ID3D11DeviceContext* context, const float textureWidth, const float textureHeight, const std::vector<TextEntry>& texts, const DirectX::XMMATRIX& eye0,
             const DirectX::XMMATRIX& eye1, const DirectX::XMFLOAT4& adjust0, const DirectX::XMFLOAT4& adjust1)
@@ -934,6 +944,31 @@ float4 main(PS_INPUT input) : SV_Target {
             if (texts.empty() || !s_textVB || !s_screenTextVertexShader || textureWidth <= 0.0f || textureHeight <= 0.0f) {
                 return;
             }
+
+            const float eyeWidth = textureWidth * 0.5f;
+            std::vector<Vertex> vertices;
+            vertices.reserve(4096);
+            for (const auto& entry : texts) {
+                if (isWorldTextPlacement(entry.placement)) {
+                    continue; // world-space geometry, drawn by drawWorldGeometry
+                }
+                if (entry.placement == TextPlacement::WorldAnchored) {
+                    appendWorldAnchoredTextGlyphs(vertices, entry, eye0, eye1, adjust0, adjust1, textureWidth, textureHeight);
+                } else {
+                    appendTextGlyphs(vertices, entry, entry.x, entry.y, eyeWidth - 8.0f, textureWidth, textureHeight);
+                    appendTextGlyphs(vertices, entry, entry.x + eyeWidth, entry.y, textureWidth - 8.0f, textureWidth, textureHeight);
+                }
+            }
+            if (vertices.empty()) {
+                return;
+            }
+
+            D3D11_MAPPED_SUBRESOURCE mapped{};
+            if (FAILED(context->Map(s_textVB, 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped))) {
+                return;
+            }
+            std::memcpy(mapped.pData, vertices.data(), vertices.size() * sizeof(Vertex));
+            context->Unmap(s_textVB, 0);
 
             context->IASetInputLayout(s_inputLayout);
             context->VSSetShader(s_screenTextVertexShader, nullptr, 0);
@@ -947,35 +982,8 @@ float4 main(PS_INPUT input) : SV_Target {
             context->IASetVertexBuffers(0, 1, &vertexBuffer, &stride, &offset);
             context->IASetIndexBuffer(nullptr, DXGI_FORMAT_UNKNOWN, 0);
 
-            const float eyeWidth = textureWidth * 0.5f;
-            for (const auto& entry : texts) {
-                if (isWorldTextPlacement(entry.placement)) {
-                    continue; // world-space geometry, drawn by drawWorldGeometry
-                }
-                std::vector<Vertex> vertices;
-                vertices.reserve(4096);
-                if (entry.placement == TextPlacement::WorldAnchored) {
-                    appendWorldAnchoredTextGlyphs(vertices, entry, eye0, eye1, adjust0, adjust1, textureWidth, textureHeight);
-                } else {
-                    appendTextGlyphs(vertices, entry, entry.x, entry.y, eyeWidth - 8.0f, textureWidth, textureHeight);
-                    appendTextGlyphs(vertices, entry, entry.x + eyeWidth, entry.y, textureWidth - 8.0f, textureWidth, textureHeight);
-                }
-                if (vertices.empty()) {
-                    continue;
-                }
-                if (vertices.size() > TEXT_VERTEX_CAPACITY) {
-                    vertices.resize(TEXT_VERTEX_CAPACITY);
-                }
-
-                D3D11_MAPPED_SUBRESOURCE mapped{};
-                if (FAILED(context->Map(s_textVB, 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped))) {
-                    continue;
-                }
-                std::memcpy(mapped.pData, vertices.data(), vertices.size() * sizeof(Vertex));
-                context->Unmap(s_textVB, 0);
-                uploadColorModel(context, DirectX::XMMatrixIdentity(), entry.color);
-                context->Draw(static_cast<UINT>(vertices.size()), 0);
-            }
+            uploadDrawConstants(context);
+            context->Draw(static_cast<UINT>(vertices.size()), 0);
         }
 
         /**

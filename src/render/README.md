@@ -61,15 +61,23 @@ void MyMod::onFrameUpdate()
 Depth testing is off within a layer, so the lists are painted in a fixed order and whatever draws
 last wins the pixel: **lines, then all fills, then all images, then all text**. That is what puts a
 panel's background under its image and its image under its labels — but it also means a layer's own
-content is not meant to overlap itself. Consecutive content of one color and texture goes out in a
-single draw call; each distinct texture costs a draw.
+content is not meant to overlap itself. The color is on each vertex, so consecutive content of one
+texture goes out in a single draw call whatever its colors; each distinct texture costs a draw.
+
+A fill takes a color for each corner and blends between them, so a gradient or a fade is one shape:
+
+```cpp
+// a strip that fades out from a-b to c-d
+const render::Color clear{ color.r, color.g, color.b, 0.0f };
+frame.addQuad(a, b, c, d, color, color, clear, clear);
+```
 
 ### Budgets
 
 `MAX_LINE_VERTICES` (64k), `TEXT_VERTEX_CAPACITY` (128k), `MAX_FILL_TRIANGLES` (8k) and
 `MAX_IMAGE_QUADS` (4k) per frame. The `add*` helpers return `false` when full, so a runaway producer
 degrades instead of ballooning GPU buffers. The lists are public, for a producer with its own
-ordering or accounting rules (the debug overlay sorts by color to batch runs).
+ordering or accounting rules.
 
 ## Text
 
