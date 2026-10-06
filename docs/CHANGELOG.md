@@ -16,6 +16,10 @@ major version is `0`, a minor bump may break the API; the **Upgrading** notes sa
   `attachPresetToOffhandWandRight` attach a UI to the offhand controller, as the primary wand's top
   and left presets do for the primary hand. `attachPresetToOffhandWrist` lays a UI on the inner
   wrist and keeps it on the forearm as the arm moves, when an arm is drawn at the controller (FRIK).
+- **vrui in the world**: `UIManager::attachPresetToWorldAtHMD` puts a UI where the HMD is and leaves
+  it there, so it stays in the world while the player walks and turns. `recenterWorldElement` puts
+  it where the HMD is now, back in front of the player. Given a distance, the preset does that by
+  itself when the player walks further than that from the UI.
 - **vrui finds the finger**: the fingertip that presses a button is read from the player's skeleton,
   and either hand can press: a UI on a hand is pressed by the other hand, any other UI by the nearer
   finger, and the hand that presses points and gets the haptic. Without a hand drawn at

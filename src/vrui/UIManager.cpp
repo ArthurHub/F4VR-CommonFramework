@@ -1,10 +1,19 @@
 #include "UIManager.h"
 
+#include <algorithm>
+
 #include "ModBase.h"
 #include "UIHandPointing.h"
+#include "common/MatrixUtils.h"
 #include "perf/Perf.h"
 
 using namespace common;
+
+namespace
+{
+    // the base of a root that is placed from its attach node itself
+    const RE::NiTransform NO_BASE_TRANSFORM = MatrixUtils::getTransform(0, 0, 0, 0, 0, 0);
+}
 
 namespace f4cf::vrui
 {
@@ -60,6 +69,8 @@ namespace f4cf::vrui
         F4CF_PERF_FUNCTION();
 
         _skeletonHandler.onFrameUpdate();
+
+        updateWorldElements();
 
         UIFrameUpdateContext context;
 
@@ -210,6 +221,59 @@ namespace f4cf::vrui
     }
 
     /**
+     * Attach the UI where the HMD is now and leave it there: it stays in the world while the player walks and turns.
+     * The root's own position and rotation apply from that place as they do on the HMD's node: level, and from
+     * the way the head faced.
+     * The root is attached to the HMD's node, and every frame it gets the base transform that moves it from the
+     * node back to where the node was.
+     * @param recenterDistance when the player walks further than this from the UI, it is put where the HMD is
+     * again, see updateWorldElements. 0 leaves it where it is at any distance.
+     */
+    void UIManager::attachPresetToWorldAtHMD(const std::shared_ptr<UIElement>& element, const float recenterDistance)
+    {
+        attachElement(element, UIUtils::getHMDAttachNode());
+        _worldElements.push_back({ element, element->_attachNode->world, recenterDistance });
+    }
+
+    /**
+     * Put a UI that was attached with attachPresetToWorldAtHMD where the HMD is now, which brings it back in
+     * front of the player. It does nothing for a UI attached in another way.
+     */
+    void UIManager::recenterWorldElement(const std::shared_ptr<UIElement>& element)
+    {
+        const auto found = std::ranges::find(_worldElements, element, &WorldElement::element);
+        if (found == _worldElements.end()) {
+            return;
+        }
+        found->world = element->_attachNode->world;
+        // set here too: a press handler runs after this frame's bases were given, and the root would be drawn
+        // at its old place for a frame
+        element->setBaseTransform(NO_BASE_TRANSFORM);
+    }
+
+    /**
+     * Give every root that stays in the world its base for this frame: the move from its attach node back to
+     * where the node was when the root was put there.
+     * Before that, a root the player walked away from is put where the HMD is now: one with a recenter distance,
+     * whose own position is further than that from the HMD's node. A hidden root is left where it is.
+     * Call before the roots are laid out and drawn.
+     */
+    void UIManager::updateWorldElements()
+    {
+        for (auto& [element, world, recenterDistance] : _worldElements) {
+            const RE::NiTransform& node = element->_attachNode->world;
+            if (recenterDistance > 0.0f && element->calcVisibility()) {
+                const float distance = MatrixUtils::vec3Len(MatrixUtils::localToWorldPoint(world, element->getPosition()) - node.translate);
+                if (distance > recenterDistance) {
+                    logger::info("UI Manager root element '{}' is {:.0f} from the player, put at the HMD again", element->_name, distance);
+                    world = node;
+                }
+            }
+            element->setBaseTransform(MatrixUtils::worldToLocalTransform(node, world));
+        }
+    }
+
+    /**
      * Remove the element and subtree from attached game node.
      * Safe Release: If <true>, the element will be added to release queue to be released on the next frame update
      * so finishing access to it on this frame update is still safe (release UI while handling UI event).
@@ -218,6 +282,10 @@ namespace f4cf::vrui
     {
         element->detachFromAttachedNode(releaseSafe);
         _skeletonHandler.removeWristElement(element);
+        if (const auto found = std::ranges::find(_worldElements, element, &WorldElement::element); found != _worldElements.end()) {
+            _worldElements.erase(found);
+            element->setBaseTransform(NO_BASE_TRANSFORM);
+        }
 
         // only the root can exists in the manager collection
         if (element->getParent()) {
