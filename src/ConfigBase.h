@@ -282,5 +282,10 @@ namespace f4cf
         // persisted to disk. Guarded by _overridesMutex as it is read from the file-watch thread.
         std::map<std::pair<std::string, std::string>, config::IniValue> _overrides;
         mutable std::mutex _overridesMutex;
+
+        // Held by a load from the read of the INI to the last value set, so two loads never run at once and
+        // the load that read the INI last is the one whose values stay. A change on disk loads on the
+        // file-watch thread, and an override on the thread of whoever sets it.
+        std::mutex _loadMutex;
     };
 }

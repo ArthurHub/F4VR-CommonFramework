@@ -72,6 +72,7 @@ A global singleton `f4cf::g_mod` holds the active mod instance.
 - **Default INI** is embedded in the DLL as RCDATA resource ID 101 and extracted on first run
 - **Config version migration:** the `[Debug] iVersion` key; when the shipped INI's value is higher than the user's, `ConfigBase` rewrites the user's INI into the shipped layout
 - File watcher triggers `loadIniConfigInternal()` automatically on disk change — no restart needed
+- A load runs on the watcher's thread for a change on disk and on the caller's for a session override (`setConfigOverride`), one at a time: `_loadMutex` is held from the read of the file to the end of `loadIniConfigInternal()`
 
 Standard `[Debug]` INI keys provided by the base class:
 ```ini

@@ -55,6 +55,11 @@ void Config::loadIniConfigInternal(const CSimpleIniA& ini)
 `%USERPROFILE%\Documents\My Games\Fallout4VR\Mods_Config\{ModName}\`; the default is embedded in the
 DLL (resource `IDR_CONFIG_INI`) and extracted on first run.
 
+A change on disk is loaded on the file watcher's thread, and a session override
+(`setConfigOverride`) on the thread of whoever sets it. Loads run one at a time, so
+`loadIniConfigInternal` never runs twice at once. It is not the game thread: only read values in
+it, and apply anything that calls into the engine from `onFrameUpdate()`.
+
 ### 2. Mod — derive from `ModBase`
 
 ```cpp
