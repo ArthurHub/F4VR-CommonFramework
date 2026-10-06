@@ -46,9 +46,11 @@ major version is `0`, a minor bump may break the API; the **Upgrading** notes sa
   `UIImGuiPanel::setInteractive` make a wand's ray the pointer of the canvas and its trigger the
   mouse button, so buttons, checkboxes, sliders and lists work as ImGui does them. One hand owns the
   pointer at a time: the one that pressed last, and the primary hand before either has.
-  `imgui::pointer()` is that pointer: `state()` says what it does, `setHands` limits pointing to one
-  hand, and `setOffset` sets where the ray is on the wand. The ray is not drawn yet, and the trigger
-  still reaches the game.
+  `imgui::pointer()` is that pointer: `state()` says what it does, and `setHands` limits pointing to
+  one hand. While the pointer is on a canvas its ray is drawn, up to a set length and with a fade at
+  both ends, and a mark with a border on the canvas, over the panels and not hidden by the world.
+  `setStyle` takes a `PointerStyle`: where the ray is on the hand and the whole look, or the look
+  turned off for a mod that draws its own. The trigger still reaches the game.
 - **config color**: `ConfigBase::getColorValue` reads a color from the INI, written as `r,g,b` or
   `r,g,b,a` in 0 to 255, as `getTransformValue` reads a transform.
 

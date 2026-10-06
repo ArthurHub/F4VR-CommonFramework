@@ -139,6 +139,7 @@ overlay the player happened to trigger first in a session:
 | -------- | ----- | ----------- |
 | `DRAW_ORDER_HINTS` | 50 | world-anchored hints (the activation-sphere icons) — under the panels, so an open panel is never painted over by a hint behind it |
 | `DRAW_ORDER_PANELS` | 100 | `vrui::UIPanel` and the ImGui canvases |
+| `DRAW_ORDER_POINTERS` | 150 | what points at the panels (the ray and mark of the ImGui pointer) — over them |
 | `DRAW_ORDER_DEFAULT` | 500 | anything with no opinion |
 | `DRAW_ORDER_DEBUG` | 900 | deliberately last, i.e. on top: diagnostics must never end up hidden behind a mod's UI |
 

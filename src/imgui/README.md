@@ -20,7 +20,7 @@ and a `vrui::UITextPanel` standing side by side read as one UI.
 | ----------------------- | -------------------------------------------------------------------- |
 | [`ImGuiCanvas.h`](ImGuiCanvas.h) / [`.cpp`](ImGuiCanvas.cpp) | `Canvas` — one ImGui window placed in the world by a provider you write. Content, placement, chrome (background, border, rounding, padding), sizing and occlusion. |
 | [`UIImGuiPanel.h`](UIImGuiPanel.h) / [`.cpp`](UIImGuiPanel.cpp) | The vrui adapter: a `UIElement` whose rectangle a `Canvas` fills. Takes `vrui::UIPanelStyle` and the vrui sizing modes, in vrui units. |
-| [`ImGuiPointer.h`](ImGuiPointer.h) / [`.cpp`](ImGuiPointer.cpp) | `Pointer`, reached as `imgui::pointer()` — the one pointer of the interactive canvases: a wand's ray as ImGui's mouse, its trigger as the mouse button. Its state, which hands point, and where the ray is. |
+| [`ImGuiPointer.h`](ImGuiPointer.h) / [`.cpp`](ImGuiPointer.cpp) | `Pointer`, reached as `imgui::pointer()` — the one pointer of the interactive canvases: a wand's ray as ImGui's mouse, its trigger as the mouse button. Its state, which hands point, and its `PointerStyle`: where the ray is on the hand, and how the ray and its mark are drawn. |
 | [`ImGuiPointerLogic.h`](ImGuiPointerLogic.h) | The pointer's logic apart from the game, so it is unit tested: where a ray meets a quad, and which hand owns the pointer. |
 | [`ImGuiSettings.h`](ImGuiSettings.h) / [`.cpp`](ImGuiSettings.cpp) | The two process-wide knobs: `setFontSizePixels` and `setSupersample`. |
 | [`ImGuiFonts.h`](ImGuiFonts.h) / [`.cpp`](ImGuiFonts.cpp) | Loads the framework's text font into the ImGui atlas, from the same bytes the primitive renderer draws with. |
@@ -125,11 +125,16 @@ panel->setContent([this] {
   `secondaryUIOffsetNode`), whose +Y is the way the hand aims a weapon: the node a weapon hangs on is
   turned the same, and the wand's own node points 59 degrees above that. By default the ray starts a
   little in front of the wand and points 18 degrees above that aim and 5 degrees inward, which is
-  where the hand points. `imgui::pointer().setOffset` replaces the default: the ray starts at the
-  offset's position and runs along its +Y. The offset is given for the right hand and mirrored for
-  the left.
+  where the hand points. The style's `rayOffset` is that placement: the ray starts at the offset's
+  position and runs along its +Y. It is given for the right hand and mirrored for the left.
 - **What it meets.** The ray meets a canvas only from its front, and the nearest interactive canvas
   takes it. It passes through the canvases that are not interactive, and through the world.
+- **What is drawn.** While the pointer is on a canvas: the owner's ray, and a mark on the canvas
+  where the ray meets it. The ray is no longer than a set length, so it ends before a canvas that
+  is further away and at the mark of a nearer one, and it fades in and out at its two ends. The
+  mark is a disc with a border, and looks the same size at any distance. Both are drawn over the
+  panels (`DRAW_ORDER_POINTERS`) and are not hidden by the world. Nothing is drawn while the pointer
+  is on no canvas.
 - **What the pointer does.** `imgui::pointer().state()` has the canvas the pointer is on, where on it
   in the canvas's pixels, the hand, whether its trigger is down, the ray in the world, and whether
   ImGui uses the pointer (`io.WantCaptureMouse`). `UIImGuiPanel::isPointedAt()` says whether it is on
@@ -138,7 +143,37 @@ panel->setContent([this] {
 - **What it costs.** A canvas that is not interactive costs nothing more. While no interactive canvas
   is shown, nothing is read from the game for the pointer.
 
-Not there yet: the ray is not drawn, the trigger still reaches the game, and nothing scrolls.
+### How the pointer looks
+
+[`PointerStyle`](ImGuiPointer.h) holds where the ray is on the hand and the whole look, and its own
+defaults are the default pointer, so the values are in one place. Lengths are in world units.
+
+| Field | Default | What it is |
+| ----- | ------- | ---------- |
+| `rayOffset` | -2,3,-1; -18,0,-5 | where the ray is, from the wand's UI node: position, then degrees around x, y and z |
+| `drawn` | `true` | `false` draws nothing, for a mod that draws the pointer itself from `state()` |
+| `rayColor` | 190,255,190,200 | the ray's color, with its opacity as the alpha |
+| `rayWidth` | 0.2 | the ray's width |
+| `rayMaxLength` | 25 | the longest the ray is drawn: it ends there, or at the mark when the canvas is nearer |
+| `rayFade` | 1 | the length the ray fades in over at its start and out over at its end; 0 for no fade |
+| `markColor` | 215,255,215,180 | the mark's color, with its opacity as the alpha |
+| `markSize` | 0.7 | the mark's radius at 100 units from the head, its border included; it grows and shrinks with its distance |
+| `markBorderColor` | 215,255,215,100 | the color of the border around the mark |
+| `markBorderWidth` | 0.1 | the border's width, measured as the mark's size is; 0 for no border |
+
+A mod changes a part by starting from the current style:
+
+```cpp
+auto style = imgui::pointer().style();
+style.rayColor = render::Color::rgba(10, 250, 120, 200);
+imgui::pointer().setStyle(style);
+```
+
+A mod that wants the player to set these reads the fields from its own INI and calls `setStyle`
+with them: `ConfigBase::getColorValue` reads a color written as `r,g,b,a`, and `getTransformValue`
+the offset. The framework has no INI keys for it.
+
+Not there yet: the trigger still reaches the game, and nothing scrolls.
 
 ## Sizes, pixels and legibility
 
@@ -176,7 +211,8 @@ imgui::internal::onFrameEnd()                   draw callback (DRAW_ORDER_PANELS
   ├─ resolve placements → world quads             ├─ rasterize the frame into the atlas
   ├─ the pointer: a wand's ray on the quads       ├─ group quads by occluded / on-top
   │    of the interactive canvases → ImGui's      └─ composite each canvas's atlas slice
-  │    mouse                                           as a world quad, back to front
+  │    mouse, and its ray and mark → their own         as a world quad, back to front
+  │    layer over the panels
   ├─ one ImGui frame, every visible canvas
   │    as its own window packed into the atlas
   ├─ measure each canvas's content

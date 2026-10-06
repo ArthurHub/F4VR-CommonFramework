@@ -1,17 +1,41 @@
 #include "ImGuiPointer.h"
 
+#include <algorithm>
+#include <array>
 #include <cfloat>
+#include <cmath>
+#include <numbers>
 
 #include <imgui.h>
 
 #include "../common/MatrixUtils.h"
 #include "../f4vr/PlayerNodes.h"
+#include "../render/PrimitiveDrawRenderer.h"
 #include "../vrcf/VRControllersManager.h"
 
 namespace f4cf::imgui
 {
     namespace
     {
+        // A fill has one color, so a fade is drawn as this many pieces, each more opaque than the one before.
+        constexpr int RAY_FADE_STEPS = 8;
+
+        // the mark is a disc of this many triangles
+        constexpr int MARK_SEGMENTS = 20;
+
+        // the distance from the head at which the mark has the radius of the style
+        constexpr float MARK_SIZE_DISTANCE = 100.0f;
+
+        /**
+         * The layer the pointer is drawn in: over the panels it points at, and not hidden by the world.
+         * Function-local static, so a mod with no interactive canvas never builds it.
+         */
+        render::PrimitiveDrawRenderer& pointerLayer()
+        {
+            static render::PrimitiveDrawRenderer instance("ImGuiPointer", render::DRAW_ORDER_POINTERS, false);
+            return instance;
+        }
+
         /**
          * The left hand's offset from the right hand's: the same, mirrored left to right.
          */
@@ -25,14 +49,6 @@ namespace f4cf::imgui
             return transform;
         }
     }
-
-    /**
-     * The default offset was found in the game: the ray starts a little in front of the wand, and points 18
-     * degrees above the way the hand aims a weapon and 5 degrees inward, which is where the hand points.
-     */
-    Pointer::Pointer()
-        : _offset(common::MatrixUtils::getTransform(-2.0f, 3.0f, -1.0f, -18.0f, 0.0f, -5.0f))
-    {}
 
     /**
      * Function-local static: a mod may ask for the pointer from a static initializer, before this translation
@@ -53,22 +69,18 @@ namespace f4cf::imgui
     }
 
     /**
-     * Where a hand's ray is, from the UI node of its wand (primaryUIAttachNode, secondaryUIOffsetNode): the
-     * ray starts at the offset's position and runs along its +Y. It replaces the default. An offset of
-     * nothing starts the ray at the wand and points it the way the hand aims a weapon.
-     * The offset is given for the right hand and mirrored for the left hand: its x position, and its turns
-     * around y and z. Its scale is not used.
+     * Where the ray is on the hand and how the pointer is drawn, all of it at once: start from style() to
+     * change one part.
      */
-    void Pointer::setOffset(const RE::NiTransform& offset)
+    void Pointer::setStyle(const PointerStyle& style)
     {
-        _offset = offset;
-        _offset.scale = 1.0f;
+        _style = style;
     }
 
     /**
      * Give ImGui the pointer for the frame that is about to begin: where the pointing hand's ray meets an
      * interactive canvas, as ImGui's mouse position, and that hand's trigger as the left mouse button.
-     * Called before ImGui::NewFrame(), so the widgets of this frame see it.
+     * Called before ImGui::NewFrame(), so the widgets of this frame see it. The pointer is drawn from here too.
      * With no target nothing is read from the game.
      */
     void Pointer::update(const std::vector<internal::PointerTarget>& targets)
@@ -76,6 +88,7 @@ namespace f4cf::imgui
         _state = {};
         if (targets.empty()) {
             release();
+            draw(nullptr);
             return;
         }
 
@@ -85,6 +98,7 @@ namespace f4cf::imgui
             _ownership.update({ .onCanvas = primary.target != nullptr, .down = primary.sample.down }, { .onCanvas = offhand.target != nullptr, .down = offhand.sample.down });
         if (owner == internal::PointerOwner::None) {
             release();
+            draw(nullptr);
             return;
         }
 
@@ -105,6 +119,7 @@ namespace f4cf::imgui
         _state.down = hand.sample.down;
         _state.rayOrigin = hand.sample.origin;
         _state.hitPosition = hand.sample.origin + hand.sample.direction * hand.hit.distance;
+        draw(&hand);
     }
 
     /**
@@ -116,11 +131,12 @@ namespace f4cf::imgui
     }
 
     /**
-     * No ImGui frame is built in this frame, so the pointer is on nothing.
+     * No ImGui frame is built in this frame, so the pointer is on nothing and is not drawn.
      */
     void Pointer::clearState()
     {
         _state = {};
+        draw(nullptr);
     }
 
     /**
@@ -134,8 +150,8 @@ namespace f4cf::imgui
     }
 
     /**
-     * A hand's pointer from its wand: the ray from the wand's UI node, moved and turned by the offset, and
-     * the wand's trigger.
+     * A hand's pointer from its wand: the ray from the wand's UI node, moved and turned by the style's
+     * offset, and the wand's trigger.
      * The UI node is at the wand's node, turned the way the hand aims a weapon: the node a weapon hangs on
      * and the game's own aim node of the offhand are turned the same. The wand's node itself points 59
      * degrees above that.
@@ -148,7 +164,7 @@ namespace f4cf::imgui
             return {};
         }
         const bool rightHand = primaryHand != f4vr::isLeftHandedMode();
-        const RE::NiTransform ray = common::MatrixUtils::localToWorldTransform(wand->world, rightHand ? _offset : mirrorLeftToRight(_offset));
+        const RE::NiTransform ray = common::MatrixUtils::localToWorldTransform(wand->world, rightHand ? _style.rayOffset : mirrorLeftToRight(_style.rayOffset));
         return {
             .valid = true,
             .origin = ray.translate,
@@ -193,5 +209,106 @@ namespace f4cf::imgui
         auto& io = ImGui::GetIO();
         io.AddMousePosEvent(-FLT_MAX, -FLT_MAX);
         io.AddMouseButtonEvent(ImGuiMouseButton_Left, false);
+    }
+
+    /**
+     * Draw the pointer of the given hand, whose ray is on a canvas: the ray and the mark of the style. With no
+     * hand, or a style that is not drawn, the layer is given nothing, once.
+     *
+     * The ray is a ribbon turned to face the head, since a line is drawn one pixel wide whatever is asked. It
+     * runs from the ray's start for the style's longest length, or up to the mark when the canvas is nearer.
+     * It fades in and out over the style's length at its two ends, or over half of the ray when it is shorter
+     * than both. A piece of the fade at the start and its mirror at the end have one color and are added
+     * together, so the two go out in one draw.
+     *
+     * The mark is a disc that lies on the canvas, with its border as a ring around it. The size of both is
+     * given at a set distance from the head and grows with the distance, so the mark looks the same size
+     * wherever the canvas is.
+     */
+    void Pointer::draw(const HandPointer* hand)
+    {
+        const auto* nodes = hand && _style.drawn ? f4vr::getVRPlayerNodes() : nullptr;
+        if (!nodes || !nodes->hmdNode) {
+            // the layer is touched only to take away what it draws, so it is never built if it never draws
+            if (_drawn) {
+                _drawn = false;
+                pointerLayer().publish({});
+            }
+            return;
+        }
+        const RE::NiPoint3 head = nodes->hmdNode->world.translate;
+        const RE::NiPoint3& origin = hand->sample.origin;
+        const RE::NiPoint3& direction = hand->sample.direction;
+        render::PrimitiveDraw frame;
+
+        // the ribbon's width runs across both the ray and the line of sight to it; a ray that points
+        // straight from the head has no such direction, and shows as its mark alone
+        const float length = (std::min)(hand->hit.distance, _style.rayMaxLength);
+        RE::NiPoint3 across;
+        if (length > 0.0f && _style.rayWidth > 0.0f && _style.rayColor.a > 0.0f &&
+            common::MatrixUtils::tryVec3Norm(common::MatrixUtils::vec3Cross(direction, origin - head), across)) {
+            const RE::NiPoint3 half = across * (_style.rayWidth * 0.5f);
+            const auto addPiece = [&](const float from, const float to, const float opacity) {
+                render::Color color = _style.rayColor;
+                color.a *= opacity;
+                const RE::NiPoint3 start = origin + direction * from;
+                const RE::NiPoint3 end = origin + direction * to;
+                frame.addQuad(start - half, start + half, end + half, end - half, color);
+            };
+
+            const float fade = std::clamp(_style.rayFade, 0.0f, length * 0.5f);
+            if (fade > 0.0f) {
+                const float step = fade / static_cast<float>(RAY_FADE_STEPS);
+                for (int i = 0; i < RAY_FADE_STEPS; ++i) {
+                    const float opacity = (static_cast<float>(i) + 0.5f) / static_cast<float>(RAY_FADE_STEPS);
+                    addPiece(step * static_cast<float>(i), step * static_cast<float>(i + 1), opacity);
+                    addPiece(length - step * static_cast<float>(i + 1), length - step * static_cast<float>(i), opacity);
+                }
+            }
+            if (length > fade * 2.0f) {
+                addPiece(fade, length - fade, 1.0f);
+            }
+        }
+
+        if (_style.markSize > 0.0f) {
+            const RE::NiPoint3 center = origin + direction * hand->hit.distance;
+            const float scale = common::MatrixUtils::vec3Len(center - head) / MARK_SIZE_DISTANCE;
+            const float radius = _style.markSize * scale;
+            const float inside = radius - std::clamp(_style.markBorderWidth * scale, 0.0f, radius);
+
+            // the directions from the center to the points around the mark, the last one the first again
+            const RE::NiPoint3 right = common::MatrixUtils::vec3Norm(hand->target->topRight - hand->target->topLeft);
+            const RE::NiPoint3 down = common::MatrixUtils::vec3Norm(hand->target->bottomLeft - hand->target->topLeft);
+            std::array<RE::NiPoint3, MARK_SEGMENTS + 1> around;
+            for (int i = 0; i <= MARK_SEGMENTS; ++i) {
+                const float angle = 2.0f * std::numbers::pi_v<float> * static_cast<float>(i % MARK_SEGMENTS) / static_cast<float>(MARK_SEGMENTS);
+                around[i] = right * std::cos(angle) + down * std::sin(angle);
+            }
+
+            // the border is beside the disc, not over it, so its opacity is its own
+            if (inside > 0.0f && _style.markColor.a > 0.0f) {
+                for (int i = 0; i < MARK_SEGMENTS; ++i) {
+                    frame.addTriangle(center, center + around[i] * inside, center + around[i + 1] * inside, _style.markColor);
+                }
+            }
+            if (inside < radius && _style.markBorderColor.a > 0.0f) {
+                for (int i = 0; i < MARK_SEGMENTS; ++i) {
+                    frame.addQuad(center + around[i] * inside,
+                        center + around[i] * radius,
+                        center + around[i + 1] * radius,
+                        center + around[i + 1] * inside,
+                        _style.markBorderColor);
+                }
+            }
+        }
+
+        if (frame.empty() && !_drawn) {
+            return;
+        }
+        _drawn = !frame.empty();
+        if (_drawn) {
+            pointerLayer().ensureInstalled();
+        }
+        pointerLayer().publish(std::move(frame));
     }
 }

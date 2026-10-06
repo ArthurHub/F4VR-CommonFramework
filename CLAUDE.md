@@ -136,7 +136,7 @@ Rules that cause bugs if missed:
   into OpenVR, and restore anything you bind beyond the shared `ScopedPipelineState`. In FO4VR Submit is called on the game
   thread during play, right after the mods' frames, and from the loading screen's own thread while one is up; the hook
   logs each thread it is called on once. The game → render handoff is what keeps a layer correct on both.
-- Draw order is **declared** (`DRAW_ORDER_HINTS` 50 / `PANELS` 100 / `DEFAULT` 500 / `DEBUG` 900),
+- Draw order is **declared** (`DRAW_ORDER_HINTS` 50 / `PANELS` 100 / `POINTERS` 150 / `DEFAULT` 500 / `DEBUG` 900),
   not inherited from registration order — registration is lazy.
 - Callbacks are **never unregistered** and the vtable patch is never removed, so a layer must outlive
   the process. Hold it as a static.
@@ -157,7 +157,9 @@ and composited as one quad, so N canvases cost one ImGui frame and one draw call
   render thread, since ImGui recycles its own buffers on the next `NewFrame`.
 - **Display only until `setInteractive(true)`** — then a wand's ray is ImGui's mouse on the canvas and
   its trigger the left button (`imgui::pointer()` in `ImGuiPointer.h`: `state`, `setHands`,
-  `setOffset`). One hand owns the pointer at a time. vrui's finger-collision press handling
+  `setStyle`). One hand owns the pointer at a time, and while it is on a canvas its ray and a mark
+  on the canvas are drawn over the panels. `PointerStyle` has where the ray is on the hand and how
+  both look, with its defaults as the default pointer. vrui's finger-collision press handling
   does not reach ImGui widgets: buttons to press by touch go beside the panel, in vrui.
 - Content can only be measured by drawing it, which happens after vrui lays the frame out, so a panel
   sized to its content is laid out at **last frame's** size.
