@@ -22,12 +22,43 @@ namespace f4cf::vrui
         Interacting,
     };
 
+    class UIElement;
+
     /**
-     * What the elements share during one frame update: how close each hand's finger is to something it can press.
+     * An element the ray of a hand is on.
+     */
+    struct UIPointedAt
+    {
+        const UIElement* element = nullptr;
+
+        // where the ray meets the element, in the world
+        RE::NiPoint3 position;
+    };
+
+    /**
+     * What the elements share during one frame update: how close each hand's finger is to something it can
+     * press, and the element each hand's ray is on.
      */
     class UIFrameUpdateContext
     {
     public:
+        /**
+         * The element the ray of the given hand is on. Empty if no element said so in this frame.
+         */
+        const std::optional<UIPointedAt>& getPointedAt(const bool primaryHand) const
+        {
+            return primaryHand ? _primaryPointedAt : _offhandPointedAt;
+        }
+
+        /**
+         * An element that is operated by a ray says that the ray of the given hand is on it, and where in the
+         * world. The manager moves a root that stays in the world by it, see UIManager::setWorldMoveButton.
+         */
+        void markPointedAt(const bool primaryHand, const UIElement* element, const RE::NiPoint3& position)
+        {
+            (primaryHand ? _primaryPointedAt : _offhandPointedAt) = UIPointedAt{ .element = element, .position = position };
+        }
+
         /**
          * The closest the finger of the given hand is to any pressable. Empty if nothing was tested against
          * that finger in this frame.
@@ -46,5 +77,7 @@ namespace f4cf::vrui
     private:
         std::optional<UIFingerProximity> _primaryFingerProximity = std::nullopt;
         std::optional<UIFingerProximity> _offhandFingerProximity = std::nullopt;
+        std::optional<UIPointedAt> _primaryPointedAt = std::nullopt;
+        std::optional<UIPointedAt> _offhandPointedAt = std::nullopt;
     };
 }

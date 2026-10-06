@@ -142,10 +142,17 @@ namespace f4cf::imgui
      *
      * A panel that is scaled down to fit says so here, and not where its size is set: a panel that is made
      * dedicated after it is created is then not reported at the atlas's size.
+     *
+     * The panel says when the pointer is on it, which vrui moves a panel in the world by
+     * (vrui::UIManager::setWorldMoveButton). The pointer is as the ImGui frame before this one had it.
      */
-    void UIImGuiPanel::onFrameUpdate(vrui::UIFrameUpdateContext*)
+    void UIImGuiPanel::onFrameUpdate(vrui::UIFrameUpdateContext* context)
     {
         refreshCanvas();
+
+        if (const PointerState& state = pointer().state(); state.canvas == _canvas.get()) {
+            context->markPointedAt(state.primaryHand, this, state.hitPosition);
+        }
 
         if (const float fit = pixelFitFor(_size.width, _size.height, _canvas->maxPixelSize()); fit < 1.0f) {
             // sampled: a persistently oversized panel would otherwise say so on every frame

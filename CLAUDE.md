@@ -174,6 +174,12 @@ and composited as one quad, so N canvases cost one ImGui frame and one draw call
 - **A wide panel is curved** (`setCurveRadius`): bent toward the player around a cylinder, so its
   sides read as its middle does. It is drawn as flat pieces side by side, and the pointer meets it
   on the cylinder, both from `CurvedQuad` in `ImGuiPointerLogic.h`. vrui still lays it out flat.
+- **A panel in the world is moved by the player**: vrui does it, for every root attached with
+  `attachPresetToWorldAtHMD`, once the mod sets `g_uiManager->setWorldMoveButton(...)`. While that
+  button is held on the hand that owns the pointer, from a press on the panel, the root follows the
+  hand, kept level and smoothed against the hand's shake (`setWorldMoveSmoothing`), and that wand
+  stays hidden from the game. The panel only reports the ray on it
+  (`UIFrameUpdateContext::markPointedAt`). Recentering the root puts it back.
 - Content can only be measured by drawing it, which happens after vrui lays the frame out, so a panel
   sized to its content is laid out at **last frame's** size.
 - `setFontSizePixels` / `setSupersample` are process-wide and read when the first canvas draws.
