@@ -260,6 +260,8 @@ namespace f4cf
      */
     void ConfigBase::loadEmbeddedDefaultOnly()
     {
+        std::lock_guard lock(_loadMutex);
+
         CSimpleIniA ini;
         const SI_Error rc = ini.LoadData(common::getEmbededResourceAsString(_module, _iniDefaultConfigEmbeddedResourceId));
         if (rc < 0) {
@@ -406,9 +408,14 @@ namespace f4cf
     /**
      * Load all the config values from INI config file, override all existing values in the instance.
      * This code should be safe to run multiple times as changes are loaded from disk.
+     * It runs on the file-watch thread for a change on disk and on the caller's thread for an override, so
+     * the whole load is under one lock, the read of the file included: the load that read the file last is
+     * then the one applied last.
      */
     void ConfigBase::loadIniConfigValues()
     {
+        std::lock_guard lock(_loadMutex);
+
         CSimpleIniA ini;
         const SI_Error rc = ini.LoadFile(_iniFilePath.c_str());
         if (rc < 0) {
@@ -443,6 +450,8 @@ namespace f4cf
      */
     void ConfigBase::applyIniConfigWithOverride(const char* section, const char* key, const char* value)
     {
+        std::lock_guard lock(_loadMutex);
+
         CSimpleIniA ini;
         if (!loadIniFromFile(ini)) {
             return;

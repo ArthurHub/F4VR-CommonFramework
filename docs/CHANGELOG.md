@@ -91,6 +91,10 @@ major version is `0`, a minor bump may break the API; the **Upgrading** notes sa
   is moved by a ray on it, which an interactive `UIImGuiPanel` tells vrui of by itself.
 - **config color**: `ConfigBase::getColorValue` reads a color from the INI, written as `r,g,b` or
   `r,g,b,a` in 0 to 255, as `getTransformValue` reads a transform.
+- **config loads one at a time**: a change of the INI on disk is loaded on the file watcher's
+  thread and a session override on its caller's, and the two could run at the same time. A load now
+  holds a lock from the read of the file to the last value set, so `loadIniConfigInternal` never
+  runs twice at once, and the load that read the file last is the one whose values stay.
 - **render gradients**: a fill takes a color for each corner and blends between them
   (`PrimitiveDraw::addTriangle` and `addQuad` with a color per corner), so a gradient or a fade is
   one shape. Every vertex carries its color, so a change of color no longer starts a new draw call:
