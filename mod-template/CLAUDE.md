@@ -80,7 +80,7 @@ TODO: add a row for each component as the mod grows.
 - The main section is `[MyMod]`; it must match `NAME` in `CMakeLists.txt`, which the config reads back as both the INI file name and the default section.
 - `[Debug]` holds the framework's keys (log level and pattern, flow flags, data dumps, debug draw).
 - To add a value: a member in `Config.h`, a read in `Config::loadIniConfigInternal()`, and the key in the shipped INI.
-- `ConfigBase` watches the file and reloads it on change, so edits apply while the game runs. The reload runs on the watcher's thread: apply anything that calls into the engine from `onFrameUpdate()`.
+- `ConfigBase` watches the file and reloads it on change, so edits apply while the game runs. The reload runs on the watcher's thread: apply anything that calls into the engine in a `subscribeForIniChangedEvent` callback, which the framework calls on the game thread at the start of the next frame, or from `onFrameUpdate()`.
 - Bump `iVersion` in `[Debug]` when the shipped INI changes, so existing users' files are migrated.
 
 ### Mod Data

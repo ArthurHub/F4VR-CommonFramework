@@ -271,12 +271,17 @@ namespace f4cf
 
         loadDebugSection(ini);
         loadIniConfigInternal(ini);
+        _valuesReloaded = true;
     }
 
     /**
-     * Subscribe to ini change events to receive notification when mod ini file changed externally.
-     * Used for refresh the mod config at runtime without restarting the game.
+     * Subscribe to be told when the config values were loaded again: after a change of the INI on disk, a
+     * session override set or cleared, or reload().
+     * The callback runs on the game thread, at the start of the next frame and before the mod's
+     * onFrameUpdate(), once for all the loads since the frame before. So it can call into the engine, and a
+     * value that is set many times a second while it is previewed is one call a frame.
      * Key used to identify the subscription, for unsubscribe, and prevent duplicates.
+     * Call it on the game thread, as unsubscribeFromIniChangedEvent.
      */
     void ConfigBase::subscribeForIniChangedEvent(const std::string& key, const std::function<void(const std::string&)>& callback)
     {
@@ -292,6 +297,27 @@ namespace f4cf
     void ConfigBase::unsubscribeFromIniChangedEvent(const std::string& key)
     {
         _onIniConfigChangedSubscribers.erase(key);
+    }
+
+    /**
+     * Call the subscribers if the config values were loaded again since the last call.
+     * ModBase calls it at the start of every frame, on the game thread, so a mod has nothing to call. A mod
+     * with a frame update of its own calls it there.
+     * A load runs on the file watcher's thread, or on the thread of whoever sets an override, and at any
+     * point of a frame. It only marks that it ran, and the subscribers are called from here.
+     */
+    void ConfigBase::notifySubscribersOfReload()
+    {
+        if (!_valuesReloaded.exchange(false)) {
+            return;
+        }
+
+        // a copy, so a subscriber can unsubscribe from inside its call
+        const auto subscribers = _onIniConfigChangedSubscribers;
+        for (const auto& [key, subscriber] : subscribers) {
+            logger::debug("Notify INI config change subscriber '{}'", key);
+            subscriber(key);
+        }
     }
 
     /**
@@ -451,6 +477,9 @@ namespace f4cf
 
         // let inherited class load all its values
         loadIniConfigInternal(ini);
+
+        // for the subscribers, which are called on the game thread, see notifySubscribersOfReload
+        _valuesReloaded = true;
     }
 
     /**
@@ -1114,12 +1143,7 @@ namespace f4cf
                     return;
                 }
 
-                for (const auto& [key, subscriber] : _onIniConfigChangedSubscribers) {
-                    logger::info("Notify INI config change subscriber '{}'", key.c_str());
-                    subscriber(key);
-                }
-
-                // once the subscribers have it too, so a client that reacts to it sees the mod already reconfigured
+                // the values are loaded, and the subscribers are called at the start of the next frame
                 devbench::emit("config.reloaded", [&] {
                     return nlohmann::json{ { "file", fs::path(_iniFilePath).filename().string() }, { "trigger", "file" } };
                 });

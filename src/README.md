@@ -58,7 +58,18 @@ DLL (resource `IDR_CONFIG_INI`) and extracted on first run.
 A change on disk is loaded on the file watcher's thread, and a session override
 (`setConfigOverride`) on the thread of whoever sets it. Loads run one at a time, so
 `loadIniConfigInternal` never runs twice at once. It is not the game thread: only read values in
-it, and apply anything that calls into the engine from `onFrameUpdate()`.
+it. To apply something that calls into the engine when the values were loaded again, subscribe:
+
+```cpp
+g_config.subscribeForIniChangedEvent("MyMod", [](const std::string&) {
+    // on the game thread, before onFrameUpdate(): apply what depends on the values
+});
+```
+
+`ModBase` calls the subscribers at the start of the next frame, once for all the loads since the
+frame before: a change on disk, a session override set or cleared, `reload()`, and the framework's
+own load when a game session starts. A mod with a frame update of its own calls
+`notifySubscribersOfReload()` there.
 
 The mod's own save (`saveIniConfigValue`, `save()`) is not loaded back. The file watcher loads the
 file only when it holds something else than the mod last loaded or saved, so a write by someone

@@ -106,6 +106,13 @@ major version is `0`, a minor bump may break the API; the **Upgrading** notes sa
   while a setting is previewed. Only a key that becomes overridden is logged at the info level and
   is a `config.override` devbench event. A new value for a key that is already overridden is logged
   at the debug level, with no event. A clear reads the file, as before.
+- **config subscribers on the game thread**: the callbacks of
+  `ConfigBase::subscribeForIniChangedEvent` are called by `ModBase` at the start of the next frame,
+  on the game thread and before the mod's `onFrameUpdate()`, so they can call into the engine. They
+  are called once for all the loads of the values since the frame before, and for every kind of
+  load: a change of the INI on disk, a session override set or cleared, `reload()`, and the load
+  when a game session starts. Before, they were called on the file watcher's thread, and only for
+  a change on disk.
 - **render gradients**: a fill takes a color for each corner and blends between them
   (`PrimitiveDraw::addTriangle` and `addQuad` with a color per corner), so a gradient or a fade is
   one shape. Every vertex carries its color, so a change of color no longer starts a new draw call:
@@ -131,6 +138,11 @@ major version is `0`, a minor bump may break the API; the **Upgrading** notes sa
   and a `[VRUI_DevLayout]` section left in an INI is no longer read.
 - `render::FillTriangle` has a color for each corner, `colorA`, `colorB` and `colorC`, in place of
   `color`. `addTriangle` and `addQuad` with one color are unchanged.
+- A `subscribeForIniChangedEvent` callback now runs on the game thread, at the start of the next
+  frame, and also after a session override and `reload()`. Work it handed to the game thread can be
+  done in it. A mod that sets a flag of its own in `loadIniConfigInternal`, to apply a reload in
+  `onFrameUpdate()`, can subscribe instead. A mod that does not use `ModBase`'s frame update calls
+  `notifySubscribersOfReload()` on its config in its own.
 
 - `f4vr::PlayerNodes` and `getPlayerNodes()`, deprecated in 0.4.0, are removed. Use
   `getVRPlayerNodes()`, which returns CommonLibF4's `RE::VRPlayerNodes`: the same table with

@@ -235,6 +235,11 @@ namespace f4cf
             // consumes it; a single relaxed load when nothing is queued
             devbench::internal::onFrameStart();
 
+            // the config was loaded again since the last frame, by the file watcher or with a session override, also one
+            // a devbench action has just set: the config's subscribers are called here, on the game thread and before
+            // the mod's update; one atomic exchange when it was not
+            _settings.config->notifySubscribersOfReload();
+
             // the VR UI's frame update runs once in a frame, and from here it can run again
             if (vrui::g_uiManager) {
                 vrui::g_uiManager->onFrameStart();
