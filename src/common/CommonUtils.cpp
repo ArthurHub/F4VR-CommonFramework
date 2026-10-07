@@ -386,7 +386,7 @@ namespace f4cf::common
         std::tm localTime;
         localtime_s(&localTime, &now);
         char buffer[9];
-        std::strftime(buffer, sizeof(buffer), "%H:%M:{}", &localTime);
+        std::strftime(buffer, sizeof(buffer), "%H:%M:%S", &localTime);
         return std::string(buffer);
     }
 

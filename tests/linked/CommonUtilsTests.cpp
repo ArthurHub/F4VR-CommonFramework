@@ -231,6 +231,9 @@ TEST_CASE("CommonUtils: a time as text")
     REQUIRE(common::toDateTimeString(time, "%Y-%m") == "2021-06");
     REQUIRE(std::regex_match(common::toDateTimeString(time), std::regex(R"(2021-06-1[56] \d\d:\d\d:\d\d)")));
     REQUIRE(common::toDateTimeString(clock_cast<file_clock>(time), "%Y-%m") == "2021-06");
+
+    // the time now as hours, minutes and seconds
+    REQUIRE(std::regex_match(common::getCurrentTimeString(), std::regex(R"(\d\d:\d\d:\d\d)")));
 }
 
 TEST_CASE("CommonUtils: strings are ordered without their letter case")
