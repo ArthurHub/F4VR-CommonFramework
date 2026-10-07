@@ -411,15 +411,16 @@ namespace f4cf
      * It runs on the file-watch thread for a change on disk and on the caller's thread for an override, so
      * the whole load is under one lock, the read of the file included: the load that read the file last is
      * then the one applied last.
-     * With `onlyIfFileChanged`, which is how the file watch loads, a file that holds what the mod last loaded
-     * or saved is not loaded, and false is returned.
+     * `source` is what is loaded, see config::IniFile::Source. From `ChangedFile`, which is how the file watch
+     * loads, a file that holds what the mod last loaded or saved is not loaded, and false is returned. From
+     * `Kept`, which is how a set override loads, the file is not read.
      */
-    bool ConfigBase::loadIniConfigValues(const bool onlyIfFileChanged)
+    bool ConfigBase::loadIniConfigValues(const config::IniFile::Source source)
     {
         std::lock_guard lock(_loadMutex);
 
         CSimpleIniA ini;
-        const auto result = _iniFile.load(_iniFilePath, ini, onlyIfFileChanged);
+        const auto result = _iniFile.load(_iniFilePath, ini, source);
         if (result == config::IniFile::LoadResult::Unchanged) {
             return false;
         }
@@ -427,7 +428,7 @@ namespace f4cf
             logger::warn("Failed to load INI config file '{}'", _iniFilePath);
             throw std::runtime_error("Failed to load INI config file: " + _iniFilePath);
         }
-        if (onlyIfFileChanged) {
+        if (source == config::IniFile::Source::ChangedFile) {
             logger::info("INI config change detected, reload...");
         }
 
@@ -517,16 +518,44 @@ namespace f4cf
      */
     void ConfigBase::setConfigOverride(const char* section, const char* key, const config::IniValue& value)
     {
+        setConfigOverrides({ config::IniOverride{ section, key, value } });
+    }
+
+    /**
+     * Set several session overrides with one reload of the config, see setConfigOverride.
+     * The reload parses the file as the mod last loaded or saved it and reads no disk, so a value can be set
+     * many times a second while it is previewed. For the same reason only a key that becomes overridden is
+     * logged at the info level and is a devbench event. A new value for a key that is already overridden is
+     * logged at the debug level.
+     */
+    void ConfigBase::setConfigOverrides(const std::vector<config::IniOverride>& overrides)
+    {
+        if (overrides.empty()) {
+            return;
+        }
+
+        // the keys that become overridden by this call
+        std::vector<const config::IniOverride*> added;
         {
             std::lock_guard lock(_overridesMutex);
-            _overrides.insert_or_assign({ section, key }, value);
+            for (const auto& entry : overrides) {
+                if (_overrides.insert_or_assign({ entry.section, entry.key }, entry.value).second) {
+                    logger::info("Config: Set session override \"{}.{} = {}\"", entry.section, entry.key, entry.value.toString());
+                    added.push_back(&entry);
+                } else {
+                    logger::debug("Config: Changed session override \"{}.{} = {}\"", entry.section, entry.key, entry.value.toString());
+                }
+            }
         }
-        logger::info("Config: Set session override \"{}.{} = {}\"", section, key, value.toString());
-        loadIniConfigValues();
+
+        loadIniConfigValues(config::IniFile::Source::Kept);
+
         // whoever set it: a devbench call, the mod itself, or another mod through the mod's API
-        devbench::emit("config.override", [&] {
-            return nlohmann::json{ { "section", section }, { "key", key }, { "value", value.toString() } };
-        });
+        for (const auto* entry : added) {
+            devbench::emit("config.override", [&] {
+                return nlohmann::json{ { "section", entry->section }, { "key", entry->key }, { "value", entry->value.toString() } };
+            });
+        }
     }
 
     /**
@@ -535,16 +564,37 @@ namespace f4cf
      */
     void ConfigBase::clearConfigOverride(const char* section, const char* key)
     {
-        bool removed;
+        clearConfigOverrides({ config::IniKey{ section, key } });
+    }
+
+    /**
+     * Remove several session overrides with one reload of the config, see clearConfigOverride. A key with no
+     * override is skipped, and nothing is reloaded when none of them had one.
+     * The reload reads the file, where the one of a set does not. A clear is not done many times a second,
+     * and the file can be newer than what the mod has: when the previewed values were saved to it right
+     * before the clear, they apply at once.
+     */
+    void ConfigBase::clearConfigOverrides(const std::vector<config::IniKey>& keys)
+    {
+        std::vector<const config::IniKey*> removed;
         {
             std::lock_guard lock(_overridesMutex);
-            removed = _overrides.erase({ section, key }) > 0;
+            for (const auto& entry : keys) {
+                if (_overrides.erase({ entry.section, entry.key }) > 0) {
+                    logger::info("Config: Cleared session override \"{}.{}\"", entry.section, entry.key);
+                    removed.push_back(&entry);
+                }
+            }
         }
-        if (removed) {
-            logger::info("Config: Cleared session override \"{}.{}\"", section, key);
-            loadIniConfigValues();
+        if (removed.empty()) {
+            return;
+        }
+
+        loadIniConfigValues();
+
+        for (const auto* entry : removed) {
             devbench::emit("config.override", [&] {
-                return nlohmann::json{ { "section", section }, { "key", key }, { "value", nullptr } };
+                return nlohmann::json{ { "section", entry->section }, { "key", entry->key }, { "value", nullptr } };
             });
         }
     }
@@ -1059,7 +1109,7 @@ namespace f4cf
 
                 waitForIniFileWriteToEnd();
 
-                if (!loadIniConfigValues(true)) {
+                if (!loadIniConfigValues(config::IniFile::Source::ChangedFile)) {
                     logger::debug("Ignore INI config file event, the file is as the mod last loaded or saved it");
                     return;
                 }

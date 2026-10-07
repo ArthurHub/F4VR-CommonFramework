@@ -64,6 +64,21 @@ The mod's own save (`saveIniConfigValue`, `save()`) is not loaded back. The file
 file only when it holds something else than the mod last loaded or saved, so a write by someone
 else is loaded whenever it comes, and a write that leaves the file as it was is not.
 
+A session override puts a value in place of the file's until it is cleared, and is never written to
+the file. It is how a setting is previewed while the game runs:
+
+```cpp
+g_config.setConfigOverride("MyMod", "fMyValue", 2.5f);        // loadIniConfigInternal runs with it
+g_config.setConfigOverrides({ { "MyMod", "fMyValue", 2.5f },  // several, with one reload
+                              { "MyMod", "bEnabled", true } });
+g_config.clearConfigOverride("MyMod", "fMyValue");            // the file's value applies again
+g_config.clearConfigOverrides({ { "MyMod", "fMyValue" }, { "MyMod", "bEnabled" } });
+```
+
+A set reads no disk: it loads the file as the mod last loaded or saved it. So a value can be set
+many times a second, as a slider is dragged, and only a key that becomes overridden is logged at
+the info level. A clear reads the file.
+
 ### 2. Mod — derive from `ModBase`
 
 ```cpp

@@ -205,7 +205,7 @@ and before the game has loaded, an emit is one atomic load and builds nothing.
   |-------|------|---------|
   | `sessionLoaded` | After each save load and new game, once the mod's own `onGameSessionLoaded` has run | — |
   | `config.reloaded` | The file watcher applied an INI change from disk, or `ConfigBase::reload()` ran | `file`, `trigger` (`file` or `reload`) |
-  | `config.override` | A session override was set or cleared, by anyone: a devbench call, the mod, or another mod through the mod's API | `section`, `key`, `value` (`null` when cleared), or `all: true` |
+  | `config.override` | A key became overridden for the session, or its override was cleared, by anyone: a devbench call, the mod, or another mod through the mod's API. A new value for a key that is already overridden is not an event: a previewed value changes many times a second | `section`, `key`, `value` (the one it was first set with, `null` when cleared), or `all: true` |
   | `input.suppression` | An owner started or stopped suppressing controller input | `owner`, its `left`/`right` `buttons`/`axes` (empty once released), the `effective` union, `owners` |
 
   Names are the input binding grammar's (`grip`, `trigger`, `menu`, `a`, `thumbstick`), and

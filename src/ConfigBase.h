@@ -7,6 +7,7 @@
 #include <thomasmonkman-filewatch/FileWatch.hpp>
 #include <utility>
 #include <variant>
+#include <vector>
 
 #include "Common/CommonUtils.h"
 #include "ConfigIniFile.h"
@@ -67,6 +68,26 @@ namespace f4cf
         private:
             std::variant<bool, int, float, std::string> _value;
         };
+
+        /**
+         * The INI section and key of a value.
+         */
+        struct IniKey
+        {
+            std::string section;
+            std::string key;
+        };
+
+        /**
+         * A session override: the value that applies in place of the file's for a section and key, see
+         * ConfigBase::setConfigOverrides.
+         */
+        struct IniOverride
+        {
+            std::string section;
+            std::string key;
+            IniValue value;
+        };
     }
 
     constexpr auto INI_SECTION_DEBUG = "Debug";
@@ -122,7 +143,11 @@ namespace f4cf
 
         void setConfigOverride(const char* section, const char* key, const config::IniValue& value);
 
+        void setConfigOverrides(const std::vector<config::IniOverride>& overrides);
+
         void clearConfigOverride(const char* section, const char* key);
+
+        void clearConfigOverrides(const std::vector<config::IniKey>& keys);
 
         void clearAllConfigOverrides();
 
@@ -213,7 +238,7 @@ namespace f4cf
         void loadIniConfig();
         int loadEmbeddedResourceIniConfigVersion() const;
         void loadDebugSection(const CSimpleIniA& ini);
-        bool loadIniConfigValues(bool onlyIfFileChanged = false);
+        bool loadIniConfigValues(config::IniFile::Source source = config::IniFile::Source::File);
         void applyIniConfig(const CSimpleIniA& ini);
 
         // Stamp all active session overrides onto the given INI (in-memory only) before it is applied

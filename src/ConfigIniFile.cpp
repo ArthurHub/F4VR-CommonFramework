@@ -46,19 +46,26 @@ namespace f4cf::config
 {
     /**
      * Read the file into `ini`, and keep its content as the one the mod has.
-     * With `onlyIfChanged`, a file that holds what the mod last loaded or saved is left alone. That is how
-     * the file watcher loads: the event is then of the mod's own save, or one more event of a write that is
-     * already loaded.
+     * From `Source::ChangedFile`, a file that holds what the mod last loaded or saved is left alone. That is
+     * how the file watcher loads: the event is then of the mod's own save, or one more event of a write that
+     * is already loaded.
+     * From `Source::Kept`, the kept content is parsed and the file is not read, so a session override that
+     * changes many times a second while it is previewed reads no disk. A change of the file that is not
+     * loaded yet is then not in `ini`: the file watcher loads it. With nothing kept, the file is read.
      */
-    IniFile::LoadResult IniFile::load(const std::string& path, CSimpleIniA& ini, const bool onlyIfChanged)
+    IniFile::LoadResult IniFile::load(const std::string& path, CSimpleIniA& ini, const Source source)
     {
         std::lock_guard lock(_mutex);
+
+        if (source == Source::Kept && _content) {
+            return ini.LoadData(*_content) < 0 ? LoadResult::Failed : LoadResult::Loaded;
+        }
 
         auto content = readFile(path);
         if (!content) {
             return LoadResult::Failed;
         }
-        if (onlyIfChanged && content == _content) {
+        if (source == Source::ChangedFile && content == _content) {
             return LoadResult::Unchanged;
         }
         if (ini.LoadData(*content) < 0) {
