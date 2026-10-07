@@ -9,6 +9,7 @@ if(NOT TARGET Catch2::Catch2WithMain)
 endif()
 
 add_executable(${PROJECT_NAME}_tests
+  ConfigIniFileTests.cpp
   FrameContextTests.cpp
   HistogramTests.cpp
   ImGuiPointerLogicTests.cpp
@@ -16,6 +17,7 @@ add_executable(${PROJECT_NAME}_tests
   PerfSiteTests.cpp
   UIDevLayoutFileTests.cpp
   # the plain-std sources under test
+  ${SOURCE_DIR}/ConfigIniFile.cpp
   ${SOURCE_DIR}/perf/FrameContext.cpp
   ${SOURCE_DIR}/perf/Perf.cpp
   ${SOURCE_DIR}/perf/Report.cpp

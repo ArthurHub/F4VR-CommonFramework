@@ -2,7 +2,6 @@
 
 #include <SimpleIni.h>
 #include <array>
-#include <atomic>
 #include <map>
 #include <mutex>
 #include <thomasmonkman-filewatch/FileWatch.hpp>
@@ -10,6 +9,7 @@
 #include <variant>
 
 #include "Common/CommonUtils.h"
+#include "ConfigIniFile.h"
 
 namespace f4cf::vrcf
 {
@@ -213,7 +213,7 @@ namespace f4cf
         void loadIniConfig();
         int loadEmbeddedResourceIniConfigVersion() const;
         void loadDebugSection(const CSimpleIniA& ini);
-        void loadIniConfigValues();
+        bool loadIniConfigValues(bool onlyIfFileChanged = false);
         void applyIniConfig(const CSimpleIniA& ini);
 
         // Stamp all active session overrides onto the given INI (in-memory only) before it is applied
@@ -266,17 +266,17 @@ namespace f4cf
         // the log message pattern to use for the logger
         std::string _logPattern;
 
+        void waitForIniFileWriteToEnd() const;
+
         // filesystem watch for changes to INI config file to have live reload
         std::unique_ptr<filewatch::FileWatch<std::string>> _iniConfigFileWatch;
 
-        // INI config file last write time to prevent reload the same change because of OS multiple events
-        std::atomic<std::filesystem::file_time_type> _lastIniFileWriteTime;
+        // The INI file as the mod last loaded or saved it. By it the file watch tells a change by someone else
+        // from the mod's own save, and from one more event of a write that is already loaded.
+        config::IniFile _iniFile;
 
         // Callbacks to notify when INI config is changed
         std::unordered_map<std::string, std::function<void(const std::string&)>> _onIniConfigChangedSubscribers;
-
-        // Handle ignoring file watch change event IFF the change was made by us
-        std::atomic<bool> _ignoreNextIniFileChange = false;
 
         // Session-only value overrides keyed by {section, key}, re-applied on every load and never
         // persisted to disk. Guarded by _overridesMutex as it is read from the file-watch thread.

@@ -457,7 +457,7 @@ namespace f4cf
     void DebugAdjuster::saveCurrent(const ConfigBase& config)
     {
         // const_cast is fine: ConfigBase exposes saveIniConfigValue as non-const because it touches
-        // file state and watcher flags, but the in-memory config values we're saving are not mutated.
+        // the state it keeps of the file, but the in-memory config values we're saving are not mutated.
         auto& mutableConfig = const_cast<ConfigBase&>(config);
         switch (config.debug.adjustTarget) {
         case DebugAdjustTarget::Transform:
