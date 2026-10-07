@@ -458,7 +458,7 @@ namespace f4cf
             logger::info("INI config change detected, reload...");
         }
 
-        applyConfigOverrides(ini);
+        _overrides.applyTo(ini);
         applyIniConfig(ini);
         return true;
     }
@@ -496,22 +496,9 @@ namespace f4cf
             return;
         }
         // persistent session overrides first, then the caller's transient one-off override on top
-        applyConfigOverrides(ini);
+        _overrides.applyTo(ini);
         ini.SetValue(section, key, value);
         applyIniConfig(ini);
-    }
-
-    /**
-     * Stamp every active session override onto the given INI before it is propagated to the typed
-     * members. Uses SetValue with the string form (no logging, unlike IniValue::applyTo) since this
-     * runs on every reload; the string parses back through the matching getter when the member loads.
-     */
-    void ConfigBase::applyConfigOverrides(CSimpleIniA& ini) const
-    {
-        std::lock_guard lock(_overridesMutex);
-        for (const auto& [sectionKey, value] : _overrides) {
-            ini.SetValue(sectionKey.first.c_str(), sectionKey.second.c_str(), value.toString().c_str());
-        }
     }
 
     /**
@@ -523,12 +510,8 @@ namespace f4cf
      */
     std::string ConfigBase::getConfigValue(const char* section, const char* key, const char* defaultValue) const
     {
-        {
-            std::lock_guard lock(_overridesMutex);
-            const auto it = _overrides.find({ section, key });
-            if (it != _overrides.end()) {
-                return it->second.toString();
-            }
+        if (const auto value = _overrides.find({ section, key })) {
+            return *value;
         }
 
         CSimpleIniA ini;
@@ -544,130 +527,120 @@ namespace f4cf
      * other reload, and is never written to disk. Accepts any IniValue type (bool/int/float/string);
      * a string value is parsed by the type-appropriate getter when the member is loaded, so a string
      * can override any value. Immediately reloads the config so the typed members reflect it.
+     * `owner` is the name of who sets it. An owner sets and clears only its own overrides, so several
+     * callers override one config and none removes another's: the devbench tool, the mod itself, and
+     * another mod through the mod's API, which passes its caller's name. When two owners override the same
+     * key, the one that was set last applies, and when that one is cleared the other applies again. The
+     * overrides are held by config::Overrides.
      */
-    void ConfigBase::setConfigOverride(const char* section, const char* key, const config::IniValue& value)
+    void ConfigBase::setConfigOverride(const std::string& owner, const char* section, const char* key, const config::IniValue& value)
     {
-        setConfigOverrides({ config::IniOverride{ section, key, value } });
+        setConfigOverrides(owner, { config::IniOverride{ section, key, value } });
     }
 
     /**
-     * Set several session overrides with one reload of the config, see setConfigOverride.
+     * Set several session overrides of one owner with one reload of the config, see setConfigOverride.
      * The reload parses the file as the mod last loaded or saved it and reads no disk, so a value can be set
-     * many times a second while it is previewed. For the same reason only a key that becomes overridden is
-     * logged at the info level and is a devbench event. A new value for a key that is already overridden is
-     * logged at the debug level.
+     * many times a second while it is previewed. For the same reason only a key that the owner did not
+     * override before is logged at the info level and is a devbench event. A new value for a key it already
+     * overrides is logged at the debug level.
      */
-    void ConfigBase::setConfigOverrides(const std::vector<config::IniOverride>& overrides)
+    void ConfigBase::setConfigOverrides(const std::string& owner, const std::vector<config::IniOverride>& overrides)
     {
         if (overrides.empty()) {
             return;
         }
 
-        // the keys that become overridden by this call
+        // the keys that the owner did not override before this call
         std::vector<const config::IniOverride*> added;
-        {
-            std::lock_guard lock(_overridesMutex);
-            for (const auto& entry : overrides) {
-                if (_overrides.insert_or_assign({ entry.section, entry.key }, entry.value).second) {
-                    logger::info("Config: Set session override \"{}.{} = {}\"", entry.section, entry.key, entry.value.toString());
-                    added.push_back(&entry);
-                } else {
-                    logger::debug("Config: Changed session override \"{}.{} = {}\"", entry.section, entry.key, entry.value.toString());
-                }
+        for (const auto& entry : overrides) {
+            if (_overrides.set(owner, { entry.section, entry.key }, entry.value.toString())) {
+                logger::info("Config: '{}' set session override \"{}.{} = {}\"", owner, entry.section, entry.key, entry.value.toString());
+                added.push_back(&entry);
+            } else {
+                logger::debug("Config: '{}' changed session override \"{}.{} = {}\"", owner, entry.section, entry.key, entry.value.toString());
             }
         }
 
         loadIniConfigValues(config::IniFile::Source::Kept);
 
-        // whoever set it: a devbench call, the mod itself, or another mod through the mod's API
         for (const auto* entry : added) {
             devbench::emit("config.override", [&] {
-                return nlohmann::json{ { "section", entry->section }, { "key", entry->key }, { "value", entry->value.toString() } };
+                return nlohmann::json{ { "section", entry->section }, { "key", entry->key }, { "value", entry->value.toString() }, { "owner", owner } };
             });
         }
     }
 
     /**
-     * Remove a previously set session override for section/key and reload so the member reverts to
-     * its on-disk value. No-op if no override is set for that key.
+     * Remove the owner's session override for section/key and reload, so the member has another owner's
+     * override of it, or its on-disk value with none. Returns whether the owner had one, and nothing is
+     * reloaded when it did not.
      */
-    void ConfigBase::clearConfigOverride(const char* section, const char* key)
+    bool ConfigBase::clearConfigOverride(const std::string& owner, const char* section, const char* key)
     {
-        clearConfigOverrides({ config::IniKey{ section, key } });
+        return clearConfigOverrides(owner, { config::IniKey{ section, key } }) > 0;
     }
 
     /**
-     * Remove several session overrides with one reload of the config, see clearConfigOverride. A key with no
-     * override is skipped, and nothing is reloaded when none of them had one.
+     * Remove several session overrides of one owner with one reload of the config, see clearConfigOverride.
+     * A key the owner does not override is skipped. Returns how many were removed, and nothing is reloaded
+     * when none was.
      * The reload reads the file, where the one of a set does not. A clear is not done many times a second,
      * and the file can be newer than what the mod has: when the previewed values were saved to it right
      * before the clear, they apply at once.
      */
-    void ConfigBase::clearConfigOverrides(const std::vector<config::IniKey>& keys)
+    std::size_t ConfigBase::clearConfigOverrides(const std::string& owner, const std::vector<config::IniKey>& keys)
     {
-        std::vector<const config::IniKey*> removed;
-        {
-            std::lock_guard lock(_overridesMutex);
-            for (const auto& entry : keys) {
-                if (_overrides.erase({ entry.section, entry.key }) > 0) {
-                    logger::info("Config: Cleared session override \"{}.{}\"", entry.section, entry.key);
-                    removed.push_back(&entry);
-                }
-            }
-        }
+        const auto removed = _overrides.clear(owner, keys);
         if (removed.empty()) {
-            return;
+            return 0;
+        }
+        for (const auto& entry : removed) {
+            logger::info("Config: '{}' cleared session override \"{}.{}\"", owner, entry.section, entry.key);
         }
 
         loadIniConfigValues();
 
-        for (const auto* entry : removed) {
+        for (const auto& entry : removed) {
             devbench::emit("config.override", [&] {
-                return nlohmann::json{ { "section", entry->section }, { "key", entry->key }, { "value", nullptr } };
+                return nlohmann::json{ { "section", entry.section }, { "key", entry.key }, { "value", nullptr }, { "owner", owner } };
             });
         }
+        return removed.size();
     }
 
     /**
-     * Remove all session overrides (if any) and reload so all members revert to disk.
+     * Remove every session override of one owner and reload, so its members have another owner's override
+     * or their on-disk value. Returns how many were removed, and nothing is reloaded when none was.
      */
-    void ConfigBase::clearAllConfigOverrides()
+    std::size_t ConfigBase::clearAllConfigOverrides(const std::string& owner)
     {
-        bool hadAny;
-        {
-            std::lock_guard lock(_overridesMutex);
-            hadAny = !_overrides.empty();
-            _overrides.clear();
-        }
-        if (hadAny) {
-            logger::info("Config: Cleared all session overrides");
+        const auto removed = _overrides.clearAll(owner);
+        if (removed > 0) {
+            logger::info("Config: '{}' cleared all its {} session overrides", owner, removed);
             loadIniConfigValues();
             devbench::emit("config.override", [&] {
-                return nlohmann::json{ { "all", true }, { "value", nullptr } };
+                return nlohmann::json{ { "all", true }, { "value", nullptr }, { "owner", owner } };
             });
         }
+        return removed;
     }
 
     /**
-     * Whether a session override is currently set for section/key.
+     * Whether a session override is currently set for section/key, by any owner.
      */
     bool ConfigBase::hasConfigOverride(const char* section, const char* key) const
     {
-        std::lock_guard lock(_overridesMutex);
-        return _overrides.contains({ section, key });
+        return _overrides.find({ section, key }).has_value();
     }
 
     /**
-     * Every active session override, keyed by {section, key}, with its value in the INI string form.
+     * The session override that applies for every overridden key, with its value in the INI string form
+     * and the owner that set it.
      */
-    std::map<std::pair<std::string, std::string>, std::string> ConfigBase::getConfigOverrides() const
+    std::vector<config::AppliedOverride> ConfigBase::getConfigOverrides() const
     {
-        std::lock_guard lock(_overridesMutex);
-        std::map<std::pair<std::string, std::string>, std::string> overrides;
-        for (const auto& [sectionKey, value] : _overrides) {
-            overrides.emplace(sectionKey, value.toString());
-        }
-        return overrides;
+        return _overrides.applied();
     }
 
     /**

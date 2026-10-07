@@ -12,6 +12,7 @@
 
 #include "Common/CommonUtils.h"
 #include "ConfigIniFile.h"
+#include "ConfigOverrides.h"
 
 namespace f4cf::vrcf
 {
@@ -71,17 +72,8 @@ namespace f4cf
         };
 
         /**
-         * The INI section and key of a value.
-         */
-        struct IniKey
-        {
-            std::string section;
-            std::string key;
-        };
-
-        /**
-         * A session override: the value that applies in place of the file's for a section and key, see
-         * ConfigBase::setConfigOverrides.
+         * A session override to set: the value that applies in place of the file's for a section and key,
+         * see ConfigBase::setConfigOverrides.
          */
         struct IniOverride
         {
@@ -142,19 +134,19 @@ namespace f4cf
 
         std::string getConfigValue(const char* section, const char* key, const char* defaultValue = "") const;
 
-        void setConfigOverride(const char* section, const char* key, const config::IniValue& value);
+        void setConfigOverride(const std::string& owner, const char* section, const char* key, const config::IniValue& value);
 
-        void setConfigOverrides(const std::vector<config::IniOverride>& overrides);
+        void setConfigOverrides(const std::string& owner, const std::vector<config::IniOverride>& overrides);
 
-        void clearConfigOverride(const char* section, const char* key);
+        bool clearConfigOverride(const std::string& owner, const char* section, const char* key);
 
-        void clearConfigOverrides(const std::vector<config::IniKey>& keys);
+        std::size_t clearConfigOverrides(const std::string& owner, const std::vector<config::IniKey>& keys);
 
-        void clearAllConfigOverrides();
+        std::size_t clearAllConfigOverrides(const std::string& owner);
 
         bool hasConfigOverride(const char* section, const char* key) const;
 
-        std::map<std::pair<std::string, std::string>, std::string> getConfigOverrides() const;
+        std::vector<config::AppliedOverride> getConfigOverrides() const;
 
         void loadEmbeddedDefaultOnly();
 
@@ -243,9 +235,6 @@ namespace f4cf
         bool loadIniConfigValues(config::IniFile::Source source = config::IniFile::Source::File);
         void applyIniConfig(const CSimpleIniA& ini);
 
-        // Stamp all active session overrides onto the given INI (in-memory only) before it is applied
-        // to the typed members. Called on every load path so overrides survive reloads.
-        void applyConfigOverrides(CSimpleIniA& ini) const;
         bool loadIniFromFile(CSimpleIniA& ini) const;
         void saveIniToFile(const CSimpleIniA& ini);
         void saveIniConfig();
@@ -309,10 +298,9 @@ namespace f4cf
         // the game thread
         std::atomic<bool> _valuesReloaded = false;
 
-        // Session-only value overrides keyed by {section, key}, re-applied on every load and never
-        // persisted to disk. Guarded by _overridesMutex as it is read from the file-watch thread.
-        std::map<std::pair<std::string, std::string>, config::IniValue> _overrides;
-        mutable std::mutex _overridesMutex;
+        // Session-only value overrides, each with the owner that set it, re-applied on every load and never
+        // persisted to disk
+        config::Overrides _overrides;
 
         // Held by a load from the read of the INI to the last value set, so two loads never run at once and
         // the load that read the INI last is the one whose values stay. A change on disk loads on the
