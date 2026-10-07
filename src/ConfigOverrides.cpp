@@ -12,12 +12,24 @@ namespace f4cf::config
     bool Overrides::set(const std::string& owner, const IniKey& key, std::string value)
     {
         std::lock_guard lock(_mutex);
+        return setEntry(owner, key, std::move(value));
+    }
 
-        auto& entries = _entries[key];
-        const bool added = std::erase_if(entries, [&](const Entry& entry) {
-            return entry.owner == owner;
-        }) == 0;
-        entries.push_back({ owner, std::move(value) });
+    /**
+     * Set the owner's overrides of several keys, see set, each value in its INI string form. Returns the
+     * ones for a key that the owner did not override before, in the order given.
+     */
+    std::vector<AppliedOverride> Overrides::set(const std::string& owner, const std::vector<IniOverride>& overrides)
+    {
+        std::lock_guard lock(_mutex);
+
+        std::vector<AppliedOverride> added;
+        for (const auto& entry : overrides) {
+            auto value = entry.value.toString();
+            if (setEntry(owner, { entry.section, entry.key }, value)) {
+                added.push_back({ entry.section, entry.key, std::move(value), owner });
+            }
+        }
         return added;
     }
 
@@ -104,6 +116,19 @@ namespace f4cf::config
         for (const auto& [key, entries] : _entries) {
             ini.SetValue(key.section.c_str(), key.key.c_str(), entries.back().value.c_str());
         }
+    }
+
+    /**
+     * Set the owner's override of a key, with the lock already held. Returns whether it had none before.
+     */
+    bool Overrides::setEntry(const std::string& owner, const IniKey& key, std::string value)
+    {
+        auto& entries = _entries[key];
+        const bool added = std::erase_if(entries, [&](const Entry& entry) {
+            return entry.owner == owner;
+        }) == 0;
+        entries.push_back({ owner, std::move(value) });
+        return added;
     }
 
     /**

@@ -8,6 +8,8 @@
 #include <string>
 #include <vector>
 
+#include "ConfigIniValue.h"
+
 // The session overrides of a mod's config, apart from the game: plain std and SimpleIni only, so it is unit tested.
 namespace f4cf::config
 {
@@ -20,6 +22,17 @@ namespace f4cf::config
         std::string key;
 
         auto operator<=>(const IniKey&) const = default;
+    };
+
+    /**
+     * A session override to set: the value that applies in place of the file's for a section and key, see
+     * ConfigBase::setConfigOverrides.
+     */
+    struct IniOverride
+    {
+        std::string section;
+        std::string key;
+        IniValue value;
     };
 
     /**
@@ -47,6 +60,7 @@ namespace f4cf::config
     {
     public:
         bool set(const std::string& owner, const IniKey& key, std::string value);
+        std::vector<AppliedOverride> set(const std::string& owner, const std::vector<IniOverride>& overrides);
         bool clear(const std::string& owner, const IniKey& key);
         std::vector<IniKey> clear(const std::string& owner, const std::vector<IniKey>& keys);
         std::size_t clearAll(const std::string& owner);
@@ -62,6 +76,7 @@ namespace f4cf::config
             std::string value;
         };
 
+        bool setEntry(const std::string& owner, const IniKey& key, std::string value);
         bool clearEntry(const std::string& owner, const IniKey& key);
 
         // The overrides of each overridden key in the order they were set, so the last one applies. An owner has

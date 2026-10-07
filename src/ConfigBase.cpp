@@ -175,54 +175,6 @@ namespace
     }
 }
 
-namespace f4cf::config
-{
-    /**
-     * Write this value to the INI using the setter matching its underlying type, and log it.
-     */
-    void IniValue::applyTo(CSimpleIniA& ini, const char* section, const char* key) const
-    {
-        std::visit(
-            [&]<typename T>(const T& v) {
-                if constexpr (std::is_same_v<T, bool>) {
-                    ini.SetBoolValue(section, key, v);
-                    logger::info("Config: Saving \"{} = {}\"", key, v ? "true" : "false");
-                } else if constexpr (std::is_same_v<T, int>) {
-                    ini.SetLongValue(section, key, v);
-                    logger::info("Config: Saving \"{} = {}\"", key, v);
-                } else if constexpr (std::is_same_v<T, float>) {
-                    ini.SetDoubleValue(section, key, v);
-                    logger::info("Config: Saving \"{} = {}\"", key, v);
-                } else if constexpr (std::is_same_v<T, std::string>) {
-                    ini.SetValue(section, key, v.c_str());
-                    logger::info("Config: Saving \"{} = {}\"", key, v);
-                }
-            },
-            _value);
-    }
-
-    /**
-     * Render this value to its INI string form. Kept consistent with applyTo so the result parses back
-     * through CSimpleIniA's GetBoolValue/GetLongValue/GetDoubleValue/GetValue to the same value.
-     */
-    std::string IniValue::toString() const
-    {
-        if (const auto* v = std::get_if<bool>(&_value)) {
-            return *v ? "true" : "false";
-        }
-        if (const auto* v = std::get_if<int>(&_value)) {
-            return std::to_string(*v);
-        }
-        if (const auto* v = std::get_if<float>(&_value)) {
-            return fmt::format("{}", *v);
-        }
-        if (const auto* v = std::get_if<std::string>(&_value)) {
-            return *v;
-        }
-        return {};
-    }
-}
-
 namespace f4cf
 {
     /**
@@ -551,22 +503,22 @@ namespace f4cf
             return;
         }
 
-        // the keys that the owner did not override before this call
-        std::vector<const config::IniOverride*> added;
-        for (const auto& entry : overrides) {
-            if (_overrides.set(owner, { entry.section, entry.key }, entry.value.toString())) {
-                logger::info("Config: '{}' set session override \"{}.{} = {}\"", owner, entry.section, entry.key, entry.value.toString());
-                added.push_back(&entry);
-            } else {
-                logger::debug("Config: '{}' changed session override \"{}.{} = {}\"", owner, entry.section, entry.key, entry.value.toString());
+        // the ones for a key that the owner did not override before this call
+        const auto added = _overrides.set(owner, overrides);
+        for (const auto& entry : added) {
+            logger::info("Config: '{}' set session override \"{}.{} = {}\"", owner, entry.section, entry.key, entry.value);
+        }
+        if (logger::isDebugEnabled()) {
+            for (const auto& entry : overrides) {
+                logger::debug("Config: '{}' session override \"{}.{} = {}\"", owner, entry.section, entry.key, entry.value.toString());
             }
         }
 
         loadIniConfigValues(config::IniFile::Source::Kept);
 
-        for (const auto* entry : added) {
+        for (const auto& entry : added) {
             devbench::emit("config.override", [&] {
-                return nlohmann::json{ { "section", entry->section }, { "key", entry->key }, { "value", entry->value.toString() }, { "owner", owner } };
+                return nlohmann::json{ { "section", entry.section }, { "key", entry.key }, { "value", entry.value }, { "owner", owner } };
             });
         }
     }
@@ -711,7 +663,7 @@ namespace f4cf
     /**
      * Save one or more key/value pairs in a single file load/save cycle. The single-value
      * saveIniConfigValue overloads all route through here, so this is the one place that does
-     * the disk I/O. Values may be of any type IniValue supports (bool/int/float/string/NiTransform).
+     * the disk I/O. Values may be of any type IniValue supports (bool/int/float/string).
      */
     void ConfigBase::saveIniConfigValues(const char* section, std::initializer_list<std::pair<const char*, config::IniValue>> values)
     {
@@ -723,6 +675,7 @@ namespace f4cf
         }
         for (const auto& [key, value] : values) {
             value.applyTo(ini, section, key);
+            logger::info("Config: Saving \"{} = {}\"", key, value.toString());
         }
         if (!_iniFile.save(_iniFilePath, ini)) {
             logger::warn("Failed to save INI config values");

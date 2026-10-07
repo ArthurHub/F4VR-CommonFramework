@@ -142,6 +142,45 @@ TEST_CASE("ConfigOverrides: an owner's clear of all leaves the other owners' ove
     REQUIRE(overrides.applied().empty());
 }
 
+TEST_CASE("ConfigOverrides: several overrides are set at once, each value in its INI form, and the new ones are returned")
+{
+    Overrides overrides;
+    overrides.set(PREVIEW, SCALE, "1.5");
+    overrides.set(OTHER_MOD, MODE, "7");
+
+    const auto added = overrides.set(PREVIEW, { { "Main", "fScale", 2.5f }, { "Main", "iMode", 3 }, { "Debug", "iLogLevel", "0" }, { "Main", "bEnabled", true } });
+
+    // the scale was the owner's already, so it only has a new value; the mode is new for this owner
+    REQUIRE(added.size() == 3);
+    REQUIRE(added[0].section == "Main");
+    REQUIRE(added[0].key == "iMode");
+    REQUIRE(added[0].value == "3");
+    REQUIRE(added[0].owner == PREVIEW);
+    REQUIRE(added[1].key == "iLogLevel");
+    REQUIRE(added[1].value == "0");
+    REQUIRE(added[2].key == "bEnabled");
+    REQUIRE(added[2].value == "true");
+
+    REQUIRE(appliedValue(overrides, SCALE) == "2.5");
+    REQUIRE(appliedValue(overrides, MODE) == "3");
+    REQUIRE(appliedValue(overrides, LEVEL) == "0");
+    REQUIRE(appliedValue(overrides, { "Main", "bEnabled" }) == "true");
+
+    SECTION("a key that is twice in the list is new once, and has its last value")
+    {
+        const IniKey speed{ "Main", "fSpeed" };
+        const auto addedTwice = overrides.set(PREVIEW, { { "Main", "fSpeed", 1.0f }, { "Main", "fSpeed", 2.0f } });
+
+        REQUIRE(addedTwice.size() == 1);
+        REQUIRE(appliedValue(overrides, speed) == "2");
+    }
+    SECTION("an empty list sets nothing")
+    {
+        REQUIRE(overrides.set(PREVIEW, std::vector<f4cf::config::IniOverride>{}).empty());
+        REQUIRE(overrides.applied().size() == 4);
+    }
+}
+
 TEST_CASE("ConfigOverrides: several keys are cleared at once, and the ones the owner had are returned")
 {
     Overrides overrides;
