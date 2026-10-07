@@ -127,4 +127,30 @@ namespace f4cf::config
         color = parsed;
         return true;
     }
+
+    /**
+     * Take a name out of a list of names, as the value of sDumpDataOnceNames is, and return whether it had it.
+     * A name is found only as a whole: "skelly" is not found in "fp_skelly". It is letters, digits and '_', and
+     * anything else is between names. Only the name is removed, so the names can have any separator.
+     */
+    bool takeName(std::string& names, const std::string_view name)
+    {
+        const auto isNameChar = [](const char ch) {
+            return std::isalnum(static_cast<unsigned char>(ch)) != 0 || ch == '_';
+        };
+
+        if (name.empty()) {
+            return false;
+        }
+        for (auto at = names.find(name); at != std::string::npos; at = names.find(name, at + 1)) {
+            const auto end = at + name.size();
+            const bool startsName = at == 0 || !isNameChar(names[at - 1]);
+            const bool endsName = end == names.size() || !isNameChar(names[end]);
+            if (startsName && endsName) {
+                names.erase(at, name.size());
+                return true;
+            }
+        }
+        return false;
+    }
 }

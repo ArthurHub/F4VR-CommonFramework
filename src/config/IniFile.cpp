@@ -75,6 +75,22 @@ namespace f4cf::config
     }
 
     /**
+     * Parse the INI as the mod has it into `ini`, for a read that loads no values: the kept content with no read
+     * of the file, or the file when nothing is kept. Nothing is kept by it, so the file watcher still loads a
+     * file that was read here. Returns false when the INI could not be read.
+     */
+    bool IniFile::read(const std::string& path, CSimpleIniA& ini) const
+    {
+        std::lock_guard lock(_mutex);
+
+        if (_content) {
+            return ini.LoadData(*_content) >= 0;
+        }
+        const auto content = readFile(path);
+        return content && ini.LoadData(*content) >= 0;
+    }
+
+    /**
      * Write `ini` as the file, the same bytes SimpleIni's SaveFile writes. Returns false when it could not.
      * What is written becomes the kept content, so the file watcher loads nothing for this save. When someone
      * else changed the file since the mod loaded it, the kept content is forgotten instead: the file has values

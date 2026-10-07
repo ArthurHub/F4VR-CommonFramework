@@ -3,6 +3,7 @@
 #include <nlohmann/json.hpp>
 
 #include "IniMigration.h"
+#include "IniValueParsers.h"
 #include "devbench/DevBench.h"
 
 namespace f4cf
@@ -45,15 +46,23 @@ namespace f4cf
         std::lock_guard lock(_loadMutex);
 
         CSimpleIniA ini;
-        const SI_Error rc = ini.LoadData(common::getEmbededResourceAsString(_module, _iniDefaultConfigEmbeddedResourceId));
-        if (rc < 0) {
-            logger::warn("Failed to load INI config file! Error: {}", rc);
-            throw std::runtime_error("Failed to load INI config file! Error: " + std::to_string(rc));
-        }
+        loadEmbeddedIni(ini);
 
         loadDebugSection(ini);
         loadIniConfigInternal(ini);
-        _valuesReloaded = true;
+        _subscribers.markReloaded();
+    }
+
+    /**
+     * Parse the default INI that is embedded in the mod's DLL into `ini`. Throws when it cannot be parsed.
+     */
+    void ConfigBase::loadEmbeddedIni(CSimpleIniA& ini) const
+    {
+        const SI_Error rc = ini.LoadData(common::getEmbededResourceAsString(_module, _iniDefaultConfigEmbeddedResourceId));
+        if (rc < 0) {
+            logger::warn("Failed to load the embedded INI config! Error: {}", rc);
+            throw std::runtime_error("Failed to load the embedded INI config! Error: " + std::to_string(rc));
+        }
     }
 
     /**
@@ -63,10 +72,7 @@ namespace f4cf
      */
     void ConfigBase::subscribeForIniChangedEvent(const std::string& key, const std::function<void(const std::string&)>& callback)
     {
-        if (_onIniConfigChangedSubscribers.contains(key)) {
-            throw std::runtime_error("ConfigBase::subscribeForIniChangedEvent: Key '" + key + "' is already subscribed!");
-        }
-        _onIniConfigChangedSubscribers.emplace(key, callback);
+        _subscribers.subscribe(key, callback);
     }
 
     /**
@@ -74,7 +80,7 @@ namespace f4cf
      */
     void ConfigBase::unsubscribeFromIniChangedEvent(const std::string& key)
     {
-        _onIniConfigChangedSubscribers.erase(key);
+        _subscribers.unsubscribe(key);
     }
 
     /**
@@ -84,30 +90,21 @@ namespace f4cf
      */
     void ConfigBase::notifySubscribersOfReload()
     {
-        if (!_valuesReloaded.exchange(false)) {
-            return;
-        }
-
-        // a copy, so a subscriber can unsubscribe from inside its call
-        const auto subscribers = _onIniConfigChangedSubscribers;
-        for (const auto& [key, subscriber] : subscribers) {
+        _subscribers.notify([](const std::string& key) {
             logger::debug("Notify INI config change subscriber '{}'", key);
-            subscriber(key);
-        }
+        });
     }
 
     /**
-     * Check if a debug data dump is requested for the given name in sDumpDataOnceNames.
-     * A matched name is removed from the list, in memory and in the INI, so the dump runs once and a reload does
-     * not request it again. Only the matched text is removed, so the names can have any separator.
+     * Check if a debug data dump is requested for the given name in sDumpDataOnceNames, see config::takeName.
+     * The name is then removed from the list, in memory and in the INI, so the dump runs once and a reload does
+     * not request it again.
      */
     bool ConfigBase::checkDebugDumpDataOnceFor(const char* name)
     {
-        const auto idx = debug.dumpDataOnceNames.find(name);
-        if (idx == std::string::npos) {
+        if (!config::takeName(debug.dumpDataOnceNames, name)) {
             return false;
         }
-        debug.dumpDataOnceNames = debug.dumpDataOnceNames.erase(idx, strlen(name));
         // write to INI for auto-reload not to re-enable it
         saveIniConfigValue(INI_SECTION_DEBUG, "sDumpDataOnceNames", debug.dumpDataOnceNames.c_str());
 
@@ -160,15 +157,8 @@ namespace f4cf
      */
     int ConfigBase::loadEmbeddedResourceIniConfigVersion() const
     {
-        const auto embeddedIniStr = common::getEmbededResourceAsString(_module, _iniDefaultConfigEmbeddedResourceId);
-
         CSimpleIniA ini;
-        const SI_Error rc = ini.LoadData(embeddedIniStr);
-        if (rc < 0) {
-            logger::warn("Failed to load INI config file! Error: {}", rc);
-            throw std::runtime_error("Failed to load INI config file! Error: " + std::to_string(rc));
-        }
-
+        loadEmbeddedIni(ini);
         return ini.GetLongValue(INI_SECTION_DEBUG, "iVersion", 0);
     }
 
@@ -228,19 +218,19 @@ namespace f4cf
         loadIniConfigInternal(ini);
 
         // for the subscribers, which are called on the game thread, see notifySubscribersOfReload
-        _valuesReloaded = true;
+        _subscribers.markReloaded();
     }
 
     /**
-     * Re-apply the INI on disk to all config members with one key overridden in memory only, for the
-     * DebugAdjuster field mode to preview a field. The file is read on every call, and never written.
+     * Re-apply the INI as the mod last loaded or saved it to all config members, with one key overridden in memory
+     * only. No disk is read or written, so the DebugAdjuster field mode calls it every frame to preview a field.
      */
     void ConfigBase::applyIniConfigWithOverride(const char* section, const char* key, const char* value)
     {
         std::lock_guard lock(_loadMutex);
 
         CSimpleIniA ini;
-        if (!loadIniFromFile(ini)) {
+        if (!loadKeptIni(ini)) {
             return;
         }
         // persistent session overrides first, then the caller's transient one-off override on top
@@ -251,8 +241,8 @@ namespace f4cf
 
     /**
      * Get the effective value of a section/key as a string: the session override if one is set, otherwise the
-     * value in the INI on disk, otherwise defaultValue. The caller parses it to the type it expects.
-     * For a key the file does not have, defaultValue can differ from the default the mod loads its member with.
+     * value in the INI as the mod last loaded or saved it, otherwise defaultValue. The caller parses it.
+     * For a key the INI does not have, defaultValue can differ from the default the mod loads its member with.
      */
     std::string ConfigBase::getConfigValue(const char* section, const char* key, const char* defaultValue) const
     {
@@ -261,7 +251,7 @@ namespace f4cf
         }
 
         CSimpleIniA ini;
-        if (!loadIniFromFile(ini)) {
+        if (!loadKeptIni(ini)) {
             return defaultValue ? defaultValue : std::string{};
         }
         return ini.GetValue(section, key, defaultValue ? defaultValue : "");
@@ -397,13 +387,27 @@ namespace f4cf
     }
 
     /**
-     * Load the INI file into the given CSimpleIniA instance.
+     * Load the INI file from disk into `ini`, for a save to change it and write it back with saveIniToFile.
+     * The file can hold a change by someone else that the mod has not loaded yet, and the save then keeps it.
      */
     bool ConfigBase::loadIniFromFile(CSimpleIniA& ini) const
     {
         const auto rc = ini.LoadFile(_iniFilePath.c_str());
         if (rc < 0) {
             logger::warn("Failed to load INI config file '{}' with code: {}", _iniFilePath, rc);
+            return false;
+        }
+        return true;
+    }
+
+    /**
+     * Parse the INI as the mod last loaded or saved it into `ini`, with no read of the disk, for a read that
+     * loads no values, see config::IniFile::read.
+     */
+    bool ConfigBase::loadKeptIni(CSimpleIniA& ini) const
+    {
+        if (!_iniFile.read(_iniFilePath, ini)) {
+            logger::warn("Failed to read INI config file '{}'", _iniFilePath);
             return false;
         }
         return true;
@@ -452,9 +456,7 @@ namespace f4cf
     void ConfigBase::saveIniConfigValues(const char* section, std::initializer_list<std::pair<const char*, config::IniValue>> values)
     {
         CSimpleIniA ini;
-        const SI_Error rc = ini.LoadFile(_iniFilePath.c_str());
-        if (rc < 0) {
-            logger::warn("Failed to save INI config values with code: {}", rc);
+        if (!loadIniFromFile(ini)) {
             return;
         }
         for (const auto& [key, value] : values) {
@@ -467,36 +469,36 @@ namespace f4cf
     }
 
     /**
-     * Read the on-disk transform value for an arbitrary section/key (DebugAdjuster field mode seed).
+     * Read the transform of a section/key from the INI as the mod has it (DebugAdjuster field mode seed).
      */
     RE::NiTransform ConfigBase::readIniTransformValue(const char* section, const char* key, const RE::NiTransform& defaultValue) const
     {
         CSimpleIniA ini;
-        if (!loadIniFromFile(ini)) {
+        if (!loadKeptIni(ini)) {
             return defaultValue;
         }
         return getTransformValue(ini, section, key, defaultValue);
     }
 
     /**
-     * Read the on-disk 22-float hand pose for an arbitrary section/key (DebugAdjuster field mode seed).
+     * Read the 22-float hand pose of a section/key from the INI as the mod has it (DebugAdjuster field mode seed).
      */
     std::array<float, 22> ConfigBase::readIniHandPoseValue(const char* section, const char* key, const std::array<float, 22>& defaultValue) const
     {
         CSimpleIniA ini;
-        if (!loadIniFromFile(ini)) {
+        if (!loadKeptIni(ini)) {
             return defaultValue;
         }
         return getHandPoseValue(ini, section, key, defaultValue);
     }
 
     /**
-     * Read the on-disk float value for an arbitrary section/key (DebugAdjuster field mode seed).
+     * Read the float of a section/key from the INI as the mod has it (DebugAdjuster field mode seed).
      */
     float ConfigBase::readIniFloatValue(const char* section, const char* key, const float defaultValue) const
     {
         CSimpleIniA ini;
-        if (!loadIniFromFile(ini)) {
+        if (!loadKeptIni(ini)) {
             return defaultValue;
         }
         return static_cast<float>(ini.GetDoubleValue(section, key, defaultValue));
@@ -515,21 +517,9 @@ namespace f4cf
             throw std::runtime_error("Failed to load old .ini file! Error: " + std::to_string(rc));
         }
 
-        // override the file with the default .ini resource.
-        const auto tmpIniPath = std::string(_iniFilePath) + ".tmp";
-        common::createFileFromResourceIfNotExists(tmpIniPath, _module, _iniDefaultConfigEmbeddedResourceId, true);
-
+        // the default .ini of the new version
         CSimpleIniA newIni;
-        rc = newIni.LoadFile(tmpIniPath.c_str());
-        if (rc < 0) {
-            throw std::runtime_error("Failed to load new .ini file! Error: " + std::to_string(rc));
-        }
-
-        // remove temp ini file
-        auto res = std::remove(tmpIniPath.c_str());
-        if (res != 0) {
-            logger::warn("Failed to remove temp INI config with code: {}", res);
-        }
+        loadEmbeddedIni(newIni);
 
         // update all values in the new ini with the old ini values but only if they exist in the new
         for (const auto& entry : config::migrateIniValues(oldIni, newIni)) {
@@ -548,7 +538,7 @@ namespace f4cf
         // backup the old ini file before overwriting
         auto nameStr = std::string(_iniFilePath);
         nameStr = nameStr.replace(nameStr.length() - 4, 4, "_backup_v" + std::to_string(_iniConfigVersion) + ".ini");
-        res = std::rename(_iniFilePath.c_str(), nameStr.c_str());
+        const auto res = std::rename(_iniFilePath.c_str(), nameStr.c_str());
         if (res != 0) {
             logger::warn("Failed to backup old .ini file to '{}'. Error: {}", nameStr.c_str(), res);
         }
