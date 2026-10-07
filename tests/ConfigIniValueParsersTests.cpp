@@ -8,6 +8,7 @@
 using f4cf::config::parseColor255;
 using f4cf::config::parseHandPose;
 using f4cf::config::parseTransform;
+using f4cf::config::takeName;
 
 namespace
 {
@@ -128,4 +129,57 @@ TEST_CASE("ConfigIniValueParsers: a malformed color leaves the color as it was")
         REQUIRE_FALSE(parseColor255(text, color));
         REQUIRE(color == PRESET);
     }
+}
+
+TEST_CASE("ConfigIniValueParsers: a name is taken out of a list of names, once")
+{
+    std::string names = "skelly, geometry";
+
+    REQUIRE(takeName(names, "geometry"));
+    REQUIRE(names == "skelly, ");
+    REQUIRE_FALSE(takeName(names, "geometry"));
+
+    REQUIRE(takeName(names, "skelly"));
+    REQUIRE(names == ", ");
+}
+
+TEST_CASE("ConfigIniValueParsers: a name is taken only as a whole, in whatever order the names are asked for")
+{
+    std::string names = "fp_skelly";
+    REQUIRE_FALSE(takeName(names, "skelly"));
+    REQUIRE_FALSE(takeName(names, "fp"));
+    REQUIRE(names == "fp_skelly");
+
+    names = "perf_reset, fp_skelly, skelly";
+    REQUIRE_FALSE(takeName(names, "perf"));
+    REQUIRE(takeName(names, "skelly"));
+    REQUIRE(names == "perf_reset, fp_skelly, ");
+    REQUIRE(takeName(names, "fp_skelly"));
+    REQUIRE(takeName(names, "perf_reset"));
+}
+
+TEST_CASE("ConfigIniValueParsers: the names of a list can have any separator")
+{
+    for (const std::string separator : { ",", ", ", " ", ";", "|", " + " }) {
+        CAPTURE(separator);
+        std::string names = "skelly" + separator + "world" + separator + "perf";
+
+        REQUIRE(takeName(names, "world"));
+        REQUIRE(names == "skelly" + separator + separator + "perf");
+        REQUIRE(takeName(names, "perf"));
+        REQUIRE(takeName(names, "skelly"));
+    }
+}
+
+TEST_CASE("ConfigIniValueParsers: a name that the list does not have leaves the list as it was")
+{
+    std::string names = "skelly, world";
+    REQUIRE_FALSE(takeName(names, "geometry"));
+    // the letter case is part of a name
+    REQUIRE_FALSE(takeName(names, "Skelly"));
+    REQUIRE_FALSE(takeName(names, ""));
+    REQUIRE(names == "skelly, world");
+
+    std::string none;
+    REQUIRE_FALSE(takeName(none, "skelly"));
 }

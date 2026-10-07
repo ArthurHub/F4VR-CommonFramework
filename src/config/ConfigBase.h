@@ -2,7 +2,6 @@
 
 #include <SimpleIni.h>
 #include <array>
-#include <atomic>
 #include <map>
 #include <mutex>
 #include <thomasmonkman-filewatch/FileWatch.hpp>
@@ -16,6 +15,7 @@
 #include "IniValue.h"
 #include "OffsetsFiles.h"
 #include "Overrides.h"
+#include "ReloadSubscribers.h"
 
 namespace f4cf
 {
@@ -102,6 +102,7 @@ namespace f4cf
         void applyIniConfig(const CSimpleIniA& ini);
 
         bool loadIniFromFile(CSimpleIniA& ini) const;
+        bool loadKeptIni(CSimpleIniA& ini) const;
         void saveIniToFile(const CSimpleIniA& ini);
         void saveIniConfig();
 
@@ -137,6 +138,8 @@ namespace f4cf
         // the log message pattern to use for the logger
         std::string _logPattern;
 
+        void loadEmbeddedIni(CSimpleIniA& ini) const;
+
         void waitForIniFileWriteToEnd() const;
 
         // filesystem watch for changes to INI config file to have live reload
@@ -146,12 +149,9 @@ namespace f4cf
         // from the mod's own save, and from one more event of a write that is already loaded.
         config::IniFile _iniFile;
 
-        // Callbacks to notify when the config values were loaded again. Used on the game thread only.
-        std::unordered_map<std::string, std::function<void(const std::string&)>> _onIniConfigChangedSubscribers;
-
-        // Set by every load of the values, on the thread it runs on, and taken by notifySubscribersOfReload() on
-        // the game thread
-        std::atomic<bool> _valuesReloaded = false;
+        // The callbacks to call when the config values were loaded again. Every load marks in it that it ran, on
+        // the thread it runs on, and notifySubscribersOfReload() calls them on the game thread.
+        config::ReloadSubscribers _subscribers;
 
         // Session-only value overrides, each with the owner that set it, re-applied on every load and never
         // persisted to disk

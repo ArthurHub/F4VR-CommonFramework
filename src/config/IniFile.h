@@ -42,6 +42,8 @@ namespace f4cf::config
 
         LoadResult load(const std::string& path, CSimpleIniA& ini, Source source = Source::File);
 
+        bool read(const std::string& path, CSimpleIniA& ini) const;
+
         bool save(const std::string& path, const CSimpleIniA& ini);
 
     private:
@@ -49,6 +51,6 @@ namespace f4cf::config
         // and from a save over a file that someone else changed until the next load: the file is then loaded
         // whatever it holds.
         std::optional<std::string> _content;
-        std::mutex _mutex;
+        mutable std::mutex _mutex;
     };
 }

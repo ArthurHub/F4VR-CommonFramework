@@ -425,3 +425,83 @@ TEST_CASE("ConfigIniFile: a save to a folder that is not there fails, and the ne
     REQUIRE(onFileEvent(iniFile, file, ini) == LoadResult::Loaded);
     REQUIRE(value(ini, "fScale") == "2");
 }
+
+TEST_CASE("ConfigIniFile: a read gives the INI as the mod has it, with no read of the file")
+{
+    const TempFile file(SHIPPED);
+    IniFile iniFile;
+    CSimpleIniA startup;
+    REQUIRE(iniFile.load(file.path, startup) == LoadResult::Loaded);
+
+    SECTION("a write by someone else is not in it, and is still for the file watcher to load")
+    {
+        writeBySomeoneElse(file, "fScale", "2");
+
+        CSimpleIniA read;
+        REQUIRE(iniFile.read(file.path, read));
+        REQUIRE(value(read, "fScale") == "1");
+
+        CSimpleIniA eventLoad;
+        REQUIRE(onFileEvent(iniFile, file, eventLoad) == LoadResult::Loaded);
+        REQUIRE(value(eventLoad, "fScale") == "2");
+
+        CSimpleIniA nextRead;
+        REQUIRE(iniFile.read(file.path, nextRead));
+        REQUIRE(value(nextRead, "fScale") == "2");
+    }
+    SECTION("the file can be gone")
+    {
+        std::filesystem::remove(file.path);
+
+        CSimpleIniA read;
+        REQUIRE(iniFile.read(file.path, read));
+        REQUIRE(value(read, "fScale") == "1");
+        REQUIRE(value(read, "iMode") == "0");
+    }
+    SECTION("the mod's own save is in it")
+    {
+        saveByMod(iniFile, file, "iMode", "3");
+
+        CSimpleIniA read;
+        REQUIRE(iniFile.read(file.path, read));
+        REQUIRE(value(read, "iMode") == "3");
+        REQUIRE(value(read, "fScale") == "1");
+    }
+}
+
+TEST_CASE("ConfigIniFile: a read with nothing kept reads the file, and keeps nothing")
+{
+    const TempFile file(SHIPPED);
+    IniFile iniFile;
+    CSimpleIniA ini;
+
+    SECTION("before the first load")
+    {
+        CSimpleIniA read;
+        REQUIRE(iniFile.read(file.path, read));
+        REQUIRE(value(read, "fScale") == "1");
+    }
+    SECTION("after the mod saved over a write by someone else")
+    {
+        REQUIRE(iniFile.load(file.path, ini) == LoadResult::Loaded);
+        writeBySomeoneElse(file, "fScale", "2");
+        saveByMod(iniFile, file, "iMode", "1");
+
+        CSimpleIniA read;
+        REQUIRE(iniFile.read(file.path, read));
+        REQUIRE(value(read, "fScale") == "2");
+        REQUIRE(value(read, "iMode") == "1");
+    }
+
+    // the read loaded no values, so the file is still for the file watcher to load
+    REQUIRE(onFileEvent(iniFile, file, ini) == LoadResult::Loaded);
+}
+
+TEST_CASE("ConfigIniFile: a read of a missing file with nothing kept fails")
+{
+    const TempFile file;
+    IniFile iniFile;
+    CSimpleIniA ini;
+
+    REQUIRE_FALSE(iniFile.read(file.path, ini));
+}

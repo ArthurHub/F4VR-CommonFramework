@@ -15,6 +15,7 @@ add_executable(${PROJECT_NAME}_tests
   ConfigIniValueTests.cpp
   ConfigOffsetsJsonTests.cpp
   ConfigOverridesTests.cpp
+  ConfigReloadSubscribersTests.cpp
   FrameContextTests.cpp
   HistogramTests.cpp
   ImGuiPointerLogicTests.cpp
@@ -27,6 +28,7 @@ add_executable(${PROJECT_NAME}_tests
   ${SOURCE_DIR}/config/IniValue.cpp
   ${SOURCE_DIR}/config/IniValueParsers.cpp
   ${SOURCE_DIR}/config/Overrides.cpp
+  ${SOURCE_DIR}/config/ReloadSubscribers.cpp
   ${SOURCE_DIR}/perf/FrameContext.cpp
   ${SOURCE_DIR}/perf/Perf.cpp
   ${SOURCE_DIR}/perf/Report.cpp
