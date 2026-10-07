@@ -47,7 +47,7 @@ namespace f4cf
         CSimpleIniA ini;
         const SI_Error rc = ini.LoadData(common::getEmbededResourceAsString(_module, _iniDefaultConfigEmbeddedResourceId));
         if (rc < 0) {
-            logger::warn("Failed to load INI config file! Error:", rc);
+            logger::warn("Failed to load INI config file! Error: {}", rc);
             throw std::runtime_error("Failed to load INI config file! Error: " + std::to_string(rc));
         }
 
@@ -57,13 +57,9 @@ namespace f4cf
     }
 
     /**
-     * Subscribe to be told when the config values were loaded again: after a change of the INI on disk, a
-     * session override set or cleared, or reload().
-     * The callback runs on the game thread, at the start of the next frame and before the mod's
-     * onFrameUpdate(), once for all the loads since the frame before. So it can call into the engine, and a
-     * value that is set many times a second while it is previewed is one call a frame.
-     * Key used to identify the subscription, for unsubscribe, and prevent duplicates.
-     * Call it on the game thread, as unsubscribeFromIniChangedEvent.
+     * Subscribe to be told when the config values were loaded again: a change of the INI on disk, a session
+     * override, or reload(). The callback runs on the game thread at the start of the next frame, once for all
+     * the loads since the frame before. Call it on the game thread. A key that is already subscribed throws.
      */
     void ConfigBase::subscribeForIniChangedEvent(const std::string& key, const std::function<void(const std::string&)>& callback)
     {
@@ -83,10 +79,8 @@ namespace f4cf
 
     /**
      * Call the subscribers if the config values were loaded again since the last call.
-     * ModBase calls it at the start of every frame, on the game thread, so a mod has nothing to call. A mod
-     * with a frame update of its own calls it there.
-     * A load runs on the file watcher's thread, or on the thread of whoever sets an override, and at any
-     * point of a frame. It only marks that it ran, and the subscribers are called from here.
+     * A load runs on another thread at any point of a frame, and only marks that it ran. ModBase calls this at
+     * the start of every frame on the game thread, and a mod with a frame update of its own calls it there.
      */
     void ConfigBase::notifySubscribersOfReload()
     {
@@ -103,10 +97,9 @@ namespace f4cf
     }
 
     /**
-     * Check if debug data dump is requested for the given name.
-     * If matched, the name will be removed from the list to prevent multiple dumps.
-     * Also saved into INI to prevent reloading the same dump name on next config reload.
-     * Support specifying multiple names by any separator as only the matched sub-string is removed.
+     * Check if a debug data dump is requested for the given name in sDumpDataOnceNames.
+     * A matched name is removed from the list, in memory and in the INI, so the dump runs once and a reload does
+     * not request it again. Only the matched text is removed, so the names can have any separator.
      */
     bool ConfigBase::checkDebugDumpDataOnceFor(const char* name)
     {
@@ -172,7 +165,7 @@ namespace f4cf
         CSimpleIniA ini;
         const SI_Error rc = ini.LoadData(embeddedIniStr);
         if (rc < 0) {
-            logger::warn("Failed to load INI config file! Error:", rc);
+            logger::warn("Failed to load INI config file! Error: {}", rc);
             throw std::runtime_error("Failed to load INI config file! Error: " + std::to_string(rc));
         }
 
@@ -191,14 +184,11 @@ namespace f4cf
     }
 
     /**
-     * Load all the config values from INI config file, override all existing values in the instance.
-     * This code should be safe to run multiple times as changes are loaded from disk.
-     * It runs on the file-watch thread for a change on disk and on the caller's thread for an override, so
-     * the whole load is under one lock, the read of the file included: the load that read the file last is
-     * then the one applied last.
-     * `source` is what is loaded, see config::IniFile::Source. From `ChangedFile`, which is how the file watch
-     * loads, a file that holds what the mod last loaded or saved is not loaded, and false is returned. From
-     * `Kept`, which is how a set override loads, the file is not read.
+     * Load all the config values from `source`, see config::IniFile::Source, with the session overrides on top.
+     * It runs on the file-watch thread for a change on disk and on the caller's thread for an override, so the
+     * whole load is under one lock, the read of the file included: the load that read last is applied last.
+     * Returns false from `ChangedFile` when the file holds what the mod last loaded or saved, and loads nothing.
+     * Throws when the INI cannot be read.
      */
     bool ConfigBase::loadIniConfigValues(const config::IniFile::Source source)
     {
@@ -242,9 +232,8 @@ namespace f4cf
     }
 
     /**
-     * Re-apply the on-disk INI to all config members with one key overridden in-memory only. The
-     * file is not modified, so this can run every frame to live-preview a single field without disk
-     * I/O. Used by the DebugAdjuster field mode.
+     * Re-apply the INI on disk to all config members with one key overridden in memory only, for the
+     * DebugAdjuster field mode to preview a field. The file is read on every call, and never written.
      */
     void ConfigBase::applyIniConfigWithOverride(const char* section, const char* key, const char* value)
     {
@@ -261,11 +250,9 @@ namespace f4cf
     }
 
     /**
-     * Get the current effective value for an arbitrary section/key as a string: an active session
-     * override if one is set (see setConfigOverride), otherwise the on-disk INI value, otherwise
-     * defaultValue. Returns the raw string form; the caller parses it to the type it expects.
-     * Note: when the key is absent from the file the caller's defaultValue is returned, which may
-     * differ from the mod's own hard-coded default used when loading the typed member.
+     * Get the effective value of a section/key as a string: the session override if one is set, otherwise the
+     * value in the INI on disk, otherwise defaultValue. The caller parses it to the type it expects.
+     * For a key the file does not have, defaultValue can differ from the default the mod loads its member with.
      */
     std::string ConfigBase::getConfigValue(const char* section, const char* key, const char* defaultValue) const
     {
@@ -281,16 +268,11 @@ namespace f4cf
     }
 
     /**
-     * Set an in-memory override for an arbitrary section/key for the rest of this session. The
-     * override is re-applied on every config (re)load, so it survives file-watch reloads and any
-     * other reload, and is never written to disk. Accepts any IniValue type (bool/int/float/string);
-     * a string value is parsed by the type-appropriate getter when the member is loaded, so a string
-     * can override any value. Immediately reloads the config so the typed members reflect it.
-     * `owner` is the name of who sets it. An owner sets and clears only its own overrides, so several
-     * callers override one config and none removes another's: the devbench tool, the mod itself, and
-     * another mod through the mod's API, which passes its caller's name. When two owners override the same
-     * key, the one that was set last applies, and when that one is cleared the other applies again. The
-     * overrides are held by config::Overrides.
+     * Override the value of a section/key in memory for the rest of the session, and reload the config so the
+     * members have it. It is applied again on every load and never written to disk. A string value can override
+     * a value of any type: the member's getter parses it.
+     * `owner` is the name of who sets it. An owner sets and clears only its own overrides, and when two override
+     * the same key the one set last applies, see config::Overrides.
      */
     void ConfigBase::setConfigOverride(const std::string& owner, const char* section, const char* key, const config::IniValue& value)
     {
@@ -299,10 +281,8 @@ namespace f4cf
 
     /**
      * Set several session overrides of one owner with one reload of the config, see setConfigOverride.
-     * The reload parses the file as the mod last loaded or saved it and reads no disk, so a value can be set
-     * many times a second while it is previewed. For the same reason only a key that the owner did not
-     * override before is logged at the info level and is a devbench event. A new value for a key it already
-     * overrides is logged at the debug level.
+     * The reload reads no disk, so a value can be set many times a second while it is previewed. For that reason
+     * only a key the owner did not override before is logged at the info level and is a devbench event.
      */
     void ConfigBase::setConfigOverrides(const std::string& owner, const std::vector<config::IniOverride>& overrides)
     {
@@ -341,12 +321,9 @@ namespace f4cf
     }
 
     /**
-     * Remove several session overrides of one owner with one reload of the config, see clearConfigOverride.
-     * A key the owner does not override is skipped. Returns how many were removed, and nothing is reloaded
-     * when none was.
-     * The reload reads the file, where the one of a set does not. A clear is not done many times a second,
-     * and the file can be newer than what the mod has: when the previewed values were saved to it right
-     * before the clear, they apply at once.
+     * Remove several session overrides of one owner with one reload, and return how many were removed. A key the
+     * owner does not override is skipped, and nothing is reloaded when none was removed.
+     * The reload reads the file, so values that were saved to it right before the clear apply at once.
      */
     std::size_t ConfigBase::clearConfigOverrides(const std::string& owner, const std::vector<config::IniKey>& keys)
     {
@@ -426,7 +403,7 @@ namespace f4cf
     {
         const auto rc = ini.LoadFile(_iniFilePath.c_str());
         if (rc < 0) {
-            logger::warn("Failed to open INI config for saving with code: {}", rc);
+            logger::warn("Failed to load INI config file '{}' with code: {}", _iniFilePath, rc);
             return false;
         }
         return true;
@@ -526,11 +503,9 @@ namespace f4cf
     }
 
     /**
-     * Current .ini file is older. Need to update it by:
-     * 1. Overriding the file with the default .ini resource.
-     * 2. Saving the current config values read from previous .ini to the new .ini file.
-     * This preserves the user changed values, including new values and comments, and remove old values completely.
-     * A backup of the previous file is created with the version number for safety.
+     * Update an INI file of an older version: write the default INI of the new version with the user's values for
+     * the keys it still has, see config::migrateIniValues. So new keys and comments come in, and old keys go.
+     * The previous file is kept beside it as a backup, with its version in the name.
      */
     void ConfigBase::updateIniConfigToLatestVersion(const int currentVersion, const int latestVersion) const
     {
@@ -588,10 +563,9 @@ namespace f4cf
     }
 
     /**
-     * Setup filesystem watch on INI config file to reload config when changes are detected.
-     * There can be 3-5 events fired for 1 change, sometimes the last a full second after it, and the mod's
-     * own save fires them too. Every event reads the file, and it is loaded only when it holds something else
-     * than the mod last loaded or saved, see config::IniFile.
+     * Watch the INI file and reload the config when it changes.
+     * One change fires 3-5 events, and the mod's own save fires them too. Every event reads the file, and it is
+     * loaded only when it holds something else than the mod last loaded or saved, see config::IniFile.
      */
     void ConfigBase::startIniConfigFileWatch()
     {

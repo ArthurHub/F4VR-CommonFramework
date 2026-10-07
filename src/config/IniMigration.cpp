@@ -6,11 +6,9 @@
 namespace f4cf::config
 {
     /**
-     * Set the values of the user's INI in the INI of a newer version, which holds that version's defaults.
-     * A value is set only for a key that the new INI has, so the new INI keeps its own keys, comments and order,
-     * and a key that the newer version no longer has is dropped.
-     * Every key is a value to carry, the one of the INI's version too: the caller sets the new version after.
-     * Returns every value of the user's INI with what was done with it.
+     * Set the values of a user's INI in the INI of a newer version, and return each with what was done with it.
+     * A value is set only for a key the new INI has, so it keeps its own keys, comments and order, and a key it
+     * no longer has is dropped. The INI's version is carried as any value: the caller sets the new one after.
      */
     std::vector<MigratedValue> migrateIniValues(const CSimpleIniA& oldIni, CSimpleIniA& newIni)
     {

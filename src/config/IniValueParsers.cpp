@@ -64,11 +64,9 @@ namespace f4cf::config
     }
 
     /**
-     * Parse a 22-float hand pose.
-     * Format is strict: 5 ';'-separated groups of 4 ','-separated floats (thumb, index, middle,
-     * ring, pinky — each prox,mid,dist,splay), followed by 2 trailing ','-separated floats
-     * (palmPitch, palmYaw). Whitespace around separators is allowed.
-     * Returns no value when the structure doesn't match.
+     * Parse a 22-float hand pose: 5 ';'-separated groups of 4 ','-separated floats (thumb, index, middle, ring,
+     * pinky, each prox,mid,dist,splay), then the 2 of the palm (palmPitch,palmYaw). Spaces around a separator
+     * are allowed. Returns no value when the structure doesn't match.
      */
     std::optional<std::array<float, 22>> parseHandPose(const char* text)
     {

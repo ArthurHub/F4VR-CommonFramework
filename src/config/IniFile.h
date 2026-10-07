@@ -11,10 +11,8 @@ namespace f4cf::config
 {
     /**
      * The mod's INI file on disk. Every load of the mod's values and every save goes through here, and the
-     * content of the last one is kept.
-     * By that content a change of the file by someone else is told from the mod's own save: after the mod's
-     * save the file holds what the mod wrote, and after someone else's write it does not. A save leaves
-     * nothing set that a later change could be taken by.
+     * content of the last one is kept. By it the file watcher tells a change by someone else from the mod's own
+     * save: after the mod's save the file holds the kept content, and after someone else's write it does not.
      */
     class IniFile
     {

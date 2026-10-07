@@ -46,12 +46,10 @@ namespace f4cf::config
 {
     /**
      * Read the file into `ini`, and keep its content as the one the mod has.
-     * From `Source::ChangedFile`, a file that holds what the mod last loaded or saved is left alone. That is
-     * how the file watcher loads: the event is then of the mod's own save, or one more event of a write that
-     * is already loaded.
-     * From `Source::Kept`, the kept content is parsed and the file is not read, so a session override that
-     * changes many times a second while it is previewed reads no disk. A change of the file that is not
-     * loaded yet is then not in `ini`: the file watcher loads it. With nothing kept, the file is read.
+     * From `Source::ChangedFile` a file that holds the kept content is left alone: the file watcher's event is
+     * then of the mod's own save, or one more event of a write that is already loaded.
+     * From `Source::Kept` the kept content is parsed and the file is not read, so an override that is previewed
+     * reads no disk. With nothing kept, the file is read.
      */
     IniFile::LoadResult IniFile::load(const std::string& path, CSimpleIniA& ini, const Source source)
     {
@@ -77,12 +75,10 @@ namespace f4cf::config
     }
 
     /**
-     * Write `ini` as the file, the same bytes SimpleIni's SaveFile writes.
-     * What is written becomes the content the mod has, so the file watcher loads nothing for this save. That
-     * is only when the file still held that content before the save. A file that someone else changed since
-     * the mod loaded it has values the mod does not have, also after this save. The kept content is then
-     * forgotten, so the file watcher loads the file whatever it holds by then.
-     * Returns false when the file could not be written.
+     * Write `ini` as the file, the same bytes SimpleIni's SaveFile writes. Returns false when it could not.
+     * What is written becomes the kept content, so the file watcher loads nothing for this save. When someone
+     * else changed the file since the mod loaded it, the kept content is forgotten instead: the file has values
+     * the mod does not have, and the file watcher then loads it whatever it holds.
      */
     bool IniFile::save(const std::string& path, const CSimpleIniA& ini)
     {
