@@ -1,0 +1,7 @@
+// The resources of this executable, embedded as a mod's are in its DLL
+
+// the default INI of the config in ConfigBaseTests.cpp
+101 RCDATA "ConfigBaseTests.ini"
+
+// the offsets that OffsetsFilesTests.cpp loads
+102 RCDATA "OffsetsFilesTests.json"

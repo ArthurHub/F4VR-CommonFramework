@@ -27,7 +27,11 @@ This creates a VS solution in `build/`. Open and build there. All project config
 - `F4CF_BUILD_TESTS` — build the unit tests in `tests/` (default: ON when the framework is the top-level project, OFF under a mod's `add_subdirectory`). A mod turns it on to build and run them with its own; it then needs `catch2` in its own `vcpkg.json`.
 - `COMMON_LIB_F4VR_PATH` — override path to CommonLibF4VR (default: `external/CommonLibF4VR`)
 
-**Tests:** `ctest --test-dir build -C Release` after a build. Catch2 unit tests in `tests/` for the game-independent logic (today `f4cf::perf`, the config's INI file, its values and its overrides, the vrui dev layout file and the imgui pointer logic). The test binary compiles the plain-std `.cpp` files it covers directly, without the PCH, so only code free of F4SE and CommonLibF4 can be tested; keep pure logic in such files so it can be. Add a new test file and any source it covers to `tests/CMakeLists.txt`.
+**Tests:** `ctest --test-dir build -C Release` after a build. Catch2 unit tests in `tests/` for the game-independent logic, in two executables:
+- `tests/*.cpp` test code that is plain std (today `f4cf::perf`, the config's INI file, its values and its overrides, the vrui dev layout file and the imgui pointer logic). The test binary compiles the `.cpp` files it covers directly, without the PCH, F4SE or CommonLibF4. Keep pure logic in such files: it is the first choice, since the logic is then tested apart from everything else.
+- `tests/linked/*.cpp` test code that needs the framework and CommonLibF4 to compile and link, and not the game to run (today `ConfigBase`, the INI readers, the `[Debug]` section and the offsets files, `MatrixUtils`, `Quaternion` and `CommonUtils`, the input binding parser and the binding prompts, the haptic patterns, the sphere styles, and the vrui container layout and toggle groups). The test binary links the framework as a mod does, and `tests/linked/Setup.cpp` sets CommonLibF4's `REL::NO_GAME`, so every game address resolves into a range that cannot be used. The addresses the framework resolves at startup (`F4VROffsets.h`) are then harmless, and a test that calls the game fails with an access violation. What reads the game or OpenVR is out of their reach: a node, the left-handed setting (so a prompt for the primary or the off hand), a controller's state.
+
+Add a new test file to `tests/CMakeLists.txt`, with the sources it covers for the first kind.
 
 ## Code Style
 
