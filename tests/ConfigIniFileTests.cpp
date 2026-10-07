@@ -8,7 +8,7 @@
 #include <sstream>
 #include <string>
 
-#include "ConfigIniFile.h"
+#include "config/IniFile.h"
 
 using f4cf::config::IniFile;
 using LoadResult = f4cf::config::IniFile::LoadResult;

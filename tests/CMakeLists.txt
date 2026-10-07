@@ -10,7 +10,10 @@ endif()
 
 add_executable(${PROJECT_NAME}_tests
   ConfigIniFileTests.cpp
+  ConfigIniMigrationTests.cpp
+  ConfigIniValueParsersTests.cpp
   ConfigIniValueTests.cpp
+  ConfigOffsetsJsonTests.cpp
   ConfigOverridesTests.cpp
   FrameContextTests.cpp
   HistogramTests.cpp
@@ -19,9 +22,11 @@ add_executable(${PROJECT_NAME}_tests
   PerfSiteTests.cpp
   UIDevLayoutFileTests.cpp
   # the plain-std sources under test
-  ${SOURCE_DIR}/ConfigIniFile.cpp
-  ${SOURCE_DIR}/ConfigIniValue.cpp
-  ${SOURCE_DIR}/ConfigOverrides.cpp
+  ${SOURCE_DIR}/config/IniFile.cpp
+  ${SOURCE_DIR}/config/IniMigration.cpp
+  ${SOURCE_DIR}/config/IniValue.cpp
+  ${SOURCE_DIR}/config/IniValueParsers.cpp
+  ${SOURCE_DIR}/config/Overrides.cpp
   ${SOURCE_DIR}/perf/FrameContext.cpp
   ${SOURCE_DIR}/perf/Perf.cpp
   ${SOURCE_DIR}/perf/Report.cpp
@@ -40,7 +45,10 @@ target_include_directories(${PROJECT_NAME}_tests PRIVATE ${SOURCE_DIR})
 find_path(SIMPLEINI_INCLUDE_DIR "SimpleIni.h" REQUIRED)
 target_include_directories(${PROJECT_NAME}_tests SYSTEM PRIVATE ${SIMPLEINI_INCLUDE_DIR})
 target_compile_options(${PROJECT_NAME}_tests PRIVATE /utf-8 /permissive- /W4 /external:anglebrackets /external:W0)
-target_link_libraries(${PROJECT_NAME}_tests PRIVATE Catch2::Catch2WithMain)
+
+# for config/OffsetsJson.h
+find_package(nlohmann_json CONFIG REQUIRED)
+target_link_libraries(${PROJECT_NAME}_tests PRIVATE Catch2::Catch2WithMain nlohmann_json::nlohmann_json)
 
 include(Catch)
 catch_discover_tests(${PROJECT_NAME}_tests)

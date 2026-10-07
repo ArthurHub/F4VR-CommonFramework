@@ -1,8 +1,8 @@
 #pragma once
 
-#include "ConfigBase.h"
 #include "Resources.h"
 #include "common/CommonUtils.h"
+#include "config/ConfigBase.h"
 
 namespace my_mod
 {

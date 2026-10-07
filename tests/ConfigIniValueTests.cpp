@@ -4,7 +4,7 @@
 #include <limits>
 #include <string>
 
-#include "ConfigIniValue.h"
+#include "config/IniValue.h"
 
 using f4cf::config::IniValue;
 

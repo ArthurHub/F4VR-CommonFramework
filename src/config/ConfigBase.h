@@ -10,24 +10,10 @@
 #include <vector>
 
 #include "Common/CommonUtils.h"
-#include "ConfigIniFile.h"
-#include "ConfigIniValue.h"
-#include "ConfigOverrides.h"
-
-namespace f4cf::vrcf
-{
-    struct InputBinding;
-}
-
-namespace f4cf::f4vr
-{
-    struct WandActivationConfig;
-}
-
-namespace f4cf::render
-{
-    struct Color;
-}
+#include "IniFile.h"
+#include "IniReaders.h"
+#include "IniValue.h"
+#include "Overrides.h"
 
 namespace f4cf
 {
@@ -52,7 +38,7 @@ namespace f4cf
         Field,
     };
 
-    class ConfigBase
+    class ConfigBase : protected config::IniReaders
     {
     public:
         ConfigBase(const std::string_view& module, const std::string_view& iniFilePath, const WORD iniDefaultConfigEmbeddedResourceId)
@@ -188,13 +174,6 @@ namespace f4cf
         bool loadIniFromFile(CSimpleIniA& ini) const;
         void saveIniToFile(const CSimpleIniA& ini);
         void saveIniConfig();
-
-        // special config structs loading
-        static RE::NiTransform getTransformValue(const CSimpleIniA& ini, const char* section, const char* key, const RE::NiTransform& defaultValue);
-        static std::array<float, 22> getHandPoseValue(const CSimpleIniA& ini, const char* section, const char* key, const std::array<float, 22>& defaultValue);
-        static vrcf::InputBinding getInputBindingValue(const CSimpleIniA& ini, const char* section, const char* key, const vrcf::InputBinding& defaultValue);
-        static render::Color getColorValue(const CSimpleIniA& ini, const char* section, const char* key, const render::Color& defaultValue);
-        static f4vr::WandActivationConfig loadWandActivationConfig(const CSimpleIniA& ini, const char* section, const f4vr::WandActivationConfig& defaults);
 
         void updateIniConfigToLatestVersion(int currentVersion, int latestVersion) const;
         static std::unordered_map<std::string, RE::NiTransform> loadEmbeddedOffsets(WORD fromResourceId, WORD toResourceId);

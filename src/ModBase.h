@@ -1,7 +1,7 @@
 #pragma once
 
-#include "ConfigBase.h"
 #include "DebugAdjuster.h"
+#include "config/ConfigBase.h"
 
 namespace f4cf
 {

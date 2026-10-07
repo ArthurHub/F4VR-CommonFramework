@@ -1,4 +1,4 @@
-#include "ConfigIniFile.h"
+#include "IniFile.h"
 
 #include <cstdio>
 

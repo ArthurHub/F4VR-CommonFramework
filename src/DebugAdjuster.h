@@ -1,6 +1,6 @@
 #pragma once
 
-#include "ConfigBase.h"
+#include "config/ConfigBase.h"
 
 namespace f4cf
 {

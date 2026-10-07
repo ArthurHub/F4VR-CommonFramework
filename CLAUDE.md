@@ -45,6 +45,7 @@ After cloning, run `pre-commit install` once to enforce clang-format on every co
 
 ### Namespaces
 - `f4cf::` — framework root (ModBase, Logger, ConfigBase)
+- `f4cf::config` — the parts `ConfigBase` is made of (`src/config/`): the INI file as the mod last loaded or saved it, typed values, session overrides, version migration, the special values' text forms and their readers, the offsets JSON
 - `f4cf::debug` — immediate-mode in-world debug draw overlay (one layer on the shared overlay renderer)
 - `f4cf::f4vr` — Fallout 4 VR game utilities (node/skeleton manipulation, animations, debug dumps)
 - `F4SEVR` (in `src/f4sevr/`) — ported F4SE VR SDK: Papyrus VM interop + native-function registration (note: this folder is `namespace F4SEVR`, not `f4cf::f4sevr`)
@@ -65,17 +66,17 @@ After cloning, run `pre-commit install` once to enforce clang-format on every co
 
 A global singleton `f4cf::g_mod` holds the active mod instance.
 
-### Config System (`src/ConfigBase.h`)
+### Config System (`src/config/`)
 `ConfigBase` wraps simpleini with file watching for hot-reload. Derive from it, override `loadIniConfigInternal()`, and call `setupConfig(path)`.
 
 - **INI base path:** `%USERPROFILE%\Documents\My Games\Fallout4VR\Mods_Config\{ModName}\`
 - **Default INI** is embedded in the DLL as RCDATA resource ID 101 and extracted on first run
-- **Config version migration:** the `[Debug] iVersion` key; when the shipped INI's value is higher than the user's, `ConfigBase` rewrites the user's INI into the shipped layout
+- **Config version migration:** the `[Debug] iVersion` key; when the shipped INI's value is higher than the user's, `ConfigBase` rewrites the user's INI into the shipped layout, with the user's values for the keys it still has (`config::migrateIniValues` in `src/config/IniMigration.h`, plain std and SimpleIni, and unit tested)
 - File watcher triggers `loadIniConfigInternal()` automatically on disk change — no restart needed
 - A load runs on the watcher's thread for a change on disk and on the caller's for a session override (`setConfigOverride`), one at a time: `_loadMutex` is held from the read of the file to the end of `loadIniConfigInternal()`
-- The mod's own save is not loaded back: the watcher loads the file only when its content is not what the mod last loaded or saved (`config::IniFile` in `src/ConfigIniFile.h`, plain std and unit tested). A save has to go through `ConfigBase` (`saveIniConfigValue(s)`, `saveIniToFile`) to be taken as the mod's own
+- The mod's own save is not loaded back: the watcher loads the file only when its content is not what the mod last loaded or saved (`config::IniFile` in `src/config/IniFile.h`, plain std and unit tested). A save has to go through `ConfigBase` (`saveIniConfigValue(s)`, `saveIniToFile`) to be taken as the mod's own
 - Session overrides (`setConfigOverride(s)`, `clearConfigOverride(s)`, several with one reload): a set loads that kept content of the file and reads no disk, so it can be done many times a second for a preview, and a clear reads the file. Only a key that its owner did not override before is logged at info and is a `config.override` event
-- Every override has an owner, the first argument of each call, and an owner clears only its own (`config::Overrides` in `src/ConfigOverrides.h`, which holds them under its own lock and puts them into a loaded INI; plain std and SimpleIni, and unit tested). The devbench tool's is `devbench`, and a mod's API passes its caller's name. With two owners on one key the one set last applies, and the other again when it is cleared
+- Every override has an owner, the first argument of each call, and an owner clears only its own (`config::Overrides` in `src/config/Overrides.h`, which holds them under its own lock and puts them into a loaded INI; plain std and SimpleIni, and unit tested). The devbench tool's is `devbench`, and a mod's API passes its caller's name. With two owners on one key the one set last applies, and the other again when it is cleared
 - To react to a load, a mod subscribes (`subscribeForIniChangedEvent`). A load only marks that it ran, and `ModBase` calls the subscribers on the game thread at the start of the next frame, once for all the loads since the frame before: a change on disk, an override, `reload()`, and the load when a game session starts
 
 Standard `[Debug]` INI keys provided by the base class:
@@ -374,8 +375,9 @@ F4VR/
 | `src/PCH.h` | Precompiled header — included implicitly in all TUs |
 | `src/ModBase.h/.cpp` | Plugin base class and F4SE registration |
 | `src/Logger.h` | Logging macros |
-| `src/ConfigBase.h/.cpp` | INI config with hot-reload |
-| `src/ConfigIniFile.*`, `ConfigIniValue.*`, `ConfigOverrides.*` | The parts of the config that are apart from the game, so unit tested: the INI file as the mod last loaded or saved it, a typed INI value, and the session overrides with their owners |
+| `src/config/ConfigBase.h/.cpp` | INI config with hot-reload |
+| `src/config/IniFile.*`, `IniValue.*`, `Overrides.*`, `IniMigration.*`, `IniValueParsers.*`, `OffsetsJson.h` | The parts of the config that are apart from the game, so unit tested: the INI file as the mod last loaded or saved it, a typed INI value, the session overrides with their owners, the move of a user's values into the INI of a newer version, the text forms of a transform, a hand pose and a color, and the offsets JSON |
+| `src/config/IniReaders.*` | The readers of a transform, a hand pose, a binding, a color and an activation sphere's section from a loaded INI (`getTransformValue`, `loadWandActivationConfig`, ...). `ConfigBase` derives from it, so a mod's config calls them by name |
 | `src/f4vr/` | Game node/skeleton/animation utilities |
 | `src/f4sevr/` | Papyrus native function registration helpers |
 | `src/vrcf/VRControllersManager.h` | Controller button/trigger state |
