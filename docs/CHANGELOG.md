@@ -95,6 +95,11 @@ major version is `0`, a minor bump may break the API; the **Upgrading** notes sa
   thread and a session override on its caller's, and the two could run at the same time. A load now
   holds a lock from the read of the file to the last value set, so `loadIniConfigInternal` never
   runs twice at once, and the load that read the file last is the one whose values stay.
+- **config tells its own save by the file's content**: the file watcher loads the INI only when it
+  holds something else than the mod last loaded or saved. Before, the mod's save set a flag for the
+  next event of the file, which could stay set after two saves close together, and the next change
+  by someone else was then not loaded. A second write within 200 ms of another was dropped too, and
+  is now loaded. A write that leaves the file as it was loads nothing.
 - **render gradients**: a fill takes a color for each corner and blends between them
   (`PrimitiveDraw::addTriangle` and `addQuad` with a color per corner), so a gradient or a fade is
   one shape. Every vertex carries its color, so a change of color no longer starts a new draw call:

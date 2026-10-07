@@ -27,7 +27,7 @@ This creates a VS solution in `build/`. Open and build there. All project config
 - `F4CF_BUILD_TESTS` — build the unit tests in `tests/` (default: ON when the framework is the top-level project, OFF under a mod's `add_subdirectory`). A mod turns it on to build and run them with its own; it then needs `catch2` in its own `vcpkg.json`.
 - `COMMON_LIB_F4VR_PATH` — override path to CommonLibF4VR (default: `external/CommonLibF4VR`)
 
-**Tests:** `ctest --test-dir build -C Release` after a build. Catch2 unit tests in `tests/` for the game-independent logic (today `f4cf::perf`, the vrui dev layout file and the imgui pointer logic). The test binary compiles the plain-std `.cpp` files it covers directly, without the PCH, so only code free of F4SE and CommonLibF4 can be tested; keep pure logic in such files so it can be. Add a new test file and any source it covers to `tests/CMakeLists.txt`.
+**Tests:** `ctest --test-dir build -C Release` after a build. Catch2 unit tests in `tests/` for the game-independent logic (today `f4cf::perf`, the config's INI file, the vrui dev layout file and the imgui pointer logic). The test binary compiles the plain-std `.cpp` files it covers directly, without the PCH, so only code free of F4SE and CommonLibF4 can be tested; keep pure logic in such files so it can be. Add a new test file and any source it covers to `tests/CMakeLists.txt`.
 
 ## Code Style
 
@@ -73,6 +73,7 @@ A global singleton `f4cf::g_mod` holds the active mod instance.
 - **Config version migration:** the `[Debug] iVersion` key; when the shipped INI's value is higher than the user's, `ConfigBase` rewrites the user's INI into the shipped layout
 - File watcher triggers `loadIniConfigInternal()` automatically on disk change — no restart needed
 - A load runs on the watcher's thread for a change on disk and on the caller's for a session override (`setConfigOverride`), one at a time: `_loadMutex` is held from the read of the file to the end of `loadIniConfigInternal()`
+- The mod's own save is not loaded back: the watcher loads the file only when its content is not what the mod last loaded or saved (`config::IniFile` in `src/ConfigIniFile.h`, plain std and unit tested). A save has to go through `ConfigBase` (`saveIniConfigValue(s)`, `saveIniToFile`) to be taken as the mod's own
 
 Standard `[Debug]` INI keys provided by the base class:
 ```ini

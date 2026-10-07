@@ -411,20 +411,29 @@ namespace f4cf
      * It runs on the file-watch thread for a change on disk and on the caller's thread for an override, so
      * the whole load is under one lock, the read of the file included: the load that read the file last is
      * then the one applied last.
+     * With `onlyIfFileChanged`, which is how the file watch loads, a file that holds what the mod last loaded
+     * or saved is not loaded, and false is returned.
      */
-    void ConfigBase::loadIniConfigValues()
+    bool ConfigBase::loadIniConfigValues(const bool onlyIfFileChanged)
     {
         std::lock_guard lock(_loadMutex);
 
         CSimpleIniA ini;
-        const SI_Error rc = ini.LoadFile(_iniFilePath.c_str());
-        if (rc < 0) {
-            logger::warn("Failed to load INI config file! Error:", rc);
-            throw std::runtime_error("Failed to load INI config file! Error: " + std::to_string(rc));
+        const auto result = _iniFile.load(_iniFilePath, ini, onlyIfFileChanged);
+        if (result == config::IniFile::LoadResult::Unchanged) {
+            return false;
+        }
+        if (result == config::IniFile::LoadResult::Failed) {
+            logger::warn("Failed to load INI config file '{}'", _iniFilePath);
+            throw std::runtime_error("Failed to load INI config file: " + _iniFilePath);
+        }
+        if (onlyIfFileChanged) {
+            logger::info("INI config change detected, reload...");
         }
 
         applyConfigOverrides(ini);
         applyIniConfig(ini);
+        return true;
     }
 
     /**
@@ -614,16 +623,14 @@ namespace f4cf
 
     /**
      * Save the INI config to the specified ini config file.
+     * The file watch does not load it back: it tells the mod's own save by the content that was written.
      */
     void ConfigBase::saveIniToFile(const CSimpleIniA& ini)
     {
-        _ignoreNextIniFileChange.store(true);
-
-        const auto rc = ini.SaveFile(_iniFilePath.c_str());
-        if (rc < 0) {
-            logger::error("Config: Failed to save .ini. Error: {}", rc);
-        } else {
+        if (_iniFile.save(_iniFilePath, ini)) {
             logger::info("Config: Saving INI config successful");
+        } else {
+            logger::error("Config: Failed to save .ini");
         }
     }
 
@@ -652,13 +659,12 @@ namespace f4cf
     /**
      * Save one or more key/value pairs in a single file load/save cycle. The single-value
      * saveIniConfigValue overloads all route through here, so this is the one place that does
-     * the disk I/O and sets the file-watch ignore flag. Values may be of any type IniValue
-     * supports (bool/int/float/string/NiTransform).
+     * the disk I/O. Values may be of any type IniValue supports (bool/int/float/string/NiTransform).
      */
     void ConfigBase::saveIniConfigValues(const char* section, std::initializer_list<std::pair<const char*, config::IniValue>> values)
     {
         CSimpleIniA ini;
-        SI_Error rc = ini.LoadFile(_iniFilePath.c_str());
+        const SI_Error rc = ini.LoadFile(_iniFilePath.c_str());
         if (rc < 0) {
             logger::warn("Failed to save INI config values with code: {}", rc);
             return;
@@ -666,10 +672,8 @@ namespace f4cf
         for (const auto& [key, value] : values) {
             value.applyTo(ini, section, key);
         }
-        _ignoreNextIniFileChange.store(true);
-        rc = ini.SaveFile(_iniFilePath.c_str());
-        if (rc < 0) {
-            logger::warn("Failed to save INI config values with code: {}", rc);
+        if (!_iniFile.save(_iniFilePath, ini)) {
+            logger::warn("Failed to save INI config values");
         }
     }
 
@@ -1036,9 +1040,9 @@ namespace f4cf
 
     /**
      * Setup filesystem watch on INI config file to reload config when changes are detected.
-     * Handling duplicate modified events from file-watcher:
-     * There can be 3-5 events fired for 1 change. Sometimes the last even can be a full second after a change.
-     * To prevent it we check the file last write time and ignore events that
+     * There can be 3-5 events fired for 1 change, sometimes the last a full second after it, and the mod's
+     * own save fires them too. Every event reads the file, and it is loaded only when it holds something else
+     * than the mod last loaded or saved, see config::IniFile.
      */
     void ConfigBase::startIniConfigFileWatch()
     {
@@ -1053,35 +1057,12 @@ namespace f4cf
                     return;
                 }
 
-                constexpr auto delay = std::chrono::milliseconds(200);
+                waitForIniFileWriteToEnd();
 
-                // ignore duplicate modified events, use atomic to make sure only 1 thread gets through
-                auto prevWriteTime = _lastIniFileWriteTime.load();
-                std::error_code ec;
-                const auto writeTime = fs::last_write_time(_iniFilePath, ec);
-                if (ec || !_lastIniFileWriteTime.compare_exchange_strong(prevWriteTime, writeTime) || writeTime - prevWriteTime < delay) {
-                    logger::debug("Ignore INI config change duplicate (write: {}) (err:{})", writeTime.time_since_epoch().count(), ec.value());
+                if (!loadIniConfigValues(true)) {
+                    logger::debug("Ignore INI config file event, the file is as the mod last loaded or saved it");
                     return;
                 }
-
-                // ignore file modified if we who modified it
-                bool expected = true;
-                if (_ignoreNextIniFileChange.compare_exchange_strong(expected, false)) {
-                    logger::debug("Ignoring INI config change by ignore flag");
-                    return;
-                }
-
-                // wait until delay time is passed since the LAST file write time to prevent file lock issues and rapid modifications
-                auto now = fs::file_time_type::clock::now();
-                auto lastEventTime = _lastIniFileWriteTime.load();
-                while (now - lastEventTime < delay) {
-                    std::this_thread::sleep_for(max(std::chrono::milliseconds(0), delay - (now - lastEventTime)));
-                    now = fs::file_time_type::clock::now();
-                    lastEventTime = _lastIniFileWriteTime.load();
-                }
-
-                logger::info("INI config change detected ({}), reload...", common::toDateTimeString(writeTime));
-                loadIniConfigValues();
 
                 for (const auto& [key, subscriber] : _onIniConfigChangedSubscribers) {
                     logger::info("Notify INI config change subscriber '{}'", key.c_str());
@@ -1094,6 +1075,24 @@ namespace f4cf
                 });
             });
         }).detach();
+    }
+
+    /**
+     * Wait until the INI file was not written for a short time, so it is not read while a program still
+     * writes it. Runs on the file-watch thread.
+     */
+    void ConfigBase::waitForIniFileWriteToEnd() const
+    {
+        constexpr auto delay = std::chrono::milliseconds(200);
+        while (true) {
+            std::error_code ec;
+            const auto sinceWrite = fs::file_time_type::clock::now() - fs::last_write_time(_iniFilePath, ec);
+            // a write time in the future is a clock that was set back, not a write to wait for
+            if (ec || sinceWrite >= delay || sinceWrite < std::chrono::milliseconds(0)) {
+                return;
+            }
+            std::this_thread::sleep_for(delay - sinceWrite);
+        }
     }
 
     /**

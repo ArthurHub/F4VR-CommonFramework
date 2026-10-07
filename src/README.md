@@ -60,6 +60,10 @@ A change on disk is loaded on the file watcher's thread, and a session override
 `loadIniConfigInternal` never runs twice at once. It is not the game thread: only read values in
 it, and apply anything that calls into the engine from `onFrameUpdate()`.
 
+The mod's own save (`saveIniConfigValue`, `save()`) is not loaded back. The file watcher loads the
+file only when it holds something else than the mod last loaded or saved, so a write by someone
+else is loaded whenever it comes, and a write that leaves the file as it was is not.
+
 ### 2. Mod — derive from `ModBase`
 
 ```cpp
