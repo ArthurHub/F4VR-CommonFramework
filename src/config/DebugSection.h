@@ -51,12 +51,9 @@ namespace f4cf::config
         DebugAdjustTarget adjustTarget = DebugAdjustTarget::None;
         // For DebugAdjustTarget::Field: the "Section::Key" of the arbitrary INI field being tuned.
         std::string adjustField;
-        // f4cf::debug::DebugDraw overlay: master switch (hot-reloadable; runtime setEnabled /
-        // the hotkey below override it until changed again), comma-separated channel names to
-        // skip, a controller binding (vrcf::parseInputBinding grammar) to flip the overlay
-        // in-headset, and where the default watch-table HUD sits in the view (center /
-        // center-left / center-right / center-top / center-top-left / center-top-right). All
-        // inert unless the mod actually issues draw calls.
+        // f4cf::debug::DebugDraw overlay: the master switch, comma-separated channel names to skip, a controller
+        // binding (vrcf::parseInputBinding grammar) that flips the overlay in the headset, and where the watch
+        // table sits in the view (center, or center- with left / right / top / top-left / top-right).
         bool drawEnabled = true;
         std::string drawDisabledChannels;
         std::string drawToggleBinding;
@@ -65,12 +62,9 @@ namespace f4cf::config
         // occlusion (auto / direct / off) - see render::sceneDepth::internal::Strategy. A support
         // switch: "direct" keeps the capture but never resamples, "off" drops occlusion entirely.
         std::string sceneDepthStrategy = "auto";
-        // f4cf::render::sceneDepth: investigate the overlay-occlusion capture - add its rows to
-        // the debug-draw watch table, and re-run the side-by-side comparison of the shipped
-        // policies against their alternatives. Off by default: the comparison has already
-        // answered and costs a D3D query per committed graphics state, and the rows belong to
-        // whoever is looking at the capture, not to everyone who opens the overlay. The capture
-        // reports itself to the log either way.
+        // f4cf::render::sceneDepth: add the rows of the overlay-occlusion capture to the debug-draw watch table,
+        // and compare the shipped policies against their alternatives. Off by default: the comparison costs a
+        // D3D query per committed graphics state.
         bool sceneDepthDiagnostics = false;
         // f4cf::vrui: mark the fingertip that presses the UI with a small sphere. Without it the sphere
         // is shown only while no hand is drawn at the controller, where the controller presses the UI.

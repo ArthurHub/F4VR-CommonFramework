@@ -11,11 +11,9 @@
 namespace f4cf::config
 {
     /**
-     * Read the transforms of an offsets JSON into the map, each under its name. A name that the map already has
-     * gets the transform of the JSON.
-     * The JSON is an object with a member for each name, which holds the rotation matrix as "rotation", its 12
-     * numbers row by row with 4 to a row, the position as "x", "y" and "z", and the "scale".
-     * Throws when a member lacks one of them, or has something else than a number for it.
+     * Read the transforms of an offsets JSON into the map, each under its name, in place of one the map has.
+     * A name's member holds "rotation", the 12 numbers of the rotation matrix row by row with 4 to a row, the
+     * position as "x", "y" and "z", and "scale". Throws when one of them is missing or is not a number.
      * Transform is any type with the rotate, translate and scale of the game's NiTransform, which it is in a mod.
      */
     template <class Transform>

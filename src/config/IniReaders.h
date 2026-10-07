@@ -21,8 +21,7 @@ namespace f4cf::render
 namespace f4cf::config
 {
     /**
-     * The readers of the INI values that are more than one number or word, into the types the game code uses: a
-     * transform, a hand pose, a controller binding, a color, and the whole section of an activation sphere.
+     * The readers of the INI values that are more than one number or word, into the types the game code uses.
      * Each reads a loaded INI, and returns the default it was given for a key that is missing or malformed.
      * ConfigBase derives from it, so a mod's config calls them by their names in its loadIniConfigInternal.
      */

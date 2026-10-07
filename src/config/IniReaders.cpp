@@ -11,13 +11,10 @@
 namespace
 {
     /**
-     * Read how an activation sphere's visual looks from its INI section: a named preset (sSphereStyle) replaces
-     * `fallback`'s look (everything but its size), then each per-value key that is present overrides that one value —
-     * the mesh (sSphereNif), the texture (sSphereTexture; "none" keeps the texture the mesh itself names), the color
-     * (sSphereColor as "r,g,b" or "r,g,b,a" in 0..255 — without the alpha the preset's opacity stays), the brightness
-     * (fSphereGlow, 0..1), the middle-to-edge opacity fade (sSphereFalloff as "center,rim"), and the drawn size
-     * relative to the zone (fSphereScale, > 0). An empty value keeps what the preset set; a malformed or out-of-range
-     * one is logged and ignored.
+     * Read how an activation sphere looks from its INI section. A preset (sSphereStyle) replaces `fallback`'s look
+     * but not its size, then each key that is present overrides one value: sSphereNif, sSphereTexture ("none" keeps
+     * the mesh's own), sSphereColor ("r,g,b[,a]" in 0..255), fSphereGlow (0..1), sSphereFalloff ("center,rim"
+     * opacities) and fSphereScale (> 0). A malformed or out-of-range value is logged and ignored.
      */
     f4cf::f4vr::SphereStyle readSphereStyle(const CSimpleIniA& ini, const char* section, const f4cf::f4vr::SphereStyle& fallback)
     {
@@ -73,10 +70,9 @@ namespace
     }
 
     /**
-     * Read how an activation sphere's icon looks from its INI section, each key that is present overriding that one
-     * value of `fallback`: the image (sIcon, a .dds path; empty keeps the fallback's), the tint (sIconColor as "r,g,b"
-     * or "r,g,b,a" in 0..255 — without the alpha the fallback's opacity stays), and the size of its longer side in
-     * game units (fIconSize, > 0). A malformed or out-of-range value is logged and ignored.
+     * Read how an activation sphere's icon looks from its INI section, each key that is present overriding one
+     * value of `fallback`: sIcon (a .dds path), sIconColor ("r,g,b[,a]" in 0..255) and fIconSize (the longer side
+     * in game units, > 0). A malformed or out-of-range value is logged and ignored.
      */
     f4cf::f4vr::ActivationIconStyle readIconStyle(const CSimpleIniA& ini, const char* section, const f4cf::f4vr::ActivationIconStyle& fallback)
     {
@@ -195,16 +191,11 @@ namespace f4cf::config
     }
 
     /**
-     * Read a whole activation-sphere gesture from one INI section into a f4vr::WandActivationConfig. Each key
-     * falls back to the matching field of `defaults`: the zone (tZone), its optional power-armor variant
-     * (tZonePA — set only when present, so WandActivationConfig::zoneFor falls back to the regular zone), the
-     * two bindings (sPrimaryBinding / sSecondaryBinding — suppress is a token in the binding string, see
-     * InputBindingParser), the entry + per-binding activation haptics (sEntryHaptic / sPrimaryHaptic
-     * / sSecondaryHaptic — "none"/empty = silent; absent keeps the default), when the sphere
-     * visual is drawn (sShowSphere — never / always / wheninside / whenavailable), how it looks and how big it is drawn
-     * (sSphereStyle preset + per-value overrides incl. fSphereScale, see readSphereStyle), which way it faces
-     * (sSphereOrientation — hmd / body / world), and the same for the icon: when (sShowIcon) and how it looks (sIcon,
-     * sIconColor, fIconSize, see readIconStyle).
+     * Read the whole INI section of an activation sphere into a f4vr::WandActivationConfig, each key falling back
+     * to the matching field of `defaults`: the zone (tZone, and tZonePA for power armor), the two bindings
+     * (sPrimaryBinding, sSecondaryBinding), the haptics (sEntryHaptic, sPrimaryHaptic, sSecondaryHaptic), the
+     * sphere (sShowSphere, sSphereOrientation, and its look, see readSphereStyle) and the icon (sShowIcon, and
+     * its look, see readIconStyle).
      */
     f4vr::WandActivationConfig IniReaders::loadWandActivationConfig(const CSimpleIniA& ini, const char* section, const f4vr::WandActivationConfig& defaults)
     {

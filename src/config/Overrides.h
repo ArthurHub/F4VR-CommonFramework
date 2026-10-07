@@ -48,13 +48,9 @@ namespace f4cf::config
     };
 
     /**
-     * The session overrides of a mod's config, each with the name of the owner that set it.
-     * Several callers override a mod's values: the devbench tool, another mod through the mod's API, and the
-     * mod itself. An owner sets and clears only its own, so one caller's clear never removes another's.
-     * When two owners override the same key, the one that was set last applies, and when that one is cleared
-     * the other applies again.
-     * Every call is under the class's own lock: overrides are set on one thread and applied to a loaded INI
-     * on another.
+     * The session overrides of a mod's config, each under the name of the owner that set it, as several callers
+     * override one config. An owner sets and clears only its own, and of two on one key the one set last applies.
+     * Every call is under the class's own lock: overrides are set on one thread and applied on another.
      */
     class Overrides
     {
