@@ -1,5 +1,8 @@
-# Unit tests for the framework's game-independent logic. Sources under src/ that pull in F4SE, CommonLibF4 or
-# the PCH cannot be tested here; keep the pure logic in plain-std headers or standalone .cpp files.
+# Unit tests for the framework's game-independent logic, in two executables:
+# - The files of this folder test sources under src/ that are plain std: each is compiled here by itself, with no
+#   PCH, F4SE or CommonLibF4. Keep pure logic in such headers and standalone .cpp files, so it is tested this way.
+# - The files of linked/ test code that needs the framework and CommonLibF4 to compile and link, and not the game
+#   to run. They link the framework as a mod does, see the second executable below.
 
 # vcpkg manifest mode reads the TOP-LEVEL project's vcpkg.json, so a mod that turns the tests on must declare catch2 itself
 find_package(Catch2 3 CONFIG QUIET)
@@ -54,3 +57,41 @@ target_link_libraries(${PROJECT_NAME}_tests PRIVATE Catch2::Catch2WithMain nlohm
 
 include(Catch)
 catch_discover_tests(${PROJECT_NAME}_tests)
+
+
+# >>> The tests of linked/, linked with the framework and CommonLibF4. There is no game in the process: linked/Setup.cpp
+# sets REL::NO_GAME, so CommonLibF4 resolves every game address into a range that cannot be used. The addresses the
+# framework resolves when the executable starts are then harmless, and a test that calls the game fails with an
+# access violation.
+add_executable(${PROJECT_NAME}_linked_tests
+  linked/BindingPromptTests.cpp
+  linked/CommonUtilsTests.cpp
+  linked/ConfigBaseTests.cpp
+  linked/DebugSectionTests.cpp
+  linked/IniReadersTests.cpp
+  linked/InputBindingParserTests.cpp
+  linked/MatrixUtilsTests.cpp
+  linked/OffsetsFilesTests.cpp
+  linked/QuaternionTests.cpp
+  linked/SphereStyleTests.cpp
+  linked/UIContainerTests.cpp
+  linked/UIToggleGroupContainerTests.cpp
+  linked/VRControllersHapticTests.cpp
+  linked/WandActivationSphereTests.cpp
+  # the files the tests read from the executable, embedded as a mod's are in its DLL
+  linked/Resources.rc
+  linked/Setup.cpp
+)
+
+# see the first executable for both properties
+set_target_properties(${PROJECT_NAME}_linked_tests PROPERTIES EXCLUDE_FROM_ALL FALSE INTERPROCEDURAL_OPTIMIZATION OFF)
+
+target_precompile_headers(${PROJECT_NAME}_linked_tests PRIVATE ${SOURCE_DIR}/PCH.h)
+target_compile_options(${PROJECT_NAME}_linked_tests PRIVATE /utf-8 /permissive- /W4 /external:anglebrackets /external:W0)
+target_link_libraries(${PROJECT_NAME}_linked_tests PRIVATE ${PROJECT_NAME} Catch2::Catch2WithMain delayimp)
+
+# openvr_api.dll is in the game's folder and not here, and the executable would not start without it. So it is
+# loaded on its first call, which no test makes. Release drops the unused import whole, hence the ignored warning.
+target_link_options(${PROJECT_NAME}_linked_tests PRIVATE /DELAYLOAD:openvr_api.dll /IGNORE:4199)
+
+catch_discover_tests(${PROJECT_NAME}_linked_tests)
