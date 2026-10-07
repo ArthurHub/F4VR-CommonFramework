@@ -7,11 +7,11 @@
 #include <mutex>
 #include <thomasmonkman-filewatch/FileWatch.hpp>
 #include <utility>
-#include <variant>
 #include <vector>
 
 #include "Common/CommonUtils.h"
 #include "ConfigIniFile.h"
+#include "ConfigIniValue.h"
 #include "ConfigOverrides.h"
 
 namespace f4cf::vrcf
@@ -32,56 +32,6 @@ namespace f4cf::render
 namespace f4cf
 {
     static const auto BASE_PATH = common::getRelativePathInDocuments(R"(\My Games\Fallout4VR\Mods_Config)");
-
-    namespace config
-    {
-        /**
-         * A typed INI value for batch writes via ConfigBase::saveIniConfigValues.
-         * Constructs implicitly from any supported type, so callers can write {"key", 1.5f}.
-         * NiTransform is serialized as "x,y,z;heading,roll,attitude;scale" (rotation in degrees).
-         */
-        class IniValue
-        {
-        public:
-            IniValue(bool value)
-                : _value(value)
-            {}
-
-            IniValue(int value)
-                : _value(value)
-            {}
-
-            IniValue(float value)
-                : _value(value)
-            {}
-
-            IniValue(const char* value)
-                : _value(std::string(value))
-            {}
-
-            IniValue(std::string value)
-                : _value(std::move(value))
-            {}
-
-            void applyTo(CSimpleIniA& ini, const char* section, const char* key) const;
-
-            std::string toString() const;
-
-        private:
-            std::variant<bool, int, float, std::string> _value;
-        };
-
-        /**
-         * A session override to set: the value that applies in place of the file's for a section and key,
-         * see ConfigBase::setConfigOverrides.
-         */
-        struct IniOverride
-        {
-            std::string section;
-            std::string key;
-            IniValue value;
-        };
-    }
 
     constexpr auto INI_SECTION_DEBUG = "Debug";
 
