@@ -408,7 +408,7 @@ namespace f4cf::common
         RE::NiTransform target;
         target.scale = delta.scale * targetFrom.scale;
         target.rotate = targetFrom.rotate * delta.rotate;
-        target.translate = delta.rotate.Transpose() * ((targetFrom.translate * delta.scale) + delta.translate);
+        target.translate = delta.translate + delta.rotate.Transpose() * (targetFrom.translate * delta.scale);
         return target;
     }
 

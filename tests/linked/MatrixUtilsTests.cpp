@@ -279,6 +279,23 @@ TEST_CASE("MatrixUtils: the delta of two transforms is the parent under which th
     requireNear(MatrixUtils::localToWorldTransform(delta, from), to, 1e-3f);
 }
 
+TEST_CASE("MatrixUtils: the change from one transform to another, made on a third")
+{
+    const auto from = transform(1, 2, 3, -40, 15, 70, 2);
+    const auto to = transform(10, -20, 30, 30, 20, 10, 3);
+
+    SECTION("made on the first gives the second")
+    {
+        requireNear(MatrixUtils::getTargetTransform(from, to, from), to, 1e-3f);
+    }
+    SECTION("made on another is that one under the delta")
+    {
+        const auto other = transform(-5, 8, 2, 100, -35, 60, 0.5f);
+
+        requireNear(MatrixUtils::getTargetTransform(from, to, other), MatrixUtils::localToWorldTransform(MatrixUtils::getDeltaTransform(from, to), other), 1e-3f);
+    }
+}
+
 TEST_CASE("MatrixUtils: a camera looks at an object when both face along the line from the camera to the object")
 {
     // forward is +Y
