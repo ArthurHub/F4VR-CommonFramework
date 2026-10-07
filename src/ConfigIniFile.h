@@ -28,7 +28,21 @@ namespace f4cf::config
             Loaded,
         };
 
-        LoadResult load(const std::string& path, CSimpleIniA& ini, bool onlyIfChanged = false);
+        /**
+         * What a load reads.
+         */
+        enum class Source : std::uint8_t
+        {
+            // the file
+            File,
+            // the file, loaded only when it holds something else than the kept content: the file watcher's load
+            ChangedFile,
+            // the kept content with no read of the file, and the file when nothing is kept: a load that is only
+            // for a session override
+            Kept,
+        };
+
+        LoadResult load(const std::string& path, CSimpleIniA& ini, Source source = Source::File);
 
         bool save(const std::string& path, const CSimpleIniA& ini);
 

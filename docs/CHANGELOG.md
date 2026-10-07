@@ -100,6 +100,12 @@ major version is `0`, a minor bump may break the API; the **Upgrading** notes sa
   next event of the file, which could stay set after two saves close together, and the next change
   by someone else was then not loaded. A second write within 200 ms of another was dropped too, and
   is now loaded. A write that leaves the file as it was loads nothing.
+- **config overrides at preview rates**: `ConfigBase::setConfigOverrides` and `clearConfigOverrides`
+  set and clear several session overrides with one reload. A set no longer reads the INI from disk:
+  it loads the file as the mod last loaded or saved it, so a value can be set many times a second
+  while a setting is previewed. Only a key that becomes overridden is logged at the info level and
+  is a `config.override` devbench event. A new value for a key that is already overridden is logged
+  at the debug level, with no event. A clear reads the file, as before.
 - **render gradients**: a fill takes a color for each corner and blends between them
   (`PrimitiveDraw::addTriangle` and `addQuad` with a color per corner), so a gradient or a fade is
   one shape. Every vertex carries its color, so a change of color no longer starts a new draw call:

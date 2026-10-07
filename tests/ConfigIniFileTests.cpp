@@ -91,13 +91,91 @@ namespace
      */
     LoadResult onFileEvent(IniFile& iniFile, const TempFile& file, CSimpleIniA& ini)
     {
-        return iniFile.load(file.path, ini, true);
+        return iniFile.load(file.path, ini, IniFile::Source::ChangedFile);
+    }
+
+    /**
+     * The load of a session override that was set: the file as the mod has it, with no read of the file.
+     */
+    LoadResult onOverrideSet(IniFile& iniFile, const TempFile& file, CSimpleIniA& ini)
+    {
+        return iniFile.load(file.path, ini, IniFile::Source::Kept);
     }
 
     std::string value(const CSimpleIniA& ini, const char* key)
     {
         return ini.GetValue(MAIN, key, "");
     }
+}
+
+TEST_CASE("ConfigIniFile: the load of a set override does not read the file")
+{
+    const TempFile file(SHIPPED);
+    IniFile iniFile;
+    CSimpleIniA startup;
+    REQUIRE(iniFile.load(file.path, startup) == LoadResult::Loaded);
+
+    SECTION("a write by someone else is left for the file watcher to load")
+    {
+        writeBySomeoneElse(file, "fScale", "2");
+
+        CSimpleIniA overrideLoad;
+        REQUIRE(onOverrideSet(iniFile, file, overrideLoad) == LoadResult::Loaded);
+        REQUIRE(value(overrideLoad, "fScale") == "1");
+
+        CSimpleIniA eventLoad;
+        REQUIRE(onFileEvent(iniFile, file, eventLoad) == LoadResult::Loaded);
+        REQUIRE(value(eventLoad, "fScale") == "2");
+
+        CSimpleIniA nextOverrideLoad;
+        REQUIRE(onOverrideSet(iniFile, file, nextOverrideLoad) == LoadResult::Loaded);
+        REQUIRE(value(nextOverrideLoad, "fScale") == "2");
+    }
+    SECTION("the file can be gone")
+    {
+        std::filesystem::remove(file.path);
+
+        CSimpleIniA overrideLoad;
+        REQUIRE(onOverrideSet(iniFile, file, overrideLoad) == LoadResult::Loaded);
+        REQUIRE(value(overrideLoad, "fScale") == "1");
+        REQUIRE(value(overrideLoad, "iMode") == "0");
+    }
+    SECTION("the mod's own save is in it")
+    {
+        saveByMod(iniFile, file, "iMode", "3");
+
+        CSimpleIniA overrideLoad;
+        REQUIRE(onOverrideSet(iniFile, file, overrideLoad) == LoadResult::Loaded);
+        REQUIRE(value(overrideLoad, "iMode") == "3");
+        REQUIRE(value(overrideLoad, "fScale") == "1");
+    }
+}
+
+TEST_CASE("ConfigIniFile: the load of a set override reads the file when nothing is kept")
+{
+    const TempFile file(SHIPPED);
+    IniFile iniFile;
+    CSimpleIniA ini;
+
+    SECTION("before the first load")
+    {
+        REQUIRE(onOverrideSet(iniFile, file, ini) == LoadResult::Loaded);
+        REQUIRE(value(ini, "fScale") == "1");
+    }
+    SECTION("after the mod saved over a write by someone else")
+    {
+        REQUIRE(iniFile.load(file.path, ini) == LoadResult::Loaded);
+        writeBySomeoneElse(file, "fScale", "2");
+        saveByMod(iniFile, file, "iMode", "1");
+
+        CSimpleIniA overrideLoad;
+        REQUIRE(onOverrideSet(iniFile, file, overrideLoad) == LoadResult::Loaded);
+        REQUIRE(value(overrideLoad, "fScale") == "2");
+        REQUIRE(value(overrideLoad, "iMode") == "1");
+    }
+
+    // what it read is kept, so the file watcher has nothing more to load
+    REQUIRE(onFileEvent(iniFile, file, ini) == LoadResult::Unchanged);
 }
 
 TEST_CASE("ConfigIniFile: a load reads the file, every time it is asked to")
@@ -122,7 +200,8 @@ TEST_CASE("ConfigIniFile: a missing file fails to load")
     CSimpleIniA ini;
 
     REQUIRE(iniFile.load(file.path, ini) == LoadResult::Failed);
-    REQUIRE(iniFile.load(file.path, ini, true) == LoadResult::Failed);
+    REQUIRE(iniFile.load(file.path, ini, IniFile::Source::ChangedFile) == LoadResult::Failed);
+    REQUIRE(iniFile.load(file.path, ini, IniFile::Source::Kept) == LoadResult::Failed);
 }
 
 TEST_CASE("ConfigIniFile: a write by someone else is loaded once, however many events it fires")
