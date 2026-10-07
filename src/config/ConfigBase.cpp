@@ -3,33 +3,7 @@
 #include <nlohmann/json.hpp>
 
 #include "IniMigration.h"
-#include "OffsetsJson.h"
-#include "common/MatrixUtils.h"
 #include "devbench/DevBench.h"
-
-using json = nlohmann::json;
-
-namespace
-{
-    DebugAdjustTarget parseDebugAdjustTarget(const std::string_view value)
-    {
-        if (value == "transform")
-            return DebugAdjustTarget::Transform;
-        if (value == "handpose")
-            return DebugAdjustTarget::HandPose;
-        if (value == "flag1")
-            return DebugAdjustTarget::FlowFlag1;
-        if (value == "flag2")
-            return DebugAdjustTarget::FlowFlag2;
-        if (value == "flag3")
-            return DebugAdjustTarget::FlowFlag3;
-        if (value == "flag123")
-            return DebugAdjustTarget::FlowFlag123;
-        if (value == "haptictest")
-            return DebugAdjustTarget::HapticTest;
-        return DebugAdjustTarget::None;
-    }
-}
 
 namespace f4cf
 {
@@ -205,38 +179,15 @@ namespace f4cf
         return ini.GetLongValue(INI_SECTION_DEBUG, "iVersion", 0);
     }
 
+    /**
+     * Read the [Debug] section: the values that are the config's own, and the rest into `debug`.
+     */
     void ConfigBase::loadDebugSection(const CSimpleIniA& ini)
     {
         _iniConfigVersion = ini.GetLongValue(INI_SECTION_DEBUG, "iVersion", 0);
         _logLevel = ini.GetLongValue(INI_SECTION_DEBUG, "iLogLevel", 2);
         _logPattern = ini.GetValue(INI_SECTION_DEBUG, "sLogPattern", "%H:%M:%S.%e %L: %v");
-        debug.flowFlag1 = static_cast<float>(ini.GetDoubleValue(INI_SECTION_DEBUG, "fFlowFlag1", 0));
-        debug.flowFlag2 = static_cast<float>(ini.GetDoubleValue(INI_SECTION_DEBUG, "fFlowFlag2", 0));
-        debug.flowFlag3 = static_cast<float>(ini.GetDoubleValue(INI_SECTION_DEBUG, "fFlowFlag3", 0));
-        debug.flowText1 = ini.GetValue(INI_SECTION_DEBUG, "sFlowText1", "");
-        debug.flowText2 = ini.GetValue(INI_SECTION_DEBUG, "sFlowText2", "");
-        debug.transform = getTransformValue(ini, INI_SECTION_DEBUG, "tTransform", common::MatrixUtils::getTransform(0, 0, 0, 0, 0, 0));
-        debug.handPose = getHandPoseValue(ini, INI_SECTION_DEBUG, "hHandPose", {});
-        // sAdjustTarget is either a fixed keyword (transform/handpose/flag1...) or, when it
-        // contains "::", a "Section::Key" reference to any INI field tuned live via the field mode.
-        const std::string adjustTarget = ini.GetValue(INI_SECTION_DEBUG, "sAdjustTarget", "none");
-        if (adjustTarget.find("::") != std::string::npos) {
-            debug.adjustTarget = DebugAdjustTarget::Field;
-            debug.adjustField = adjustTarget;
-        } else {
-            debug.adjustTarget = parseDebugAdjustTarget(adjustTarget);
-            debug.adjustField.clear();
-        }
-        debug.dumpDataOnceNames = ini.GetValue(INI_SECTION_DEBUG, "sDumpDataOnceNames", "");
-        debug.addItemsOnceNames = ini.GetValue(INI_SECTION_DEBUG, "sAddItemsOnceNames", "");
-        debug.drawEnabled = ini.GetBoolValue(INI_SECTION_DEBUG, "bDebugDrawEnabled", true);
-        debug.drawDisabledChannels = ini.GetValue(INI_SECTION_DEBUG, "sDebugDrawDisabledChannels", "");
-        debug.drawToggleBinding = ini.GetValue(INI_SECTION_DEBUG, "sDebugDrawToggleBinding", "");
-        debug.drawHudPlacement = ini.GetValue(INI_SECTION_DEBUG, "sDebugDrawHudPlacement", "center");
-        debug.sceneDepthStrategy = ini.GetValue(INI_SECTION_DEBUG, "sSceneDepthStrategy", "auto");
-        debug.sceneDepthDiagnostics = ini.GetBoolValue(INI_SECTION_DEBUG, "bSceneDepthDiagnostics", false);
-        debug.vruiShowFingerTip = ini.GetBoolValue(INI_SECTION_DEBUG, "bVRUIShowFingerTip", false);
-        debug.vruiDevLayout = ini.GetBoolValue(INI_SECTION_DEBUG, "bVRUIDevLayout", false);
+        debug.load(ini);
     }
 
     /**
@@ -634,92 +585,6 @@ namespace f4cf
         }
 
         logger::info(".ini updated successfully");
-    }
-
-    /**
-     * Load all embedded in resources offsets in the given resource range.
-     */
-    std::unordered_map<std::string, RE::NiTransform> ConfigBase::loadEmbeddedOffsets(const WORD fromResourceId, const WORD toResourceId)
-    {
-        std::unordered_map<std::string, RE::NiTransform> offsets;
-        for (WORD resourceId = fromResourceId; resourceId <= toResourceId; resourceId++) {
-            auto resourceOpt = common::getEmbeddedResourceAsStringIfExists(resourceId);
-            if (resourceOpt.has_value()) {
-                json json = json::parse(resourceOpt.value());
-                config::readOffsetsJson(json, offsets);
-            }
-        }
-        return offsets;
-    }
-
-    /**
-     * Load offset data from given json file path and store it in the given map.
-     * Use the entry key in the json file but for everything to work properly the name of the json should match the key.
-     */
-    void ConfigBase::loadOffsetJsonFile(const std::string& file, std::unordered_map<std::string, RE::NiTransform>& offsetsMap)
-    {
-        try {
-            std::ifstream inF;
-            inF.open(file, std::ios::in);
-            if (inF.fail()) {
-                logger::warn("cannot open {}", file.c_str());
-                inF.close();
-                return;
-            }
-
-            json weaponJson;
-            try {
-                inF >> weaponJson;
-            } catch (json::parse_error& ex) {
-                logger::info("cannot open {}: parse error at byte {}", file.c_str(), ex.byte);
-                inF.close();
-                return;
-            }
-            inF.close();
-
-            config::readOffsetsJson(weaponJson, offsetsMap);
-        } catch (std::exception& ex) {
-            std::throw_with_nested(std::runtime_error(fmt::format("Failed to load offset json from file '{}':\n\t{}", file.c_str(), ex.what())));
-        }
-    }
-
-    /**
-     * Load all the offsets found in json files in a specific folder.
-     */
-    std::unordered_map<std::string, RE::NiTransform> ConfigBase::loadOffsetsFromFilesystem(const std::string& path)
-    {
-        std::unordered_map<std::string, RE::NiTransform> offsets;
-        for (const auto& file : std::filesystem::directory_iterator(path)) {
-            if (file.exists() && !file.is_directory()) {
-                loadOffsetJsonFile(file.path().string(), offsets);
-            }
-        }
-        return offsets;
-    }
-
-    /**
-     * Save the given offsets transform to a json file using the given name.
-     */
-    bool ConfigBase::saveOffsetsToJsonFile(const std::string& name, const RE::NiTransform& transform, const std::string& file)
-    {
-        logger::info("Saving offsets '{}' to '{}'", name.c_str(), file.c_str());
-        const auto offsetJson = config::writeOffsetsJson(name, transform);
-
-        std::ofstream outF;
-        outF.open(file, std::ios::out);
-        if (outF.fail()) {
-            logger::info("cannot open '{}' for writing", file.c_str());
-            return false;
-        }
-        try {
-            outF << std::setw(4) << offsetJson;
-            outF.close();
-            return true;
-        } catch (std::exception& e) {
-            outF.close();
-            logger::warn("Unable to save json '{}': {}", file.c_str(), e.what());
-            return false;
-        }
     }
 
     /**

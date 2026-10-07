@@ -45,7 +45,7 @@ After cloning, run `pre-commit install` once to enforce clang-format on every co
 
 ### Namespaces
 - `f4cf::` — framework root (ModBase, Logger, ConfigBase)
-- `f4cf::config` — the parts `ConfigBase` is made of (`src/config/`): the INI file as the mod last loaded or saved it, typed values, session overrides, version migration, the special values' text forms and their readers, the offsets JSON
+- `f4cf::config` — the parts `ConfigBase` is made of (`src/config/`): the INI file as the mod last loaded or saved it, typed values, session overrides, version migration, the special values' text forms and their readers, the offsets JSON and its files, the `[Debug]` section
 - `f4cf::debug` — immediate-mode in-world debug draw overlay (one layer on the shared overlay renderer)
 - `f4cf::f4vr` — Fallout 4 VR game utilities (node/skeleton manipulation, animations, debug dumps)
 - `F4SEVR` (in `src/f4sevr/`) — ported F4SE VR SDK: Papyrus VM interop + native-function registration (note: this folder is `namespace F4SEVR`, not `f4cf::f4sevr`)
@@ -377,7 +377,8 @@ F4VR/
 | `src/Logger.h` | Logging macros |
 | `src/config/ConfigBase.h/.cpp` | INI config with hot-reload |
 | `src/config/IniFile.*`, `IniValue.*`, `Overrides.*`, `IniMigration.*`, `IniValueParsers.*`, `OffsetsJson.h` | The parts of the config that are apart from the game, so unit tested: the INI file as the mod last loaded or saved it, a typed INI value, the session overrides with their owners, the move of a user's values into the INI of a newer version, the text forms of a transform, a hand pose and a color, and the offsets JSON |
-| `src/config/IniReaders.*` | The readers of a transform, a hand pose, a binding, a color and an activation sphere's section from a loaded INI (`getTransformValue`, `loadWandActivationConfig`, ...). `ConfigBase` derives from it, so a mod's config calls them by name |
+| `src/config/IniReaders.*`, `OffsetsFiles.*` | The readers of a transform, a hand pose, a binding, a color and an activation sphere's section from a loaded INI (`getTransformValue`, `loadWandActivationConfig`, ...), and the loading and saving of the offsets JSON files (`loadOffsetsFromFilesystem`, `saveOffsetsToJsonFile`, ...). `ConfigBase` derives from both, so a mod's config calls them by name |
+| `src/config/DebugSection.*` | The values of the `[Debug]` INI section, which a mod reads as `config->debug`, and `DebugAdjustTarget` |
 | `src/f4vr/` | Game node/skeleton/animation utilities |
 | `src/f4sevr/` | Papyrus native function registration helpers |
 | `src/vrcf/VRControllersManager.h` | Controller button/trigger state |
