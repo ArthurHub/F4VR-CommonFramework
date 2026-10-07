@@ -75,6 +75,7 @@ A global singleton `f4cf::g_mod` holds the active mod instance.
 - A load runs on the watcher's thread for a change on disk and on the caller's for a session override (`setConfigOverride`), one at a time: `_loadMutex` is held from the read of the file to the end of `loadIniConfigInternal()`
 - The mod's own save is not loaded back: the watcher loads the file only when its content is not what the mod last loaded or saved (`config::IniFile` in `src/ConfigIniFile.h`, plain std and unit tested). A save has to go through `ConfigBase` (`saveIniConfigValue(s)`, `saveIniToFile`) to be taken as the mod's own
 - Session overrides (`setConfigOverride(s)`, `clearConfigOverride(s)`, several with one reload): a set loads that kept content of the file and reads no disk, so it can be done many times a second for a preview, and a clear reads the file. Only a key that becomes overridden is logged at info and is a `config.override` event
+- To react to a load, a mod subscribes (`subscribeForIniChangedEvent`). A load only marks that it ran, and `ModBase` calls the subscribers on the game thread at the start of the next frame, once for all the loads since the frame before: a change on disk, an override, `reload()`, and the load when a game session starts
 
 Standard `[Debug]` INI keys provided by the base class:
 ```ini

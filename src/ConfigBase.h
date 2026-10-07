@@ -2,6 +2,7 @@
 
 #include <SimpleIni.h>
 #include <array>
+#include <atomic>
 #include <map>
 #include <mutex>
 #include <thomasmonkman-filewatch/FileWatch.hpp>
@@ -165,6 +166,7 @@ namespace f4cf
 
         void subscribeForIniChangedEvent(const std::string& key, const std::function<void(const std::string&)>& callback);
         void unsubscribeFromIniChangedEvent(const std::string& key);
+        void notifySubscribersOfReload();
 
         bool checkDebugDumpDataOnceFor(const char* name);
 
@@ -300,8 +302,12 @@ namespace f4cf
         // from the mod's own save, and from one more event of a write that is already loaded.
         config::IniFile _iniFile;
 
-        // Callbacks to notify when INI config is changed
+        // Callbacks to notify when the config values were loaded again. Used on the game thread only.
         std::unordered_map<std::string, std::function<void(const std::string&)>> _onIniConfigChangedSubscribers;
+
+        // Set by every load of the values, on the thread it runs on, and taken by notifySubscribersOfReload() on
+        // the game thread
+        std::atomic<bool> _valuesReloaded = false;
 
         // Session-only value overrides keyed by {section, key}, re-applied on every load and never
         // persisted to disk. Guarded by _overridesMutex as it is read from the file-watch thread.
