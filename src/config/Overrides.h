@@ -8,7 +8,7 @@
 #include <string>
 #include <vector>
 
-#include "ConfigIniValue.h"
+#include "IniValue.h"
 
 // The session overrides of a mod's config, apart from the game: plain std and SimpleIni only, so it is unit tested.
 namespace f4cf::config

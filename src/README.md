@@ -22,7 +22,7 @@ Every translation unit pulls in [`PCH.h`](PCH.h), which does `using namespace f4
 
 ```cpp
 // Config.h
-#include "ConfigBase.h"
+#include "config/ConfigBase.h"
 #include "Resources.h"   // defines IDR_CONFIG_INI
 
 namespace my_mod
@@ -190,7 +190,7 @@ if (logger::isDebugEnabled()) { /* skip expensive work when the level is above d
 ```
 
 Log level and pattern come from the `[Debug]` INI section (`iLogLevel`, `sLogPattern`) and update live
-on reload. See [`Logger.h`](Logger.h) and [`ConfigBase.h`](ConfigBase.h) for the rest (`[Debug]` flow
+on reload. See [`Logger.h`](Logger.h) and [`ConfigBase.h`](config/ConfigBase.h) for the rest (`[Debug]` flow
 flags for runtime toggling, debug-dump triggers, and batch config saves).
 
 ## Layout
@@ -198,7 +198,7 @@ flags for runtime toggling, debug-dump triggers, and batch config saves).
 | Folder / File                        | Namespace      | What it is                                                                                                       |
 | ------------------------------------ | -------------- | ---------------------------------------------------------------------------------------------------------------- |
 | [`ModBase`](ModBase.h)               | `f4cf`         | Base class every mod derives from. Owns the F4SE lifecycle, logging init, and the per-frame update hook.         |
-| [`ConfigBase`](ConfigBase.h)         | `f4cf`         | INI-backed config with hot-reload, embedded-default extraction, and version migration.                           |
+| [`ConfigBase`](config/ConfigBase.h)  | `f4cf`         | INI-backed config with hot-reload, embedded-default extraction, and version migration.                           |
 | [`Logger.h`](Logger.h)               | `f4cf::logger` | spdlog wrapper. `logger::trace` / `debug` / `info` / `warn` / `error` functions + rate-limited `logger::sample`. |
 | [`common/`](common/README.md)        | `f4cf::common` | Math (quaternions, matrices, transforms) and engine-agnostic utilities (strings, files, resources, time).        |
 | [`debug/`](debug/README.md)          | `f4cf::debug`  | Immediate-mode in-world debug draw overlay: wire primitives, HUD text/labels, watch table. Zero cost until used. |

@@ -149,6 +149,8 @@ major version is `0`, a minor bump may break the API; the **Upgrading** notes sa
   done in it. A mod that sets a flag of its own in `loadIniConfigInternal`, to apply a reload in
   `onFrameUpdate()`, can subscribe instead. A mod that does not use `ModBase`'s frame update calls
   `notifySubscribersOfReload()` on its config in its own.
+- `ConfigBase.h` is now `config/ConfigBase.h`: change the `#include` in the mod's `Config.h`. The
+  class is as it was, in the `f4cf` namespace.
 - `ConfigBase::setConfigOverride`, `clearConfigOverride` and `clearAllConfigOverrides` take the
   owner's name as their first argument. A mod's API that sets overrides for its callers passes the
   caller's name. `clearConfigOverride` returns whether the owner had the override, and

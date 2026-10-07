@@ -12,8 +12,8 @@
 #include <thread>
 #include <vector>
 
-#include "ConfigBase.h"
 #include "DevBenchAPI.h"
+#include "config/ConfigBase.h"
 #include "perf/Perf.h"
 #include "perf/Report.h"
 
