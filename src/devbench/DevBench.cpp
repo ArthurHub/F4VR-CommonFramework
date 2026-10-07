@@ -26,7 +26,11 @@ namespace f4cf::devbench
         // Bumped whenever a generic action changes its arguments or the shape of its answer. Every mod ships the
         // framework version it was built with, so this is how a client tells their tools apart (health reports it).
         // 2: perf answers without the game thread, as a tree per thread, a flat map or a text table (format)
-        constexpr int TOOL_CONTRACT = 2;
+        // 3: set and clear act on the tool's own session overrides only, and overrides says who set each
+        constexpr int TOOL_CONTRACT = 3;
+
+        // the owner of the session overrides that the tool's set action sets, see ConfigBase::setConfigOverride
+        constexpr auto OVERRIDE_OWNER = "devbench";
 
         // devbench's own stall watchdog is 5000ms; answering well before it keeps "the mod did not answer" apart from
         // "devbench is stalled"
@@ -544,11 +548,16 @@ namespace f4cf::devbench
                               handler(&Tool::setConfig) },
                     true);
                 addAction({ "clear",
-                              "drop one session override, or every one with all=true, so the file's value applies again",
-                              { { "section", section }, { "key", key }, { "all", argument("boolean", "clear: drop every session override instead of one key") } },
+                              "drop one session override that set made, or every one of them with all=true, so the file's value applies again. "
+                              "An override that someone else set, as another mod, stays",
+                              { { "section", section }, { "key", key }, { "all", argument("boolean", "clear: drop every session override that set made instead of one key") } },
                               handler(&Tool::clearConfig) },
                     true);
-                addAction({ "overrides", "the session overrides in effect", json::object(), handler(&Tool::listOverrides) }, true);
+                addAction({ "overrides",
+                              "the session overrides in effect, each with the owner that set it ('devbench' for this tool's set)",
+                              json::object(),
+                              handler(&Tool::listOverrides) },
+                    true);
                 addAction({ "perf",
                               "time spent in every perf site in the mod since the last reset, as a tree per thread: each site under the site it runs "
                               "inside, with n, avg, p50, p95, p99, min, max and self ms, busy% of the window, calls per frame and share of the frame "
@@ -640,28 +649,33 @@ namespace f4cf::devbench
                 }
                 const auto value = argString(args, "value");
                 // rewrites every typed config member, which the mod reads mid-frame: the reason set is a game-thread action
-                config().setConfigOverride(section.c_str(), key.c_str(), config::IniValue(value));
+                config().setConfigOverride(OVERRIDE_OWNER, section.c_str(), key.c_str(), config::IniValue(value));
                 return { { "section", section }, { "key", key }, { "value", value }, { "note", "session override; the file is unchanged" } };
             }
 
+            /**
+             * Only what the tool's own set made: an override of another owner, as a mod through this mod's API, stays.
+             */
             json clearConfig(const json& args) const
             {
                 if (argBool(args, "all")) {
-                    const auto count = config().getConfigOverrides().size();
-                    config().clearAllConfigOverrides();
-                    return { { "cleared", count }, { "note", "every session override dropped; the file's values apply again" } };
+                    const auto count = config().clearAllConfigOverrides(OVERRIDE_OWNER);
+                    return { { "cleared", count }, { "note", "every session override that set made is dropped; the file's values apply again" } };
                 }
                 const auto [section, key] = sectionAndKey(args, "clear");
-                const bool hadOverride = config().hasConfigOverride(section.c_str(), key.c_str());
-                config().clearConfigOverride(section.c_str(), key.c_str());
-                return { { "section", section }, { "key", key }, { "hadOverride", hadOverride }, { "note", "the file's value applies again" } };
+                const bool hadOverride = config().clearConfigOverride(OVERRIDE_OWNER, section.c_str(), key.c_str());
+                return { { "section", section },
+                    { "key", key },
+                    { "hadOverride", hadOverride },
+                    { "overridden", config().hasConfigOverride(section.c_str(), key.c_str()) },
+                    { "note", "the file's value applies again, unless 'overridden': then someone else overrides the key too" } };
             }
 
             json listOverrides(const json&) const
             {
                 json overrides = json::array();
-                for (const auto& [sectionKey, value] : config().getConfigOverrides()) {
-                    overrides.push_back({ { "section", sectionKey.first }, { "key", sectionKey.second }, { "value", value } });
+                for (const auto& entry : config().getConfigOverrides()) {
+                    overrides.push_back({ { "section", entry.section }, { "key", entry.key }, { "value", entry.value }, { "owner", entry.owner } });
                 }
                 return { { "overrides", overrides } };
             }

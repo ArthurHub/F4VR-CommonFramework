@@ -79,16 +79,23 @@ A session override puts a value in place of the file's until it is cleared, and 
 the file. It is how a setting is previewed while the game runs:
 
 ```cpp
-g_config.setConfigOverride("MyMod", "fMyValue", 2.5f);        // loadIniConfigInternal runs with it
-g_config.setConfigOverrides({ { "MyMod", "fMyValue", 2.5f },  // several, with one reload
-                              { "MyMod", "bEnabled", true } });
-g_config.clearConfigOverride("MyMod", "fMyValue");            // the file's value applies again
-g_config.clearConfigOverrides({ { "MyMod", "fMyValue" }, { "MyMod", "bEnabled" } });
+// the first argument is the owner: the name of who sets the override
+g_config.setConfigOverride("Preview", "MyMod", "fMyValue", 2.5f);        // loadIniConfigInternal runs with it
+g_config.setConfigOverrides("Preview", { { "MyMod", "fMyValue", 2.5f },  // several, with one reload
+                                         { "MyMod", "bEnabled", true } });
+g_config.clearConfigOverride("Preview", "MyMod", "fMyValue");            // the file's value applies again
+g_config.clearConfigOverrides("Preview", { { "MyMod", "fMyValue" }, { "MyMod", "bEnabled" } });
+g_config.clearAllConfigOverrides("Preview");                             // every override of this owner
 ```
 
 A set reads no disk: it loads the file as the mod last loaded or saved it. So a value can be set
-many times a second, as a slider is dragged, and only a key that becomes overridden is logged at
-the info level. A clear reads the file.
+many times a second, as a slider is dragged, and only a key that its owner did not override before
+is logged at the info level. A clear reads the file.
+
+An owner sets and clears only its own overrides. So the devbench tool (the owner `devbench`),
+another mod through the mod's API and the mod itself override the same config, and none removes
+another's. A mod's API passes its caller's name as the owner. When two owners override the same
+key, the one that was set last applies, and when that one is cleared the other applies again.
 
 ### 2. Mod — derive from `ModBase`
 

@@ -27,7 +27,7 @@ This creates a VS solution in `build/`. Open and build there. All project config
 - `F4CF_BUILD_TESTS` — build the unit tests in `tests/` (default: ON when the framework is the top-level project, OFF under a mod's `add_subdirectory`). A mod turns it on to build and run them with its own; it then needs `catch2` in its own `vcpkg.json`.
 - `COMMON_LIB_F4VR_PATH` — override path to CommonLibF4VR (default: `external/CommonLibF4VR`)
 
-**Tests:** `ctest --test-dir build -C Release` after a build. Catch2 unit tests in `tests/` for the game-independent logic (today `f4cf::perf`, the config's INI file, the vrui dev layout file and the imgui pointer logic). The test binary compiles the plain-std `.cpp` files it covers directly, without the PCH, so only code free of F4SE and CommonLibF4 can be tested; keep pure logic in such files so it can be. Add a new test file and any source it covers to `tests/CMakeLists.txt`.
+**Tests:** `ctest --test-dir build -C Release` after a build. Catch2 unit tests in `tests/` for the game-independent logic (today `f4cf::perf`, the config's INI file and its overrides, the vrui dev layout file and the imgui pointer logic). The test binary compiles the plain-std `.cpp` files it covers directly, without the PCH, so only code free of F4SE and CommonLibF4 can be tested; keep pure logic in such files so it can be. Add a new test file and any source it covers to `tests/CMakeLists.txt`.
 
 ## Code Style
 
@@ -74,7 +74,8 @@ A global singleton `f4cf::g_mod` holds the active mod instance.
 - File watcher triggers `loadIniConfigInternal()` automatically on disk change — no restart needed
 - A load runs on the watcher's thread for a change on disk and on the caller's for a session override (`setConfigOverride`), one at a time: `_loadMutex` is held from the read of the file to the end of `loadIniConfigInternal()`
 - The mod's own save is not loaded back: the watcher loads the file only when its content is not what the mod last loaded or saved (`config::IniFile` in `src/ConfigIniFile.h`, plain std and unit tested). A save has to go through `ConfigBase` (`saveIniConfigValue(s)`, `saveIniToFile`) to be taken as the mod's own
-- Session overrides (`setConfigOverride(s)`, `clearConfigOverride(s)`, several with one reload): a set loads that kept content of the file and reads no disk, so it can be done many times a second for a preview, and a clear reads the file. Only a key that becomes overridden is logged at info and is a `config.override` event
+- Session overrides (`setConfigOverride(s)`, `clearConfigOverride(s)`, several with one reload): a set loads that kept content of the file and reads no disk, so it can be done many times a second for a preview, and a clear reads the file. Only a key that its owner did not override before is logged at info and is a `config.override` event
+- Every override has an owner, the first argument of each call, and an owner clears only its own (`config::Overrides` in `src/ConfigOverrides.h`, which holds them under its own lock and puts them into a loaded INI; plain std and SimpleIni, and unit tested). The devbench tool's is `devbench`, and a mod's API passes its caller's name. With two owners on one key the one set last applies, and the other again when it is cleared
 - To react to a load, a mod subscribes (`subscribeForIniChangedEvent`). A load only marks that it ran, and `ModBase` calls the subscribers on the game thread at the start of the next frame, once for all the loads since the frame before: a change on disk, an override, `reload()`, and the load when a game session starts
 
 Standard `[Debug]` INI keys provided by the base class:

@@ -113,6 +113,12 @@ major version is `0`, a minor bump may break the API; the **Upgrading** notes sa
   load: a change of the INI on disk, a session override set or cleared, `reload()`, and the load
   when a game session starts. Before, they were called on the file watcher's thread, and only for
   a change on disk.
+- **config overrides have an owner**: a session override is set and cleared under the name of its
+  owner, and an owner clears only its own. The devbench tool, another mod through the mod's API and
+  the mod itself then override the same config and none removes another's. When two owners override
+  the same key, the one that was set last applies, and when that one is cleared the other applies
+  again. The devbench tool's owner is `devbench`: its `clear` drops only what its `set` made, and
+  `overrides` says who set each.
 - **render gradients**: a fill takes a color for each corner and blends between them
   (`PrimitiveDraw::addTriangle` and `addQuad` with a color per corner), so a gradient or a fade is
   one shape. Every vertex carries its color, so a change of color no longer starts a new draw call:
@@ -143,6 +149,11 @@ major version is `0`, a minor bump may break the API; the **Upgrading** notes sa
   done in it. A mod that sets a flag of its own in `loadIniConfigInternal`, to apply a reload in
   `onFrameUpdate()`, can subscribe instead. A mod that does not use `ModBase`'s frame update calls
   `notifySubscribersOfReload()` on its config in its own.
+- `ConfigBase::setConfigOverride`, `clearConfigOverride` and `clearAllConfigOverrides` take the
+  owner's name as their first argument. A mod's API that sets overrides for its callers passes the
+  caller's name. `clearConfigOverride` returns whether the owner had the override, and
+  `getConfigOverrides` returns a list of `config::AppliedOverride`, each with its owner, in place
+  of a map.
 
 - `f4vr::PlayerNodes` and `getPlayerNodes()`, deprecated in 0.4.0, are removed. Use
   `getVRPlayerNodes()`, which returns CommonLibF4's `RE::VRPlayerNodes`: the same table with

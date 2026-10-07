@@ -10,6 +10,7 @@ endif()
 
 add_executable(${PROJECT_NAME}_tests
   ConfigIniFileTests.cpp
+  ConfigOverridesTests.cpp
   FrameContextTests.cpp
   HistogramTests.cpp
   ImGuiPointerLogicTests.cpp
@@ -18,6 +19,7 @@ add_executable(${PROJECT_NAME}_tests
   UIDevLayoutFileTests.cpp
   # the plain-std sources under test
   ${SOURCE_DIR}/ConfigIniFile.cpp
+  ${SOURCE_DIR}/ConfigOverrides.cpp
   ${SOURCE_DIR}/perf/FrameContext.cpp
   ${SOURCE_DIR}/perf/Perf.cpp
   ${SOURCE_DIR}/perf/Report.cpp
