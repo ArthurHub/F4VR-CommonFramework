@@ -41,6 +41,7 @@ namespace f4cf::vrui
         void recenterWorldElement(const std::shared_ptr<UIElement>& element);
         void setWorldMoveButton(std::optional<vr::EVRButtonId> button);
         void setWorldMoveSmoothing(float seconds);
+        void setWorldMoveHoldDelay(float seconds);
 
     private:
         /**
@@ -66,9 +67,12 @@ namespace f4cf::vrui
             // the button was down in the frame before
             bool down = false;
 
-            // the button is down from a press that took hold of a root in the world: the hand's wand is
-            // hidden from the game until the button is released
+            // the button is down from a press on a root in the world: the hand's wand is hidden from the game
+            // until the button is released
             bool moving = false;
+
+            // that press took hold of a root, or found none to hold when it was held for the hold delay
+            bool tookHold = false;
         };
 
         /**
@@ -134,6 +138,9 @@ namespace f4cf::vrui
 
         // the time such a root takes to come about two thirds of the way to where the hand that moves it has it
         float _worldMoveSmoothSeconds = WORLD_MOVE_SMOOTH_SECONDS;
+
+        // how long the move button is held before it takes hold of such a root
+        float _worldMoveHoldDelaySeconds = 0.0f;
 
         WorldMoveHand _primaryMoveHand;
         WorldMoveHand _offhandMoveHand;
