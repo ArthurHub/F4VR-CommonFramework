@@ -24,7 +24,7 @@ why something drew where it did.
 | [`SubmitHook.h`](SubmitHook.h) / [`.cpp`](SubmitHook.cpp) | The shared `IVRCompositor::Submit` vtable hook and the draw-callback table every layer registers on. Owns the RTV over the submitted eye texture, the per-eye camera constants, the pipeline save/restore and the painter order. |
 | [`RenderUtils.h`](RenderUtils.h) / [`.cpp`](RenderUtils.cpp) | The game's D3D11 device/context, the engine's per-eye view-projection + posAdjust (`StereoCameraConstants`), and `ScopedPipelineState` — the RAII snapshot taken around the whole callback list. |
 | [`TextFont.h`](TextFont.h) / [`.cpp`](TextFont.cpp) | The framework's font as a signed-distance-field atlas, and the measuring a producer lays text out with (`measureText`, `fitText`, `textDescent`, `measureTextRun`). |
-| [`Texture.h`](Texture.h) / [`.cpp`](Texture.cpp) | Images loaded through the **engine's own** texture loader, shared per path, so a path resolves the way a NIF's texture path does — loose files and BA2 archives alike. |
+| [`Texture.h`](Texture.h) / [`.cpp`](Texture.cpp) | Images loaded through the **engine's own** texture loader, shared per path, so a path resolves the way a NIF's texture path does — loose files and BA2 archives alike. And images made from pixels in memory. |
 | [`SceneDepthCapture.h`](SceneDepthCapture.h) / [`.cpp`](SceneDepthCapture.cpp) | Takes hold of the engine's scene depth for the frame being submitted, read-only, so a layer can be occluded by the world. |
 | [`SceneDepthResample.h`](SceneDepthResample.h) / [`.cpp`](SceneDepthResample.cpp) | The copy made under an upscaler (DLSS/FSR), which draws the world into a sub-viewport of a full-size buffer and clears it before submit. |
 | [`SceneDepthDiagnostics.h`](SceneDepthDiagnostics.h) / [`.cpp`](SceneDepthDiagnostics.cpp) | `sSceneDepthStrategy` / `bSceneDepthDiagnostics`, the watch rows, and the shadow A/B that elected the shipped policy. |
@@ -135,6 +135,24 @@ frame.addImage(icon->view(), icon->isSRGB(), topLeft, topRight, bottomRight, bot
   `isSRGB()` reports what actually came back and the renderer re-encodes, since the overlay writes
   into a target that is not sRGB-encoded. (`Color::rgba(r, g, b, a)` takes the 0-255 bytes a color
   picker reports; a byte in is that byte out.)
+
+An image that is no file the engine can load, one a mod reads or draws itself, is a texture made
+from its pixels:
+
+```cpp
+// rows from the top, 4 bytes a pixel: red, green, blue, alpha
+auto picture = render::Texture::fromPixels("MyMod picture", width, height, rgba);
+frame.addImage(picture->view(), picture->isSRGB(), topLeft, topRight, bottomRight, bottomLeft, tint);
+```
+
+- **The pixels are copied**, and drawn as given: a byte in is that byte out, and the alpha is not
+  multiplied into the colors. The name is for the log.
+- **It is created on the GPU by its first `view()`**, so `fromPixels` runs on any thread and before
+  the renderer is up, and `width()` and `height()` are known from the start. `view()` stays game
+  thread only.
+- **It is shared with no one** and has one mip level. It lives as long as its holders: dropping it
+  while an image of it is shown is safe, as a published frame keeps the GPU texture.
+- **Pixels that do not fill the size** are logged, and the texture draws nothing.
 
 ## Layers and draw order
 

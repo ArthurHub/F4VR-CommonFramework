@@ -9,6 +9,7 @@
 #include "../f4vr/F4VROffsets.h"
 #include "../f4vr/F4VRUtils.h"
 #include "RE/Bethesda/BSGraphics.h"
+#include "RenderUtils.h"
 
 namespace f4cf::render
 {
@@ -45,11 +46,69 @@ namespace f4cf::render
             static std::unordered_set<std::string> described;
             return described.insert(path).second;
         }
+
+        /**
+         * Whether that many bytes are an image of the size, at four bytes a pixel.
+         */
+        bool isImageOfSize(const std::uint32_t width, const std::uint32_t height, const std::size_t bytes)
+        {
+            return width > 0 && height > 0 && bytes == std::uint64_t{ width } * height * 4;
+        }
+    }
+
+    /**
+     * A texture of the pixels on the device, as its shader view, or null when it cannot be made.
+     * The pixels are rows from the top, four bytes each as red, green, blue and alpha, and the alpha
+     * is not multiplied into the colors. They are drawn as given, with no sRGB decoding and one mip.
+     */
+    TextureView createTextureView(ID3D11Device* device, const std::uint32_t width, const std::uint32_t height, const std::span<const std::uint8_t> rgba)
+    {
+        if (!device || !isImageOfSize(width, height, rgba.size())) {
+            return {};
+        }
+
+        D3D11_TEXTURE2D_DESC desc{};
+        desc.Width = width;
+        desc.Height = height;
+        desc.MipLevels = 1;
+        desc.ArraySize = 1;
+        desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+        desc.SampleDesc.Count = 1;
+        desc.Usage = D3D11_USAGE_IMMUTABLE;
+        desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+
+        D3D11_SUBRESOURCE_DATA data{};
+        data.pSysMem = rgba.data();
+        data.SysMemPitch = width * 4;
+
+        Microsoft::WRL::ComPtr<ID3D11Texture2D> texture;
+        TextureView view;
+        if (FAILED(device->CreateTexture2D(&desc, &data, texture.GetAddressOf())) || FAILED(device->CreateShaderResourceView(texture.Get(), nullptr, view.GetAddressOf()))) {
+            return {};
+        }
+        return view; // the view keeps the texture alive
     }
 
     Texture::Texture(std::string path)
         : _path(std::move(path))
     {}
+
+    /**
+     * A texture from pixels, as fromPixels() makes it. Pixels that are not an image of the size
+     * make a texture of no size that draws nothing.
+     */
+    Texture::Texture(std::string name, const std::uint32_t width, const std::uint32_t height, std::vector<std::uint8_t> rgba)
+        : _path(std::move(name)),
+          _fromPixels(true)
+    {
+        if (!isImageOfSize(width, height, rgba.size())) {
+            logger::warn("Texture '{}' is not made: {} bytes are not {}x{} pixels of 4 bytes; images using it draw nothing", _path, rgba.size(), width, height);
+            return;
+        }
+        _pixels = std::move(rgba);
+        _width = width;
+        _height = height;
+    }
 
     /**
      * Hand out the live texture for a path, or make one.
@@ -79,6 +138,16 @@ namespace f4cf::render
         return texture;
     }
 
+    /**
+     * A texture of pixels in memory, which are copied: rows from the top, four bytes a pixel as red,
+     * green, blue and alpha, drawn as given. The name is for the log. It is created on the GPU by
+     * its first view(), so it can be made on any thread and before the renderer is up.
+     */
+    std::shared_ptr<Texture> Texture::fromPixels(std::string name, const std::uint32_t width, const std::uint32_t height, const std::span<const std::uint8_t> rgba)
+    {
+        return std::make_shared<Texture>(std::move(name), width, height, std::vector(rgba.begin(), rgba.end()));
+    }
+
     Texture::~Texture() = default;
 
     /**
@@ -90,6 +159,9 @@ namespace f4cf::render
      */
     TextureView Texture::view()
     {
+        if (_fromPixels) {
+            return pixelsView();
+        }
         if (!_loadAttempted) {
             _loadAttempted = true;
             RE::NiTexture* loaded = nullptr;
@@ -119,6 +191,29 @@ namespace f4cf::render
             return {};
         }
         return TextureView(view);
+    }
+
+    /**
+     * The view of a texture from pixels. The first call with the renderer up creates the texture on
+     * the GPU and lets the pixels go, and one that cannot be created is not tried again.
+     */
+    TextureView Texture::pixelsView()
+    {
+        if (_pixelsView || _pixels.empty()) {
+            return _pixelsView;
+        }
+        auto* device = getDevice();
+        if (!device) {
+            return {};
+        }
+        _pixelsView = createTextureView(device, _width, _height, _pixels);
+        _pixels = {};
+        if (_pixelsView) {
+            logger::info("Texture '{}' ready: {}x{}, from pixels in memory", _path, _width, _height);
+        } else {
+            logger::warn("Texture '{}' of {}x{} could not be created on the GPU; images using it draw nothing", _path, _width, _height);
+        }
+        return _pixelsView;
     }
 
     /**

@@ -152,6 +152,8 @@ Rules that cause bugs if missed:
   the process. Hold it as a static.
 - `Texture::load()` / `Texture::view()` are **game thread only**; the `TextureView` in a published
   frame is what keeps the GPU texture alive across the boundary.
+- `Texture::fromPixels()` makes a texture from RGBA pixels in memory, for an image that is no file
+  the engine can load. It runs on any thread: the GPU texture is created by the first `view()`.
 
 Full API, budgets, text placements and the occlusion story: [`src/render/README.md`](src/render/README.md).
 Scene-depth design + the `sSceneDepthStrategy` / `bSceneDepthDiagnostics` keys:
