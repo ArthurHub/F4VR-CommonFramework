@@ -5,6 +5,7 @@
 
 #include <imgui.h>
 
+#include "../render/Texture.h"
 #include "ImGuiCanvas.h"
 
 namespace f4cf::imgui::internal
@@ -37,6 +38,10 @@ namespace f4cf::imgui::internal
         void scale(float factor);
 
         ImDrawData drawData{};
+
+        // The views of the images in the draw data, which names each by its pointer alone. Held here, a
+        // texture the mod drops is alive until the last frame that draws it is drawn and let go.
+        std::vector<render::TextureView> textures;
     };
 
     /**

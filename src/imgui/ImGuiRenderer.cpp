@@ -89,6 +89,30 @@ float4 main(PS_INPUT input) : SV_Target {
 }
 )";
 
+        // An image of the content whose view decodes sRGB, drawn by ImGui's backend with this in place of
+        // its own pixel shader, which it matches but for the encoding. The canvas texture is not
+        // sRGB-encoded, so the sample is encoded back, or the image would come out darker than its file.
+        const char* K_SRGB_IMAGE_PIXEL_SHADER = R"(
+Texture2D image : register(t0);
+SamplerState imageSampler : register(s0);
+
+struct PS_INPUT {
+    float4 pos : SV_POSITION;
+    float4 col : COLOR0;
+    float2 uv : TEXCOORD0;
+};
+
+float3 linearToSrgb(float3 value) {
+    value = saturate(value);
+    return value <= 0.0031308 ? value * 12.92 : 1.055 * pow(max(value, 1.0e-6), 1.0 / 2.4) - 0.055;
+}
+
+float4 main(PS_INPUT input) : SV_Target {
+    float4 texel = image.Sample(imageSampler, input.uv);
+    return input.col * float4(linearToSrgb(texel.rgb), texel.a);
+}
+)";
+
         // --- shared by both threads ------------------------------------------------------------
         RenderFrame s_frame;
         std::mutex s_frameMutex;
@@ -118,9 +142,13 @@ float4 main(PS_INPUT input) : SV_Target {
         RenderTarget s_atlasTarget;
         RenderTarget s_dedicatedTarget;
 
+        // the context of the frame being drawn, for the callbacks of its draw data
+        ID3D11DeviceContext* s_drawContext = nullptr;
+
         // --- D3D objects, created once ----------------------------------------------------------
         ID3D11VertexShader* s_quadVertexShader = nullptr;
         ID3D11PixelShader* s_quadPixelShader = nullptr;
+        ID3D11PixelShader* s_srgbImagePixelShader = nullptr;
         ID3D11InputLayout* s_quadInputLayout = nullptr;
         ID3D11Buffer* s_quadVertexBuffer = nullptr;
         ID3D11SamplerState* s_atlasSampler = nullptr;
@@ -237,6 +265,16 @@ float4 main(PS_INPUT input) : SV_Target {
                 return false;
             }
             hr = device->CreatePixelShader(psBlob->GetBufferPointer(), psBlob->GetBufferSize(), nullptr, &s_quadPixelShader);
+            psBlob->Release();
+            if (FAILED(hr)) {
+                return false;
+            }
+
+            psBlob = nullptr;
+            if (!compileShader(K_SRGB_IMAGE_PIXEL_SHADER, "F4CFImGuiSrgbImagePS", "ps_5_0", &psBlob)) {
+                return false;
+            }
+            hr = device->CreatePixelShader(psBlob->GetBufferPointer(), psBlob->GetBufferSize(), nullptr, &s_srgbImagePixelShader);
             psBlob->Release();
             if (FAILED(hr)) {
                 return false;
@@ -443,7 +481,9 @@ float4 main(PS_INPUT input) : SV_Target {
             constexpr FLOAT transparent[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
             context->OMSetRenderTargets(1, &target.rtv, nullptr);
             context->ClearRenderTargetView(target.rtv, transparent);
+            s_drawContext = context;
             ImGui_ImplDX11_RenderDrawData(&drawData->drawData);
+            s_drawContext = nullptr;
 
             // pass 2: back onto the eye texture the hook host bound for us. Rebinding it is this
             // callback's responsibility - the host binds it once for the whole callback list, so a
@@ -462,6 +502,23 @@ float4 main(PS_INPUT input) : SV_Target {
             context->RSSetViewports(1, &viewport);
 
             drawQuads(submitFrame, quads, target.srv);
+        }
+    }
+
+    /**
+     * The state an image of the content is drawn in, set by a callback of the draw data before the image
+     * (render thread). The sampler clamps, where the backend's own wraps and lets an edge of the image
+     * take color from the opposite one. A view that decodes sRGB, told by the callback's data, is
+     * drawn with the shader that encodes it back. ImDrawCallback_ResetRenderState puts both back.
+     */
+    void setImageRenderState(const ImDrawList*, const ImDrawCmd* command)
+    {
+        if (!s_drawContext) {
+            return;
+        }
+        s_drawContext->PSSetSamplers(0, 1, &s_atlasSampler);
+        if (command->UserCallbackData) {
+            s_drawContext->PSSetShader(s_srgbImagePixelShader, nullptr, 0);
         }
     }
 

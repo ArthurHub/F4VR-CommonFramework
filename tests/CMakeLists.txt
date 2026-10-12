@@ -95,4 +95,9 @@ target_link_libraries(${PROJECT_NAME}_linked_tests PRIVATE ${PROJECT_NAME} Catch
 # loaded on its first call, which no test makes. Release drops the unused import whole, hence the ignored warning.
 target_link_options(${PROJECT_NAME}_linked_tests PRIVATE /DELAYLOAD:openvr_api.dll /IGNORE:4199)
 
+# the tests of the Dear ImGui UI layer, which a build without it does not have
+if(F4CF_WITH_IMGUI_UI)
+  target_sources(${PROJECT_NAME}_linked_tests PRIVATE linked/ImGuiImageTests.cpp)
+endif()
+
 catch_discover_tests(${PROJECT_NAME}_linked_tests)
