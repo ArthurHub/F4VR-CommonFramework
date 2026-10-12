@@ -357,6 +357,11 @@ loading).
     0.05 seconds about a third of a fast shake gets through, and the root trails a moving hand by
     the way the hand goes in that time. A longer time is steadier and trails more: at 0.15 seconds
     about an eighth gets through. 0 follows the hand at once.
+  - `setWorldMoveHoldDelay(seconds)` is how long the button is held before it takes hold of the
+    root, 0 by default. With a time, a press that is released before it moves nothing, so the mod
+    has a short press of the same button for something of its own, as a Back
+    (`VRControllers.isReleased(hand, button, seconds)`). The root is taken hold of where the ray is
+    on it when the time has passed.
   - The whole wand of the hand that moves a root is hidden from the game from the press to the
     release (`VRControllersSuppress`, under the owner `UIWorldMove`), also while the ray is beside
     the root, which trails it. A button that is already down when the ray comes to the root moves

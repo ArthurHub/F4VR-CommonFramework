@@ -88,7 +88,9 @@ major version is `0`, a minor bump may break the API; the **Upgrading** notes sa
   UI moves and turns with the hand, kept level, until the button is released. It follows the hand
   smoothly, which steadies the hand's shake: `setWorldMoveSmoothing` is how smoothly. It stays there
   until `recenterWorldElement` or the recenter distance puts it in front of the player again. A UI
-  is moved by a ray on it, which an interactive `UIImGuiPanel` tells vrui of by itself.
+  is moved by a ray on it, which an interactive `UIImGuiPanel` tells vrui of by itself. With
+  `setWorldMoveHoldDelay` the button takes hold only when it is held that long, so a short press of
+  it is the mod's to use.
 - **config color**: `ConfigBase::getColorValue` reads a color from the INI, written as `r,g,b` or
   `r,g,b,a` in 0 to 255, as `getTransformValue` reads a transform.
 - **config loads one at a time**: a change of the INI on disk is loaded on the file watcher's

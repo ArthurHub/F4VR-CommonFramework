@@ -334,9 +334,22 @@ namespace f4cf::vrui
     }
 
     /**
+     * How long the move button is held before it takes hold of a UI that stays in the world, in seconds. 0 by
+     * default: the press takes hold at once.
+     * - With a time, a press that is released before it moves nothing, so the mod has a short press of the same
+     *   button for something of its own.
+     */
+    void UIManager::setWorldMoveHoldDelay(const float seconds)
+    {
+        _worldMoveHoldDelaySeconds = (std::max)(0.0f, seconds);
+    }
+
+    /**
      * Let each hand move the roots that stay in the world with the move button:
      * - A press of the button while the hand's ray is on such a root, or on an element under it, takes hold of
      *   the root at the point the ray meets it, see holdWorldElement. A root is held by one hand.
+     * - With a hold delay (setWorldMoveHoldDelay) it takes hold when the button was held that long, of the root
+     *   the ray is on then. A press that is released before that moves nothing.
      * - The hand lets go when it releases the button, and the root stays where it is then.
      * - A button that is already down when the ray comes to a root moves nothing until it is released.
      * - From that press to the release the hand's whole wand is hidden from the game. The root trails the
@@ -354,18 +367,22 @@ namespace f4cf::vrui
             const bool pressed = down && !moveHand.down;
             moveHand.down = down;
 
+            const auto& pointedAt = context.getPointedAt(primaryHand);
+            const auto found = pointedAt ? findWorldElement(pointedAt->element) : _worldElements.end();
+            const auto logNothing = [&] {
+                logger::debug("UI Manager move button of the {} moves nothing: {}",
+                    handName(primaryHand),
+                    !pointedAt                      ? "its ray is on no UI"
+                    : found == _worldElements.end() ? "the UI its ray is on is not in the world"
+                                                    : "the other hand holds the UI");
+            };
+
             if (pressed) {
-                const auto& pointedAt = context.getPointedAt(primaryHand);
-                const auto found = pointedAt ? findWorldElement(pointedAt->element) : _worldElements.end();
                 if (found != _worldElements.end() && !found->hold) {
-                    holdWorldElement(*found, primaryHand, pointedAt->position);
                     moveHand.moving = true;
+                    moveHand.tookHold = false;
                 } else {
-                    logger::debug("UI Manager move button of the {} moves nothing: {}",
-                        handName(primaryHand),
-                        !pointedAt                      ? "its ray is on no UI"
-                        : found == _worldElements.end() ? "the UI its ray is on is not in the world"
-                                                        : "the other hand holds the UI");
+                    logNothing();
                 }
             } else if (!down && moveHand.moving) {
                 moveHand.moving = false;
@@ -380,6 +397,16 @@ namespace f4cf::vrui
             if (moveHand.moving) {
                 // in every frame, which costs a lookup and brings it back after a session load has reset it
                 vrcf::VRControllersSuppress.setAllSuppressed(WORLD_MOVE_SUPPRESS_KEY, hand, true);
+
+                // once in a press: when it began, or when it was held for the hold delay
+                if (!moveHand.tookHold && vrcf::VRControllers.isPressHeldDown(hand, *_worldMoveButton, _worldMoveHoldDelaySeconds)) {
+                    moveHand.tookHold = true;
+                    if (found != _worldElements.end() && !found->hold) {
+                        holdWorldElement(*found, primaryHand, pointedAt->position);
+                    } else {
+                        logNothing();
+                    }
+                }
             }
         }
     }
