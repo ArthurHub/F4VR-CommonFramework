@@ -124,6 +124,9 @@ major version is `0`, a minor bump may break the API; the **Upgrading** notes sa
   one shape. Every vertex carries its color, so a change of color no longer starts a new draw call:
   the lines of a layer go out in one draw, its screen text in one, and its fills and world text in
   one for each texture.
+- **render texture from pixels**: `render::Texture::fromPixels` makes a texture from RGBA pixels in
+  memory, for an image that is no file the engine can load. It is drawn as a loaded texture is, by
+  `PrimitiveDraw::addImage` and by `UIImagePanel::setImage`.
 
 **Upgrading**
 

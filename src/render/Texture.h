@@ -2,8 +2,10 @@
 
 #include <cstdint>
 #include <memory>
+#include <span>
 #include <string>
 #include <string_view>
+#include <vector>
 
 #include <d3d11.h>
 #include <wrl/client.h>
@@ -16,6 +18,8 @@ namespace f4cf::render
      * copy between the frame being published and the frame being drawn.
      */
     using TextureView = Microsoft::WRL::ComPtr<ID3D11ShaderResourceView>;
+
+    TextureView createTextureView(ID3D11Device* device, std::uint32_t width, std::uint32_t height, std::span<const std::uint8_t> rgba);
 
     /**
      * An image file loaded through the engine's own texture loader, for PrimitiveDraw images.
@@ -44,11 +48,16 @@ namespace f4cf::render
      * Only the engine's pointer to the D3D view is relied on; the size, mip count and colour encoding
      * are read back from D3D itself, since the rest of the engine's texture layout is not verified
      * for VR.
+     *
+     * fromPixels() makes one from pixels in memory, for an image that is no file the engine can load.
+     * It has no path and is shared with no one: it lives as long as its holders, and the frames that
+     * were published with its view.
      */
     class Texture
     {
     public:
         explicit Texture(std::string path);
+        Texture(std::string name, std::uint32_t width, std::uint32_t height, std::vector<std::uint8_t> rgba);
         ~Texture();
 
         Texture(const Texture&) = delete;
@@ -71,6 +80,11 @@ namespace f4cf::render
          */
         static std::shared_ptr<Texture> load(std::string_view path);
 
+        static std::shared_ptr<Texture> fromPixels(std::string name, std::uint32_t width, std::uint32_t height, std::span<const std::uint8_t> rgba);
+
+        /**
+         * The path of a loaded texture, or the name a texture from pixels was given for the log.
+         */
         const std::string& path() const
         {
             return _path;
@@ -82,11 +96,13 @@ namespace f4cf::render
          *
          * GAME thread only: the first call loads the file, and every call re-reads the engine's view
          * rather than caching it, because the engine may replace it (streaming mip levels in or out).
+         * The first call of a texture from pixels creates it on the GPU, once the renderer is up.
          */
         TextureView view();
 
         /**
-         * Size of the full image in texels; 0 until view() has returned a view.
+         * Size of the full image in texels; 0 until view() has returned a view. A texture from
+         * pixels has its size from the start.
          */
         std::uint32_t width() const
         {
@@ -109,8 +125,14 @@ namespace f4cf::render
 
     private:
         void describe(ID3D11ShaderResourceView* view);
+        TextureView pixelsView();
 
         std::string _path;
+
+        // a texture from pixels: the pixels until the GPU has them, and then its view
+        bool _fromPixels = false;
+        std::vector<std::uint8_t> _pixels;
+        TextureView _pixelsView;
 
         // holds the reference the loader hands back, adopted rather than added to, so releasing it is
         // what gives the texture back to the engine

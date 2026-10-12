@@ -74,6 +74,7 @@ add_executable(${PROJECT_NAME}_linked_tests
   linked/OffsetsFilesTests.cpp
   linked/QuaternionTests.cpp
   linked/SphereStyleTests.cpp
+  linked/TextureTests.cpp
   linked/UIContainerTests.cpp
   linked/UIToggleGroupContainerTests.cpp
   linked/VRControllersHapticTests.cpp
