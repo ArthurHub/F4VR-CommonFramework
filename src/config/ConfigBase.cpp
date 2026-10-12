@@ -169,7 +169,7 @@ namespace f4cf
     {
         _iniConfigVersion = ini.GetLongValue(INI_SECTION_DEBUG, "iVersion", 0);
         _logLevel = ini.GetLongValue(INI_SECTION_DEBUG, "iLogLevel", 2);
-        _logPattern = ini.GetValue(INI_SECTION_DEBUG, "sLogPattern", "%H:%M:%S.%e %L: %v");
+        _logPattern = ini.GetValue(INI_SECTION_DEBUG, "sLogPattern", "%H:%M:%S.%e %l [%-20!k] %v");
         debug.load(ini);
     }
 
