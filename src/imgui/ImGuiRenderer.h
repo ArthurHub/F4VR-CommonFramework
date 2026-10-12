@@ -30,5 +30,7 @@ namespace f4cf::imgui::internal
          * frame goes dormant. The texture the frame names is created when its first frame is drawn.
          */
         void publish(RenderFrame&& frame);
+
+        void setImageRenderState(const ImDrawList* drawList, const ImDrawCmd* command);
     }
 }

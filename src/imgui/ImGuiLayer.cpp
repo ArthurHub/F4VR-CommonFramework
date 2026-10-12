@@ -10,6 +10,7 @@
 #include "../f4vr/PlayerNodes.h"
 #include "../render/RenderUtils.h"
 #include "ImGuiFonts.h"
+#include "ImGuiImage.h"
 #include "ImGuiPointer.h"
 #include "ImGuiRenderer.h"
 #include "ImGuiSettings.h"
@@ -556,6 +557,7 @@ namespace f4cf::imgui::internal
         RenderFrame frame;
         frame.drawData = std::make_shared<ClonedDrawData>();
         frame.drawData->copyFrom(*ImGui::GetDrawData());
+        frame.drawData->textures = takeFrameTextures();
         frame.drawData->scale(s_atlasScale);
         frame.dedicated = display.dedicated;
         frame.textureWidth = display.textureWidth;

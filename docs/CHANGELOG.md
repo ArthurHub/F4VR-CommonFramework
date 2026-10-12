@@ -127,6 +127,9 @@ major version is `0`, a minor bump may break the API; the **Upgrading** notes sa
 - **render texture from pixels**: `render::Texture::fromPixels` makes a texture from RGBA pixels in
   memory, for an image that is no file the engine can load. It is drawn as a loaded texture is, by
   `PrimitiveDraw::addImage` and by `UIImagePanel::setImage`.
+- **imgui images**: the content of a canvas draws a `render::Texture` with `imgui::image`, an item at
+  the cursor as `ImGui::Image` is, and `imgui::addImage`, a rectangle of a draw list. The texture can
+  be dropped while its panel is shown: the frame that draws it keeps it until it has been drawn.
 
 **Upgrading**
 

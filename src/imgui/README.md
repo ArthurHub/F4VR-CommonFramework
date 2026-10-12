@@ -22,6 +22,7 @@ and a `vrui::UITextPanel` standing side by side read as one UI.
 | [`UIImGuiPanel.h`](UIImGuiPanel.h) / [`.cpp`](UIImGuiPanel.cpp) | The vrui adapter: a `UIElement` whose rectangle a `Canvas` fills. Takes `vrui::UIPanelStyle` and the vrui sizing modes, in vrui units. |
 | [`ImGuiPointer.h`](ImGuiPointer.h) / [`.cpp`](ImGuiPointer.cpp) | `Pointer`, reached as `imgui::pointer()` â€” the one pointer of the interactive canvases: a wand's ray as ImGui's mouse, its trigger as the mouse button, and that wand hidden from the game. Its state, which hands point, and its `PointerStyle`: where the ray is on the hand, and how the ray and its mark are drawn. |
 | [`ImGuiPointerLogic.h`](ImGuiPointerLogic.h) | The pointer's logic apart from the game, so it is unit tested: where a ray meets a quad and its plane, the quad of a curved canvas bent around its cylinder, whether a hand operates the UI and presses it, which hand owns the pointer, and how much a thumbstick scrolls. |
+| [`ImGuiImage.h`](ImGuiImage.h) / [`.cpp`](ImGuiImage.cpp) | `imgui::image` and `imgui::addImage` — a `render::Texture` in the content of a canvas, kept until the frame that draws it has been drawn. |
 | [`ImGuiSettings.h`](ImGuiSettings.h) / [`.cpp`](ImGuiSettings.cpp) | The two process-wide knobs: `setFontSizePixels` and `setSupersample`. |
 | [`ImGuiFonts.h`](ImGuiFonts.h) / [`.cpp`](ImGuiFonts.cpp) | Loads the framework's text font into the ImGui atlas, from the same bytes the primitive renderer draws with. |
 | [`ImGuiLayer.h`](ImGuiLayer.h) / [`.cpp`](ImGuiLayer.cpp) | Game-thread pump: one ImGui frame holding every visible canvas, or the dedicated canvas alone, cloned and published with each canvas's quad. |
@@ -202,6 +203,34 @@ imgui::pointer().setStyle(style);
 A mod that wants the player to set these reads the fields from its own INI and calls `setStyle`
 with them: `ConfigBase::getColorValue` reads a color written as `r,g,b,a`, and `getTransformValue`
 the offset. The framework has no INI keys for it.
+
+## Images
+
+The content of a canvas draws a [`render::Texture`](../render/README.md#images): one loaded from a
+file through the engine, or one made from pixels in memory.
+
+```cpp
+#include "imgui/ImGuiImage.h"
+
+_icon = render::Texture::load("Data\\Textures\\MyMod\\icon.dds");
+_picture = render::Texture::fromPixels("MyMod picture", width, height, rgba);
+
+panel->setContent([this] {
+    imgui::image(*_icon, ImVec2(64.0f, 64.0f));                    // an item at the cursor, as ImGui::Image
+    imgui::addImage(ImGui::GetWindowDrawList(), *_picture, min, max);  // in a rectangle, as ImDrawList::AddImage
+});
+```
+
+- **In place of ImGui's own.** `ImGui::Image` takes a bare pointer to a texture, which nothing keeps
+  alive for the render thread. These two take the texture, in layout pixels as ImGui's do, with an
+  optional tint that multiplies the image's colors and its alpha.
+- **The texture can be dropped at any time**, also while its panel is shown: the published frame
+  holds the views of its images until it has been drawn and let go.
+- **A texture that is not ready draws nothing.** One that has not loaded yet, and one whose file is
+  missing, keeps the room `imgui::image` was given.
+- **Colors are the file's.** A texture whose view decodes sRGB is encoded back, as the primitive
+  renderer does, and an image's edge takes no color from its opposite edge.
+- **What it costs.** A draw for each image, and two changes of the pipeline's state around it.
 
 ## A dedicated panel
 

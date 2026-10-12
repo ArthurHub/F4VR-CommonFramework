@@ -192,6 +192,9 @@ and composited as one quad, so N canvases cost one ImGui frame and one draw call
   hand, kept level and smoothed against the hand's shake (`setWorldMoveSmoothing`), and that wand
   stays hidden from the game. The panel only reports the ray on it
   (`UIFrameUpdateContext::markPointedAt`). Recentering the root puts it back.
+- **An image in the content is `imgui::image` / `imgui::addImage`** (`ImGuiImage.h`), with a
+  `render::Texture`, and never `ImGui::Image` with a raw view: the published frame then holds the
+  texture's view until it has been drawn, so the mod can drop the texture at any time.
 - Content can only be measured by drawing it, which happens after vrui lays the frame out, so a panel
   sized to its content is laid out at **last frame's** size.
 - `setFontSizePixels` / `setSupersample` are process-wide and read when the first canvas draws.
