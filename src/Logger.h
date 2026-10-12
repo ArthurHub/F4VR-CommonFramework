@@ -54,7 +54,7 @@ namespace f4cf::logger::internal
     /**
      * Current global log pattern
      */
-    inline std::string _logPattern = "%H:%M:%S.%e %l: %v";
+    inline std::string _logPattern = "%H:%M:%S.%e %l [%-20!k] %v";
 
     /**
      * Holds the last time of a log message per key.
