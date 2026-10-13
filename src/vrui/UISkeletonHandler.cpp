@@ -22,6 +22,37 @@ namespace f4cf::vrui
         constexpr auto FINGER_TIP_MARKER_NAME = "VRUI_FingerTipMarker";
         constexpr auto FINGER_TIP_MARKER_STYLE = "gold-medium";
 
+        // How far the marker is drawn from the point that presses, toward the player's head, found in the game.
+        // At the point itself the sphere is half inside a pressed button, and the two flicker as the hand moves.
+        constexpr float FINGER_TIP_MARKER_PULL_BACK = 0.3f;
+
+        // From the controller's node to the point that presses the UI while no hand is drawn there, along the node's axes,
+        // found in the game. The values are the right hand's; the left hand's are their mirror, left to right.
+        const RE::NiPoint3 WAND_PRESS_POINT_OFFSET(0.0f, -4.0f, -2.0f);
+
+        /**
+         * The point that presses the UI for a hand with no arm drawn at its controller.
+         */
+        RE::NiPoint3 getWandPressPoint(const bool primaryHand, const RE::NiTransform& wand)
+        {
+            RE::NiTransform local;
+            local.translate = WAND_PRESS_POINT_OFFSET;
+            local.rotate = MatrixUtils::getIdentityMatrix();
+            local.scale = 1.0f;
+            if (primaryHand == UIUtils::isLeftHandedMode()) {
+                local.translate.x = -local.translate.x;
+            }
+            return MatrixUtils::localToWorldTransform(wand, local).translate;
+        }
+
+        /**
+         * Where the marker of a point that presses is drawn: a little from the point toward the player's head.
+         */
+        RE::NiPoint3 getMarkerPosition(const RE::NiPoint3& pressPoint)
+        {
+            return pressPoint + MatrixUtils::vec3Norm(f4vr::getCameraPosition() - pressPoint) * FINGER_TIP_MARKER_PULL_BACK;
+        }
+
         /**
          * The tip of the index finger of the primary hand or the offhand, as the player's skeleton has it.
          * @return nothing while the hand bone is not at the controller, as no hand is drawn there
@@ -163,7 +194,8 @@ namespace f4cf::vrui
      * The point that presses the UI for the given hand: the tip of its index finger, or the controller while
      * no hand is drawn there, which needs a mod like FRIK. It is found once a frame, the first time it is asked for.
      * The point is marked with a small sphere while it is the controller, since there is no finger to see,
-     * and always when the config asks for it: [Debug] bVRUIShowFingerTip.
+     * and always when the config asks for it: [Debug] bVRUIShowFingerTip. The sphere is drawn a little
+     * nearer to the player's head than the point, so it stays out of the button it presses.
      */
     RE::NiPoint3 UISkeletonHandler::getIndexFingerTipWorldPosition(const bool primaryHand)
     {
@@ -174,13 +206,13 @@ namespace f4cf::vrui
 
         const auto wandNode = primaryHand ? f4vr::getPrimaryHandWandNode() : f4vr::getOffhandWandNode();
         const auto fingerTip = findIndexFingerTip(primaryHand, wandNode->world.translate);
-        const RE::NiPoint3 position = fingerTip.value_or(wandNode->world.translate);
+        const RE::NiPoint3 position = fingerTip ? *fingerTip : getWandPressPoint(primaryHand, wandNode->world);
 
         if (!fingerTip || g_mod->getConfig()->debug.vruiShowFingerTip) {
             // under the UI node of the hand, where the framework attaches all it draws on a hand: a mesh attached to the
             // controller node itself is drawn in an interior cell but not outside
             const auto uiNode = primaryHand ? UIUtils::getPrimaryWandAttachNode() : UIUtils::getOffhandWandAttachNode();
-            placeFingerTipMarker(primaryHand ? _primaryFingerTipMarker : _offhandFingerTipMarker, uiNode, position);
+            placeFingerTipMarker(primaryHand ? _primaryFingerTipMarker : _offhandFingerTipMarker, uiNode, getMarkerPosition(position));
         }
         found = position;
         return position;
