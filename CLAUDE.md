@@ -28,8 +28,8 @@ This creates a VS solution in `build/`. Open and build there. All project config
 - `COMMON_LIB_F4VR_PATH` — override path to CommonLibF4VR (default: `external/CommonLibF4VR`)
 
 **Tests:** `ctest --test-dir build -C Release` after a build. Catch2 unit tests in `tests/` for the game-independent logic, in two executables:
-- `tests/*.cpp` test code that is plain std (today `f4cf::perf`, the TOML editor, the config's INI file, its values and its overrides, the vrui dev layout file and the imgui pointer logic). The test binary compiles the `.cpp` files it covers directly, without the PCH, F4SE or CommonLibF4. Keep pure logic in such files: it is the first choice, since the logic is then tested apart from everything else.
-- `tests/linked/*.cpp` test code that needs the framework and CommonLibF4 to compile and link, and not the game to run (today `ConfigBase`, the INI readers, the `[Debug]` section and the offsets files, `MatrixUtils`, `Quaternion` and `CommonUtils`, the input binding parser and the binding prompts, the haptic patterns, the sphere styles, and the vrui container layout and toggle groups). The test binary links the framework as a mod does, and `tests/linked/Setup.cpp` sets CommonLibF4's `REL::NO_GAME`, so every game address resolves into a range that cannot be used. The addresses the framework resolves at startup (`F4VROffsets.h`) are then harmless, and a test that calls the game fails with an access violation. What reads the game or OpenVR is out of their reach: a node, the left-handed setting (so a prompt for the primary or the off hand), a controller's state.
+- `tests/*.cpp` test code that is plain std (today `f4cf::perf`, the TOML editor, the config's file, its values, its overrides and its migration, the vrui dev layout file and the imgui pointer logic). The test binary compiles the `.cpp` files it covers directly, without the PCH, F4SE or CommonLibF4. Keep pure logic in such files: it is the first choice, since the logic is then tested apart from everything else.
+- `tests/linked/*.cpp` test code that needs the framework and CommonLibF4 to compile and link, and not the game to run (today `ConfigBase`, the config readers, the `[Debug]` section and the offsets files, `MatrixUtils`, `Quaternion` and `CommonUtils`, the input binding parser and the binding prompts, the haptic patterns, the sphere styles, and the vrui container layout and toggle groups). The test binary links the framework as a mod does, and `tests/linked/Setup.cpp` sets CommonLibF4's `REL::NO_GAME`, so every game address resolves into a range that cannot be used. The addresses the framework resolves at startup (`F4VROffsets.h`) are then harmless, and a test that calls the game fails with an access violation. What reads the game or OpenVR is out of their reach: a node, the left-handed setting (so a prompt for the primary or the off hand), a controller's state.
 
 Add a new test file to `tests/CMakeLists.txt`, with the sources it covers for the first kind.
 
@@ -49,7 +49,7 @@ After cloning, run `pre-commit install` once to enforce clang-format on every co
 
 ### Namespaces
 - `f4cf::` — framework root (ModBase, Logger, ConfigBase)
-- `f4cf::config` — the parts `ConfigBase` is made of (`src/config/`): the INI file as the mod last loaded or saved it, typed values, session overrides, version migration, the special values' text forms and their readers, the offsets JSON and its files, the `[Debug]` section
+- `f4cf::config` — the parts `ConfigBase` is made of (`src/config/`): the TOML file as the mod last loaded or saved it, typed values, session overrides, version migration, the special values' text forms and their readers, the offsets JSON and its files, the `[Debug]` section
 - `f4cf::debug` — immediate-mode in-world debug draw overlay (one layer on the shared overlay renderer)
 - `f4cf::f4vr` — Fallout 4 VR game utilities (node/skeleton manipulation, animations, debug dumps)
 - `F4SEVR` (in `src/f4sevr/`) — ported F4SE VR SDK: Papyrus VM interop + native-function registration (note: this folder is `namespace F4SEVR`, not `f4cf::f4sevr`)
@@ -71,26 +71,28 @@ After cloning, run `pre-commit install` once to enforce clang-format on every co
 A global singleton `f4cf::g_mod` holds the active mod instance.
 
 ### Config System (`src/config/`)
-`ConfigBase` wraps simpleini with file watching for hot-reload. Derive from it, override `loadIniConfigInternal()`, and call `setupConfig(path)`.
+`ConfigBase` loads a TOML file (toml++) with file watching for hot-reload. Derive from it, override `loadConfigInternal(const toml::table&)`, and pass the file's path and the default's resource id to its constructor. A mod reads a value as `config[SECTION]["key"].value_or(default)`, which gives the default for a key that is missing or of another type (toml++ reads an integer as a float and as a bool); the readers of `ConfigReaders` (`getTransformValue`, `getInputBindingValue`, ...) read the values that are text.
 
-- **INI base path:** `%USERPROFILE%\Documents\My Games\Fallout4VR\Mods_Config\{ModName}\`
-- **Default INI** is embedded in the DLL as RCDATA resource ID 101 and extracted on first run
-- **Config version migration:** the `[Debug] iVersion` key; when the shipped INI's value is higher than the user's, `ConfigBase` rewrites the user's INI into the shipped layout, with the user's values for the keys it still has (`config::migrateIniValues` in `src/config/IniMigration.h`, plain std and SimpleIni, and unit tested)
-- File watcher triggers `loadIniConfigInternal()` automatically on disk change — no restart needed
-- A load runs on the watcher's thread for a change on disk and on the caller's for a session override (`setConfigOverride`), one at a time: `_loadMutex` is held from the read of the file to the end of `loadIniConfigInternal()`
-- The mod's own save is not loaded back: the watcher loads the file only when its content is not what the mod last loaded or saved (`config::IniFile` in `src/config/IniFile.h`, plain std and unit tested). A save has to go through `ConfigBase` (`saveIniConfigValue(s)`, or `loadIniFromFile` and `saveIniToFile`) to be taken as the mod's own. A read that loads no values (`getConfigValue`, the DebugAdjuster's field mode) parses that kept content and reads no disk
+- **Config base path:** `%USERPROFILE%\Documents\My Games\Fallout4VR\Mods_Config\{ModName}\{ModName}.toml`
+- **Default config** is embedded in the DLL as RCDATA (resource ID 101) and written on first run
+- **Saves** (`saveConfigValue(s)`) go through `common::TomlEditor`: only the values change in the file, its comments and layout stay, and a file that already holds them is not written. A value given as text is written in the type the file has for the key (`"1.250"` over a float is the float 1.25), and not written when it is not of it. A mod saves several values with one `saveConfigValues` (the keys of one section, or `config::ConfigEntry` values of any sections), in its `save()` override: each save reads and writes the whole file, so a `saveConfigValue` in a loop costs a file write per value. Values in nested tables can't be saved or overridden yet (a TODO in `ConfigBase.h`)
+- **A file that is not TOML** (a person in the middle of editing it, a string without its quotes) is logged with the line and what is wrong, and never written over: the values loaded before stay, and before any were the embedded default's apply. Its other file-watch events are not parsed again until it changes, and a save refuses it
+- **Config version migration:** the `[Debug] iVersion` key; when the shipped config's value is higher than the user's, `ConfigBase` writes the shipped config with the user's values for the keys it still has with a value of the same type (`config::migrateValues` in `src/config/ConfigMigration.h`, plain std and toml++, and unit tested), then calls `updateConfigToLatestVersionCustom` for what changed type or name. The old file is kept as `{name}_backup_v{N}.toml`
+- File watcher triggers `loadConfigInternal()` automatically on disk change — no restart needed
+- A load runs on the watcher's thread for a change on disk and on the caller's for a session override (`setConfigOverride`), one at a time: `_loadMutex` is held from the read of the file to the end of `loadConfigInternal()`
+- The mod's own save is not loaded back: the watcher loads the file only when its content is not what the mod last loaded or saved (`config::ConfigFile` in `src/config/ConfigFile.h`, plain std and unit tested). A save has to go through `ConfigBase` (`saveConfigValue(s)`) to be taken as the mod's own. A read that loads no values (`getConfigValue`, the DebugAdjuster's field mode) parses that kept content and reads no disk
 - Session overrides (`setConfigOverride(s)`, `clearConfigOverride(s)`, several with one reload): a set loads that kept content of the file and reads no disk, so it can be done many times a second for a preview, and a clear reads the file. Only a key that its owner did not override before is logged at info and is a `config.override` event
-- Every override has an owner, the first argument of each call, and an owner clears only its own (`config::Overrides` in `src/config/Overrides.h`, which holds them under its own lock and puts them into a loaded INI; plain std and SimpleIni, and unit tested). The devbench tool's is `devbench`, and a mod's API passes its caller's name. With two owners on one key the one set last applies, and the other again when it is cleared
-- To react to a load, a mod subscribes (`subscribeForIniChangedEvent`). A load only marks that it ran, and `ModBase` calls the subscribers on the game thread at the start of the next frame, once for all the loads since the frame before: a change on disk, an override, `reload()`, and the load when a game session starts
+- Every override has an owner, the first argument of each call, and an owner clears only its own (`config::Overrides` in `src/config/Overrides.h`, which holds them under its own lock and puts them into a loaded config in the type the file has for the key; plain std and toml++, and unit tested). The devbench tool's is `devbench`, and a mod's API passes its caller's name. With two owners on one key the one set last applies, and the other again when it is cleared
+- To react to a load, a mod subscribes (`subscribeForConfigChangedEvent`). A load only marks that it ran, and `ModBase` calls the subscribers on the game thread at the start of the next frame, once for all the loads since the frame before: a change on disk, an override, `reload()`, and the load when a game session starts
 
-Standard `[Debug]` INI keys provided by the base class:
-```ini
-iLogLevel = 2              # 0=trace, 1=debug, 2=info
-sLogPattern = %H:%M:%S.%e %l: %v
-fFlowFlag1/2/3 = 0   # Runtime feature toggles, read via g_config.debug.flowFlag1
-sFlowText1/2 =        # Debug text fields
-sDumpDataOnceNames =  # Comma-separated: ui_tree, skelly, fp_skelly, geometry, world, all_nodes, perf (log the perf table), perf_reset (log it and start a new window; the first one switches recording on)
-sAddItemsOnceNames =  # Bulk-add items once: first token = operation (get=obtainable/get-all=everything/print=dry-run of get/print-all=dry-run of get-all), then "category[:filter]" tokens (weapons/throwables/ammo/armor/aid/misc); filter is '|'-sep key=value (name=/keyword= any; armor slot=/class=light|heavy|none; weapon class=melee|gun|unarmed)
+Standard `[Debug]` config keys provided by the base class:
+```toml
+iLogLevel = 2                 # 0=trace, 1=debug, 2=info
+sLogPattern = "%H:%M:%S.%e %l: %v"
+fFlowFlag1 = 0.0              # also 2 and 3: runtime feature toggles, read via g_config.debug.flowFlag1
+sFlowText1 = ""               # also 2: debug text fields
+sDumpDataOnceNames = ""       # Comma-separated: ui_tree, skelly, fp_skelly, geometry, world, all_nodes, perf (log the perf table), perf_reset (log it and start a new window; the first one switches recording on)
+sAddItemsOnceNames = ""       # Bulk-add items once: first token = operation (get=obtainable/get-all=everything/print=dry-run of get/print-all=dry-run of get-all), then "category[:filter]" tokens (weapons/throwables/ammo/armor/aid/misc); filter is '|'-sep key=value (name=/keyword= any; armor slot=/class=light|heavy|none; weapon class=melee|gun|unarmed)
 ```
 
 ### Logging (`src/Logger.h`)
@@ -125,7 +127,7 @@ layer at `DRAW_ORDER_DEBUG` — on top of everything and deliberately not occlud
 shape behind a wall is exactly the one you need to see. Call each frame to keep a shape visible
 (auto-clears per frame); `sec > 0` persists a one-shot for that long. Zero cost and no hooks until
 the first draw call (lazy install, driven by `ModBase` around `onFrameUpdate`).
-`[Debug]` INI keys: `bDebugDrawEnabled`, `sDebugDrawDisabledChannels`, `sDebugDrawToggleBinding`.
+`[Debug]` config keys: `bDebugDrawEnabled`, `sDebugDrawDisabledChannels`, `sDebugDrawToggleBinding`.
 Usage: [`src/debug/README.md`](src/debug/README.md); design: [`docs/tech/debug-draw-overlay.md`](docs/tech/debug-draw-overlay.md).
 
 ### Overlay Rendering (`src/render/`)
@@ -261,8 +263,8 @@ Copy the entire `mod-template/` directory into the new mod's repo. Then replace 
 |------|----------------|
 | `CMakeLists.txt` | `NAME`, `FRIENDLY_NAME`, `VERSION` at the top |
 | `src/MyMod.h` / `src/MyMod.cpp` | Rename files; update class name and `#include` |
-| `src/Config.h` / `src/Config.cpp` | Update class name, INI section name |
-| `data/config/MyMod.ini` | Rename file; update `[MyMod]` section header |
+| `src/Config.h` / `src/Config.cpp` | Update class name, config section name |
+| `data/config/MyMod.toml` | Rename file; update `[MyMod]` section header |
 | `cmake/Version.h.in` | (no change needed — driven by CMakeLists.txt) |
 | `README.md` | Update links, description |
 | `CLAUDE.md` | The mod's own Claude Code guidance; rename the tokens (`MyMod`, `My Mod`, `my_mod`, `g_myMod`) and fill in its TODOs |
@@ -301,15 +303,15 @@ Opens a VS solution in `build/`. Debug, Release and Tracy (Release plus the Trac
 |------|---------|
 | `src/MyMod.h` | Mod class (extends `ModBase`); declares lifecycle overrides; holds global `g_myMod` singleton |
 | `src/MyMod.cpp` | `F4SEPlugin_Query` / `F4SEPlugin_Load` entry points; lifecycle method bodies |
-| `src/Config.h` | `Config` class (extends `ConfigBase`); declares INI-backed member variables |
-| `src/Config.cpp` | `loadIniConfigInternal()` — reads each INI key via `simpleini`; holds `g_config` singleton |
-| `src/Resources.h` | Resource IDs (e.g., `IDR_CONFIG_INI = 101`) for files embedded in the DLL |
+| `src/Config.h` | `Config` class (extends `ConfigBase`); declares config-backed member variables |
+| `src/Config.cpp` | `loadConfigInternal()` — reads each key from the `toml::table`; holds `g_config` singleton |
+| `src/Resources.h` | Resource IDs (e.g., `IDR_CONFIG = 101`) for files embedded in the DLL |
 | `src/PCH.h` | Precompiled header — includes F4SE, RE/Fallout.h, REL/Relocation.h, Logger.h, Version.h |
 | `cmake/Version.h.in` | Template → auto-generated `Version.h` with `Version::PROJECT`, `Version::NAME`, semver consts |
 | `cmake/version.rc.in` | Template → DLL metadata resource (file version, product name) |
-| `cmake/resources.rc.in` | Template → embeds `MyMod.ini` as binary resource ID 101 inside the DLL |
+| `cmake/resources.rc.in` | Template → embeds `MyMod.toml` as binary resource ID 101 inside the DLL |
 | `cmake/package.cmake` | Run by the `package_mod` target: stages files → zips to versioned `.7z` |
-| `data/config/MyMod.ini` | Shipped INI (also embedded in DLL as default). Sections: `[MyMod]` for settings, `[Debug]` for log level/pattern/debug flags |
+| `data/config/MyMod.toml` | Shipped config (also embedded in DLL as default). Sections: `[MyMod]` for settings, `[Debug]` for log level/pattern/debug flags |
 
 ### 5. Lifecycle hooks (override in MyMod.cpp)
 
@@ -325,13 +327,13 @@ void onFrameUpdate()        // fires every frame while PlayerCharacter is initia
 ### 6. Adding config values
 
 1. Add a member to `Config.h`: `float myValue = 0.0f;`
-2. Read it in `Config.cpp` → `loadIniConfigInternal()`:
+2. Read it in `Config.cpp` → `loadConfigInternal()`:
    ```cpp
-   myValue = static_cast<float>(ini.GetDoubleValue(DEFAULT_SECTION, "fMyValue", 0.0));
+   myValue = config[DEFAULT_SECTION]["fMyValue"].value_or(0.0f);
    ```
-3. Add the key to `data/config/MyMod.ini` under `[MyMod]`.
+3. Add the key to `data/config/MyMod.toml` under `[MyMod]`: `fMyValue = 1.0` (a float with its decimal point, a string in quotes, a Windows path in single quotes).
 
-The file watcher in `ConfigBase` calls `loadIniConfigInternal()` automatically when the INI changes on disk — no restart needed.
+The file watcher in `ConfigBase` calls `loadConfigInternal()` automatically when the file changes on disk — no restart needed.
 
 ### 7. Framework assets (`f4cf\`)
 
@@ -388,10 +390,10 @@ F4VR/
 | `src/PCH.h` | Precompiled header — included implicitly in all TUs |
 | `src/ModBase.h/.cpp` | Plugin base class and F4SE registration |
 | `src/Logger.h` | Logging macros |
-| `src/config/ConfigBase.h/.cpp` | INI config with hot-reload |
-| `src/config/IniFile.*`, `IniValue.*`, `Overrides.*`, `ReloadSubscribers.*`, `IniMigration.*`, `IniValueParsers.*`, `OffsetsJson.h` | The parts of the config that are apart from the game, so unit tested: the INI file as the mod last loaded or saved it, a typed INI value, the session overrides with their owners, the subscribers to a reload, the move of a user's values into the INI of a newer version, the text forms of a transform, a hand pose, a color and a list of names, and the offsets JSON |
-| `src/config/IniReaders.*`, `OffsetsFiles.*` | The readers of a transform, a hand pose, a binding, a color and an activation sphere's section from a loaded INI (`getTransformValue`, `loadWandActivationConfig`, ...), and the loading and saving of the offsets JSON files (`loadOffsetsFromFilesystem`, `saveOffsetsToJsonFile`, ...). `ConfigBase` derives from both, so a mod's config calls them by name |
-| `src/config/DebugSection.*` | The values of the `[Debug]` INI section, which a mod reads as `config->debug`, and `DebugAdjustTarget` |
+| `src/config/ConfigBase.h/.cpp` | TOML config with hot-reload |
+| `src/config/ConfigFile.*`, `ConfigValue.*`, `Overrides.*`, `ReloadSubscribers.*`, `ConfigMigration.*`, `ValueParsers.*`, `OffsetsJson.h` | The parts of the config that are apart from the game, so unit tested: the TOML file as the mod last loaded or saved it, a typed value and the type a value given as text takes, the session overrides with their owners, the subscribers to a reload, the move of a user's values into the config of a newer version, the text forms of a transform, a hand pose, a color and a list of names, and the offsets JSON |
+| `src/config/ConfigReaders.*`, `OffsetsFiles.*` | The readers of a transform, a hand pose, a binding, a color and an activation sphere's section from a loaded config (`getTransformValue`, `loadWandActivationConfig`, ...), and the loading and saving of the offsets JSON files (`loadOffsetsFromFilesystem`, `saveOffsetsToJsonFile`, ...). `ConfigBase` derives from both, so a mod's config calls them by name |
+| `src/config/DebugSection.*` | The values of the `[Debug]` config section, which a mod reads as `config->debug`, and `DebugAdjustTarget` |
 | `src/f4vr/` | Game node/skeleton/animation utilities |
 | `src/f4sevr/` | Papyrus native function registration helpers |
 | `src/vrcf/VRControllersManager.h` | Controller button/trigger state |

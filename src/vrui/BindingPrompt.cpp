@@ -111,7 +111,7 @@ namespace f4cf::vrui
 
         /**
          * How a button must be worked, in words, in the config's own terms - a tap is a TAP - so a player
-         * reading a prompt with no icon can find it in the INI.
+         * reading a prompt with no icon can find it in the config.
          */
         std::string_view activationName(const vrcf::ActivationType type)
         {

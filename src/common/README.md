@@ -90,5 +90,5 @@ writeFile(path, editor.text());
 - `Quaternion` and `MatrixUtils` operate on CommonLibF4VR's `RE::NiPoint3` / `RE::NiMatrix3` /
   `RE::NiTransform`, so include `RE/Fallout.h` (already in the [PCH](../PCH.h)) before use.
 - Angle helpers come in radians and `...Degrees` variants — pick the matching pair to avoid
-  unit bugs. INI transforms (`ConfigBase`) store rotations in **degrees**.
+  unit bugs. Config transforms (`ConfigBase`) store rotations in **degrees**.
 - `slerp` math is adapted from VRIK (credit: prog).

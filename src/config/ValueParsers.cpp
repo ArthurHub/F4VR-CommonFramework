@@ -1,4 +1,4 @@
-#include "IniValueParsers.h"
+#include "ValueParsers.h"
 
 #include <cctype>
 #include <charconv>
@@ -48,9 +48,9 @@ namespace f4cf::config
      * are allowed.
      * Returns no value when the text does not have the seven numbers.
      */
-    std::optional<IniTransform> parseTransform(const char* text)
+    std::optional<ParsedTransform> parseTransform(const char* text)
     {
-        IniTransform transform;
+        ParsedTransform transform;
         const int parsed = sscanf_s(text,
             " %f , %f , %f ; %f , %f , %f ; %f",
             &transform.x,

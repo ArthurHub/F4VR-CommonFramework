@@ -9,17 +9,17 @@ namespace f4cf::config
      * Returns whether the owner had no override of the key before, so a new value for one it already has
      * can be told from a new override.
      */
-    bool Overrides::set(const std::string& owner, const IniKey& key, std::string value)
+    bool Overrides::set(const std::string& owner, const ConfigKey& key, std::string value)
     {
         std::lock_guard lock(_mutex);
         return setEntry(owner, key, std::move(value));
     }
 
     /**
-     * Set the owner's overrides of several keys, see set, each value in its INI string form. Returns the
+     * Set the owner's overrides of several keys, see set, each value in its text form. Returns the
      * ones for a key that the owner did not override before, in the order given.
      */
-    std::vector<AppliedOverride> Overrides::set(const std::string& owner, const std::vector<IniOverride>& overrides)
+    std::vector<AppliedOverride> Overrides::set(const std::string& owner, const std::vector<ConfigEntry>& overrides)
     {
         std::lock_guard lock(_mutex);
 
@@ -38,7 +38,7 @@ namespace f4cf::config
      * set before it applies again, and with none left the file's value does.
      * Returns whether the owner had one.
      */
-    bool Overrides::clear(const std::string& owner, const IniKey& key)
+    bool Overrides::clear(const std::string& owner, const ConfigKey& key)
     {
         std::lock_guard lock(_mutex);
         return clearEntry(owner, key);
@@ -48,11 +48,11 @@ namespace f4cf::config
      * Remove the owner's overrides of several keys, see clear. Returns the keys it had one for, in the order
      * given.
      */
-    std::vector<IniKey> Overrides::clear(const std::string& owner, const std::vector<IniKey>& keys)
+    std::vector<ConfigKey> Overrides::clear(const std::string& owner, const std::vector<ConfigKey>& keys)
     {
         std::lock_guard lock(_mutex);
 
-        std::vector<IniKey> cleared;
+        std::vector<ConfigKey> cleared;
         for (const auto& key : keys) {
             if (clearEntry(owner, key)) {
                 cleared.push_back(key);
@@ -81,7 +81,7 @@ namespace f4cf::config
     /**
      * The value that applies for a key, or no value when no owner overrides it.
      */
-    std::optional<std::string> Overrides::find(const IniKey& key) const
+    std::optional<std::string> Overrides::find(const ConfigKey& key) const
     {
         std::lock_guard lock(_mutex);
 
@@ -105,23 +105,22 @@ namespace f4cf::config
     }
 
     /**
-     * Put the value that applies for every overridden key into a loaded INI, in place of the file's, before
-     * the mod reads its values from it. A key or a section that the file does not have is added.
-     * The value is set in its string form, which the mod's read of the key parses as it does the file's.
+     * Put the value that applies for every overridden key into a loaded config, in place of the file's, before
+     * the mod reads its values from it, see applyOverride.
      */
-    void Overrides::applyTo(CSimpleIniA& ini) const
+    void Overrides::applyTo(toml::table& table) const
     {
         std::lock_guard lock(_mutex);
 
         for (const auto& [key, entries] : _entries) {
-            ini.SetValue(key.section.c_str(), key.key.c_str(), entries.back().value.c_str());
+            applyOverride(table, key, entries.back().value);
         }
     }
 
     /**
      * Set the owner's override of a key, with the lock already held. Returns whether it had none before.
      */
-    bool Overrides::setEntry(const std::string& owner, const IniKey& key, std::string value)
+    bool Overrides::setEntry(const std::string& owner, const ConfigKey& key, std::string value)
     {
         auto& entries = _entries[key];
         const bool added = std::erase_if(entries, [&](const Entry& entry) {
@@ -134,7 +133,7 @@ namespace f4cf::config
     /**
      * Remove the owner's override of a key, with the lock already held. Returns whether it had one.
      */
-    bool Overrides::clearEntry(const std::string& owner, const IniKey& key)
+    bool Overrides::clearEntry(const std::string& owner, const ConfigKey& key)
     {
         const auto found = _entries.find(key);
         if (found == _entries.end()) {
@@ -148,5 +147,26 @@ namespace f4cf::config
             _entries.erase(found);
         }
         return removed;
+    }
+
+    /**
+     * Put a value given as text into a loaded config, in place of the file's, in the type the file has for the key,
+     * see typedLike. A key or a section that the file does not have is added. Text that is not of the file's type is
+     * put as a string, so the mod's read of the key gets its default, as from a value of the file of another type.
+     */
+    void applyOverride(toml::table& table, const ConfigKey& key, const std::string_view value)
+    {
+        auto* section = table.get_as<toml::table>(key.section);
+        if (!section) {
+            section = table.insert_or_assign(key.section, toml::table{}).first->second.as_table();
+        }
+        const auto typed = typedLike(section->get(key.key), value);
+        if (!typed) {
+            section->insert_or_assign(key.key, std::string(value));
+            return;
+        }
+        typed->get("v")->visit([&](const auto& v) {
+            section->insert_or_assign(key.key, v);
+        });
     }
 }

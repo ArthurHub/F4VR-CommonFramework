@@ -200,9 +200,9 @@ style.rayColor = render::Color::rgba(10, 250, 120, 200);
 imgui::pointer().setStyle(style);
 ```
 
-A mod that wants the player to set these reads the fields from its own INI and calls `setStyle`
+A mod that wants the player to set these reads the fields from its own config and calls `setStyle`
 with them: `ConfigBase::getColorValue` reads a color written as `r,g,b,a`, and `getTransformValue`
-the offset. The framework has no INI keys for it.
+the offset. The framework has no config keys for it.
 
 ## Images
 

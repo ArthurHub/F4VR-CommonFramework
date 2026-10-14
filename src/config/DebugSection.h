@@ -1,13 +1,13 @@
 #pragma once
 
-#include <SimpleIni.h>
 #include <array>
 #include <cstdint>
 #include <string>
+#include <toml++/toml.hpp>
 
 namespace f4cf
 {
-    constexpr auto INI_SECTION_DEBUG = "Debug";
+    constexpr auto CONFIG_SECTION_DEBUG = "Debug";
 
     /**
      * Which debug field the in-game DebugAdjuster is bound to. None disables it.
@@ -22,7 +22,7 @@ namespace f4cf
         FlowFlag3,
         FlowFlag123,
         HapticTest,
-        // Tune an arbitrary INI field referenced by debug.adjustField ("Section::Key").
+        // Tune an arbitrary config field referenced by debug.adjustField ("Section::Key").
         Field,
     };
 }
@@ -30,7 +30,7 @@ namespace f4cf
 namespace f4cf::config
 {
     /**
-     * Runtime debug/tuning state, backed by the [Debug] INI section and grouped here so the
+     * Runtime debug/tuning state, backed by the [Debug] config section and grouped here so the
      * fields stay together instead of loose on ConfigBase. Field names drop the "Debug" prefix
      * (the [Debug] section already scopes them): access as e.g. config->debug.flowFlag1.
      */
@@ -49,7 +49,7 @@ namespace f4cf::config
         // Consumers can convert via frik::api::FRIKApi::HandPoseData::fromFloats(debug.handPose).
         std::array<float, 22> handPose{};
         DebugAdjustTarget adjustTarget = DebugAdjustTarget::None;
-        // For DebugAdjustTarget::Field: the "Section::Key" of the arbitrary INI field being tuned.
+        // For DebugAdjustTarget::Field: the "Section::Key" of the arbitrary config field being tuned.
         std::string adjustField;
         // f4cf::debug::DebugDraw overlay: the master switch, comma-separated channel names to skip, a controller
         // binding (vrcf::parseInputBinding grammar) that flips the overlay in the headset, and where the watch
@@ -73,10 +73,10 @@ namespace f4cf::config
         // own while the game runs, see vrui::UIDevLayout.
         bool vruiDevLayout = false;
         // One-shot name lists consumed via ConfigBase::checkDebugDumpDataOnceFor() / consumeDebugAddItemsOnce();
-        // each is cleared (in memory + INI) once consumed so the file-watch reload doesn't re-trigger it.
+        // each is cleared (in memory + file) once consumed so the file-watch reload doesn't re-trigger it.
         std::string dumpDataOnceNames;
         std::string addItemsOnceNames;
 
-        void load(const CSimpleIniA& ini);
+        void load(const toml::table& config);
     };
 }

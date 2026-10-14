@@ -84,7 +84,7 @@ source_group(TREE ${ROOT_DIR} FILES ${headers} ${sources} ${inls})
 
 # >>> Resource files
 list(APPEND resource_files
-  "${ROOT_DIR}/data/config/${NAME}.ini"
+  "${ROOT_DIR}/data/config/${NAME}.toml"
 )
 # NOTE: Additional resources added here
 

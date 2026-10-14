@@ -347,7 +347,7 @@ loading).
   until the button is released. Nothing by default, and the roots are then not moved.
   - It is one button for every root in the world. It is a button and not a binding: a binding names
     a hand, and this is the button of the hand that points, whichever it is. `vrcf::parseButton`
-    reads one from an INI value.
+    reads one from a config value.
   - The root moves and turns with that hand's wand around the point the ray meets it, as a thing at
     the end of a stick. It stays level: it turns to the sides and tilts up and down with the hand,
     and does not roll with it.
@@ -379,8 +379,8 @@ loading).
   release to the next frame.
 - A dev layout mode tunes placement live through a file of its own, with nothing for the mod to
   call. It is on while `bVRUIDevLayout` in the config's `[Debug]` section is true; the key is not in
-  the shipped INI, so add the line. [`UIDevLayout`](UIDevLayout.h) then keeps
-  `<mod>_DevLayout.ini`, beside the mod's INI:
+  the shipped config, so add the line. [`UIDevLayout`](UIDevLayout.h) then keeps
+  `<mod>_DevLayout.ini`, beside the mod's config file:
   - Every attached root is a section named after it, with a line for the root, keyed by its name,
     and one for each element under it, keyed by its path below the root (`Row1.SaveButton`). So the
     roots of a mod need different names.

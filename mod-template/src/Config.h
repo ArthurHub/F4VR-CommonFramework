@@ -7,20 +7,20 @@
 namespace my_mod
 {
     static const auto BASE_MOD_PATH = BASE_PATH + "\\" + std::string(Version::PROJECT);
-    static const auto INI_PATH = BASE_MOD_PATH + "\\" + std::string(Version::PROJECT) + ".ini";
+    static const auto CONFIG_PATH = BASE_MOD_PATH + "\\" + std::string(Version::PROJECT) + ".toml";
 
     class Config : public ConfigBase
     {
     public:
         explicit Config()
-            : ConfigBase(Version::PROJECT, INI_PATH, IDR_CONFIG_INI)
+            : ConfigBase(Version::PROJECT, CONFIG_PATH, IDR_CONFIG)
         {}
 
         // Mod configs
         float myConfigValue = 0.0f;
 
     protected:
-        virtual void loadIniConfigInternal(const CSimpleIniA& ini) override;
+        virtual void loadConfigInternal(const toml::table& config) override;
     };
 
     // Global singleton for easy access

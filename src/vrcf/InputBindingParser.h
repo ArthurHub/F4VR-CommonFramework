@@ -10,7 +10,7 @@
 namespace f4cf::vrcf
 {
     /**
-     * String parsing helpers for building an InputBinding from config (INI) text.
+     * String parsing helpers for building an InputBinding from config text.
      *
      * These are intentionally separate from VRControllersManager so the manager stays free of any
      * config/string concerns. All parsing is case-insensitive and tolerant of leading/trailing

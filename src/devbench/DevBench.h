@@ -75,7 +75,7 @@ namespace f4cf::devbench
     void setToolDescription(std::string description);
 
     /**
-     * The INI section the config, set and clear actions use when the call names none. Defaults to the mod's name,
+     * The config section the config, set and clear actions use when the call names none. Defaults to the mod's name,
      * which is the section the mod template uses.
      */
     void setDefaultConfigSection(std::string section);

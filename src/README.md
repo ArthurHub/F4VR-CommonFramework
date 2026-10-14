@@ -23,7 +23,7 @@ Every translation unit pulls in [`PCH.h`](PCH.h), which does `using namespace f4
 ```cpp
 // Config.h
 #include "config/ConfigBase.h"
-#include "Resources.h"   // defines IDR_CONFIG_INI
+#include "Resources.h"   // defines IDR_CONFIG, the embedded default config
 
 namespace my_mod
 {
@@ -31,37 +31,40 @@ namespace my_mod
     {
     public:
         Config()
-            : ConfigBase(Version::PROJECT, INI_PATH, IDR_CONFIG_INI)
+            : ConfigBase(Version::PROJECT, CONFIG_PATH, IDR_CONFIG)
         {}
 
         float myValue = 1.0f;   // your settings
 
     protected:
-        void loadIniConfigInternal(const CSimpleIniA& ini) override;
+        void loadConfigInternal(const toml::table& config) override;
     };
 
     inline Config g_config;     // global singleton
 }
 
 // Config.cpp
-void Config::loadIniConfigInternal(const CSimpleIniA& ini)
+void Config::loadConfigInternal(const toml::table& config)
 {
-    myValue = static_cast<float>(ini.GetDoubleValue("MyMod", "fMyValue", 1.0));
+    // the default for a key that is missing or of another type; an integer reads as a float
+    myValue = config["MyMod"]["fMyValue"].value_or(1.0f);
 }
 ```
 
-`loadIniConfigInternal` is called on load **and** automatically whenever the INI changes on disk
-(hot-reload) — no restart needed. The INI lives under
+`loadConfigInternal` is called on load **and** automatically whenever the file changes on disk
+(hot-reload) — no restart needed. The file is TOML and lives under
 `%USERPROFILE%\Documents\My Games\Fallout4VR\Mods_Config\{ModName}\`; the default is embedded in the
-DLL (resource `IDR_CONFIG_INI`) and extracted on first run.
+DLL (resource `IDR_CONFIG`) and written on first run. A file that is not TOML, as one the player is in
+the middle of editing, is logged with the line and what is wrong at it, and the values loaded before
+it stay.
 
 A change on disk is loaded on the file watcher's thread, and a session override
 (`setConfigOverride`) on the thread of whoever sets it. Loads run one at a time, so
-`loadIniConfigInternal` never runs twice at once. It is not the game thread: only read values in
+`loadConfigInternal` never runs twice at once. It is not the game thread: only read values in
 it. To apply something that calls into the engine when the values were loaded again, subscribe:
 
 ```cpp
-g_config.subscribeForIniChangedEvent("MyMod", [](const std::string&) {
+g_config.subscribeForConfigChangedEvent("MyMod", [](const std::string&) {
     // on the game thread, before onFrameUpdate(): apply what depends on the values
 });
 ```
@@ -71,7 +74,8 @@ frame before: a change on disk, a session override set or cleared, `reload()`, a
 own load when a game session starts. A mod with a frame update of its own calls
 `notifySubscribersOfReload()` there.
 
-The mod's own save (`saveIniConfigValue`, `save()`) is not loaded back. The file watcher loads the
+The mod's own save (`saveConfigValue(s)`, in its `save()`) changes only the values in the file and
+keeps its comments and layout (`common::TomlEditor`), and is not loaded back. The file watcher loads the
 file only when it holds something else than the mod last loaded or saved, so a write by someone
 else is loaded whenever it comes, and a write that leaves the file as it was is not.
 
@@ -80,7 +84,7 @@ the file. It is how a setting is previewed while the game runs:
 
 ```cpp
 // the first argument is the owner: the name of who sets the override
-g_config.setConfigOverride("Preview", "MyMod", "fMyValue", 2.5f);        // loadIniConfigInternal runs with it
+g_config.setConfigOverride("Preview", "MyMod", "fMyValue", 2.5f);        // loadConfigInternal runs with it
 g_config.setConfigOverrides("Preview", { { "MyMod", "fMyValue", 2.5f },  // several, with one reload
                                          { "MyMod", "bEnabled", true } });
 g_config.clearConfigOverride("Preview", "MyMod", "fMyValue");            // the file's value applies again
@@ -189,7 +193,7 @@ logger::infoRaw("no timestamp/prefix line");
 if (logger::isDebugEnabled()) { /* skip expensive work when the level is above debug */ }
 ```
 
-Log level and pattern come from the `[Debug]` INI section (`iLogLevel`, `sLogPattern`) and update live
+Log level and pattern come from the `[Debug]` config section (`iLogLevel`, `sLogPattern`) and update live
 on reload. See [`Logger.h`](Logger.h) and [`ConfigBase.h`](config/ConfigBase.h) for the rest (`[Debug]` flow
 flags for runtime toggling, debug-dump triggers, and batch config saves).
 
@@ -198,7 +202,7 @@ flags for runtime toggling, debug-dump triggers, and batch config saves).
 | Folder / File                        | Namespace      | What it is                                                                                                       |
 | ------------------------------------ | -------------- | ---------------------------------------------------------------------------------------------------------------- |
 | [`ModBase`](ModBase.h)               | `f4cf`         | Base class every mod derives from. Owns the F4SE lifecycle, logging init, and the per-frame update hook.         |
-| [`ConfigBase`](config/ConfigBase.h)  | `f4cf`         | INI-backed config with hot-reload, embedded-default extraction, and version migration.                           |
+| [`ConfigBase`](config/ConfigBase.h)  | `f4cf`         | TOML config with hot-reload, embedded-default extraction, and version migration.                                  |
 | [`Logger.h`](Logger.h)               | `f4cf::logger` | spdlog wrapper. `logger::trace` / `debug` / `info` / `warn` / `error` functions + rate-limited `logger::sample`. |
 | [`common/`](common/README.md)        | `f4cf::common` | Math (quaternions, matrices, transforms) and engine-agnostic utilities (strings, files, resources, time).        |
 | [`debug/`](debug/README.md)          | `f4cf::debug`  | Immediate-mode in-world debug draw overlay: wire primitives, HUD text/labels, watch table. Zero cost until used. |
@@ -212,14 +216,14 @@ flags for runtime toggling, debug-dump triggers, and batch config saves).
 | [`vrui/`](vrui/README.md)            | `f4cf::vrui`   | VR UI widget system: panels, buttons, toggles, containers, scene graph, input dispatch.                          |
 | [`PCH.h`](PCH.h)                     | —              | Precompiled header, included implicitly in every translation unit.                                               |
 | [`MainLoopHook.h`](MainLoopHook.h)   | `f4cf`         | Trampoline into the game main loop that drives `ModBase::onFrameUpdate`.                                         |
-| [`DebugAdjuster.h`](DebugAdjuster.h) | `f4cf`         | Live-tune a transform / hand pose / flow flags — or any INI field by `Section::Key` — at runtime via controller input + INI reload. |
+| [`DebugAdjuster.h`](DebugAdjuster.h) | `f4cf`         | Live-tune a transform / hand pose / flow flags — or any config field by `Section::Key` — at runtime via controller input + config reload. |
 
 ## How the pieces fit together
 
 ```
   Your mod (extends ModBase)
         │
-        ├── ConfigBase ........ INI load/save, hot-reload, [Debug] keys
+        ├── ConfigBase ........ TOML load/save, hot-reload, [Debug] keys
         ├── Logger ............ logger::info("...") etc.
         │
         └── onFrameUpdate()  ◄── MainLoopHook (game frame)

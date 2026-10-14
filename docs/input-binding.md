@@ -1,14 +1,19 @@
 # Controller bindings & activation spheres
 
-Mods built on F4VR-CommonFramework let you change their controls in the mod's INI file: which hand, which
+Mods built on F4VR-CommonFramework let you change their controls in the mod's config file: which hand, which
 button, and how you press it. Some actions are **gestures**: you reach a hand to a spot, such as your chest,
 your head or your other hand, and press a button there. Each of those spots is an **activation sphere**.
 
-The INI is `Documents\My Games\Fallout4VR\Mods_Config\<ModName>\<ModName>.ini`. Which settings it has, and
-their defaults, is up to each mod. The formats on this page are the same in every mod.
+The config file is `Documents\My Games\Fallout4VR\Mods_Config\<ModName>\<ModName>.toml`. Which settings it has,
+and their defaults, is up to each mod. The formats on this page are the same in every mod.
 
-> **Edits apply live.** Save the INI while the game runs and the change takes effect right away, with no
-> restart. A value that can't be read is logged as a warning, and the setting keeps its previous value.
+The file is TOML: a binding, and any other text value, goes in double quotes, a number is written as it is,
+and a Windows path goes in single quotes, where a backslash is just a backslash (`sIcon = 'f4cf\icon.dds'`).
+
+> **Edits apply live.** Save the file while the game runs and the change takes effect right away, with no
+> restart. A value that can't be read is logged as a warning, and the setting keeps its previous value. A
+> typo that breaks the file, such as a binding without its quotes, is logged with its line, and every setting
+> keeps its value until it is fixed.
 
 This page has three parts:
 
@@ -24,10 +29,10 @@ This page has three parts:
 
 ## Change a button
 
-A binding is one line: the hand, how you press, and the button.
+A binding is one string: the hand, how you press, and the button.
 
-```ini
-sOpenMenu = offhand longpress grip
+```toml
+sOpenMenu = "offhand longpress grip"
 ```
 
 | Part   | Common values                                                                                                             |
@@ -53,27 +58,27 @@ pressing another. See [the binding line](#the-binding-line).
 
 Set it to `none`:
 
-```ini
-sOpenMenu = none
+```toml
+sOpenMenu = "none"
 ```
 
-An empty value (`sOpenMenu =`) turns it off too. Deleting the whole line doesn't: the mod then uses its
+An empty string (`sOpenMenu = ""`) turns it off too. Deleting the whole line doesn't: the mod then uses its
 default binding.
 
 ## Gestures
 
-Each gesture has its own INI section. The section's name is up to the mod, but the keys in it are the same
+Each gesture has its own config section. The section's name is up to the mod, but the keys in it are the same
 in every mod. The ones you're most likely to change:
 
-```ini
+```toml
 [MyMod_SomeActivation]
-tZone = 0,0,0;0,0,0;18
-sPrimaryBinding = offhand tap trigger suppress
-sSecondaryBinding = offhand longpress trigger suppress
-sEntryHaptic = Tick
-sShowIcon = wheninside
-fIconSize = 1
-sShowSphere = never
+tZone = "0,0,0;0,0,0;18"
+sPrimaryBinding = "offhand tap trigger suppress"
+sSecondaryBinding = "offhand longpress trigger suppress"
+sEntryHaptic = "Tick"
+sShowIcon = "wheninside"
+fIconSize = 1.0
+sShowSphere = "never"
 ```
 
 ### Hide or show the icon and sphere
@@ -81,8 +86,8 @@ sShowSphere = never
 A gesture can mark its zone with a small **icon**, a glowing **sphere**, or both. By default only the icon
 shows, and only while your hand is in the zone. To never show the icon:
 
-```ini
-sShowIcon = never
+```toml
+sShowIcon = "never"
 ```
 
 The gesture still works the same, and the vibration as your hand enters still tells you when it's in the
@@ -114,15 +119,15 @@ To turn the gesture off, set both to `none`. Its icon and sphere go with it, unl
 
 ### Turn off the vibration
 
-`sEntryHaptic = none` stops the one as your hand enters the zone. `sPrimaryHaptic = none` and
-`sSecondaryHaptic = none` stop the one when the gesture fires. The other patterns are listed under
+`sEntryHaptic = "none"` stops the one as your hand enters the zone. `sPrimaryHaptic = "none"` and
+`sSecondaryHaptic = "none"` stop the one when the gesture fires. The other patterns are listed under
 [haptics](#haptics).
 
 ### Move or resize the zone
 
 `tZone` is `x,y,z;0,0,0;size`. The first three numbers place the zone relative to what it's attached to (a
 hand, your head, or a prop on your body), and the last one is its diameter in game units. The three in the
-middle aren't used. To see the zone while you move it, set `sShowSphere = always`; the sphere then shows the
+middle aren't used. To see the zone while you move it, set `sShowSphere = "always"`; the sphere then shows the
 zone's real size, as long as `fSphereScale` is left at `1`.
 
 ---
@@ -232,8 +237,8 @@ default the modifier is checked on the binding's own hand; prefix it with a hand
 
 The modifier can sit anywhere on the line, but by convention it goes last:
 
-```ini
-sFastTravel = primary press trigger +offhand:grip
+```toml
+sFastTravel = "primary press trigger +offhand:grip"
 ```
 
 ## Suppressing the game input
@@ -248,8 +253,8 @@ Suppression only has an effect where something applies it. Today that consumer i
 hand is inside its zone (so, e.g., the trigger you use to grab the flashlight doesn't also fire your
 weapon while your hand is in the grab zone).
 
-```ini
-sGrab = offhand tap trigger suppress
+```toml
+sGrab = "offhand tap trigger suppress"
 ```
 
 ---
@@ -266,8 +271,8 @@ hand's wand, the HMD, or a prop attached to the body — and, while a bound hand
 - and optionally **marks the zone** — with a small icon at its center, a translucent sphere, or both — so
   you can see where to reach.
 
-A mod groups each sphere into **its own INI section**. The section name is chosen by the mod (check its
-INI); the keys inside are always the ones below. Any key you leave out keeps the mod's default for that
+A mod groups each sphere into **its own config section**. The section name is chosen by the mod (check its
+config file); the keys inside are always the ones below. Any key you leave out keeps the mod's default for that
 sphere.
 
 ## Zone and bindings
@@ -348,27 +353,27 @@ Editing any of these while the game runs redraws the sphere with the new look th
   `cyan-subtle`; `white-subtle` is the default.
 - `debug` — the evenly lit, two-sided debug sphere: a light grid.
 
-To go beyond the presets, start from the closest one and override values, e.g. `sSphereStyle = white-subtle`
-with `sSphereColor = 255,105,180` for a subtle pink sphere.
+To go beyond the presets, start from the closest one and override values, e.g. `sSphereStyle = "white-subtle"`
+with `sSphereColor = "255,105,180"` for a subtle pink sphere.
 
-A common recipe is a small proximity dot — `sShowSphere = wheninside` with `fSphereScale = 0.5` — that
+A common recipe is a small proximity dot — `sShowSphere = "wheninside"` with `fSphereScale = 0.5` — that
 appears only as your hand nears the zone. To hide the visuals entirely, set `sShowIcon` and `sShowSphere`
 to `never`.
 
 ## Example
 
-```ini
+```toml
 [MyMod_SomeActivation]
-tZone = 0,0,0;0,0,0;18
-sPrimaryBinding = offhand tap trigger suppress
-sSecondaryBinding = offhand longpress trigger suppress
-sEntryHaptic = Tick
-sPrimaryHaptic = DoubleClick
-sSecondaryHaptic = Click
-sShowIcon = whenavailable
-sIcon = f4cf\activation-icon-ring.dds
-sShowSphere = wheninside
-sSphereStyle = cyan-subtle
+tZone = "0,0,0;0,0,0;18"
+sPrimaryBinding = "offhand tap trigger suppress"
+sSecondaryBinding = "offhand longpress trigger suppress"
+sEntryHaptic = "Tick"
+sPrimaryHaptic = "DoubleClick"
+sSecondaryHaptic = "Click"
+sShowIcon = "whenavailable"
+sIcon = 'f4cf\activation-icon-ring.dds'
+sShowSphere = "wheninside"
+sSphereStyle = "cyan-subtle"
 ```
 
 A tap of the off-hand trigger while it's near the HMD fires the primary gesture (its trigger hidden
@@ -380,7 +385,7 @@ the sphere lights up once your hand is in it.
 # For mod authors
 
 **A single binding** is `f4cf::vrcf::InputBinding`, evaluated each frame with one
-`VRControllers.check(binding)`. Load one from the INI with `ConfigBase::getInputBindingValue(...)`, or
+`VRControllers.check(binding)`. Load one from the config with `ConfigBase::getInputBindingValue(...)`, or
 parse a string directly with `parseInputBinding(...)`. The `suppress` flag rides on the binding
 (`InputBinding::suppress`); a consumer that wants exclusive use of the button applies it via
 `VRControllersSuppress`. Full API, code examples, and the button map are in
@@ -389,7 +394,7 @@ parse a string directly with `parseInputBinding(...)`. The `suppress` flag rides
 **An activation sphere** is two types:
 
 - `f4cf::f4vr::WandActivationConfig` — the authored bundle (zone + bindings + haptics + when each visual shows + the icon and sphere styles).
-  Load one whole INI section with `ConfigBase::loadWandActivationConfig(ini, "SectionName", defaults)`.
+  Load one whole config section with `ConfigBase::loadWandActivationConfig(config, "SectionName", defaults)`.
 - `f4cf::f4vr::WandActivationSphere` — the runtime zone. Drive it each frame with `onFrameUpdate(frame,
 onActivated)`, composing the per-frame `Frame` from your `WandActivationConfig` (gating a binding off
   for the frame by passing the disabled binding, and re-anchoring the zone if needed). It handles the
@@ -411,7 +416,7 @@ framework's `mod-template` under its own folder:
 See [`src/f4vr/README.md`](../src/f4vr/README.md) for the `WandActivationSphere` API and an example.
 
 **Telling the player what is bound.** Do not hard-code a button name in your UI - it goes stale the
-moment someone edits the INI. `f4cf::vrui::appendBindingPrompt(spans, binding)`
+moment someone edits the config. `f4cf::vrui::appendBindingPrompt(spans, binding)`
 ([`src/vrui/BindingPrompt.h`](../src/vrui/BindingPrompt.h)) turns an `InputBinding` into a text span
 for a `UITextPanel` row, drawing the controller icon the binding actually resolves to - primary and
 offhand mapped to the left or right controller by the player's handedness, and buttons named the way

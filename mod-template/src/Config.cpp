@@ -9,9 +9,9 @@ namespace
 
 namespace my_mod
 {
-    void Config::loadIniConfigInternal(const CSimpleIniA& ini)
+    void Config::loadConfigInternal(const toml::table& config)
     {
-        // TODO: load config from ini
-        myConfigValue = static_cast<float>(ini.GetDoubleValue(DEFAULT_SECTION, "fMyConfigValue", 3.0));
+        // TODO: load config values; value_or returns the default for a key that is missing or of another type
+        myConfigValue = config[DEFAULT_SECTION]["fMyConfigValue"].value_or(3.0f);
     }
 }

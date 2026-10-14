@@ -69,19 +69,19 @@ The entry point is [src/MyMod.h](src/MyMod.h) / [src/MyMod.cpp](src/MyMod.cpp), 
 | Component  | Files                                                 | Responsibility                                                                    |
 | ---------- | ----------------------------------------------------- | --------------------------------------------------------------------------------- |
 | **MyMod**  | [src/MyMod.h](src/MyMod.h) / [.cpp](src/MyMod.cpp)    | The mod class and the F4SE entry points                                           |
-| **Config** | [src/Config.h](src/Config.h) / [.cpp](src/Config.cpp) | INI load via `ConfigBase` (global `g_config`), live hot-reload via a file watcher |
+| **Config** | [src/Config.h](src/Config.h) / [.cpp](src/Config.cpp) | TOML config load via `ConfigBase` (global `g_config`), live hot-reload via a file watcher |
 
 TODO: add a row for each component as the mod grows.
 
 ### Config
 
-[data/config/MyMod.ini](data/config/MyMod.ini) is the shipped default config. It is embedded in the DLL (resource `IDR_CONFIG_INI`) and written on first run to `%USERPROFILE%\Documents\My Games\Fallout4VR\Mods_Config\MyMod\MyMod.ini`.
+[data/config/MyMod.toml](data/config/MyMod.toml) is the shipped default config, in TOML. It is embedded in the DLL (resource `IDR_CONFIG`) and written on first run to `%USERPROFILE%\Documents\My Games\Fallout4VR\Mods_Config\MyMod\MyMod.toml`.
 
-- The main section is `[MyMod]`; it must match `NAME` in `CMakeLists.txt`, which the config reads back as both the INI file name and the default section.
+- The main section is `[MyMod]`; it must match `NAME` in `CMakeLists.txt`, which the config reads back as both the file name and the default section.
 - `[Debug]` holds the framework's keys (log level and pattern, flow flags, data dumps, debug draw).
-- To add a value: a member in `Config.h`, a read in `Config::loadIniConfigInternal()`, and the key in the shipped INI.
-- `ConfigBase` watches the file and reloads it on change, so edits apply while the game runs. The reload runs on the watcher's thread: apply anything that calls into the engine in a `subscribeForIniChangedEvent` callback, which the framework calls on the game thread at the start of the next frame, or from `onFrameUpdate()`.
-- Bump `iVersion` in `[Debug]` when the shipped INI changes, so existing users' files are migrated.
+- To add a value: a member in `Config.h`, a read in `Config::loadConfigInternal()` (`config[SECTION]["key"].value_or(default)`, which gives the default for a key that is missing or of another type), and the key in the shipped file. Write a float with a decimal point (`1.0`) and a string in quotes; a Windows path in single quotes (`'f4cf\icon.dds'`), where a backslash is not an escape.
+- `ConfigBase` watches the file and reloads it on change, so edits apply while the game runs. The reload runs on the watcher's thread: apply anything that calls into the engine in a `subscribeForConfigChangedEvent` callback, which the framework calls on the game thread at the start of the next frame, or from `onFrameUpdate()`.
+- Bump `iVersion` in `[Debug]` when the shipped file changes, so existing users' files are migrated. A value whose type changes is left to `updateConfigToLatestVersionCustom`. Saves (`saveConfigValue(s)`) change only the values in the file and keep its comments and layout.
 
 ### Mod Data
 
@@ -100,7 +100,7 @@ The framework's own [CLAUDE.md](external/F4VR-CommonFramework/CLAUDE.md) maps it
 | Dear ImGui content on world-space quads                     | `src/imgui/README.md`              |
 | Game state: nodes, skeleton, weapon and menu state, HUD     | `src/f4vr/README.md`               |
 | Papyrus native functions                                    | `src/f4sevr/README.md`             |
-| Debug draw overlay, the `[Debug]` INI keys                  | `src/debug/README.md`, `docs/debug-config.md` |
+| Debug draw overlay, the `[Debug]` config keys                  | `src/debug/README.md`, `docs/debug-config.md` |
 | Timing a hot path (`F4CF_PERF_SCOPE`), Tracy                | `src/perf/README.md`               |
 | The mod's devbench tool (drive and inspect the running game) | `src/devbench/README.md`           |
 
@@ -109,6 +109,6 @@ The framework's own [CLAUDE.md](external/F4VR-CommonFramework/CLAUDE.md) maps it
 Pulled via vcpkg (`vcpkg.json`) with a **pinned baseline** required for CommonLibF4 compatibility:
 
 - `F4VR-CommonFramework` (git submodule at `external/`) — re-exports CommonLibF4 and the framework base classes
-- `spdlog`, `nlohmann-json`, `simpleini`, `thomasmonkman-filewatch`, `args`, `rapidcsv`, `rsm-mmio`, `xbyak`, `cpptrace`, `imgui` (with `dx11-binding`, for the framework's Dear ImGui UI layer)
+- `spdlog`, `nlohmann-json`, `simpleini`, `tomlplusplus`, `thomasmonkman-filewatch`, `args`, `rapidcsv`, `rsm-mmio`, `xbyak`, `cpptrace`, `imgui` (with `dx11-binding`, for the framework's Dear ImGui UI layer)
 
 The vcpkg baseline **must not be changed** without verifying CommonLibF4 still builds; it was specifically pinned to `b4a3d89125e45bc8f80fb94bef9761d4f4e14fb9`.

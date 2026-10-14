@@ -7,7 +7,7 @@ namespace f4cf
     /**
      * In-game adjuster for the ConfigBase debug fields. When the active config's
      * `debug.adjustTarget` is not None, controller input mutates the corresponding
-     * value live; Primary-A short-tap saves to INI, Primary-A long-press reloads.
+     * value live; Primary-A short-tap saves to the config file, Primary-A long-press reloads.
      *
      * Input map (when target == Transform):
      *   - Offhand-Grip held: rotate (primary stick Y=pitch X=yaw, secondary X=roll)
@@ -30,7 +30,7 @@ namespace f4cf
      * target owns Primary-A, so the shared save/reload bindings are skipped while it is active.
      *
      * Field mode (when sAdjustTarget is a "Section::Key" reference instead of a fixed keyword,
-     * e.g. "MyMod::tWeaponOffset"): tune any INI field live. The value kind is inferred from the key
+     * e.g. "MyMod::tWeaponOffset"): tune any config field live. The value kind is inferred from the key
      * prefix (t=transform, h=hand pose, f=float) and the matching input map above applies. The edit
      * is pushed into the running config in-memory each frame, and Primary-A save/reload write to /
      * re-seed from that key.
@@ -51,6 +51,6 @@ namespace f4cf
         static void adjustField(ConfigBase& config);
         static bool loadField(const ConfigBase& config);
         static void saveCurrent(const ConfigBase& config);
-        static void reloadFromIni(ConfigBase& config);
+        static void reloadFromConfig(ConfigBase& config);
     };
 }

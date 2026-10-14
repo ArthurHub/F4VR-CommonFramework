@@ -1,43 +1,33 @@
 #pragma once
 
-#include <SimpleIni.h>
 #include <compare>
 #include <map>
 #include <mutex>
 #include <optional>
 #include <string>
+#include <string_view>
+#include <toml++/toml.hpp>
 #include <vector>
 
-#include "IniValue.h"
+#include "ConfigValue.h"
 
-// The session overrides of a mod's config, apart from the game: plain std and SimpleIni only, so it is unit tested.
+// The session overrides of a mod's config, apart from the game: plain std and toml++ only, so it is unit tested.
 namespace f4cf::config
 {
     /**
-     * The INI section and key of a value.
+     * The section and key of a config value.
      */
-    struct IniKey
+    struct ConfigKey
     {
         std::string section;
         std::string key;
 
-        auto operator<=>(const IniKey&) const = default;
+        auto operator<=>(const ConfigKey&) const = default;
     };
 
     /**
-     * A session override to set: the value that applies in place of the file's for a section and key, see
-     * ConfigBase::setConfigOverrides.
-     */
-    struct IniOverride
-    {
-        std::string section;
-        std::string key;
-        IniValue value;
-    };
-
-    /**
-     * An override that applies: the value in place of the file's for a section and key, in its INI string
-     * form, and the owner that set it.
+     * An override that applies: the value in place of the file's for a section and key, in its text form, and the
+     * owner that set it.
      */
     struct AppliedOverride
     {
@@ -55,15 +45,15 @@ namespace f4cf::config
     class Overrides
     {
     public:
-        bool set(const std::string& owner, const IniKey& key, std::string value);
-        std::vector<AppliedOverride> set(const std::string& owner, const std::vector<IniOverride>& overrides);
-        bool clear(const std::string& owner, const IniKey& key);
-        std::vector<IniKey> clear(const std::string& owner, const std::vector<IniKey>& keys);
+        bool set(const std::string& owner, const ConfigKey& key, std::string value);
+        std::vector<AppliedOverride> set(const std::string& owner, const std::vector<ConfigEntry>& overrides);
+        bool clear(const std::string& owner, const ConfigKey& key);
+        std::vector<ConfigKey> clear(const std::string& owner, const std::vector<ConfigKey>& keys);
         std::size_t clearAll(const std::string& owner);
 
-        std::optional<std::string> find(const IniKey& key) const;
+        std::optional<std::string> find(const ConfigKey& key) const;
         std::vector<AppliedOverride> applied() const;
-        void applyTo(CSimpleIniA& ini) const;
+        void applyTo(toml::table& table) const;
 
     private:
         struct Entry
@@ -72,12 +62,14 @@ namespace f4cf::config
             std::string value;
         };
 
-        bool setEntry(const std::string& owner, const IniKey& key, std::string value);
-        bool clearEntry(const std::string& owner, const IniKey& key);
+        bool setEntry(const std::string& owner, const ConfigKey& key, std::string value);
+        bool clearEntry(const std::string& owner, const ConfigKey& key);
 
         // The overrides of each overridden key in the order they were set, so the last one applies. An owner has
         // one for a key at most, and a key with none is not in the map.
-        std::map<IniKey, std::vector<Entry>> _entries;
+        std::map<ConfigKey, std::vector<Entry>> _entries;
         mutable std::mutex _mutex;
     };
+
+    void applyOverride(toml::table& table, const ConfigKey& key, std::string_view value);
 }

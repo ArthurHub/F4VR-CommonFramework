@@ -59,7 +59,7 @@ namespace f4cf::vrui
      */
     void UIDevLayout::start()
     {
-        fs::path path(g_mod->getConfig()->getIniFilePath());
+        fs::path path(g_mod->getConfig()->getConfigFilePath());
         path.replace_filename(path.stem().string() + FILE_NAME_SUFFIX);
         _filePath = path.string();
 

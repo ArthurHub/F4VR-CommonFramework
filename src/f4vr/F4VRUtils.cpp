@@ -55,7 +55,7 @@ namespace
             return;
         }
 
-        const auto count = min(sourceNode->children.size(), cloneNode->children.size());
+        const auto count = (std::min)(sourceNode->children.size(), cloneNode->children.size());
         for (std::uint16_t i = 0; i < count; ++i) {
             copyNodeNamesRecursive(sourceNode->children[i].get(), cloneNode->children[i].get());
         }

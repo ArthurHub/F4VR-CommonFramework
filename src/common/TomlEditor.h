@@ -14,6 +14,8 @@
 // Editing the text of a TOML document, apart from the game: plain std and toml++ only, so it is unit tested.
 namespace f4cf::common
 {
+    std::expected<toml::table, std::string> parseToml(std::string_view text, std::string_view sourceName = {});
+
     /**
      * Sets values in the text of a TOML document and leaves every other byte as it was: comments, blank lines, the
      * order of the keys and how every other value is written. toml++ has no writer that keeps those, so it only

@@ -99,7 +99,7 @@ namespace f4cf::debug
     }
 
     /**
-     * Runtime master switch layered over the INI value (bDebugDrawEnabled); wins until the next
+     * Runtime master switch layered over the config value (bDebugDrawEnabled); wins until the next
      * setEnabled call. The in-headset hotkey routes through here too.
      */
     void DebugDraw::setEnabled(const bool enabled)
@@ -128,7 +128,7 @@ namespace f4cf::debug
     }
 
     /**
-     * Runtime per-channel override, layered over the INI-disabled set (sDebugDrawDisabledChannels).
+     * Runtime per-channel override, layered over the config-disabled set (sDebugDrawDisabledChannels).
      */
     void DebugDraw::setChannelEnabled(const std::string_view channel, const bool enabled)
     {
@@ -452,7 +452,7 @@ namespace f4cf::debug
 
     /**
      * Recompute the per-append fast-path flag from the master switch and the current channel's
-     * state (runtime override first, then the INI-disabled set) — so every draw call is a single
+     * state (runtime override first, then the config-disabled set) — so every draw call is a single
      * bool test instead of set lookups.
      */
     void DebugDraw::refreshAppendActive()
@@ -461,7 +461,7 @@ namespace f4cf::debug
     }
 
     /**
-     * A channel's own gate: its runtime override when one is set, else whether the INI-disabled set
+     * A channel's own gate: its runtime override when one is set, else whether the config-disabled set
      * (sDebugDrawDisabledChannels) leaves it on.
      */
     bool DebugDraw::isChannelEnabled(const std::string& channel) const

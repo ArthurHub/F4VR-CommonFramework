@@ -466,13 +466,11 @@ namespace
      */
     std::expected<toml::table, std::string> verify(const std::string_view before, const std::string_view edited, const toml::table& expected, const std::string_view sourceName)
     {
-        toml::table result;
-        try {
-            result = toml::parse(edited, sourceName);
-        } catch (const toml::parse_error& error) {
-            return std::unexpected(std::format("the edited text does not parse: {}", describe(error, edited, sourceName)));
+        auto result = f4cf::common::parseToml(edited, sourceName);
+        if (!result) {
+            return std::unexpected(std::format("the edited text does not parse: {}", result.error()));
         }
-        if (contentOf(result) != contentOf(expected)) {
+        if (contentOf(*result) != contentOf(expected)) {
             return std::unexpected(std::format("the edit at line {} would change more than the value", firstChangedLine(before, edited)));
         }
         return result;
@@ -481,6 +479,20 @@ namespace
 
 namespace f4cf::common
 {
+    /**
+     * Parse a TOML document. When it is not TOML, why not as one line for a log: what is wrong, the line and column
+     * (of `sourceName` when given), and the text of that line.
+     */
+    std::expected<toml::table, std::string> parseToml(const std::string_view text, const std::string_view sourceName)
+    {
+        F4CF_PERF_FUNCTION();
+        try {
+            return toml::parse(text, sourceName);
+        } catch (const toml::parse_error& error) {
+            return std::unexpected(describe(error, text, sourceName));
+        }
+    }
+
     TomlEditor::Value::Value(const bool value)
         : _text(value ? "true" : "false")
     {}
@@ -521,12 +533,12 @@ namespace f4cf::common
         : _text(std::move(text)),
           _sourceName(sourceName)
     {
-        F4CF_PERF_FUNCTION();
-        try {
-            _table = toml::parse(_text, _sourceName);
+        auto parsed = parseToml(_text, _sourceName);
+        if (parsed) {
+            _table = std::move(*parsed);
             _parsed = true;
-        } catch (const toml::parse_error& error) {
-            _error = describe(error, _text, _sourceName);
+        } else {
+            _error = std::move(parsed.error());
         }
     }
 

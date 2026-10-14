@@ -1,19 +1,19 @@
 #include <catch2/catch_test_macros.hpp>
 
-#include <SimpleIni.h>
 #include <string>
 #include <vector>
 
 #include "config/Overrides.h"
 
-using f4cf::config::IniKey;
+using f4cf::common::TomlEditor;
+using f4cf::config::ConfigKey;
 using f4cf::config::Overrides;
 
 namespace
 {
-    const IniKey SCALE{ "Main", "fScale" };
-    const IniKey MODE{ "Main", "iMode" };
-    const IniKey LEVEL{ "Debug", "iLogLevel" };
+    const ConfigKey SCALE{ "Main", "fScale" };
+    const ConfigKey MODE{ "Main", "iMode" };
+    const ConfigKey LEVEL{ "Debug", "iLogLevel" };
 
     // the callers of the design: the devbench tool, another mod through the mod's API, and the config menu's preview
     const std::string DEVBENCH = "devbench";
@@ -23,25 +23,26 @@ namespace
     /**
      * The value that applies for a key, or "none" when no owner overrides it.
      */
-    std::string appliedValue(const Overrides& overrides, const IniKey& key)
+    std::string appliedValue(const Overrides& overrides, const ConfigKey& key)
     {
         return overrides.find(key).value_or("none");
     }
 
     /**
-     * The value of a key in an INI as the mod reads it, or "none" when the INI does not have the key.
+     * The value of a key in a loaded config as TOML text, or "none" when the config does not have the key.
      */
-    std::string iniValue(const CSimpleIniA& ini, const IniKey& key)
+    std::string configValue(const toml::table& config, const ConfigKey& key)
     {
-        return ini.GetValue(key.section.c_str(), key.key.c_str(), "none");
+        const auto* node = config[key.section][key.key].node();
+        return node ? TomlEditor::Value(*node).text() : "none";
     }
 
     /**
      * The mod's file as a load has it before the overrides are put in: a scale and a mode, and no log level.
      */
-    void loadFile(CSimpleIniA& ini)
+    toml::table loadFile()
     {
-        REQUIRE(ini.LoadData(std::string("[Main]\nfScale = 1\niMode = 0\n")) >= 0);
+        return toml::parse("[Main]\nfScale = 1.0\niMode = 0\n");
     }
 }
 
@@ -142,7 +143,7 @@ TEST_CASE("ConfigOverrides: an owner's clear of all leaves the other owners' ove
     REQUIRE(overrides.applied().empty());
 }
 
-TEST_CASE("ConfigOverrides: several overrides are set at once, each value in its INI form, and the new ones are returned")
+TEST_CASE("ConfigOverrides: several overrides are set at once, each value in its text form, and the new ones are returned")
 {
     Overrides overrides;
     overrides.set(PREVIEW, SCALE, "1.5");
@@ -168,7 +169,7 @@ TEST_CASE("ConfigOverrides: several overrides are set at once, each value in its
 
     SECTION("a key that is twice in the list is new once, and has its last value")
     {
-        const IniKey speed{ "Main", "fSpeed" };
+        const ConfigKey speed{ "Main", "fSpeed" };
         const auto addedTwice = overrides.set(PREVIEW, { { "Main", "fSpeed", 1.0f }, { "Main", "fSpeed", 2.0f } });
 
         REQUIRE(addedTwice.size() == 1);
@@ -176,7 +177,7 @@ TEST_CASE("ConfigOverrides: several overrides are set at once, each value in its
     }
     SECTION("an empty list sets nothing")
     {
-        REQUIRE(overrides.set(PREVIEW, std::vector<f4cf::config::IniOverride>{}).empty());
+        REQUIRE(overrides.set(PREVIEW, std::vector<f4cf::config::ConfigEntry>{}).empty());
         REQUIRE(overrides.applied().size() == 4);
     }
 }
@@ -197,47 +198,58 @@ TEST_CASE("ConfigOverrides: several keys are cleared at once, and the ones the o
     REQUIRE(appliedValue(overrides, MODE) == "7");
 
     REQUIRE(overrides.clear(PREVIEW, { LEVEL, MODE, SCALE }).empty());
-    REQUIRE(overrides.clear(PREVIEW, std::vector<IniKey>{}).empty());
+    REQUIRE(overrides.clear(PREVIEW, std::vector<ConfigKey>{}).empty());
 }
 
-TEST_CASE("ConfigOverrides: the overrides are put into a loaded INI in place of the file's values")
+TEST_CASE("ConfigOverrides: the overrides are put into a loaded config in place of the file's values")
 {
     Overrides overrides;
-    CSimpleIniA ini;
-    loadFile(ini);
+    auto config = loadFile();
 
-    SECTION("with no override the INI is as the file")
+    SECTION("with no override the config is as the file")
     {
-        overrides.applyTo(ini);
+        overrides.applyTo(config);
 
-        REQUIRE(iniValue(ini, SCALE) == "1");
-        REQUIRE(iniValue(ini, MODE) == "0");
-        REQUIRE(iniValue(ini, LEVEL) == "none");
+        REQUIRE(configValue(config, SCALE) == "1.0");
+        REQUIRE(configValue(config, MODE) == "0");
+        REQUIRE(configValue(config, LEVEL) == "none");
     }
-    SECTION("an overridden key has the override, and the others the file's")
+    SECTION("an overridden key has the override in the type of the file's value, and the others the file's")
     {
-        overrides.set(PREVIEW, SCALE, "2.5");
-        overrides.applyTo(ini);
+        overrides.set(PREVIEW, SCALE, "2");
+        overrides.set(PREVIEW, MODE, "3");
+        overrides.applyTo(config);
 
-        REQUIRE(iniValue(ini, SCALE) == "2.5");
-        REQUIRE(ini.GetDoubleValue("Main", "fScale", 0) == 2.5);
-        REQUIRE(iniValue(ini, MODE) == "0");
+        REQUIRE(configValue(config, SCALE) == "2.0");
+        REQUIRE(config["Main"]["fScale"].is_floating_point());
+        REQUIRE(configValue(config, MODE) == "3");
+        REQUIRE(config["Main"]["iMode"].is_integer());
     }
-    SECTION("a key and a section that the file does not have are added")
+    SECTION("a value that is not of the file's type is a string, which the mod's read of the type does not take")
+    {
+        overrides.set(PREVIEW, SCALE, "big");
+        overrides.applyTo(config);
+
+        REQUIRE(configValue(config, SCALE) == "\"big\"");
+        REQUIRE_FALSE(config["Main"]["fScale"].value<double>());
+    }
+    SECTION("a key and a section that the file does not have are added, as the TOML the value is")
     {
         overrides.set(DEVBENCH, LEVEL, "0");
-        overrides.applyTo(ini);
+        overrides.set(DEVBENCH, { "Main", "sButton" }, "left tap grip");
+        overrides.applyTo(config);
 
-        REQUIRE(iniValue(ini, LEVEL) == "0");
-        REQUIRE(iniValue(ini, SCALE) == "1");
+        REQUIRE(configValue(config, LEVEL) == "0");
+        REQUIRE(configValue(config, { "Main", "sButton" }) == "\"left tap grip\"");
+        REQUIRE(configValue(config, SCALE) == "1.0");
     }
     SECTION("with two owners on a key it is the one set last")
     {
         overrides.set(OTHER_MOD, SCALE, "2");
         overrides.set(PREVIEW, SCALE, "3");
-        overrides.applyTo(ini);
+        overrides.applyTo(config);
 
-        REQUIRE(iniValue(ini, SCALE) == "3");
+        REQUIRE(configValue(config, SCALE) == "3.0");
     }
     SECTION("a cleared override is not in the next load")
     {
@@ -245,17 +257,15 @@ TEST_CASE("ConfigOverrides: the overrides are put into a loaded INI in place of 
         overrides.set(PREVIEW, SCALE, "3");
         overrides.clear(PREVIEW, SCALE);
 
-        CSimpleIniA nextLoad;
-        loadFile(nextLoad);
+        auto nextLoad = loadFile();
         overrides.applyTo(nextLoad);
-        REQUIRE(iniValue(nextLoad, SCALE) == "2");
+        REQUIRE(configValue(nextLoad, SCALE) == "2.0");
 
         overrides.clear(OTHER_MOD, SCALE);
 
-        CSimpleIniA lastLoad;
-        loadFile(lastLoad);
+        auto lastLoad = loadFile();
         overrides.applyTo(lastLoad);
-        REQUIRE(iniValue(lastLoad, SCALE) == "1");
+        REQUIRE(configValue(lastLoad, SCALE) == "1.0");
     }
 }
 
