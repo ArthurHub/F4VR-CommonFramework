@@ -208,7 +208,7 @@ namespace f4cf::vrcf
     namespace
     {
         /**
-         * One hand's mask by the input binding grammar's names (InputBindingParser), so an event reads like an INI
+         * One hand's mask by the input binding grammar's names (InputBindingParser), so an event reads like a config
          * binding. Axis bits index rAxis, which is what Axis numbers.
          */
         nlohmann::json sideJson(const uint64_t buttons, const uint8_t axes)

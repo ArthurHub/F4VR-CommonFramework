@@ -7,7 +7,7 @@
 
 F4VR Common Framework gives Fallout 4 VR mod authors a ready-made foundation so they can focus on
 their mod instead of the plumbing: plugin lifecycle management, VR controller input, an in-world VR
-UI widget system with its own overlay renderer, INI config with hot-reload, and a large set of
+UI widget system with its own overlay renderer, TOML config with hot-reload, and a large set of
 game-state utilities. Mods link it as a static library and start from the included `mod-template/`.
 
 ## Table of Contents
@@ -31,7 +31,7 @@ loading config that can change at runtime. This framework packages those into on
 What it provides:
 
 - **Plugin lifecycle** — a `ModBase` class with `onModLoaded` / `onGameLoaded` / `onGameSessionLoaded` / `onFrameUpdate` hooks.
-- **Config** — `ConfigBase`: INI loading, embedded defaults, version migration, and file-watch hot-reload.
+- **Config** — `ConfigBase`: TOML loading, saves that keep the file's comments and layout, embedded defaults, version migration, and file-watch hot-reload.
 - **VR controller input** — debounced button/trigger/thumbstick reads, plus owner-keyed input suppression.
 - **VR UI** — a widget/button/container hierarchy with finger-collision interaction, rendered as in-world meshes or drawn from text and images at runtime.
 - **Overlay rendering** — world-space lines, panels, images and text drawn over the VR view through one shared compositor hook, hidden behind the world where you want them to be.

@@ -10,7 +10,7 @@ namespace f4cf::config
     void ReloadSubscribers::subscribe(const std::string& key, const Callback& callback)
     {
         if (_subscribers.contains(key)) {
-            throw std::runtime_error("ConfigBase::subscribeForIniChangedEvent: Key '" + key + "' is already subscribed!");
+            throw std::runtime_error("ConfigBase::subscribeForConfigChangedEvent: Key '" + key + "' is already subscribed!");
         }
         _subscribers.emplace(key, callback);
     }

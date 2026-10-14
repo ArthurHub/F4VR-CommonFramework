@@ -40,7 +40,7 @@ namespace f4cf::vrcf
         LongBuzz, // long constant rumble - heavy emphasis
     };
 
-    // Parse a HapticPattern from config (INI) text
+    // Parse a HapticPattern from config text
     std::optional<HapticPattern> parseHapticPattern(std::string_view text);
 
     /**

@@ -43,7 +43,7 @@ namespace f4cf::devbench
         constexpr auto STATE_ACTION = "state";
 
         /**
-         * Serialize an answer for the host. Invalid UTF-8 (an INI value in a legacy code page, say) is replaced rather
+         * Serialize an answer for the host. Invalid UTF-8 (a config value in a legacy code page, say) is replaced rather
          * than thrown, so one stray byte can't turn an answer into a failure.
          */
         std::string dump(const json& value)
@@ -519,7 +519,7 @@ namespace f4cf::devbench
 
             void addGenericActions()
             {
-                const auto section = argument("string", "config/set/clear: the INI section; defaults to the mod's main section");
+                const auto section = argument("string", "config/set/clear: the config section; defaults to the mod's main section");
                 const auto key = argument("string", "config/set/clear: the setting name");
 
                 addAction({ HEALTH_ACTION,
@@ -538,12 +538,12 @@ namespace f4cf::devbench
                               RunOn::Listener },
                     true);
                 addAction({ "config",
-                              "one INI value as the mod sees it: the session override if one is set, otherwise the file's",
+                              "one config value as the mod sees it: the session override if one is set, otherwise the file's",
                               { { "section", section }, { "key", key } },
                               handler(&Tool::readConfig) },
                     true);
                 addAction({ "set",
-                              "override one INI value for this session without writing the file; the mod reloads its config at once",
+                              "override one config value for this session without writing the file; the mod reloads its config at once",
                               { { "section", section }, { "key", key }, { "value", argument("string", "set: the new value") } },
                               handler(&Tool::setConfig) },
                     true);
@@ -649,7 +649,7 @@ namespace f4cf::devbench
                 }
                 const auto value = argString(args, "value");
                 // rewrites every typed config member, which the mod reads mid-frame: the reason set is a game-thread action
-                config().setConfigOverride(OVERRIDE_OWNER, section.c_str(), key.c_str(), config::IniValue(value));
+                config().setConfigOverride(OVERRIDE_OWNER, section.c_str(), key.c_str(), config::ConfigValue(value));
                 return { { "section", section }, { "key", key }, { "value", value }, { "note", "session override; the file is unchanged" } };
             }
 

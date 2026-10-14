@@ -1,6 +1,6 @@
 #include "DebugSection.h"
 
-#include "IniReaders.h"
+#include "ConfigReaders.h"
 #include "common/MatrixUtils.h"
 
 namespace
@@ -28,21 +28,22 @@ namespace
 namespace f4cf::config
 {
     /**
-     * Read the fields from the [Debug] section of a loaded INI.
+     * Read the fields from the [Debug] section of a loaded config.
      * The section's version, log level and log pattern are not here: they are ConfigBase's own, and it reads them.
      */
-    void DebugSection::load(const CSimpleIniA& ini)
+    void DebugSection::load(const toml::table& config)
     {
-        flowFlag1 = static_cast<float>(ini.GetDoubleValue(INI_SECTION_DEBUG, "fFlowFlag1", 0));
-        flowFlag2 = static_cast<float>(ini.GetDoubleValue(INI_SECTION_DEBUG, "fFlowFlag2", 0));
-        flowFlag3 = static_cast<float>(ini.GetDoubleValue(INI_SECTION_DEBUG, "fFlowFlag3", 0));
-        flowText1 = ini.GetValue(INI_SECTION_DEBUG, "sFlowText1", "");
-        flowText2 = ini.GetValue(INI_SECTION_DEBUG, "sFlowText2", "");
-        transform = IniReaders::getTransformValue(ini, INI_SECTION_DEBUG, "tTransform", common::MatrixUtils::getTransform(0, 0, 0, 0, 0, 0));
-        handPose = IniReaders::getHandPoseValue(ini, INI_SECTION_DEBUG, "hHandPose", {});
+        const auto debug = config[CONFIG_SECTION_DEBUG];
+        flowFlag1 = debug["fFlowFlag1"].value_or(0.0f);
+        flowFlag2 = debug["fFlowFlag2"].value_or(0.0f);
+        flowFlag3 = debug["fFlowFlag3"].value_or(0.0f);
+        flowText1 = debug["sFlowText1"].value_or(std::string());
+        flowText2 = debug["sFlowText2"].value_or(std::string());
+        transform = ConfigReaders::getTransformValue(config, CONFIG_SECTION_DEBUG, "tTransform", common::MatrixUtils::getTransform(0, 0, 0, 0, 0, 0));
+        handPose = ConfigReaders::getHandPoseValue(config, CONFIG_SECTION_DEBUG, "hHandPose", {});
         // sAdjustTarget is either a fixed keyword (transform/handpose/flag1...) or, when it
-        // contains "::", a "Section::Key" reference to any INI field tuned live via the field mode.
-        const std::string target = ini.GetValue(INI_SECTION_DEBUG, "sAdjustTarget", "none");
+        // contains "::", a "Section::Key" reference to any config field tuned live via the field mode.
+        const std::string target = debug["sAdjustTarget"].value_or(std::string("none"));
         if (target.find("::") != std::string::npos) {
             adjustTarget = DebugAdjustTarget::Field;
             adjustField = target;
@@ -50,15 +51,15 @@ namespace f4cf::config
             adjustTarget = parseDebugAdjustTarget(target);
             adjustField.clear();
         }
-        dumpDataOnceNames = ini.GetValue(INI_SECTION_DEBUG, "sDumpDataOnceNames", "");
-        addItemsOnceNames = ini.GetValue(INI_SECTION_DEBUG, "sAddItemsOnceNames", "");
-        drawEnabled = ini.GetBoolValue(INI_SECTION_DEBUG, "bDebugDrawEnabled", true);
-        drawDisabledChannels = ini.GetValue(INI_SECTION_DEBUG, "sDebugDrawDisabledChannels", "");
-        drawToggleBinding = ini.GetValue(INI_SECTION_DEBUG, "sDebugDrawToggleBinding", "");
-        drawHudPlacement = ini.GetValue(INI_SECTION_DEBUG, "sDebugDrawHudPlacement", "center");
-        sceneDepthStrategy = ini.GetValue(INI_SECTION_DEBUG, "sSceneDepthStrategy", "auto");
-        sceneDepthDiagnostics = ini.GetBoolValue(INI_SECTION_DEBUG, "bSceneDepthDiagnostics", false);
-        vruiShowFingerTip = ini.GetBoolValue(INI_SECTION_DEBUG, "bVRUIShowFingerTip", false);
-        vruiDevLayout = ini.GetBoolValue(INI_SECTION_DEBUG, "bVRUIDevLayout", false);
+        dumpDataOnceNames = debug["sDumpDataOnceNames"].value_or(std::string());
+        addItemsOnceNames = debug["sAddItemsOnceNames"].value_or(std::string());
+        drawEnabled = debug["bDebugDrawEnabled"].value_or(true);
+        drawDisabledChannels = debug["sDebugDrawDisabledChannels"].value_or(std::string());
+        drawToggleBinding = debug["sDebugDrawToggleBinding"].value_or(std::string());
+        drawHudPlacement = debug["sDebugDrawHudPlacement"].value_or(std::string("center"));
+        sceneDepthStrategy = debug["sSceneDepthStrategy"].value_or(std::string("auto"));
+        sceneDepthDiagnostics = debug["bSceneDepthDiagnostics"].value_or(false);
+        vruiShowFingerTip = debug["bVRUIShowFingerTip"].value_or(false);
+        vruiDevLayout = debug["bVRUIDevLayout"].value_or(false);
     }
 }

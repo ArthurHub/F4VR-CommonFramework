@@ -15,7 +15,7 @@ namespace f4cf::vrui
      * The dev layout: the placement of the attached UI is tuned through a file while the game runs.
      * It is on while `bVRUIDevLayout` in the config's [Debug] section is true, with nothing for the mod to call.
      *
-     * The file is `<mod>_DevLayout.ini`, beside the mod's INI. Every root is a section named after it, with
+     * The file is `<mod>_DevLayout.ini`, beside the mod's config file. Every root is a section named after it, with
      * a line for the root and for each element under it. A line an attached element is missing is added, and
      * the lines are applied to the attached elements on every frame, so they win over the values the code sets.
      * The lines of a detached root stay, and apply again when a root of that name is attached.

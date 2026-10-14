@@ -148,7 +148,7 @@ formatting one per frame on the render thread is not affordable.
 
 ## The two keys
 
-Both live in `[Debug]` and hot-reload like every other INI value.
+Both live in `[Debug]` and hot-reload like every other config value.
 
 `bSceneDepthDiagnostics` (default **false**) is for whoever came to look at the capture: it draws the
 watch rows above, and re-runs the side-by-side comparison — see *Both answered, so both are dormant*.

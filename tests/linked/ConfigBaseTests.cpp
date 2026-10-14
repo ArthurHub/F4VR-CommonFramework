@@ -1,14 +1,15 @@
 #include <catch2/catch_test_macros.hpp>
 
-#include <SimpleIni.h>
 #include <chrono>
 #include <filesystem>
 #include <string>
 #include <thread>
 
 #include "TestFiles.h"
+#include "common/TomlEditor.h"
 #include "config/ConfigBase.h"
 
+using f4cf::common::TomlEditor;
 using test_files::readFile;
 using test_files::TempFolder;
 using test_files::writeFile;
@@ -17,14 +18,17 @@ namespace
 {
     constexpr auto MAIN = "Main";
 
-    // the resource of the default INI in this executable, see Resources.rc
-    constexpr WORD DEFAULT_INI_RESOURCE_ID = 101;
+    // the resource of the default config in this executable, see Resources.rc
+    constexpr WORD DEFAULT_CONFIG_RESOURCE_ID = 101;
 
-    // a user's file of the default INI's version, with values of the user's own
-    constexpr auto USER_FILE = "# the mod's settings\n[Main]\nfScale = 1\niMode = 0\n\n[Debug]\niVersion = 2\n";
+    // a user's file of the default config's version, with values of the user's own
+    constexpr auto USER_FILE = "# the mod's settings\n[Main]\nfScale = 1.0\niMode = 0\n\n[Debug]\niVersion = 2\n";
 
     // a user's file of version 1, which had fOld and no iMode
-    constexpr auto OLD_USER_FILE = "[Main]\nfScale = 4\nfOld = 7\n\n[Debug]\niVersion = 1\n";
+    constexpr auto OLD_USER_FILE = "[Main]\nfScale = 4.0\nfOld = 7.0\n\n[Debug]\niVersion = 1\n";
+
+    // a user's file that is not TOML: a binding written without its quotes
+    constexpr auto INVALID_FILE = "[Main]\nfScale = 1.0\nsButton = left tap grip\n\n[Debug]\niVersion = 2\n";
 
     /**
      * A mod's config with two values of its own.
@@ -32,13 +36,13 @@ namespace
     class TestConfig : public f4cf::ConfigBase
     {
     public:
-        // no DLL of this name is loaded, so the default INI is read from this executable
-        explicit TestConfig(const std::string& iniFilePath)
-            : ConfigBase("F4CFTests", iniFilePath, DEFAULT_INI_RESOURCE_ID)
+        // no DLL of this name is loaded, so the default config is read from this executable
+        explicit TestConfig(const std::string& configFilePath)
+            : ConfigBase("F4CFTests", configFilePath, DEFAULT_CONFIG_RESOURCE_ID)
         {}
 
         // a load of the file as load() does it, with no file watch started
-        using ConfigBase::loadIniConfigValues;
+        using ConfigBase::loadConfigValues;
 
         float scale = 0;
         int mode = 0;
@@ -47,67 +51,58 @@ namespace
         int loads = 0;
 
     protected:
-        virtual void loadIniConfigInternal(const CSimpleIniA& ini) override
+        virtual void loadConfigInternal(const toml::table& config) override
         {
-            scale = static_cast<float>(ini.GetDoubleValue(MAIN, "fScale", 0));
-            mode = static_cast<int>(ini.GetLongValue(MAIN, "iMode", 0));
+            scale = config[MAIN]["fScale"].value_or(0.0f);
+            mode = config[MAIN]["iMode"].value_or(0);
             loads++;
         }
     };
 
-    std::string iniPath(const TempFolder& folder)
+    std::string configPath(const TempFolder& folder)
     {
-        return folder.file("TestMod.ini");
+        return folder.file("TestMod.toml");
     }
 
     /**
-     * The values of a file on disk, read past the config.
+     * A value of a file on disk as TOML text, read past the config, or "<none>" when it does not have it.
      */
-    struct FileValues
+    std::string fileValue(const std::string& path, const char* section, const char* key)
     {
-        CSimpleIniA ini;
-
-        explicit FileValues(const std::string& path)
-        {
-            REQUIRE(ini.LoadFile(path.c_str()) >= 0);
-        }
-
-        std::string value(const char* section, const char* key) const
-        {
-            return ini.GetValue(section, key, "<none>");
-        }
-    };
+        const auto table = toml::parse(readFile(path));
+        const auto* node = table[section][key].node();
+        return node ? TomlEditor::Value(*node).text() : "<none>";
+    }
 
     /**
      * Someone else sets one value in the file, past the config: a text editor, or Mods Config VR on Save.
      */
     void writeBySomeoneElse(const std::string& path, const char* key, const int value)
     {
-        CSimpleIniA ini;
-        REQUIRE(ini.LoadFile(path.c_str()) >= 0);
-        ini.SetLongValue(MAIN, key, value);
-        REQUIRE(ini.SaveFile(path.c_str()) >= 0);
+        TomlEditor editor(readFile(path));
+        REQUIRE(editor.set({ MAIN, key }, value));
+        writeFile(path, editor.text());
     }
 }
 
-TEST_CASE("ConfigBase: the default INI embedded in the module is loaded with no file")
+TEST_CASE("ConfigBase: the default config embedded in the module is loaded with no file")
 {
     const TempFolder folder;
-    TestConfig config(iniPath(folder));
+    TestConfig config(configPath(folder));
 
     config.loadEmbeddedDefaultOnly();
 
     REQUIRE(config.scale == 1.5f);
     REQUIRE(config.mode == 2);
-    REQUIRE_FALSE(std::filesystem::exists(iniPath(folder)));
+    REQUIRE_FALSE(std::filesystem::exists(configPath(folder)));
 }
 
 TEST_CASE("ConfigBase: a session override is in the loaded values and not in the file")
 {
     const TempFolder folder;
-    writeFile(iniPath(folder), USER_FILE);
-    TestConfig config(iniPath(folder));
-    REQUIRE(config.loadIniConfigValues());
+    writeFile(configPath(folder), USER_FILE);
+    TestConfig config(configPath(folder));
+    REQUIRE(config.loadConfigValues());
     REQUIRE(config.scale == 1.0f);
 
     config.setConfigOverride("tests", MAIN, "fScale", 2.5f);
@@ -115,7 +110,7 @@ TEST_CASE("ConfigBase: a session override is in the loaded values and not in the
     REQUIRE(config.scale == 2.5f);
     REQUIRE(config.mode == 0);
     REQUIRE(config.hasConfigOverride(MAIN, "fScale"));
-    REQUIRE(readFile(iniPath(folder)) == USER_FILE);
+    REQUIRE(readFile(configPath(folder)) == USER_FILE);
 
     SECTION("until its owner clears it")
     {
@@ -128,47 +123,152 @@ TEST_CASE("ConfigBase: a session override is in the loaded values and not in the
     }
     SECTION("over a value that is saved to the file after it")
     {
-        config.saveIniConfigValue(MAIN, "fScale", 3.0f);
+        config.saveConfigValue(MAIN, "fScale", 3.0f);
         config.reload();
 
         REQUIRE(config.scale == 2.5f);
-        REQUIRE(FileValues(iniPath(folder)).ini.GetDoubleValue(MAIN, "fScale", 0) == 3.0);
+        REQUIRE(fileValue(configPath(folder), MAIN, "fScale") == "3.0");
+    }
+    SECTION("given as text, in the type of the file's value")
+    {
+        config.setConfigOverride("tests", MAIN, "iMode", "7");
+
+        REQUIRE(config.mode == 7);
+        REQUIRE(config.getConfigValue(MAIN, "iMode") == "7");
     }
 }
 
 TEST_CASE("ConfigBase: a saved value is written to the file with the rest of it, and loads no values")
 {
     const TempFolder folder;
-    writeFile(iniPath(folder), USER_FILE);
-    TestConfig config(iniPath(folder));
-    REQUIRE(config.loadIniConfigValues());
+    writeFile(configPath(folder), USER_FILE);
+    TestConfig config(configPath(folder));
+    REQUIRE(config.loadConfigValues());
     const auto loads = config.loads;
 
-    config.saveIniConfigValue(MAIN, "iMode", 3);
+    config.saveConfigValue(MAIN, "iMode", 3);
 
-    const FileValues file(iniPath(folder));
-    REQUIRE(file.value(MAIN, "iMode") == "3");
-    REQUIRE(file.value(MAIN, "fScale") == "1");
-    REQUIRE(readFile(iniPath(folder)).starts_with("# the mod's settings"));
+    std::string expected = USER_FILE;
+    expected.replace(expected.find("iMode = 0"), 9, "iMode = 3");
+    REQUIRE(readFile(configPath(folder)) == expected);
     REQUIRE(config.loads == loads);
 
-    // the config has the INI as it saved it, with no read of the file
-    std::filesystem::remove(iniPath(folder));
+    // the config has the file as it saved it, with no read of the file
+    std::filesystem::remove(configPath(folder));
     REQUIRE(config.getConfigValue(MAIN, "iMode") == "3");
+}
+
+TEST_CASE("ConfigBase: a saved value given as text is written in the type of the file's value")
+{
+    const TempFolder folder;
+    writeFile(configPath(folder), USER_FILE);
+    TestConfig config(configPath(folder));
+    REQUIRE(config.loadConfigValues());
+
+    // as the DebugAdjuster saves a float, in its fixed text
+    config.saveConfigValue(MAIN, "fScale", "1.250");
+    REQUIRE(fileValue(configPath(folder), MAIN, "fScale") == "1.25");
+
+    // text that is not of the type is not written, and the rest of the save is
+    config.saveConfigValues(MAIN, { { "fScale", "big" }, { "iMode", 4 } });
+    REQUIRE(fileValue(configPath(folder), MAIN, "fScale") == "1.25");
+    REQUIRE(fileValue(configPath(folder), MAIN, "iMode") == "4");
+}
+
+TEST_CASE("ConfigBase: values of several sections are saved together, from a list made at runtime or written in place")
+{
+    const TempFolder folder;
+    writeFile(configPath(folder), USER_FILE);
+    TestConfig config(configPath(folder));
+    REQUIRE(config.loadConfigValues());
+
+    std::vector<f4cf::config::ConfigEntry> entries;
+    for (const auto& [key, value] : { std::pair{ "iMode", 6 } }) {
+        entries.push_back({ MAIN, key, value });
+    }
+    entries.push_back({ "Debug", "fFlowFlag1", 0.5f });
+    config.saveConfigValues(entries);
+
+    REQUIRE(fileValue(configPath(folder), MAIN, "iMode") == "6");
+    REQUIRE(fileValue(configPath(folder), "Debug", "fFlowFlag1") == "0.5");
+
+    config.saveConfigValues({ { MAIN, "fScale", 2.0f }, { "Debug", "fFlowFlag1", 1.5f } });
+
+    REQUIRE(fileValue(configPath(folder), MAIN, "fScale") == "2.0");
+    REQUIRE(fileValue(configPath(folder), "Debug", "fFlowFlag1") == "1.5");
+    REQUIRE(readFile(configPath(folder)).starts_with("# the mod's settings\n[Main]\nfScale = 2.0\niMode = 6\n"));
+}
+
+TEST_CASE("ConfigBase: a save of the values the file already has does not write it")
+{
+    const TempFolder folder;
+    writeFile(configPath(folder), USER_FILE);
+    TestConfig config(configPath(folder));
+    REQUIRE(config.loadConfigValues());
+    const auto written = std::filesystem::last_write_time(configPath(folder));
+
+    config.saveConfigValues(MAIN, { { "fScale", 1.0f }, { "iMode", 0 } });
+
+    REQUIRE(std::filesystem::last_write_time(configPath(folder)) == written);
+    REQUIRE(readFile(configPath(folder)) == USER_FILE);
+}
+
+TEST_CASE("ConfigBase: a file that is not TOML is left for its user to fix")
+{
+    const TempFolder folder;
+    const auto path = configPath(folder);
+
+    SECTION("at the first load the values are the embedded default's")
+    {
+        writeFile(path, INVALID_FILE);
+        TestConfig config(path);
+
+        REQUIRE_FALSE(config.loadConfigValues());
+
+        REQUIRE(config.scale == 1.5f);
+        REQUIRE(config.mode == 2);
+        REQUIRE(readFile(path) == INVALID_FILE);
+    }
+    SECTION("after a load the values loaded before stay")
+    {
+        writeFile(path, USER_FILE);
+        TestConfig config(path);
+        REQUIRE(config.loadConfigValues());
+        config.setConfigOverride("tests", MAIN, "iMode", 5);
+        const auto loads = config.loads;
+
+        writeFile(path, INVALID_FILE);
+        REQUIRE_FALSE(config.loadConfigValues());
+
+        REQUIRE(config.loads == loads);
+        REQUIRE(config.scale == 1.0f);
+        REQUIRE(config.mode == 5);
+    }
+    SECTION("a save does not write it")
+    {
+        writeFile(path, USER_FILE);
+        TestConfig config(path);
+        REQUIRE(config.loadConfigValues());
+
+        writeFile(path, INVALID_FILE);
+        config.saveConfigValue(MAIN, "iMode", 3);
+
+        REQUIRE(readFile(path) == INVALID_FILE);
+    }
 }
 
 TEST_CASE("ConfigBase: the subscribers are called once for all the loads since the last call")
 {
     const TempFolder folder;
-    writeFile(iniPath(folder), USER_FILE);
-    TestConfig config(iniPath(folder));
+    writeFile(configPath(folder), USER_FILE);
+    TestConfig config(configPath(folder));
     int calls = 0;
-    config.subscribeForIniChangedEvent("tests", [&](const std::string&) {
+    config.subscribeForConfigChangedEvent("tests", [&](const std::string&) {
         calls++;
     });
 
     // a load of the file, of an override and of a reload: each only marks that it ran
-    REQUIRE(config.loadIniConfigValues());
+    REQUIRE(config.loadConfigValues());
     config.setConfigOverride("tests", MAIN, "iMode", 1);
     config.reload();
     REQUIRE(calls == 0);
@@ -185,13 +285,13 @@ TEST_CASE("ConfigBase: load brings the file up to date, and a change of it on di
     using namespace std::chrono_literals;
 
     const TempFolder folder;
-    const auto path = iniPath(folder);
+    const auto path = configPath(folder);
 
     // Never destroyed: load() starts the file watch on a thread of its own that keeps the config, as a mod's
     // config lives for as long as the game does.
     auto& config = *new TestConfig(path);
     int calls = 0;
-    config.subscribeForIniChangedEvent("tests", [&](const std::string&) {
+    config.subscribeForConfigChangedEvent("tests", [&](const std::string&) {
         calls++;
     });
 
@@ -201,7 +301,7 @@ TEST_CASE("ConfigBase: load brings the file up to date, and a change of it on di
 
         REQUIRE(config.scale == 1.5f);
         REQUIRE(config.mode == 2);
-        REQUIRE(FileValues(path).value(MAIN, "fScale") == "1.5");
+        REQUIRE(fileValue(path, MAIN, "fScale") == "1.5");
     }
     SECTION("a file of an older version gets the default's layout with the user's values, and is kept as a backup")
     {
@@ -211,12 +311,12 @@ TEST_CASE("ConfigBase: load brings the file up to date, and a change of it on di
 
         REQUIRE(config.scale == 4.0f);
         REQUIRE(config.mode == 2);
-        const FileValues file(path);
-        REQUIRE(file.value(MAIN, "fScale") == "4");
-        REQUIRE(file.value(MAIN, "iMode") == "2");
-        REQUIRE(file.value(MAIN, "fOld") == "<none>");
-        REQUIRE(file.value("Debug", "iVersion") == "2");
-        REQUIRE(readFile(folder.file("TestMod_backup_v1.ini")) == OLD_USER_FILE);
+        REQUIRE(fileValue(path, MAIN, "fScale") == "4.0");
+        REQUIRE(fileValue(path, MAIN, "iMode") == "2");
+        REQUIRE(fileValue(path, MAIN, "fOld") == "<none>");
+        REQUIRE(fileValue(path, "Debug", "iVersion") == "2");
+        REQUIRE(readFile(path).starts_with("# The default config"));
+        REQUIRE(readFile(folder.file("TestMod_backup_v1.toml")) == OLD_USER_FILE);
     }
 
     // the loads so far are load()'s own
@@ -239,5 +339,5 @@ TEST_CASE("ConfigBase: load brings the file up to date, and a change of it on di
     REQUIRE(calls == 2);
     REQUIRE(config.mode >= FIRST_MODE);
 
-    config.unsubscribeFromIniChangedEvent("tests");
+    config.unsubscribeFromConfigChangedEvent("tests");
 }

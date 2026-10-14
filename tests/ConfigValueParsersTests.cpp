@@ -3,7 +3,7 @@
 #include <array>
 #include <string>
 
-#include "config/IniValueParsers.h"
+#include "config/ValueParsers.h"
 
 using f4cf::config::parseColor255;
 using f4cf::config::parseHandPose;
@@ -12,7 +12,7 @@ using f4cf::config::takeName;
 
 namespace
 {
-    // a color as a preset has it before its INI value is read: white, at an opacity of its own
+    // a color as a preset has it before its config value is read: white, at an opacity of its own
     constexpr std::array<float, 4> PRESET{ 1.0f, 1.0f, 1.0f, 0.4f };
 
     /**
@@ -24,7 +24,7 @@ namespace
     }
 }
 
-TEST_CASE("ConfigIniValueParsers: a transform is its position, its rotation in degrees and its scale")
+TEST_CASE("ConfigValueParsers: a transform is its position, its rotation in degrees and its scale")
 {
     const auto transform = parseTransform("1.5,-2,3;90,0,-45.5;0.8");
     REQUIRE(transform);
@@ -37,7 +37,7 @@ TEST_CASE("ConfigIniValueParsers: a transform is its position, its rotation in d
     REQUIRE(transform->scale == 0.8f);
 }
 
-TEST_CASE("ConfigIniValueParsers: a transform is read with spaces around its numbers")
+TEST_CASE("ConfigValueParsers: a transform is read with spaces around its numbers")
 {
     const auto transform = parseTransform("  1 , 2 , 3 ; 4 , 5 , 6 ; 7  ");
     REQUIRE(transform);
@@ -48,7 +48,7 @@ TEST_CASE("ConfigIniValueParsers: a transform is read with spaces around its num
     REQUIRE(transform->scale == 7.0f);
 }
 
-TEST_CASE("ConfigIniValueParsers: a transform that lacks a number or a separator is malformed")
+TEST_CASE("ConfigValueParsers: a transform that lacks a number or a separator is malformed")
 {
     REQUIRE_FALSE(parseTransform(""));
     REQUIRE_FALSE(parseTransform("none"));
@@ -61,7 +61,7 @@ TEST_CASE("ConfigIniValueParsers: a transform that lacks a number or a separator
     REQUIRE_FALSE(parseTransform("1,2,3;4,five,6;7"));
 }
 
-TEST_CASE("ConfigIniValueParsers: a hand pose is four numbers for each finger and two for the palm, in that order")
+TEST_CASE("ConfigValueParsers: a hand pose is four numbers for each finger and two for the palm, in that order")
 {
     const auto pose = parseHandPose("0.1,0.2,0.3,0.4; 1,2,3,4; 5,6,7,8; 9,10,11,12; 13,14,15,-16; 0.5,-0.25");
     REQUIRE(pose);
@@ -78,7 +78,7 @@ TEST_CASE("ConfigIniValueParsers: a hand pose is four numbers for each finger an
     REQUIRE((*pose)[21] == -0.25f);
 }
 
-TEST_CASE("ConfigIniValueParsers: a hand pose with a finger short of a number, or with no palm, is malformed")
+TEST_CASE("ConfigValueParsers: a hand pose with a finger short of a number, or with no palm, is malformed")
 {
     REQUIRE_FALSE(parseHandPose(""));
     // the thumb has three numbers
@@ -91,14 +91,14 @@ TEST_CASE("ConfigIniValueParsers: a hand pose with a finger short of a number, o
     REQUIRE_FALSE(parseHandPose("0,0,0,0, 1,2,3,4, 5,6,7,8, 9,10,11,12, 13,14,15,16, 0.5,0.25"));
 }
 
-TEST_CASE("ConfigIniValueParsers: a color of three channels keeps the opacity it had")
+TEST_CASE("ConfigValueParsers: a color of three channels keeps the opacity it had")
 {
     auto color = PRESET;
     REQUIRE(parseColor255("255,128,0", color));
     REQUIRE(color == std::array{ 1.0f, channel(128), 0.0f, 0.4f });
 }
 
-TEST_CASE("ConfigIniValueParsers: the fourth channel of a color is its opacity")
+TEST_CASE("ConfigValueParsers: the fourth channel of a color is its opacity")
 {
     auto color = PRESET;
     REQUIRE(parseColor255("0,64,255,51", color));
@@ -108,7 +108,7 @@ TEST_CASE("ConfigIniValueParsers: the fourth channel of a color is its opacity")
     REQUIRE(color == std::array{ channel(10), channel(20), channel(30), 0.0f });
 }
 
-TEST_CASE("ConfigIniValueParsers: a malformed color leaves the color as it was")
+TEST_CASE("ConfigValueParsers: a malformed color leaves the color as it was")
 {
     for (const std::string text : {
              "",
@@ -131,7 +131,7 @@ TEST_CASE("ConfigIniValueParsers: a malformed color leaves the color as it was")
     }
 }
 
-TEST_CASE("ConfigIniValueParsers: a name is taken out of a list of names, once")
+TEST_CASE("ConfigValueParsers: a name is taken out of a list of names, once")
 {
     std::string names = "skelly, geometry";
 
@@ -143,7 +143,7 @@ TEST_CASE("ConfigIniValueParsers: a name is taken out of a list of names, once")
     REQUIRE(names == ", ");
 }
 
-TEST_CASE("ConfigIniValueParsers: a name is taken only as a whole, in whatever order the names are asked for")
+TEST_CASE("ConfigValueParsers: a name is taken only as a whole, in whatever order the names are asked for")
 {
     std::string names = "fp_skelly";
     REQUIRE_FALSE(takeName(names, "skelly"));
@@ -158,7 +158,7 @@ TEST_CASE("ConfigIniValueParsers: a name is taken only as a whole, in whatever o
     REQUIRE(takeName(names, "perf_reset"));
 }
 
-TEST_CASE("ConfigIniValueParsers: the names of a list can have any separator")
+TEST_CASE("ConfigValueParsers: the names of a list can have any separator")
 {
     for (const std::string separator : { ",", ", ", " ", ";", "|", " + " }) {
         CAPTURE(separator);
@@ -171,7 +171,7 @@ TEST_CASE("ConfigIniValueParsers: the names of a list can have any separator")
     }
 }
 
-TEST_CASE("ConfigIniValueParsers: a name that the list does not have leaves the list as it was")
+TEST_CASE("ConfigValueParsers: a name that the list does not have leaves the list as it was")
 {
     std::string names = "skelly, world";
     REQUIRE_FALSE(takeName(names, "geometry"));

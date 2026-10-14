@@ -101,7 +101,7 @@ Channels are not only a mod's own: the framework tags its scene-depth readout `S
 `sDebugDrawDisabledChannels` mutes it like any other. That readout is off unless asked for — see
 [`bSceneDepthDiagnostics`](../../docs/debug-config.md#scene-depth-occlusion).
 
-## `[Debug]` INI keys (all mods get these via `ConfigBase`, hot-reloadable)
+## `[Debug]` config keys (all mods get these via `ConfigBase`, hot-reloadable)
 
 | Key                          | Default | Meaning                                                                    |
 | ---------------------------- | ------- | -------------------------------------------------------------------------- |

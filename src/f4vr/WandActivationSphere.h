@@ -34,7 +34,7 @@ namespace f4cf::f4vr
     };
 
     /**
-     * Parse an ActivationSphereVisibility from config (INI) text, case-insensitively: "never"/"off"/"false"
+     * Parse an ActivationSphereVisibility from config text, case-insensitively: "never"/"off"/"false"
      * -> Never; "always"/"on"/"true" -> Always; "wheninside"/"inside"/"proximity"/"active" -> WhenInside;
      * "whenavailable"/"available" -> WhenAvailable. Empty or unrecognized text returns `fallback` (unrecognized is
      * logged).
@@ -53,7 +53,7 @@ namespace f4cf::f4vr
     };
 
     /**
-     * Parse an ActivationSphereOrientation from config (INI) text, case-insensitively: "hmd"/"head" -> Hmd;
+     * Parse an ActivationSphereOrientation from config text, case-insensitively: "hmd"/"head" -> Hmd;
      * "body"/"skeleton" -> Body; "world" -> World. Empty or unrecognized text returns `fallback` (unrecognized is
      * logged).
      */
@@ -86,7 +86,7 @@ namespace f4cf::f4vr
     /**
      * Authored, config-loadable description of one activation sphere: its zone (+ optional PA variant), its
      * two bindings (each carrying its own suppress flag), the entry haptic plus a per-binding activation
-     * haptic, and when each visual (the sphere, the icon) is shown and how it looks. A mod parses one INI section into this
+     * haptic, and when each visual (the sphere, the icon) is shown and how it looks. A mod parses one config section into this
      * (ConfigBase::loadWandActivationConfig); the per-frame WandActivationSphere::Frame is composed from it
      * with live gating (real binding vs the disabled binding) and any runtime zone re-anchor on top. The
      * sphere only uses the zone's translate + scale (it is rotation-invariant). `secondary` defaults to
@@ -219,7 +219,7 @@ namespace f4cf::f4vr
 
         /**
          * Convenience overload that builds the per-frame Frame straight from a WandActivationConfig — the
-         * authored bundle a mod loads from one INI section — so callers pass the config once instead of
+         * authored bundle a mod loads from one config section — so callers pass the config once instead of
          * re-listing every field.
          */
         template <class OnActivated>

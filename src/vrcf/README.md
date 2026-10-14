@@ -87,18 +87,18 @@ if (VRControllers.check(openMenu)) { /* binding triggered */ }
 must be held down for the binding to fire — on the binding's own hand by default, or on the
 `InputModifier::hand` you specify.
 
-To load bindings from INI, [`InputBindingParser.h`](InputBindingParser.h) parses a forgiving,
-case-insensitive line into an `InputBinding` (token helpers `parseHand` / `parseActivationType` /
+To load bindings from the config, [`InputBindingParser.h`](InputBindingParser.h) parses a forgiving,
+case-insensitive string into an `InputBinding` (token helpers `parseHand` / `parseActivationType` /
 `parseButton` / `parseAxis` / `parseDirection` are also exposed, and `buttonName` / `axisName` /
 `buttonNames(mask)` go the other way, to the grammar's words, for logs and messages that should read
-like the INI). If your config derives from
-`ConfigBase`, prefer its `getInputBindingValue(ini, section, key, default)` helper — it reads the key,
+like the config). If your config derives from
+`ConfigBase`, prefer its `getInputBindingValue(config, section, key, default)` helper — it reads the key,
 falls back to your default, and logs a warning on a malformed value (same pattern as
 `getTransformValue` / `getHandPoseValue`):
 
 ```cpp
-// In your Config's loadIniConfigInternal(const CSimpleIniA& ini):
-openMenuBinding = getInputBindingValue(ini, "Controls", "sOpenMenu",
+// In your Config's loadConfigInternal(const toml::table& config):
+openMenuBinding = getInputBindingValue(config, "Controls", "sOpenMenu",
     InputBinding{ Hand::Offhand, ActivationType::LongPress, vr::k_EButton_Grip });
 
 // Or parse a string directly anywhere else:
@@ -113,10 +113,10 @@ Format: `"<hand> <type> <button> [duration] [+[hand:]modifier]"`. Examples: `"pr
 To **disable** a binding, set its value to `none`, `off`, `disabled`, or leave it empty — it parses to a
 `Disabled` binding whose `check()` always returns `false`, so the input never fires (no warning is logged).
 Note the difference from a *missing* key: an absent key falls back to the code default, while a present-but-empty
-value is an explicit "off". Example: `sOpenMenu = none`.
+value is an explicit "off". Example: `sOpenMenu = "none"`. The value is a string, so it goes in quotes.
 
 To **show** a binding in your UI, do not spell the button out in a string literal — it goes stale as
-soon as someone edits the INI. `vrui::appendBindingPrompt(spans, binding)`
+soon as someone edits the config. `vrui::appendBindingPrompt(spans, binding)`
 ([`BindingPrompt.h`](../vrui/BindingPrompt.h)) turns an `InputBinding` into a text-panel span with
 the controller icon it actually resolves to, falling back to words for a binding no icon covers.
 

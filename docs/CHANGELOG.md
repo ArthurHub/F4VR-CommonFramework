@@ -9,6 +9,32 @@ major version is `0`, a minor bump may break the API; the **Upgrading** notes sa
 
 ## 0.5.0 — unreleased
 
+- **TOML config**: `ConfigBase` loads a TOML file in place of an INI, through toml++. A save changes only
+  the values in the file and keeps its comments and layout (`common::TomlEditor`), and does not write a
+  file that already holds them. A value given as text, by a session override, devbench `set` or a save,
+  takes the type the file has for the key. A file that is not TOML, as one a player is in the middle of
+  editing, is logged with its line and what is wrong at it, and is never written over: the values loaded
+  before it stay, and before any were the embedded default's apply. **Upgrading:**
+  - Ship the default config as `<Mod>.toml` (embedded as RCDATA as before), and pass a `.toml` path.
+  - `loadIniConfigInternal(const CSimpleIniA&)` is `loadConfigInternal(const toml::table&)`: read a value
+    as `config[section][key].value_or(default)`, and pass the table to the readers
+    (`getTransformValue(config, ...)`, `getInputBindingValue`, `loadWandActivationConfig`, ...).
+  - `saveIniConfigInternal` is gone: override `save()` and write the values with one `saveConfigValues`.
+    Each save reads and writes the whole file, so save values together: `saveConfigValues` takes the keys
+    of one section, or `config::ConfigEntry` values of any sections, in place or as a list made at runtime.
+  - Renamed: `saveIniConfigValue(s)` → `saveConfigValue(s)`, `getIniFilePath` → `getConfigFilePath`,
+    `_iniFilePath` → `_configFilePath`, `loadIniConfig` → `loadConfig`, `stopIniConfigFileWatch` →
+    `stopConfigFileWatch`, `subscribeForIniChangedEvent` / `unsubscribeFromIniChangedEvent` →
+    `subscribeForConfigChangedEvent` / `unsubscribeFromConfigChangedEvent`, `readIni*Value` → `read*Value`,
+    `applyIniConfigWithOverride` → `applyConfigWithOverride`, `INI_SECTION_DEBUG` → `CONFIG_SECTION_DEBUG`,
+    `config::IniValue` / `IniKey` / `IniOverride` → `ConfigValue` / `ConfigKey` / `ConfigEntry`, and
+    `config::IniReaders` → `ConfigReaders`.
+  - `updateIniConfigToLatestVersionCustom` is `updateConfigToLatestVersionCustom(currentVersion,
+    latestVersion, const toml::table& old, common::TomlEditor& latest)`. The generic migration carries a
+    value only into a key of the same type (an integer into a float too): one whose type changed is left
+    to it.
+  - `ConfigBase.h` no longer includes SimpleIni, and with it Windows' `min` / `max` macros: write
+    `(std::min)(a, b)`.
 - **TOML editing**: `common::TomlEditor` sets values in the text of a TOML file and keeps every other
   byte (comments, blank lines, key order, how the other values are written), which toml++'s own writer
   doesn't. The framework depends on toml++, compiled once into it: **Upgrading:** add `"tomlplusplus"`

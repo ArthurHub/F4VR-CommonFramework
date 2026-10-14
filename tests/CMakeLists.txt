@@ -12,13 +12,13 @@ if(NOT TARGET Catch2::Catch2WithMain)
 endif()
 
 add_executable(${PROJECT_NAME}_tests
-  ConfigIniFileTests.cpp
-  ConfigIniMigrationTests.cpp
-  ConfigIniValueParsersTests.cpp
-  ConfigIniValueTests.cpp
+  ConfigFileTests.cpp
+  ConfigMigrationTests.cpp
   ConfigOffsetsJsonTests.cpp
   ConfigOverridesTests.cpp
   ConfigReloadSubscribersTests.cpp
+  ConfigValueParsersTests.cpp
+  ConfigValueTests.cpp
   FrameContextTests.cpp
   HistogramTests.cpp
   ImGuiPointerLogicTests.cpp
@@ -28,12 +28,12 @@ add_executable(${PROJECT_NAME}_tests
   UIDevLayoutFileTests.cpp
   # the plain-std sources under test
   ${SOURCE_DIR}/common/TomlEditor.cpp
-  ${SOURCE_DIR}/config/IniFile.cpp
-  ${SOURCE_DIR}/config/IniMigration.cpp
-  ${SOURCE_DIR}/config/IniValue.cpp
-  ${SOURCE_DIR}/config/IniValueParsers.cpp
+  ${SOURCE_DIR}/config/ConfigFile.cpp
+  ${SOURCE_DIR}/config/ConfigMigration.cpp
+  ${SOURCE_DIR}/config/ConfigValue.cpp
   ${SOURCE_DIR}/config/Overrides.cpp
   ${SOURCE_DIR}/config/ReloadSubscribers.cpp
+  ${SOURCE_DIR}/config/ValueParsers.cpp
   ${SOURCE_DIR}/perf/FrameContext.cpp
   ${SOURCE_DIR}/perf/Perf.cpp
   ${SOURCE_DIR}/perf/Report.cpp
@@ -48,7 +48,7 @@ set_target_properties(${PROJECT_NAME}_tests PROPERTIES EXCLUDE_FROM_ALL FALSE IN
 target_compile_features(${PROJECT_NAME}_tests PRIVATE cxx_std_23)
 target_include_directories(${PROJECT_NAME}_tests PRIVATE ${SOURCE_DIR})
 
-# SimpleIni is one header with no CMake target of its own
+# SimpleIni, for vrui/UIDevLayoutFile, is one header with no CMake target of its own
 find_path(SIMPLEINI_INCLUDE_DIR "SimpleIni.h" REQUIRED)
 target_include_directories(${PROJECT_NAME}_tests SYSTEM PRIVATE ${SIMPLEINI_INCLUDE_DIR})
 # toml++ for common/TomlEditor, header-only here: the test binary does not link the framework's compiled toml++
@@ -73,7 +73,7 @@ add_executable(${PROJECT_NAME}_linked_tests
   linked/CommonUtilsTests.cpp
   linked/ConfigBaseTests.cpp
   linked/DebugSectionTests.cpp
-  linked/IniReadersTests.cpp
+  linked/ConfigReadersTests.cpp
   linked/InputBindingParserTests.cpp
   linked/MatrixUtilsTests.cpp
   linked/OffsetsFilesTests.cpp

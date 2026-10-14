@@ -36,11 +36,11 @@ namespace f4cf::debug
      *
      * Zero cost until used: no hook is installed and the per-frame driver early-returns until the
      * first draw/watch call of the session; the OpenVR Submit hook + D3D resources are then
-     * installed lazily. When the overlay is disabled (INI bDebugDrawEnabled, setEnabled(false), or
+     * installed lazily. When the overlay is disabled (config bDebugDrawEnabled, setEnabled(false), or
      * the sDebugDrawToggleBinding hotkey) appends are skipped at the call site.
      *
      * Channels: setChannel()/channelScope() tags subsequent draws with a name so independent systems
-     * can be toggled separately (INI sDebugDrawDisabledChannels or setChannelEnabled()).
+     * can be toggled separately (config sDebugDrawDisabledChannels or setChannelEnabled()).
      *
      * Design + provenance: reference library knowledge-base/debug_draw_overlay.md (a generalization
      * of ROCK's DebugBodyOverlay).
@@ -225,11 +225,11 @@ namespace f4cf::debug
         RE::NiPoint3 _cameraPos{}; // head position captured this frame; drives distance-scaled markers + billboard labels
         std::size_t _rejectedLines = 0;
 
-        // enable state: INI value overridable at runtime (setEnabled / hotkey)
+        // enable state: config value overridable at runtime (setEnabled / hotkey)
         bool _configEnabled = true;
         std::optional<bool> _enabledOverride;
 
-        // channel gating: current tag + runtime overrides layered over the INI-disabled set
+        // channel gating: current tag + runtime overrides layered over the config-disabled set
         std::string _channel;
         bool _appendActive = true;
         std::unordered_set<std::string> _configDisabledChannels;

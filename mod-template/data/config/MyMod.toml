@@ -7,9 +7,10 @@
 #
 # -------------------------------------
 # Input Binding and Activation Spheres:
-# Controller bindings are a single, case-insensitive line: "<hand> <type> <button> [duration] [+modifier]".
+# Controller bindings are a case-insensitive string in quotes: "<hand> <type> <button> [duration] [+modifier]".
 # Examples: "none"; "offhand tap grip"; "primary longpress A"; "primary press trigger +grip".
 # Guide: https://github.com/ArthurHub/F4VR-CommonFramework/blob/main/docs/input-binding.md
+# A Windows path goes in single quotes, where a backslash is just a backslash: 'f4cf\icon.dds'.
 
 
 # This is my value, there are many like it but this one is mine
@@ -19,18 +20,18 @@ fMyConfigValue = 3.0
 # A sphere for activating functionality when player hand/wand is inside it.
 # https://github.com/ArthurHub/F4VR-CommonFramework/blob/main/docs/input-binding.md#activation-spheres
 [MyMod_AnActivationSphere]
-tZone = 3.91,7.11,0.67;0.00,0.00,0.00;20.00
-tZonePA = 4.01,10.21,-4.60;0.00,0.00,0.00;24.00
-sPrimaryBinding = offhand tap trigger suppress
-sSecondaryBinding = primary tap trigger suppress
-sEntryHaptic = Tick
-sPrimaryHaptic = DoubleClick
-sSecondaryHaptic = DoubleClick
-sShowIcon = wheninside
-sIcon = f4cf\activation-icon-hand.dds
-fIconSize = 1
-sShowSphere = wheninside
-sSphereStyle = white-subtle
+tZone = "3.91,7.11,0.67;0.00,0.00,0.00;20.00"
+tZonePA = "4.01,10.21,-4.60;0.00,0.00,0.00;24.00"
+sPrimaryBinding = "offhand tap trigger suppress"
+sSecondaryBinding = "primary tap trigger suppress"
+sEntryHaptic = "Tick"
+sPrimaryHaptic = "DoubleClick"
+sSecondaryHaptic = "DoubleClick"
+sShowIcon = "wheninside"
+sIcon = 'f4cf\activation-icon-hand.dds'
+fIconSize = 1.0
+sShowSphere = "wheninside"
+sSphereStyle = "white-subtle"
 fSphereScale = 0.9
 
 
@@ -42,44 +43,44 @@ iLogLevel = 2
 # Sets the spdlog output pattern for each normal log message.
 # Examples: "%H:%M:%S.%e %l: %v"; "%H:%M:%S %L [%s:%#]: %v"
 # Guide: https://github.com/ArthurHub/F4VR-CommonFramework/blob/main/docs/debug-config.md
-sLogPattern = %H:%M:%S.%e %l [%-20!k] %v
+sLogPattern = "%H:%M:%S.%e %l [%-20!k] %v"
 
-# Mod-defined numeric scratch values for runtime experiments; blank values load as 0.
-fFlowFlag1 = 0
-fFlowFlag2 = 0
-fFlowFlag3 = 0
+# Mod-defined numeric scratch values for runtime experiments.
+fFlowFlag1 = 0.0
+fFlowFlag2 = 0.0
+fFlowFlag3 = 0.0
 # Mod-defined text scratch values; sFlowText1 also supplies haptictest sequences.
-sFlowText1 =
-sFlowText2 =
+sFlowText1 = ""
+sFlowText2 = ""
 
-# Selects an in-game live-tuning target; none or blank disables it and restores controller input.
-# Examples: flag123; haptictest; MyMod::tSomeTransform
+# Selects an in-game live-tuning target; "none" or "" disables it and restores controller input.
+# Examples: "flag123"; "haptictest"; "MyMod::tSomeTransform"
 # Guide: https://github.com/ArthurHub/F4VR-CommonFramework/blob/main/docs/debug-config.md
-sAdjustTarget = none
+sAdjustTarget = "none"
 
 # Writes named game-state dumps to the mod log and removes each name after it runs.
-# Examples: ui_tree; skelly, fp_skelly; geometry, pipboy, all_nodes
+# Examples: "ui_tree"; "skelly, fp_skelly"; "geometry, pipboy, all_nodes"
 # Timing: perf_reset starts a perf window, then perf logs what each part of the frame cost since
 # Guide: https://github.com/ArthurHub/F4VR-CommonFramework/blob/main/docs/debug-config.md
-sDumpDataOnceNames =
+sDumpDataOnceNames = ""
 
 # Runs a one-shot inventory add or dry run from an operation plus category filters.
-# Examples: get, weapons, throwables; print, weapons:laser; print-all, armor:slot=torso|class=heavy
+# Examples: "get, weapons, throwables"; "print, weapons:laser"; "print-all, armor:slot=torso|class=heavy"
 # Guide: https://github.com/ArthurHub/F4VR-CommonFramework/blob/main/docs/debug-config.md
-sAddItemsOnceNames =
+sAddItemsOnceNames = ""
 
 # In-world debug draw overlay: master switch, comma-separated channel names to skip (e.g. npc-detection),
 # and a controller binding to enable/disable the overlay in-headset.
 # HUD placement: center, center-left, center-right, center-top, center-top-left, center-top-right.
 bDebugDrawEnabled = true
-sDebugDrawToggleBinding = offhand longpress A
-sDebugDrawDisabledChannels =
-sDebugDrawHudPlacement = center-top-left
+sDebugDrawToggleBinding = "offhand longpress A"
+sDebugDrawDisabledChannels = ""
+sDebugDrawHudPlacement = "center-top-left"
 
 # Which implementation resolves the world depth that hides overlays behind the world.
 # auto (shipped) | depthpass (count only depth-testing passes) | direct (never resample; wrong under
 # an upscaler) | off (no occlusion at all - overlays draw on top). A support switch: leave on auto.
-sSceneDepthStrategy = auto
+sSceneDepthStrategy = "auto"
 
 # Investigate the scene-depth capture that hides overlays behind the world: adds its rows to the debug
 # draw overlay, and re-runs the side-by-side comparison of the shipped policy against its alternative.

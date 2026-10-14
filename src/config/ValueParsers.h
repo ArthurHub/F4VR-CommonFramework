@@ -5,14 +5,14 @@
 #include <string>
 #include <string_view>
 
-// The text forms of the INI values that are more than one number or word, apart from the game: plain std only, so
-// it is unit tested.
+// The text forms of the config values that are more than one number or word, apart from the game: plain std only,
+// so it is unit tested.
 namespace f4cf::config
 {
     /**
-     * A transform as an INI value has it: the position, the rotation as Euler angles in degrees, and the scale.
+     * A transform as its text form has it: the position, the rotation as Euler angles in degrees, and the scale.
      */
-    struct IniTransform
+    struct ParsedTransform
     {
         float x = 0.0f;
         float y = 0.0f;
@@ -23,7 +23,7 @@ namespace f4cf::config
         float scale = 1.0f;
     };
 
-    std::optional<IniTransform> parseTransform(const char* text);
+    std::optional<ParsedTransform> parseTransform(const char* text);
 
     std::optional<std::array<float, 22>> parseHandPose(const char* text);
 

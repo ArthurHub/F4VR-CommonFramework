@@ -13,7 +13,7 @@ costs one relaxed atomic load and takes no timestamp. Two things read it:
 - The mod's [devbench tool](../devbench/README.md) switches recording on when it arms: when
   devbench is installed, a Tracy viewer connects, or `perf_reset` asks for it. Its `perf` action
   reads every site as a JSON tree, a flat map or a text table.
-- Without devbench, `[Debug] sDumpDataOnceNames` does it through the INI: `perf` writes the text
+- Without devbench, `[Debug] sDumpDataOnceNames` does it through the config: `perf` writes the text
   table to the mod log, and `perf_reset` does too, then starts a new window; the first
   `perf_reset` switches recording on ([debug-config.md](../../docs/debug-config.md)).
 

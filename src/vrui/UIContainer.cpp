@@ -121,10 +121,10 @@ namespace f4cf::vrui
             if (!childElm->calcVisibility()) {
                 continue; // skip invisible elements
             }
-            leftMost = min(leftMost, childElm->getPosition().x);
-            bottomMost = min(bottomMost, childElm->getPosition().z);
-            rightMost = max(rightMost, childElm->getPosition().x + childElm->calcSize().width);
-            topMost = max(topMost, childElm->getPosition().z + childElm->calcSize().height);
+            leftMost = (std::min)(leftMost, childElm->getPosition().x);
+            bottomMost = (std::min)(bottomMost, childElm->getPosition().z);
+            rightMost = (std::max)(rightMost, childElm->getPosition().x + childElm->calcSize().width);
+            topMost = (std::max)(topMost, childElm->getPosition().z + childElm->calcSize().height);
         }
         _size = UISize((rightMost - leftMost) / calcScale(), (topMost - bottomMost) / calcScale());
     }
@@ -145,9 +145,9 @@ namespace f4cf::vrui
             visibleChildCount++;
             if (isHorizontalLayout()) {
                 size.width = size.width + childElm->calcSize().width;
-                size.height = max(size.height, childElm->calcSize().height);
+                size.height = (std::max)(size.height, childElm->calcSize().height);
             } else {
-                size.width = max(size.width, childElm->calcSize().width);
+                size.width = (std::max)(size.width, childElm->calcSize().width);
                 size.height = size.height + childElm->calcSize().height;
             }
         }

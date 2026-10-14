@@ -34,7 +34,7 @@ ImGui canvases); the debug overlay deliberately opts out of it.
 game thread (ModBase::onFrameUpdateSafe)                render thread (OpenVR compositor)
 ─────────────────────────────────────────               ─────────────────────────────────
 DebugDraw::onFrameStart(config...)                      vrSubmitHook(eye, texture, ...)
-  ├─ absorb INI changes (master/channels/hotkey)          ├─ s_enabled atomic false → chain original
+  ├─ absorb config changes (master/channels/hotkey)       ├─ s_enabled atomic false → chain original
   ├─ clear last frame's command list                      └─ eye == Left:
   └─ re-emit unexpired sec>0 shapes                            ├─ snapshot frame (mutex)
                                                                ├─ beginFrame: save FULL D3D state
@@ -71,7 +71,7 @@ DebugDraw::onFrameEnd()                                        ├─ endFrame: 
   D3D pipeline objects off the game's device, and patches the compositor vtable. Each unavailable
   dependency (device, compositor) just logs once and retries next frame.
 - Once installed with nothing to draw, the Submit hook is one relaxed atomic read per call.
-- When the overlay is disabled (INI/hotkey/`setEnabled(false)`) appends are skipped at the call
+- When the overlay is disabled (config/hotkey/`setEnabled(false)`) appends are skipped at the call
   site behind a single pre-computed bool (`_appendActive`).
 
 ## 4. Rendering pipeline details (ported from ROCK, now shared)
@@ -123,7 +123,7 @@ decode + GPU shape cache, all `BodyOverlayRole`/`AxisOverlayRole`/marker/skeleto
 their per-role color tables.
 
 **Added**: the public immediate-mode API + `polyline`/`mesh` raw hatch, the game-thread persistence
-store (`sec > 0`), channels + INI toggles + in-headset hotkey, the `watch()` table, and
+store (`sec > 0`), channels + config toggles + in-headset hotkey, the `watch()` table, and
 `havokToGame()` / `nodeAxes()` / `nodeBounds()` conveniences.
 
 ## 6. Address provenance (VR 1.2.72)
@@ -175,7 +175,7 @@ after a game/runtime change, suspect it first.
 
 ## 8. Configuration
 
-`[Debug]` INI keys provided by `ConfigBase` for every mod (hot-reloadable):
+`[Debug]` config keys provided by `ConfigBase` for every mod (hot-reloadable):
 `bDebugDrawEnabled` (master, default on), `sDebugDrawDisabledChannels` (comma-separated),
 `sDebugDrawToggleBinding` (in-headset toggle, [input-binding grammar](../input-binding.md)).
 Runtime equivalents: `setEnabled()`, `setChannelEnabled()`.
