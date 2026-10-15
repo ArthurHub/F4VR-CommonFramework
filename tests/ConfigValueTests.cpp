@@ -6,6 +6,7 @@
 #include "config/ConfigValue.h"
 
 using f4cf::common::TomlEditor;
+using f4cf::config::appliedText;
 using f4cf::config::ConfigValue;
 using f4cf::config::typedLike;
 
@@ -153,4 +154,20 @@ TEST_CASE("ConfigValue: a value is written over the file's in its type")
         REQUIRE(written("grip", nullptr) == "\"grip\"");
         REQUIRE(written("", existing("s")) == "\"\"");
     }
+}
+
+TEST_CASE("ConfigValue: a text as it applies over the file's value, in text again")
+{
+    REQUIRE(appliedText(existing("b"), "no") == "false");
+    REQUIRE(appliedText(existing("i"), "07") == "7");
+    REQUIRE(appliedText(existing("f"), "1") == "1.0");
+    // a string as it is, not in TOML's quotes
+    REQUIRE(appliedText(existing("s"), "offhand tap grip") == "offhand tap grip");
+    REQUIRE(appliedText(existing("a"), "[3]") == "[3]");
+    REQUIRE(appliedText(nullptr, "1.5") == "1.5");
+    REQUIRE(appliedText(nullptr, "offhand tap grip") == "offhand tap grip");
+
+    REQUIRE_FALSE(appliedText(existing("f"), "abc"));
+    REQUIRE_FALSE(appliedText(existing("i"), "1.5"));
+    REQUIRE_FALSE(appliedText(existing("b"), "maybe"));
 }

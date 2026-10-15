@@ -60,9 +60,9 @@ namespace f4cf
 
         std::string getConfigValue(const char* section, const char* key, const char* defaultValue = "") const;
 
-        void setConfigOverride(const std::string& owner, const char* section, const char* key, const config::ConfigValue& value);
+        bool setConfigOverride(const std::string& owner, const char* section, const char* key, const config::ConfigValue& value);
 
-        void setConfigOverrides(const std::string& owner, const std::vector<config::ConfigEntry>& overrides);
+        bool setConfigOverrides(const std::string& owner, const std::vector<config::ConfigEntry>& overrides);
 
         bool clearConfigOverride(const std::string& owner, const char* section, const char* key);
 

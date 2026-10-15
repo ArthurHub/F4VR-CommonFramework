@@ -153,4 +153,23 @@ namespace f4cf::config
             return existing ? std::nullopt : std::optional{ holding(std::string(text)) };
         }
     }
+
+    /**
+     * A value given as text, as it applies over `existing`, see typedLike, in text again: a string as it is, and any
+     * other value as its TOML text, so "no" over a bool is "false" and "1" over a float is "1.0". It is the form a
+     * value of the file is read back in, see ConfigBase::getConfigValue. No value when the text is not of the
+     * existing value's type.
+     */
+    std::optional<std::string> appliedText(const toml::node* existing, const std::string_view text)
+    {
+        const auto typed = typedLike(existing, text);
+        if (!typed) {
+            return std::nullopt;
+        }
+        const auto* value = typed->get("v");
+        if (const auto* string = value->as_string()) {
+            return string->get();
+        }
+        return common::TomlEditor::Value(*value).text();
+    }
 }

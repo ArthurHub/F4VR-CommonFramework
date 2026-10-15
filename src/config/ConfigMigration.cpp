@@ -199,7 +199,8 @@ namespace f4cf::config
      * migrateValues. An INI value has no type, so a key that `like` has, the TOML config the mod ships, takes the type
      * `like` has for it, read as the mod read it from the INI, see iniValueAs. Every other value is a string, for the
      * mod's own migration to read: a key `like` does not have, and a text that is not a value of the type, for which
-     * the mod had its default. An empty text there is left out, as for no key, so a migration does not warn about it.
+     * the mod had its default. An empty text of either is left out, as for no key: it holds nothing for the mod's
+     * migration, and the load of the version 0 file does not read it as a broken value of the key.
      * The INI's names are matched with no regard to case, as SimpleIni matched them, and take `like`'s spelling. The
      * sections and keys are in the INI's order, a key before its first section is a key of the root, and its comments
      * are left out. Returns why when the INI can't be TOML, as when it has a key of the root and a section of the
@@ -236,7 +237,7 @@ namespace f4cf::config
                     value = iniValueAs(ini, section.pItem, key.pItem, *node);
                 }
                 const auto* text = ini.GetValue(section.pItem, key.pItem, "");
-                if (!value && node && !*text) {
+                if (!value && !*text) {
                     continue;
                 }
                 auto path = sectionPath;
