@@ -1,5 +1,6 @@
 #include "ConfigReaders.h"
 
+#include "Overrides.h"
 #include "ValueParsers.h"
 #include "common/CommonUtils.h"
 #include "common/MatrixUtils.h"
@@ -11,11 +12,12 @@
 namespace
 {
     /**
-     * The node of a section's key, or null when the config does not have it.
+     * The node of a section's key, or null when the config does not have it. The key can be a value in a nested
+     * table, see config::ConfigKey.
      */
     const toml::node* nodeOf(const toml::table& config, const char* section, const char* key)
     {
-        return config[section][key].node();
+        return f4cf::config::nodeOf(config, { section, key });
     }
 
     /**
@@ -238,7 +240,7 @@ namespace f4cf::config
     {
         f4vr::WandActivationConfig cfg;
         cfg.zone = getTransformValue(config, section, "tZone", defaults.zone);
-        cfg.zonePA = nodeOf(config, section, "tZonePA") ? std::optional{ getTransformValue(config, section, "tZonePA", cfg.zone) } : defaults.zonePA;
+        cfg.zonePA = nodeOf(config, { section, "tZonePA" }) ? std::optional{ getTransformValue(config, section, "tZonePA", cfg.zone) } : defaults.zonePA;
         cfg.primary = getInputBindingValue(config, section, "sPrimaryBinding", defaults.primary);
         cfg.secondary = getInputBindingValue(config, section, "sSecondaryBinding", defaults.secondary);
 

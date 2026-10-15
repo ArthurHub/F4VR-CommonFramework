@@ -277,7 +277,8 @@ namespace f4cf
     /**
      * Get the effective value of a section/key as text: the session override if one is set, otherwise the value in
      * the file as the mod last loaded or saved it, otherwise defaultValue. A string is its text and any other value
-     * its TOML text ("true", "1.5", "[1, 2]"). The caller parses it.
+     * its TOML text ("true", "1.5", "[1, 2]"). The caller parses it. The key can be a value in a nested table, see
+     * config::ConfigKey.
      * For a key the file does not have, defaultValue can differ from the default the mod loads its member with.
      */
     std::string ConfigBase::getConfigValue(const char* section, const char* key, const char* defaultValue) const
@@ -287,7 +288,7 @@ namespace f4cf
         }
 
         toml::table config;
-        const auto* node = loadKeptConfig(config) ? config[section][key].node() : nullptr;
+        const auto* node = loadKeptConfig(config) ? config::nodeOf(config, { section, key }) : nullptr;
         if (!node) {
             return defaultValue ? defaultValue : std::string{};
         }
@@ -301,39 +302,55 @@ namespace f4cf
      * Override the value of a section/key in memory for the rest of the session, and reload the config so the
      * members have it. It is applied again on every load and never written to disk. The value is taken in the type
      * the file has for the key, and kept as it applies, see config::appliedText: "no" over a bool is "false", which
-     * getConfigValue and getConfigOverrides then give. A value that is not of the type is refused, and nothing is set.
+     * getConfigValue and getConfigOverrides then give. The key can be a value in a nested table, see config::ConfigKey,
+     * and two spellings of one key's path are one override.
      * `owner` is the name of who sets it. An owner sets and clears only its own overrides, and when two override
      * the same key the one set last applies, see config::Overrides.
-     * Returns whether it is set.
+     * Refused, with why, and nothing set: a value that is not of the type, a key that is not a TOML key, and a key
+     * under a value of the file that is not a table.
      */
-    bool ConfigBase::setConfigOverride(const std::string& owner, const char* section, const char* key, const config::ConfigValue& value)
+    std::expected<void, std::string> ConfigBase::setConfigOverride(const std::string& owner, const char* section, const char* key, const config::ConfigValue& value)
     {
         return setConfigOverrides(owner, { config::ConfigEntry{ section, key, value } });
     }
 
     /**
      * Set several session overrides of one owner with one reload of the config, see setConfigOverride. When one of
-     * them is not of the type the file has for its key, none is set, and it returns false.
+     * them is refused, none is set, and the result says why.
      * The reload reads no disk, so a value can be set many times a second while it is previewed. For that reason
      * only a key the owner did not override before is logged at the info level and is a devbench event.
      */
-    bool ConfigBase::setConfigOverrides(const std::string& owner, const std::vector<config::ConfigEntry>& overrides)
+    std::expected<void, std::string> ConfigBase::setConfigOverrides(const std::string& owner, const std::vector<config::ConfigEntry>& overrides)
     {
         if (overrides.empty()) {
-            return true;
+            return {};
         }
 
         // each value as it applies over the file's, the form it is kept and read back in; a file that can't be read
-        // has no type to check a value against
+        // has no type to check a value against. A key that can't be put, as one under a value that is not a table,
+        // is refused as well: it is tried on a copy of the file.
         toml::table kept;
         _configFile.read(_configFilePath, kept);
+        auto tried = kept;
         std::vector<config::ConfigEntry> applied;
         applied.reserve(overrides.size());
         for (const auto& [section, key, value] : overrides) {
-            auto text = config::appliedText(kept[section][key].node(), value.toString());
+            const auto refuse = [&](const std::string& why) {
+                logger::warn("Config: '{}' session override \"{}.{} = {}\" refused: {}", owner, section, key, value.toString(), why);
+                return std::unexpected(why);
+            };
+            const config::ConfigKey configKey{ section, key };
+            if (!configKey.path()) {
+                return refuse(std::format("{}.{} is not a TOML key", section, key));
+            }
+            const auto* existing = config::nodeOf(kept, configKey);
+            auto text = config::appliedText(existing, value.toString());
             if (!text) {
-                logger::warn("Config: '{}' session override \"{}.{} = {}\" refused, the file's value for the key is of another type", owner, section, key, value.toString());
-                return false;
+                return refuse(
+                    std::format("'{}' is not of the type of {}.{} in the config file, which is {}", value.toString(), section, key, common::TomlEditor::Value(*existing).text()));
+            }
+            if (!config::applyOverride(tried, configKey, *text)) {
+                return refuse(std::format("{}.{} is under a value of the config file that is not a table", section, key));
             }
             applied.push_back({ section, key, std::move(*text) });
         }
@@ -356,7 +373,7 @@ namespace f4cf
                 return nlohmann::json{ { "section", entry.section }, { "key", entry.key }, { "value", entry.value }, { "owner", owner } };
             });
         }
-        return true;
+        return {};
     }
 
     /**
@@ -470,6 +487,8 @@ namespace f4cf
      * Save values of any sections in a single read and write of the file, see common::TomlEditor: only the values
      * change in it, and its comments and layout stay. Only a value the file does not hold yet is written and logged,
      * and the file is not written when it holds them all.
+     * A value in a nested table is saved by its dotted key, "hand.x" for x in [Main.hand], see config::ConfigKey, and a
+     * key or table the file does not have is added.
      * Every save routes through here, so this is the one place that writes the file. A string value is written in the
      * type the file has for the key, see config::ConfigValue::toTomlLike. A file that is not TOML is not written, so
      * a person in the middle of editing it does not lose their edit.
@@ -488,9 +507,17 @@ namespace f4cf
             return;
         }
 
+        // the keys of each value from the file's root, which the edits are views of
+        std::vector<std::vector<std::string>> paths;
+        paths.reserve(values.size());
         std::vector<common::TomlEditor::Edit> edits;
         for (const auto& [section, key, value] : values) {
-            const auto* existing = editor.table()[section][key].node();
+            auto path = config::ConfigKey{ section, key }.path();
+            if (!path) {
+                logger::warn("Config: not saved \"{}.{} = {}\", it is not a TOML key", section, key, value.toString());
+                continue;
+            }
+            const auto* existing = config::nodeOf(editor.table(), { section, key });
             auto tomlValue = value.toTomlLike(existing);
             if (!tomlValue) {
                 logger::warn("Config: not saved \"{}.{} = {}\", the file's value for the key is of another type", section, key, value.toString());
@@ -501,7 +528,8 @@ namespace f4cf
                 continue;
             }
             logger::info("Config: Saving \"{}.{} = {}\"", section, key, tomlValue->text());
-            edits.push_back({ { section, key }, std::move(*tomlValue) });
+            const auto& keys = paths.emplace_back(std::move(*path));
+            edits.push_back({ { keys.begin(), keys.end() }, std::move(*tomlValue) });
         }
         if (!editor.set(edits)) {
             logger::warn("Config: not saved: {}", editor.error());
@@ -544,7 +572,8 @@ namespace f4cf
         if (!loadKeptConfig(config)) {
             return defaultValue;
         }
-        return config[section][key].value_or(defaultValue);
+        const auto* node = config::nodeOf(config, { section, key });
+        return node ? node->value_or(defaultValue) : defaultValue;
     }
 
     /**

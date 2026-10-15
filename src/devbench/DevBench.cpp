@@ -650,12 +650,8 @@ namespace f4cf::devbench
                 }
                 const auto value = argString(args, "value");
                 // rewrites every typed config member, which the mod reads mid-frame: the reason set is a game-thread action
-                if (!config().setConfigOverride(OVERRIDE_OWNER, section.c_str(), key.c_str(), config::ConfigValue(value))) {
-                    throw std::invalid_argument(std::format("'{}' is not a value of the type {}.{} has in the config file, which has {}: nothing is set",
-                        value,
-                        section,
-                        key,
-                        config().getConfigValue(section.c_str(), key.c_str())));
+                if (const auto set = config().setConfigOverride(OVERRIDE_OWNER, section.c_str(), key.c_str(), config::ConfigValue(value)); !set) {
+                    throw std::invalid_argument(set.error() + ": nothing is set");
                 }
                 // the value as it applies in the file's type: "no" over a bool is "false"
                 return { { "section", section },

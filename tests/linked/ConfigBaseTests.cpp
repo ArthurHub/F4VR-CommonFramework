@@ -108,7 +108,7 @@ TEST_CASE("ConfigBase: a session override is in the loaded values and not in the
     REQUIRE(config.loadConfigValues());
     REQUIRE(config.scale == 1.0f);
 
-    config.setConfigOverride("tests", MAIN, "fScale", 2.5f);
+    REQUIRE(config.setConfigOverride("tests", MAIN, "fScale", 2.5f));
 
     REQUIRE(config.scale == 2.5f);
     REQUIRE(config.mode == 0);
@@ -251,7 +251,7 @@ TEST_CASE("ConfigBase: a file that is not TOML is left for its user to fix")
         writeFile(path, USER_FILE);
         TestConfig config(path);
         REQUIRE(config.loadConfigValues());
-        config.setConfigOverride("tests", MAIN, "iMode", 5);
+        REQUIRE(config.setConfigOverride("tests", MAIN, "iMode", 5));
         const auto loads = config.loads;
 
         writeFile(path, INVALID_FILE);
@@ -271,6 +271,59 @@ TEST_CASE("ConfigBase: a file that is not TOML is left for its user to fix")
         config.saveConfigValue(MAIN, "iMode", 3);
 
         REQUIRE(readFile(path) == INVALID_FILE);
+    }
+}
+
+TEST_CASE("ConfigBase: a value in a nested table is saved, overridden and read by its dotted key")
+{
+    constexpr auto NESTED_FILE = "[Main]\nfScale = 1.0\niMode = 0\ng = { x = 1 }\n\n# the hand\n[Main.hand]\nfX = 1.5\n\n[Debug]\niVersion = 2\n";
+    const TempFolder folder;
+    writeFile(configPath(folder), NESTED_FILE);
+    TestConfig config(configPath(folder));
+    REQUIRE(config.loadConfigValues());
+
+    SECTION("saved in place, with the rest of the file as it was")
+    {
+        config.saveConfigValues({ { MAIN, "hand.fX", 2.5f }, { MAIN, "g.x", 7 } });
+
+        auto expected = std::string(NESTED_FILE);
+        expected.replace(expected.find("fX = 1.5"), 8, "fX = 2.5");
+        expected.replace(expected.find("x = 1 }"), 7, "x = 7 }");
+        REQUIRE(readFile(configPath(folder)) == expected);
+    }
+    SECTION("overridden in the type of the file's value, and read back as it applies")
+    {
+        REQUIRE(config.setConfigOverride("tests", MAIN, "hand.fX", "3"));
+
+        REQUIRE(config.getConfigValue(MAIN, "hand.fX") == "3.0");
+        REQUIRE(config.hasConfigOverride(MAIN, "hand.fX"));
+    }
+    SECTION("overridden as one value whatever the spelling of its path, the one set last applying")
+    {
+        REQUIRE(config.setConfigOverride("tests", MAIN, "hand.fX", "3"));
+        REQUIRE(config.setConfigOverride("tests", "Main.hand", "fX", "4"));
+
+        REQUIRE(config.getConfigValue(MAIN, "hand.fX") == "4.0");
+        REQUIRE(config.getConfigOverrides().size() == 1);
+    }
+    SECTION("refused, with why, when its key is not a TOML key or is under a value that is not a table")
+    {
+        const auto underValue = config.setConfigOverride("tests", MAIN, "fScale.x", "1");
+        REQUIRE_FALSE(underValue);
+        REQUIRE(underValue.error() == "Main.fScale.x is under a value of the config file that is not a table");
+
+        const auto notKey = config.setConfigOverride("tests", MAIN, "two words", "1");
+        REQUIRE_FALSE(notKey);
+        REQUIRE(notKey.error() == "Main.two words is not a TOML key");
+
+        const auto otherType = config.setConfigOverride("tests", MAIN, "hand.fX", "abc");
+        REQUIRE_FALSE(otherType);
+        REQUIRE(otherType.error() == "'abc' is not of the type of Main.hand.fX in the config file, which is 1.5");
+    }
+    SECTION("read from the file")
+    {
+        REQUIRE(config.getConfigValue(MAIN, "g.x") == "1");
+        REQUIRE(config.readFloatValue(MAIN, "hand.fX", 0.0f) > 1.4f);
     }
 }
 
@@ -319,7 +372,7 @@ TEST_CASE("ConfigBase: the subscribers are called once for all the loads since t
 
     // a load of the file, of an override and of a reload: each only marks that it ran
     REQUIRE(config.loadConfigValues());
-    config.setConfigOverride("tests", MAIN, "iMode", 1);
+    REQUIRE(config.setConfigOverride("tests", MAIN, "iMode", 1));
     config.reload();
     REQUIRE(calls == 0);
 

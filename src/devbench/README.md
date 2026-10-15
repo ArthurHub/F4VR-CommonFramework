@@ -20,7 +20,7 @@ default, so a call that names none is an error. Every framework mod has the same
 |--------|-----------|--------------|
 | `health` | — | Which mod and framework version this is, the tool's `contract` number, the devbench build, whether the tool is armed, whether a state snapshot exists and its `liveness`, whether this is a [Tracy](../perf/README.md#tracy) build and a Tracy viewer is connected (`tracy`: `built`, `connected`), and the actions. Answered without the game thread, so it replies while the game is stalled. |
 | `state` | — | What the mod is doing as of its last frame: `liveness` plus the mod's own state (see below). Answered from a snapshot without the game thread; a call before the first one waits for it. |
-| `config` | `key`, `section` | One config value as the mod sees it: the session override if one is set, otherwise the file's. |
+| `config` | `key`, `section` | One config value as the mod sees it: the session override if one is set, otherwise the file's. In `config`, `set` and `clear`, `key` is a TOML dotted key, so `hand.x` is a value in a nested table. |
 | `set` | `key`, `value`, `section` | Override one config value for the session, in the type the file has for the key (`ConfigBase::setConfigOverride`, as the owner `devbench`); the file is not written. A value that is not of the type is an error, and nothing is set. The reply has the value as it applies (`no` over a bool is `false`). |
 | `clear` | `key`, `section`, or `all` | Drop one session override that `set` made, or all of them. An override of another owner stays. |
 | `overrides` | — | The session overrides in effect, each with the owner that set it. |
