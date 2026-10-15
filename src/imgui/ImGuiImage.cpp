@@ -36,18 +36,20 @@ namespace f4cf::imgui
     /**
      * Add the view as an image, and keep it for the frame. ImGui's texture is the view's pointer, which
      * the render thread draws with later, so the published frame holds the views of its images.
-     * The image is drawn in a state of its own, which the two callbacks set and put back.
+     * A view that decodes sRGB is drawn with a shader of its own, which the two callbacks set and put back.
      */
     void internal::addImageView(ImDrawList* drawList, render::TextureView view, const bool srgb, const ImVec2& min, const ImVec2& max, const ImU32 tint)
     {
         if (!view) {
             return;
         }
-        // the callback's data is only whether the view decodes sRGB
-        static int srgbView = 0;
-        drawList->AddCallback(&renderer::setImageRenderState, srgb ? &srgbView : nullptr);
+        if (srgb) {
+            drawList->AddCallback(&renderer::setSrgbImageShader, nullptr);
+        }
         drawList->AddImage(static_cast<ImTextureID>(reinterpret_cast<std::uintptr_t>(view.Get())), min, max, ImVec2(0.0f, 0.0f), ImVec2(1.0f, 1.0f), tint);
-        drawList->AddCallback(ImDrawCallback_ResetRenderState, nullptr);
+        if (srgb) {
+            drawList->AddCallback(ImDrawCallback_ResetRenderState, nullptr);
+        }
         s_frameTextures.push_back(std::move(view));
     }
 

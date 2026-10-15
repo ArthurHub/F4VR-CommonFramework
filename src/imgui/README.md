@@ -231,7 +231,8 @@ panel->setContent([this] {
   missing, keeps the room `imgui::image` was given.
 - **Colors are the file's.** A texture whose view decodes sRGB is encoded back, as the primitive
   renderer does, and an image's edge takes no color from its opposite edge.
-- **What it costs.** A draw for each image, and two changes of the pipeline's state around it.
+- **What it costs.** A draw for each image. One whose view decodes sRGB adds two changes of the
+  pipeline's state around it, for the shader that encodes it back.
 
 ## A dedicated panel
 

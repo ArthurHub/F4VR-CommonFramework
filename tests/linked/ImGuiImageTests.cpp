@@ -60,9 +60,22 @@ namespace
         view->AddRef();
         return view->Release();
     }
+
+    /**
+     * The command of the draw list that draws the view as an image, or null.
+     */
+    const ImDrawCmd* imageCommand(const ImDrawList* drawList, const render::TextureView& view)
+    {
+        for (const ImDrawCmd& command : drawList->CmdBuffer) {
+            if (command.TexRef.GetTexID() == reinterpret_cast<std::uintptr_t>(view.Get()) && command.ElemCount == 6) {
+                return &command;
+            }
+        }
+        return nullptr;
+    }
 }
 
-TEST_CASE("ImGui image: an image is drawn between the callbacks that set its state and put it back")
+TEST_CASE("ImGui image: an image is one draw of its view, with no callback around it")
 {
     const render::TextureView view = testView();
     if (!view) {
@@ -70,23 +83,15 @@ TEST_CASE("ImGui image: an image is drawn between the callbacks that set its sta
     }
     const TestFrame frame;
     ImDrawList* drawList = ImGui::GetWindowDrawList();
-    const int before = drawList->CmdBuffer.Size;
 
     imgui::internal::addImageView(drawList, view, false, ImVec2(10.0f, 20.0f), ImVec2(110.0f, 70.0f), IM_COL32(255, 255, 255, 128));
 
-    const auto& commands = drawList->CmdBuffer;
-    // a draw list ends in an empty command, which the next thing drawn fills
-    REQUIRE(commands.Size >= before + 3);
-    const ImDrawCmd* image = nullptr;
-    for (int i = 1; i + 1 < commands.Size; ++i) {
-        if (commands[i].TexRef.GetTexID() == reinterpret_cast<std::uintptr_t>(view.Get()) && commands[i].ElemCount == 6) {
-            image = &commands[i];
-        }
-    }
+    // one draw of the view, in the backend's own state: no callback around it
+    const ImDrawCmd* image = imageCommand(drawList, view);
     REQUIRE(image);
-    REQUIRE((image - 1)->UserCallback == &imgui::internal::renderer::setImageRenderState);
-    REQUIRE((image - 1)->UserCallbackData == nullptr);
-    REQUIRE((image + 1)->UserCallback == ImDrawCallback_ResetRenderState);
+    for (const ImDrawCmd& command : drawList->CmdBuffer) {
+        REQUIRE(command.UserCallback == nullptr);
+    }
 
     // the image's corners and its tint
     const ImDrawVert& topLeft = drawList->VtxBuffer[image->VtxOffset + drawList->IdxBuffer[image->IdxOffset]];
@@ -97,7 +102,7 @@ TEST_CASE("ImGui image: an image is drawn between the callbacks that set its sta
     (void)imgui::internal::takeFrameTextures();
 }
 
-TEST_CASE("ImGui image: a view that decodes sRGB tells its callback so")
+TEST_CASE("ImGui image: a view that decodes sRGB is drawn between the callbacks that set its shader and put it back")
 {
     const render::TextureView view = testView();
     if (!view) {
@@ -108,11 +113,12 @@ TEST_CASE("ImGui image: a view that decodes sRGB tells its callback so")
 
     imgui::internal::addImageView(drawList, view, true, ImVec2(0.0f, 0.0f), ImVec2(10.0f, 10.0f), IM_COL32_WHITE);
 
-    bool told = false;
-    for (const ImDrawCmd& command : drawList->CmdBuffer) {
-        told = told || (command.UserCallback == &imgui::internal::renderer::setImageRenderState && command.UserCallbackData != nullptr);
-    }
-    REQUIRE(told);
+    const ImDrawCmd* image = imageCommand(drawList, view);
+    REQUIRE(image);
+    REQUIRE(image > drawList->CmdBuffer.begin());
+    REQUIRE(image + 1 < drawList->CmdBuffer.end());
+    REQUIRE((image - 1)->UserCallback == &imgui::internal::renderer::setSrgbImageShader);
+    REQUIRE((image + 1)->UserCallback == ImDrawCallback_ResetRenderState);
 
     (void)imgui::internal::takeFrameTextures();
 }

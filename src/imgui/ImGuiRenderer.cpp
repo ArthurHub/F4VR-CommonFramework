@@ -511,18 +511,13 @@ float4 main(PS_INPUT input) : SV_Target {
     }
 
     /**
-     * The state an image of the content is drawn in, set by a callback of the draw data before the image
-     * (render thread). The sampler clamps, where the backend's own wraps and lets an edge of the image
-     * take color from the opposite one. A view that decodes sRGB, told by the callback's data, is
-     * drawn with the shader that encodes it back. ImDrawCallback_ResetRenderState puts both back.
+     * The shader an image whose view decodes sRGB is drawn with, set by a callback of the draw data before
+     * the image (render thread): it encodes the sample back, as the canvas texture is not sRGB-encoded.
+     * ImDrawCallback_ResetRenderState puts the backend's own back.
      */
-    void setImageRenderState(const ImDrawList*, const ImDrawCmd* command)
+    void setSrgbImageShader(const ImDrawList*, const ImDrawCmd*)
     {
-        if (!s_drawContext) {
-            return;
-        }
-        s_drawContext->PSSetSamplers(0, 1, &s_atlasSampler);
-        if (command->UserCallbackData) {
+        if (s_drawContext) {
             s_drawContext->PSSetShader(s_srgbImagePixelShader, nullptr, 0);
         }
     }
