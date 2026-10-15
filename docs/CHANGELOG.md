@@ -28,9 +28,10 @@ major version is `0`, a minor bump may break the API; the **Upgrading** notes sa
   - `saveIniConfigInternal` is gone: override `save()` and write the values with one `saveConfigValues`.
     Each save reads and writes the whole file, so save values together: `saveConfigValues` takes the keys
     of one section, or `config::ConfigEntry` values of any sections, in place or as a list made at runtime.
+  - `_iniFilePath` and `stopIniConfigFileWatch` are private: a mod that moves to another config file at
+    runtime calls `switchConfigFile(path)`, which stops the watch, loads the new file and watches it.
   - Renamed: `saveIniConfigValue(s)` → `saveConfigValue(s)`, `getIniFilePath` → `getConfigFilePath`,
-    `_iniFilePath` → `_configFilePath`, `loadIniConfig` → `loadConfig`, `stopIniConfigFileWatch` →
-    `stopConfigFileWatch`, `subscribeForIniChangedEvent` / `unsubscribeFromIniChangedEvent` →
+    `loadIniConfig` → `loadConfig`, `subscribeForIniChangedEvent` / `unsubscribeFromIniChangedEvent` →
     `subscribeForConfigChangedEvent` / `unsubscribeFromConfigChangedEvent`, `readIni*Value` → `read*Value`,
     `applyIniConfigWithOverride` → `applyConfigWithOverride`, `INI_SECTION_DEBUG` → `CONFIG_SECTION_DEBUG`,
     `config::IniValue` / `IniKey` / `IniOverride` → `ConfigValue` / `ConfigKey` / `ConfigEntry`, and

@@ -274,6 +274,39 @@ TEST_CASE("ConfigBase: a file that is not TOML is left for its user to fix")
     }
 }
 
+TEST_CASE("ConfigBase: a switch to another file loads it, with the session overrides over it")
+{
+    const TempFolder folder;
+    writeFile(configPath(folder), USER_FILE);
+    const auto other = folder.file("TestMod_Other.toml");
+
+    // Never destroyed, as in the test of load: the file watch runs on a thread of its own that keeps the config
+    auto& config = *new TestConfig(configPath(folder));
+    config.load();
+    REQUIRE(config.mode == 0);
+    REQUIRE(config.setConfigOverride("tests", MAIN, "fScale", 2.5f));
+
+    SECTION("a file that exists")
+    {
+        writeFile(other, "[Main]\nfScale = 1.0\niMode = 9\n\n[Debug]\niVersion = 2\n");
+
+        config.switchConfigFile(other);
+
+        REQUIRE(config.mode == 9);
+    }
+    SECTION("a file that does not exist is created from the embedded default")
+    {
+        config.switchConfigFile(other);
+
+        REQUIRE(config.mode == 2);
+        REQUIRE(readFile(other).starts_with("# The default config"));
+    }
+
+    REQUIRE(config.getConfigFilePath() == other);
+    REQUIRE(config.getConfigValue(MAIN, "fScale") == "2.5");
+    REQUIRE(readFile(configPath(folder)) == USER_FILE);
+}
+
 TEST_CASE("ConfigBase: the subscribers are called once for all the loads since the last call")
 {
     const TempFolder folder;
