@@ -24,7 +24,7 @@ and a `vrui::UITextPanel` standing side by side read as one UI.
 | [`ImGuiPointerLogic.h`](ImGuiPointerLogic.h) | The pointer's logic apart from the game, so it is unit tested: where a ray meets a quad and its plane, the quad of a curved canvas bent around its cylinder, whether a hand operates the UI and presses it, which hand owns the pointer, and how much a thumbstick scrolls. |
 | [`ImGuiImage.h`](ImGuiImage.h) / [`.cpp`](ImGuiImage.cpp) | `imgui::image` and `imgui::addImage` � a `render::Texture` in the content of a canvas, kept until the frame that draws it has been drawn. |
 | [`ImGuiSettings.h`](ImGuiSettings.h) / [`.cpp`](ImGuiSettings.cpp) | The two process-wide knobs: `setFontSizePixels` and `setSupersample`. |
-| [`ImGuiFonts.h`](ImGuiFonts.h) / [`.cpp`](ImGuiFonts.cpp) | Loads the framework's text font into the ImGui atlas, from the same bytes the primitive renderer draws with. |
+| [`ImGuiFonts.h`](ImGuiFonts.h) / [`.cpp`](ImGuiFonts.cpp) | Loads the framework's text font into the ImGui atlas, from the same bytes the primitive renderer draws with, with its bold and italic faces: `imgui::canvasFont`. |
 | [`ImGuiLayer.h`](ImGuiLayer.h) / [`.cpp`](ImGuiLayer.cpp) | Game-thread pump: one ImGui frame holding every visible canvas, or the dedicated canvas alone, cloned and published with each canvas's quad. |
 | [`ImGuiRenderer.h`](ImGuiRenderer.h) / [`.cpp`](ImGuiRenderer.cpp) | Render-thread half: rasterizes the frame into the shared atlas texture, or into the dedicated canvas's own, then composites each canvas's slice as a world-space quad. |
 
@@ -340,6 +340,21 @@ The canvases load the framework's text font — a mod's own TTF/OTF at
 otherwise — from the same bytes `render::TextFont` draws with, so a `UIImGuiPanel` and a
 `UITextPanel` always share a typeface. ImGui's own embedded bitmap font is the last resort, logged as
 a warning.
+
+It has a bold and an italic face too, for a run of text in the content: `imgui::canvasFont(FontStyle)`
+gives each, to push or to draw with.
+
+```cpp
+ImGui::PushFont(imgui::canvasFont(imgui::FontStyle::Bold));
+ImGui::TextUnformatted("Warning");
+ImGui::PopFont();
+```
+
+A mod's own font has its faces beside it, `<ModName>-Bold.ttf` and `<ModName>-Italic.ttf`
+(`render::CUSTOM_BOLD_FONT_PATH`, `render::CUSTOM_ITALIC_FONT_PATH`, beside `CUSTOM_TEXT_FONT_PATH`
+in [`TextFont.h`](../render/TextFont.h)). A face it does not ship is the embedded one: Roboto Black,
+and Roboto Medium Italic. The faces are loaded at one size, and are drawn at one size and on one
+baseline only when the files have the same vertical metrics, as the faces of one family do.
 
 ## How it is drawn
 

@@ -132,9 +132,16 @@ major version is `0`, a minor bump may break the API; the **Upgrading** notes sa
 - **imgui images**: the content of a canvas draws a `render::Texture` with `imgui::image`, an item at
   the cursor as `ImGui::Image` is, and `imgui::addImage`, a rectangle of a draw list. The texture can
   be dropped while its panel is shown: the frame that draws it keeps it until it has been drawn.
+- **imgui bold and italic**: the canvas font has a bold and an italic face beside its regular one,
+  for a run of text in the content: `imgui::canvasFont(FontStyle)`. They are the embedded Roboto
+  Black and Roboto Medium Italic, or a mod's own `<ModName>-Bold.ttf` and `<ModName>-Italic.ttf`
+  beside its `<ModName>.ttf`.
 
 **Upgrading**
 
+- The embedded Roboto is Google Fonts' build, 2.137. Its line is shorter, and ImGui sizes a font by
+  its line, so the text of an ImGui canvas is drawn 12.5% larger at the same `setFontSizePixels`:
+  21.3 is now as large as 24 was. The text of vrui keeps its size, and kerns more pairs of letters.
 - `vrui::UIModAdapter` is removed: delete the mod's adapter and its
   `g_uiManager->onFrameUpdate(&adapter)` call, which the framework now makes. A mod that keeps the
   call, to have the UI updated at a certain point of its frame, passes no argument.

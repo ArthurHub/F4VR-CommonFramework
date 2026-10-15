@@ -208,50 +208,6 @@ namespace
     }
 
     /**
-     * The font text is drawn from. custom holds the mod's own file when it shipped a usable one; left
-     * empty, it means the embedded font.
-     */
-    struct FontFile
-    {
-        std::vector<std::uint8_t> custom;
-        std::string source = "embedded Roboto Medium";
-    };
-
-    FontFile resolveFontFile()
-    {
-        FontFile file;
-        if (!f4cf::g_mod) {
-            return file;
-        }
-
-        const std::string& modName = f4cf::g_mod->getName();
-        const std::string path = std::vformat(f4cf::render::CUSTOM_TEXT_FONT_PATH, std::make_format_args(modName));
-        std::error_code error;
-        if (!std::filesystem::is_regular_file(path, error)) {
-            return file;
-        }
-
-        const auto size = std::filesystem::file_size(path, error);
-        std::vector<std::uint8_t> bytes(error ? 0 : static_cast<std::size_t>(size));
-        std::ifstream stream(path, std::ios::binary);
-        stream.read(reinterpret_cast<char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
-        if (!stream || !isUsableFont(bytes)) {
-            logger::warn("Text font: '{}' is not a font the framework can use; using the embedded Roboto Medium", path);
-            return file;
-        }
-
-        file.custom = std::move(bytes);
-        file.source = std::format("'{}'", path);
-        return file;
-    }
-
-    const FontFile& fontFile()
-    {
-        static const FontFile file = resolveFontFile();
-        return file;
-    }
-
-    /**
      * Load the text font and bake every supported character into the distance-field atlas,
      * along with the metrics and kerning that lay it out.
      *
@@ -264,9 +220,10 @@ namespace
         Font font;
 
         stbtt_fontinfo info{};
-        const unsigned char* data = f4cf::render::internal::textFontBytes().data();
+        const auto& file = f4cf::render::internal::textFontFile();
+        const unsigned char* data = file.bytes().data();
         if (!stbtt_InitFont(&info, data, stbtt_GetFontOffsetForIndex(data, 0))) {
-            logger::error("Text font: {} failed to load; text will not draw", f4cf::render::internal::textFontSource());
+            logger::error("Text font: {} failed to load; text will not draw", file.source);
             font.atlas = solidOnlyAtlas();
             return font;
         }
@@ -278,7 +235,7 @@ namespace
         int capTop = 0;
         const int capGlyph = stbtt_FindGlyphIndex(&info, 'H');
         if (capGlyph == 0 || !stbtt_GetGlyphBox(&info, capGlyph, &capLeft, &capBottom, &capRight, &capTop) || capTop <= 0) {
-            logger::error("Text font: {} has no usable 'H' to measure capitals by; text will not draw", f4cf::render::internal::textFontSource());
+            logger::error("Text font: {} has no usable 'H' to measure capitals by; text will not draw", file.source);
             font.atlas = solidOnlyAtlas();
             return font;
         }
@@ -421,12 +378,7 @@ namespace
 
         font.loaded = true;
         const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - started);
-        logger::info("Text font: {}, {} characters on a {}x{} distance-field atlas, built in {}ms",
-            f4cf::render::internal::textFontSource(),
-            GLYPH_COUNT,
-            font.atlas.width,
-            font.atlas.height,
-            elapsed.count());
+        logger::info("Text font: {}, {} characters on a {}x{} distance-field atlas, built in {}ms", file.source, GLYPH_COUNT, font.atlas.width, font.atlas.height, elapsed.count());
         return font;
     }
 
@@ -557,15 +509,46 @@ namespace f4cf::render
 
 namespace f4cf::render::internal
 {
-    std::span<const std::uint8_t> textFontBytes()
+    /**
+     * The mod's own font at pathFormat, with {0} the mod's name, when it ships a usable one there, and
+     * the embedded font otherwise. A file that is there and not usable is logged.
+     */
+    FontFile resolveFontFile(const std::string_view pathFormat, const std::span<const std::uint8_t> embedded, const std::string_view embeddedName)
     {
-        const FontFile& file = fontFile();
-        return file.custom.empty() ? std::span<const std::uint8_t>(TEXT_FONT_TTF, TEXT_FONT_TTF_SIZE) : std::span<const std::uint8_t>(file.custom);
+        FontFile file{ .custom = {}, .embedded = embedded, .source = std::string(embeddedName) };
+        if (!g_mod) {
+            return file;
+        }
+
+        const std::string& modName = g_mod->getName();
+        const std::string path = std::vformat(pathFormat, std::make_format_args(modName));
+        std::error_code error;
+        if (!std::filesystem::is_regular_file(path, error)) {
+            return file;
+        }
+
+        const auto size = std::filesystem::file_size(path, error);
+        std::vector<std::uint8_t> bytes(error ? 0 : static_cast<std::size_t>(size));
+        std::ifstream stream(path, std::ios::binary);
+        stream.read(reinterpret_cast<char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
+        if (!stream || !isUsableFont(bytes)) {
+            logger::warn("Text font: '{}' is not a font the framework can use; using the {}", path, embeddedName);
+            return file;
+        }
+
+        file.custom = std::move(bytes);
+        file.source = std::format("'{}'", path);
+        return file;
     }
 
-    const std::string& textFontSource()
+    /**
+     * The text font's file: the mod's own at CUSTOM_TEXT_FONT_PATH, or the embedded Roboto Medium.
+     * Resolved once and kept for the life of the process, so the ImGui atlas reads the same bytes.
+     */
+    const FontFile& textFontFile()
     {
-        return fontFile().source;
+        static const FontFile file = resolveFontFile(CUSTOM_TEXT_FONT_PATH, std::span(TEXT_FONT_TTF, TEXT_FONT_TTF_SIZE), "embedded Roboto Medium");
+        return file;
     }
 
     const FontAtlas& fontAtlas()
