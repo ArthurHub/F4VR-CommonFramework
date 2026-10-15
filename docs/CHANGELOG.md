@@ -9,6 +9,10 @@ major version is `0`, a minor bump may break the API; the **Upgrading** notes sa
 
 ## 0.5.0 — unreleased
 
+- **TOML editing**: `common::TomlEditor` sets values in the text of a TOML file and keeps every other
+  byte (comments, blank lines, key order, how the other values are written), which toml++'s own writer
+  doesn't. The framework depends on toml++, compiled once into it: **Upgrading:** add `"tomlplusplus"`
+  to your mod's `vcpkg.json`.
 - **vrui rotation**: an element takes a rotation relative to its parent (`UIElement::setRotation`),
   and everything under it turns with it. On a root it is relative to the attach node, so a UI no
   longer has to face the way its node faces. The dev layout tunes it live as `Rot`.

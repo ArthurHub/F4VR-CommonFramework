@@ -231,6 +231,17 @@ target_link_libraries(${PROJECT_NAME}
 find_package(cpptrace CONFIG REQUIRED)
 target_link_libraries(${PROJECT_NAME} PRIVATE cpptrace::cpptrace)
 
+# >>> toml++ (via vcpkg) for common/TomlEditor. Compiled once into the framework (src/common/TomlImpl.cpp), so the
+# framework and every mod that links it include its declarations only: TOML_HEADER_ONLY=0 is PUBLIC.
+find_path(TOMLPLUSPLUS_INCLUDE_DIR "toml++/toml.hpp")
+if(NOT TOMLPLUSPLUS_INCLUDE_DIR)
+  # vcpkg manifest mode reads the TOP-LEVEL project's vcpkg.json, so a consuming mod must declare it itself
+  message(FATAL_ERROR ">> toml++ not found. Add \"tomlplusplus\" to your mod's vcpkg.json dependencies.")
+endif()
+target_include_directories(${PROJECT_NAME} SYSTEM PUBLIC ${TOMLPLUSPLUS_INCLUDE_DIR})
+target_compile_definitions(${PROJECT_NAME} PUBLIC TOML_HEADER_ONLY=0)
+set_source_files_properties("${SOURCE_DIR}/common/TomlImpl.cpp" PROPERTIES SKIP_PRECOMPILE_HEADERS ON)
+
 
 # >>> Dear ImGui (via vcpkg) for the f4cf::imgui UI layer
 if(F4CF_WITH_IMGUI_UI)
