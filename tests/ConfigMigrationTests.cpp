@@ -5,8 +5,12 @@
 #include <vector>
 
 #include "config/ConfigMigration.h"
+#include "linked/TestFiles.h"
 
 using f4cf::common::TomlEditor;
+using f4cf::config::backupPathOf;
+using f4cf::config::importIniFile;
+using f4cf::config::iniToToml;
 using f4cf::config::MigratedValue;
 using f4cf::config::migrateValues;
 
@@ -78,6 +82,50 @@ namespace
             values = migrateValues(toml::parse(users), latest);
         }
     };
+
+    // The TOML config a mod ships when it moves its config from INI to TOML.
+    const std::string SHIPPED_TOML =
+        "# The mod's settings\n"
+        "[Main]\n"
+        "# How big the menu is\n"
+        "fScale = 1.0\n"
+        "iMode = 0\n"
+        "bShow = false\n"
+        "sIcon = 'icons\\hand.dds'\n"
+        "sName = \"menu\"\n"
+        "aChannels = [\"hands\"]\n"
+        "\n"
+        "[Debug]\n"
+        "iVersion = 1\n";
+
+    // The user's INI config of the mod before that, which the mod read with SimpleIni's getters: the section and the
+    // scale in another case, the scale as an integer, the mode in hex, a word for the bool, the name as shipped, and a
+    // key and a section the TOML config does not have.
+    const std::string USERS_INI =
+        "[main]\n"
+        "FSCALE = 2\n"
+        "iMode = 0x10\n"
+        "bShow = yes\n"
+        "sIcon = icons\\arm.dds\n"
+        "sName = menu\n"
+        "aChannels = [\"hands\", \"ik\"]\n"
+        "fSpeed = 3.0\n"
+        "\n"
+        "[Old]\n"
+        "bLegacy = true\n"
+        "\n"
+        "[Debug]\n"
+        "iVersion = 18\n";
+
+    /**
+     * An INI as TOML text, typed by SHIPPED_TOML, which has to succeed.
+     */
+    std::string asToml(const std::string& ini)
+    {
+        const auto toml = iniToToml(ini, toml::parse(SHIPPED_TOML));
+        REQUIRE(toml);
+        return *toml;
+    }
 }
 
 TEST_CASE("ConfigMigration: a value the user changed is set in the new config, an integer for a float as a float")
@@ -167,4 +215,185 @@ TEST_CASE("ConfigMigration: values in a table of dotted keys and in an inline ta
     REQUIRE(outcomeOf(values, "Main.h.i") == Outcome::Carried);
     REQUIRE(outcomeOf(values, "Main.g") == Outcome::Carried);
     REQUIRE(latest.text() == "[Main]\nh.i = 5\ng = { x = 2 }\n");
+}
+
+TEST_CASE("INI as TOML: a value takes the type the TOML config has for its key, read as SimpleIni reads it")
+{
+    const auto table = toml::parse(asToml(USERS_INI));
+    const auto& main = *table["Main"].as_table();
+
+    REQUIRE(main["fScale"].is_floating_point());
+    REQUIRE(main["iMode"].value<int>() == 16);
+    REQUIRE(main["bShow"].value<bool>() == true);
+    REQUIRE(main["sIcon"].value<std::string>() == "icons\\arm.dds");
+    REQUIRE(main["aChannels"].as_array()->size() == 2);
+    REQUIRE(table["Debug"]["iVersion"].value<int>() == 18);
+}
+
+TEST_CASE("INI as TOML: in the INI's order, with the TOML config's spelling of a name, and a key it does not have a string")
+{
+    REQUIRE(asToml(USERS_INI) ==
+            "[Main]\n"
+            "fScale = 2.0\n"
+            "iMode = 16\n"
+            "bShow = true\n"
+            "sIcon = \"icons\\\\arm.dds\"\n"
+            "sName = \"menu\"\n"
+            "aChannels = [\"hands\", \"ik\"]\n"
+            "fSpeed = \"3.0\"\n"
+            "\n"
+            "[Old]\n"
+            "bLegacy = \"true\"\n"
+            "\n"
+            "[Debug]\n"
+            "iVersion = 18\n");
+}
+
+TEST_CASE("INI as TOML: a text that is not a value of the type is a string, and a migration keeps the default, as the mod had")
+{
+    const auto table = toml::parse(asToml("[Main]\nfScale = 1.5x\niMode = two\nbShow = maybe\naChannels = hands\n"));
+
+    for (const auto* key : { "fScale", "iMode", "bShow", "aChannels" }) {
+        REQUIRE(table["Main"][key].is_string());
+    }
+    REQUIRE(table["Main"]["fScale"].value<std::string>() == "1.5x");
+
+    TomlEditor latest(SHIPPED_TOML);
+    migrateValues(table, latest);
+    REQUIRE(latest.text() == SHIPPED_TOML);
+}
+
+TEST_CASE("INI as TOML: an empty text that is not a value of the type is left out, and an empty string stays")
+{
+    const auto table = toml::parse(asToml("[Main]\nfScale =\nsName =\n"));
+
+    REQUIRE_FALSE(table["Main"]["fScale"]);
+    REQUIRE(table["Main"]["sName"].value<std::string>() == "");
+}
+
+TEST_CASE("INI as TOML: a key before the INI's first section is a key of the root")
+{
+    const auto toml = iniToToml("bTop = on\n\n[Main]\niMode = 2\n", toml::parse("bTop = false\n\n[Main]\niMode = 1\n"));
+
+    REQUIRE(toml == "bTop = true\n\n[Main]\niMode = 2\n");
+}
+
+TEST_CASE("INI as TOML: a name that can't be a bare key is in quotes")
+{
+    REQUIRE(iniToToml("[My Section]\nmy key = 1\n", toml::table{}) == "[\"My Section\"]\n\"my key\" = \"1\"\n");
+}
+
+TEST_CASE("INI as TOML: an INI that can't be TOML is an error")
+{
+    // a key of the root and a section of the same name
+    REQUIRE_FALSE(iniToToml("Main = 1\n\n[Main]\nx = 1\n", toml::table{}));
+}
+
+TEST_CASE("INI as TOML: a migration sets the INI's values in the TOML config the mod ships, in its layout")
+{
+    TomlEditor latest(SHIPPED_TOML);
+    const auto values = migrateValues(toml::parse(asToml(USERS_INI)), latest);
+
+    // the text it had, but for the values that were carried, the version too, which ConfigBase sets after
+    auto expected = SHIPPED_TOML;
+    replace(expected, "fScale = 1.0\n", "fScale = 2.0\n");
+    replace(expected, "iMode = 0\n", "iMode = 16\n");
+    replace(expected, "bShow = false\n", "bShow = true\n");
+    replace(expected, "sIcon = 'icons\\hand.dds'\n", "sIcon = 'icons\\arm.dds'\n");
+    replace(expected, "aChannels = [\"hands\"]\n", "aChannels = [\"hands\", \"ik\"]\n");
+    replace(expected, "iVersion = 1\n", "iVersion = 18\n");
+    REQUIRE(latest.text() == expected);
+    REQUIRE(outcomeOf(values, "Main.sName") == Outcome::Unchanged);
+    REQUIRE(outcomeOf(values, "Main.fSpeed") == Outcome::Removed);
+    REQUIRE(outcomeOf(values, "Old.bLegacy") == Outcome::Removed);
+}
+
+TEST_CASE("INI file import: the INI as TOML at version 0, which says what it is, and the INI kept by its own version")
+{
+    const test_files::TempFolder folder;
+    const auto ini = folder.file("Mod.ini");
+    const auto file = folder.file("Mod.toml");
+    test_files::writeFile(ini, USERS_INI);
+
+    const auto imported = importIniFile(ini, file, toml::parse(SHIPPED_TOML));
+
+    REQUIRE(imported);
+    REQUIRE(imported->version == 18);
+    REQUIRE(imported->backup == folder.path / "Mod_backup_v18.ini");
+    REQUIRE(imported->backupError.empty());
+    REQUIRE_FALSE(std::filesystem::exists(ini));
+    REQUIRE(test_files::readFile(folder.file("Mod_backup_v18.ini")) == USERS_INI);
+
+    const auto text = test_files::readFile(file);
+    REQUIRE(text.starts_with("# Mod.ini as TOML"));
+    const auto table = toml::parse(text);
+    REQUIRE(table["Debug"]["iVersion"].value<int>() == 0);
+    REQUIRE(table["Main"]["iMode"].value<int>() == 16);
+}
+
+TEST_CASE("INI file import: an INI with no version is of version 0")
+{
+    const test_files::TempFolder folder;
+    test_files::writeFile(folder.file("Mod.ini"), "[Main]\niMode = 3\n");
+
+    const auto imported = importIniFile(folder.file("Mod.ini"), folder.file("Mod.toml"), toml::parse(SHIPPED_TOML));
+
+    REQUIRE(imported);
+    REQUIRE(imported->version == 0);
+    REQUIRE(std::filesystem::exists(folder.file("Mod_backup_v0.ini")));
+    REQUIRE(toml::parse(test_files::readFile(folder.file("Mod.toml")))["Debug"]["iVersion"].value<int>() == 0);
+}
+
+TEST_CASE("INI file import: an INI that can't be read or be TOML, or a file that can't be written, leaves the INI and no file")
+{
+    const test_files::TempFolder folder;
+    const auto ini = folder.file("Mod.ini");
+    const auto file = folder.file("Mod.toml");
+
+    SECTION("no INI")
+    {
+        REQUIRE_FALSE(importIniFile(ini, file, toml::table{}));
+    }
+    SECTION("an INI that can't be TOML: a key of the root and a section of the same name")
+    {
+        constexpr auto BROKEN = "Main = 1\n\n[Main]\nx = 1\n";
+        test_files::writeFile(ini, BROKEN);
+
+        const auto imported = importIniFile(ini, file, toml::table{});
+
+        REQUIRE_FALSE(imported);
+        REQUIRE(imported.error().starts_with("Mod.ini can't be TOML"));
+        REQUIRE(test_files::readFile(ini) == BROKEN);
+    }
+    SECTION("a file in a folder that does not exist")
+    {
+        test_files::writeFile(ini, USERS_INI);
+
+        REQUIRE_FALSE(importIniFile(ini, folder.file("missing/Mod.toml"), toml::parse(SHIPPED_TOML)));
+        REQUIRE(test_files::readFile(ini) == USERS_INI);
+    }
+
+    REQUIRE_FALSE(std::filesystem::exists(file));
+}
+
+TEST_CASE("INI file import: an INI that can't be moved to its backup is not a failure, and the result says why")
+{
+    const test_files::TempFolder folder;
+    const auto ini = folder.file("Mod.ini");
+    test_files::writeFile(ini, USERS_INI);
+    // a folder where the backup would go
+    std::filesystem::create_directory(folder.file("Mod_backup_v18.ini"));
+
+    const auto imported = importIniFile(ini, folder.file("Mod.toml"), toml::parse(SHIPPED_TOML));
+
+    REQUIRE(imported);
+    REQUIRE_FALSE(imported->backupError.empty());
+    REQUIRE(test_files::readFile(ini) == USERS_INI);
+    REQUIRE(std::filesystem::exists(folder.file("Mod.toml")));
+}
+
+TEST_CASE("Config backup: a file of a version is kept beside it, with the version in its name")
+{
+    REQUIRE(backupPathOf("C:/configs/Mod.toml", 3) == std::filesystem::path("C:/configs/Mod_backup_v3.toml"));
+    REQUIRE(backupPathOf("C:/configs/Mod.ini", 18) == std::filesystem::path("C:/configs/Mod_backup_v18.ini"));
 }

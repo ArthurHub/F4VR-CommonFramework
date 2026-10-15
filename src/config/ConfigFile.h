@@ -52,6 +52,8 @@ namespace f4cf::config
 
         static std::optional<std::string> readFile(const std::string& path);
 
+        static bool writeFile(const std::string& path, const std::string& content);
+
     private:
         // The file's content as the mod last loaded it, or saved it over that. No value before the first load,
         // and from a save over a file that someone else changed until the next load: the file is then loaded

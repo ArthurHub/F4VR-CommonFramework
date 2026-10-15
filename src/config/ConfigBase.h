@@ -114,7 +114,7 @@ namespace f4cf
          * Custom code to migrate the config to the latest version, after the generic one: `old` is the user's config
          * of `currentVersion`, and `latest` the default of the new version with the user's values set in it, where
          * values are set. Can be used when a key is renamed or a value changes its type, which the generic one leaves
-         * to it, see config::migrateValues.
+         * to it, see config::migrateValues. Version 0 is the mod's INI config as TOML, see importIniConfig.
          */
         virtual void updateConfigToLatestVersionCustom(int /*currentVersion*/, int /*latestVersion*/, const toml::table& /*old*/, common::TomlEditor& /*latest*/) const
         {}
@@ -152,6 +152,7 @@ namespace f4cf
         void applyConfig(const toml::table& config);
         bool loadKeptConfig(toml::table& config) const;
         void updateConfigToLatestVersion(int currentVersion, int latestVersion);
+        void importIniConfig();
         void startConfigFileWatch();
         void waitForConfigFileWriteToEnd() const;
 

@@ -27,6 +27,9 @@ namespace
     // a user's file of version 1, which had fOld and no iMode
     constexpr auto OLD_USER_FILE = "[Main]\nfScale = 4.0\nfOld = 7.0\n\n[Debug]\niVersion = 1\n";
 
+    // the user's INI config of the mod before it moved to TOML, of the INI's own version 18
+    constexpr auto USER_INI = "[Main]\nfScale = 3\niMode = 0x5\n\n[Debug]\niVersion = 18\n";
+
     // a user's file that is not TOML: a binding written without its quotes
     constexpr auto INVALID_FILE = "[Main]\nfScale = 1.0\nsButton = left tap grip\n\n[Debug]\niVersion = 2\n";
 
@@ -317,6 +320,36 @@ TEST_CASE("ConfigBase: load brings the file up to date, and a change of it on di
         REQUIRE(fileValue(path, "Debug", "iVersion") == "2");
         REQUIRE(readFile(path).starts_with("# The default config"));
         REQUIRE(readFile(folder.file("TestMod_backup_v1.toml")) == OLD_USER_FILE);
+    }
+    SECTION("the mod's INI config and no file: the INI is version 0 of the file, which is updated as any older version")
+    {
+        writeFile(folder.file("TestMod.ini"), USER_INI);
+
+        config.load();
+
+        REQUIRE(config.mode == 5);
+        REQUIRE(fileValue(path, MAIN, "fScale") == "3.0");
+        REQUIRE(fileValue(path, "Debug", "iVersion") == "2");
+        REQUIRE(readFile(path).starts_with("# The default config"));
+
+        // the INI with its own version, and the INI as TOML, as the update keeps the file it updates
+        REQUIRE_FALSE(std::filesystem::exists(folder.file("TestMod.ini")));
+        REQUIRE(readFile(folder.file("TestMod_backup_v18.ini")) == USER_INI);
+        const auto imported = folder.file("TestMod_backup_v0.toml");
+        REQUIRE(readFile(imported).starts_with("# TestMod.ini as TOML"));
+        REQUIRE(fileValue(imported, MAIN, "iMode") == "5");
+        REQUIRE(fileValue(imported, "Debug", "iVersion") == "0");
+    }
+    SECTION("the mod's INI config beside the file is left as it is")
+    {
+        writeFile(path, USER_FILE);
+        writeFile(folder.file("TestMod.ini"), USER_INI);
+
+        config.load();
+
+        REQUIRE(config.mode == 0);
+        REQUIRE(readFile(path) == USER_FILE);
+        REQUIRE(readFile(folder.file("TestMod.ini")) == USER_INI);
     }
 
     // the loads so far are load()'s own

@@ -7,7 +7,7 @@
 #include <sstream>
 #include <string>
 
-// Files on disk for the tests of this executable.
+// Files on disk for the tests, of both executables: plain std only.
 namespace test_files
 {
     /**
