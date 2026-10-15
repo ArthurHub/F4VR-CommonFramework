@@ -1,6 +1,7 @@
 #pragma once
 
 #include <array>
+#include <expected>
 #include <map>
 #include <mutex>
 #include <span>
@@ -62,9 +63,9 @@ namespace f4cf
 
         std::string getConfigValue(const char* section, const char* key, const char* defaultValue = "") const;
 
-        bool setConfigOverride(const std::string& owner, const char* section, const char* key, const config::ConfigValue& value);
+        std::expected<void, std::string> setConfigOverride(const std::string& owner, const char* section, const char* key, const config::ConfigValue& value);
 
-        bool setConfigOverrides(const std::string& owner, const std::vector<config::ConfigEntry>& overrides);
+        std::expected<void, std::string> setConfigOverrides(const std::string& owner, const std::vector<config::ConfigEntry>& overrides);
 
         bool clearConfigOverride(const std::string& owner, const char* section, const char* key);
 
@@ -78,8 +79,7 @@ namespace f4cf
 
         void loadEmbeddedDefaultOnly();
 
-        // TODO: save, override and read a value in a nested table ([section.sub], an inline table), by a path of keys in
-        // place of section + key; common::TomlEditor::set already takes a path.
+        // A section and a key are TOML dotted keys, so "hand.x" is a value in a nested table, see config::ConfigKey.
         void saveConfigValue(const char* section, const char* key, const config::ConfigValue& value);
         void saveConfigValues(const char* section, std::initializer_list<std::pair<const char*, config::ConfigValue>> values);
         void saveConfigValues(std::span<const config::ConfigEntry> values);

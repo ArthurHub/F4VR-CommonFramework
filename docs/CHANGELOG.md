@@ -14,7 +14,9 @@ major version is `0`, a minor bump may break the API; the **Upgrading** notes sa
   file that already holds them. A value given as text, by a session override, devbench `set` or a save,
   takes the type the file has for the key. A file that is not TOML, as one a player is in the middle of
   editing, is logged with its line and what is wrong at it, and is never written over: the values loaded
-  before it stay, and before any were the embedded default's apply. **Upgrading:**
+  before it stay, and before any were the embedded default's apply. A section and a key are TOML dotted
+  keys, so a value in a nested table is saved, overridden and read by its path: `hand.x` is x in
+  `[Main.hand]`. **Upgrading:**
   - Ship the default config as `<Mod>.toml` (embedded as RCDATA as before), and pass a `.toml` path.
     A player's `<Mod>.ini` moves to it by itself: on a load with no `<Mod>.toml`, the INI beside it is
     written as `<Mod>.toml` at version 0, each value read as the mod read it, by SimpleIni's getter of
@@ -40,8 +42,8 @@ major version is `0`, a minor bump may break the API; the **Upgrading** notes sa
     latestVersion, const toml::table& old, common::TomlEditor& latest)`. The generic migration carries a
     value only into a key of the same type (an integer into a float too): one whose type changed is left
     to it.
-  - `setConfigOverride(s)` return whether they set: a value that is not of the type the file has for
-    the key is refused, with the rest of its set. An override is read back as it applies
+  - `setConfigOverride(s)` return `std::expected<void, std::string>`: a value that is not of the type
+    the file has for the key is refused, with the rest of its set, and the error says why. An override is read back as it applies
     (`getConfigValue`, `getConfigOverrides`, devbench `config`): `no` over a bool is `false`.
   - `ConfigBase.h` no longer includes SimpleIni, and with it Windows' `min` / `max` macros: write
     `(std::min)(a, b)`.

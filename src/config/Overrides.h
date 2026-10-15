@@ -15,7 +15,9 @@
 namespace f4cf::config
 {
     /**
-     * The section and key of a config value.
+     * The section and key of a config value. Each is a TOML dotted key, so a value in a nested table is named by its
+     * path: "Main" and "hand.x" for x in [Main.hand], or "g.x" for x in Main's inline table g. A name with a dot in
+     * it is in quotes, as in TOML: "\"my.key\"". An empty section is the file's root.
      */
     struct ConfigKey
     {
@@ -23,6 +25,9 @@ namespace f4cf::config
         std::string key;
 
         auto operator<=>(const ConfigKey&) const = default;
+
+        std::optional<std::vector<std::string>> path() const;
+        ConfigKey canonical() const;
     };
 
     /**
@@ -71,5 +76,7 @@ namespace f4cf::config
         mutable std::mutex _mutex;
     };
 
-    void applyOverride(toml::table& table, const ConfigKey& key, std::string_view value);
+    bool applyOverride(toml::table& table, const ConfigKey& key, std::string_view value);
+
+    const toml::node* nodeOf(const toml::table& table, const ConfigKey& key);
 }

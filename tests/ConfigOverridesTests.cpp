@@ -6,7 +6,9 @@
 #include "config/Overrides.h"
 
 using f4cf::common::TomlEditor;
+using f4cf::config::applyOverride;
 using f4cf::config::ConfigKey;
+using f4cf::config::nodeOf;
 using f4cf::config::Overrides;
 
 namespace
@@ -288,4 +290,74 @@ TEST_CASE("ConfigOverrides: the applied overrides are one for each key, with the
     REQUIRE(applied[1].key == "fScale");
     REQUIRE(applied[1].value == "3");
     REQUIRE(applied[1].owner == PREVIEW);
+}
+
+TEST_CASE("ConfigKey: the section and the key are TOML dotted keys, whose keys make the path from the root")
+{
+    using Path = std::vector<std::string>;
+
+    REQUIRE(ConfigKey{ "Main", "fScale" }.path() == Path{ "Main", "fScale" });
+    REQUIRE(ConfigKey{ "Main", "hand.x" }.path() == Path{ "Main", "hand", "x" });
+    REQUIRE(ConfigKey{ "Main.hand", "x" }.path() == Path{ "Main", "hand", "x" });
+    REQUIRE(ConfigKey{ "Main", "hand . x" }.path() == Path{ "Main", "hand", "x" });
+    // a name with a dot in it is in quotes, as in TOML
+    REQUIRE(ConfigKey{ "Main", "\"my.key\"" }.path() == Path{ "Main", "my.key" });
+    // an empty section is the root
+    REQUIRE(ConfigKey{ "", "iVersion" }.path() == Path{ "iVersion" });
+
+    REQUIRE_FALSE(ConfigKey{ "Main", "" }.path());
+    REQUIRE_FALSE(ConfigKey{ "Main", "two words" }.path());
+    REQUIRE_FALSE(ConfigKey{ "Main", "x = 1" }.path());
+}
+
+TEST_CASE("ConfigKey: a value in a nested table and in an inline table is found by its path")
+{
+    const auto config = toml::parse("[Main]\ng = { x = 1 }\n\n[Main.hand]\nfX = 1.5\n");
+
+    REQUIRE(TomlEditor::Value(*nodeOf(config, { "Main", "hand.fX" })).text() == "1.5");
+    REQUIRE(TomlEditor::Value(*nodeOf(config, { "Main", "g.x" })).text() == "1");
+    REQUIRE_FALSE(nodeOf(config, { "Main", "hand.fY" }));
+    REQUIRE_FALSE(nodeOf(config, { "Main", "g.x.y" }));
+}
+
+TEST_CASE("ConfigOverrides: an override of a value in a nested table is put by its path, in the file's type")
+{
+    auto config = toml::parse("[Main]\ng = { x = 1 }\nfScale = 1.0\n\n[Main.hand]\nfX = 1.5\n");
+
+    REQUIRE(applyOverride(config, { "Main", "hand.fX" }, "2"));
+    REQUIRE(applyOverride(config, { "Main", "g.x" }, "5"));
+    REQUIRE(TomlEditor::Value(*nodeOf(config, { "Main", "hand.fX" })).text() == "2.0");
+    REQUIRE(TomlEditor::Value(*nodeOf(config, { "Main", "g.x" })).text() == "5");
+
+    // a table the file does not have is added
+    REQUIRE(applyOverride(config, { "Main", "arm.fY" }, "3.5"));
+    REQUIRE(TomlEditor::Value(*nodeOf(config, { "Main", "arm.fY" })).text() == "3.5");
+
+    // a path through a value that is not a table, and a key that is not a TOML key, are left out
+    REQUIRE_FALSE(applyOverride(config, { "Main", "fScale.x" }, "1"));
+    REQUIRE_FALSE(applyOverride(config, { "Main", "two words" }, "1"));
+    REQUIRE(TomlEditor::Value(*nodeOf(config, { "Main", "fScale" })).text() == "1.0");
+}
+
+TEST_CASE("ConfigKey: two spellings of one path are one key, its first key the section")
+{
+    REQUIRE(ConfigKey{ "Main.hand", "x" }.canonical() == ConfigKey{ "Main", "hand.x" });
+    REQUIRE(ConfigKey{ "Main", "hand . x" }.canonical() == ConfigKey{ "Main", "hand.x" });
+    REQUIRE(ConfigKey{ "Main", "\"my.key\"" }.canonical() == ConfigKey{ "Main", "\"my.key\"" });
+    REQUIRE(ConfigKey{ "Main", "fScale" }.canonical() == ConfigKey{ "Main", "fScale" });
+    REQUIRE(ConfigKey{ "", "iVersion" }.canonical() == ConfigKey{ "", "iVersion" });
+}
+
+TEST_CASE("ConfigOverrides: two spellings of one key's path are one override")
+{
+    Overrides overrides;
+
+    REQUIRE(overrides.set(DEVBENCH, { "Main", "hand.x" }, "1.5"));
+    // the same owner's override of the same value, so not a new one
+    REQUIRE_FALSE(overrides.set(DEVBENCH, { "Main.hand", "x" }, "2.5"));
+
+    REQUIRE(appliedValue(overrides, { "Main", "hand . x" }) == "2.5");
+    REQUIRE(overrides.applied().size() == 1);
+    REQUIRE(overrides.clear(DEVBENCH, ConfigKey{ "Main.hand", "x" }));
+    REQUIRE(appliedValue(overrides, { "Main", "hand.x" }) == "none");
 }
