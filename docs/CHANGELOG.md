@@ -38,6 +38,17 @@ major version is `0`, a minor bump may break the API; the **Upgrading** notes sa
     `applyIniConfigWithOverride` → `applyConfigWithOverride`, `INI_SECTION_DEBUG` → `CONFIG_SECTION_DEBUG`,
     `config::IniValue` / `IniKey` / `IniOverride` → `ConfigValue` / `ConfigKey` / `ConfigEntry`, and
     `config::IniReaders` → `ConfigReaders`.
+- **`[Debug]` lists are TOML arrays**: `aDumpDataOnce = ["skelly", "perf"]` in place of
+  `sDumpDataOnceNames`, and `aDebugDrawDisabledChannels` in place of `sDebugDrawDisabledChannels`.
+  `aAddItemsOnce` in place of `sAddItemsOnceNames` is an array of requests, each a table
+  (`{ op = "print", category = ["weapons", "armor"], keyword = "laser" }`), so one edit can run
+  several operations. A request that is not valid is logged with the key that is wrong, and then
+  none of them runs. `ConfigReaders::getStringListValue` reads an array of strings. **Upgrading:**
+  - Rename the three keys in the mod's TOML, as the template has them, and bump its `iVersion`:
+    the old values are not moved.
+  - `consumeDebugAddItemsOnce` returns a `toml::array`, and
+    `f4vr::DebugInventory::iterateObjects(std::string_view)` is
+    `iterateObjects(const toml::array&)`, with `parseRequest` for one request.
   - `updateIniConfigToLatestVersionCustom` is `updateConfigToLatestVersionCustom(currentVersion,
     latestVersion, const toml::table& old, common::TomlEditor& latest)`. The generic migration carries a
     value only into a key of the same type (an integer into a float too): one whose type changed is left

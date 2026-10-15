@@ -392,7 +392,7 @@ namespace f4cf
         void logPerfReport()
         {
             if (!perf::isEnabled()) {
-                logger::info("perf: recording is off; add 'perf_reset' to sDumpDataOnceNames to start a window, then 'perf' to log it");
+                logger::info("perf: recording is off; add 'perf_reset' to aDumpDataOnce to start a window, then 'perf' to log it");
                 return;
             }
             const auto text = perf::formatReport(perf::readReport());
@@ -406,7 +406,7 @@ namespace f4cf
     }
 
     /**
-     * Dump game data if requested in "sDumpDataOnceNames" flag in the config.
+     * Dump game data if requested in the "aDumpDataOnce" names of the config.
      */
     void ModBase::checkDebugDump() const
     {
@@ -416,7 +416,7 @@ namespace f4cf
         if (perfReset && !devbench::isArmed()) {
             // recording is off until the devbench tool is armed, and arming it starts the window
             devbench::internal::arm();
-            logger::info("perf: recording from a new window; add 'perf' to sDumpDataOnceNames to log it");
+            logger::info("perf: recording from a new window; add 'perf' to aDumpDataOnce to log it");
         } else if (perfDump || perfReset) {
             // perf_reset logs the window it ends, so listing both logs it once
             logPerfReport();
@@ -446,14 +446,14 @@ namespace f4cf
     }
 
     /**
-     * Bulk-add game items to the player inventory if requested in "sAddItemsOnceNames" flag in the config.
-     * The flag is consumed (cleared in memory + file) when read, so the add runs exactly once per request.
+     * Bulk-add game items to the player inventory if requested in the "aAddItemsOnce" requests of the config.
+     * The requests are consumed (cleared in memory + file) when read, so each runs exactly once.
      */
     void ModBase::checkDebugAddItems() const
     {
-        const auto spec = _settings.config->consumeDebugAddItemsOnce();
-        if (!spec.empty()) {
-            f4vr::DebugInventory::iterateObjects(spec);
+        const auto requests = _settings.config->consumeDebugAddItemsOnce();
+        if (!requests.empty()) {
+            f4vr::DebugInventory::iterateObjects(requests);
         }
     }
 }

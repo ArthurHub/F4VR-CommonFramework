@@ -17,8 +17,8 @@ in, and it's active.
 | ------------------------------------------------------ | ------------------------------------------------------------------ |
 | [`iLogLevel`](#iloglevel)                              | Minimum severity written to the log                                |
 | [`sAdjustTarget`](#sadjusttarget--in-game-live-tuning) | Tune transforms / hand poses / floats in-game with the controllers |
-| [`sDumpDataOnceNames`](#sdumpdataoncenames)            | Write named game-state dumps to the log, once                      |
-| [`sAddItemsOnceNames`](#sadditemsoncenames)            | Bulk-add or preview game items, once                               |
+| [`aDumpDataOnce`](#adumpdataonce)                      | Write named game-state dumps to the log, once                      |
+| [`aAddItemsOnce`](#aadditemsonce)                      | Bulk-add or preview game items, once                               |
 | [`sLogPattern`](#slogpattern)                          | Format of each log line                                            |
 | [`fFlowFlag1/2/3`, `sFlowText1/2`](#flow-values)       | Mod-defined scratch values read by mod code                        |
 | [`sSceneDepthStrategy`, `bSceneDepthDiagnostics`](#scene-depth-occlusion) | Overlay-occlusion support switches                |
@@ -164,10 +164,11 @@ sAdjustTarget = "haptictest"
 **Tap primary-hand A** to play the sequence on the primary controller. Combined with live-reload,
 this lets you edit `sFlowText1`, feel the result, and iterate.
 
-## `sDumpDataOnceNames`
+## `aDumpDataOnce`
 
-Writes one or more diagnostic node/state dumps to the mod log, then **clears each name after it
-runs** so a later file reload doesn't repeat it. Names are comma-separated.
+Writes one or more diagnostic node/state dumps to the mod log, then **removes each name from the
+array after it runs**, in memory and in the file, so a later file reload doesn't repeat it. The value
+is an array of names, matched whole and in their case.
 
 | Name        | Dumps                                                     |
 | ----------- | --------------------------------------------------------- |
@@ -181,6 +182,9 @@ runs** so a later file reload doesn't repeat it. Names are comma-separated.
 | `perf`      | The [perf sites](../src/perf/README.md) since the last reset, as an indented table (the devbench `perf` action's `text` format) |
 | `perf_reset` | Like `perf`, then starts a new window. When recording is off, it only switches it on |
 
+A mod adds names of its own (FRIK has `weapon_pos`, `weapon_muzzle` and `menus`). A name no code
+asks for stays in the array.
+
 Recording is off until the mod's devbench tool arms, which it does as soon as devbench is
 installed or a Tracy viewer connects. Without either, start with `perf_reset`, hold
 the condition being measured, then use `perf`, or `perf_reset` again to log that window and start
@@ -188,20 +192,42 @@ the next one.
 
 ```toml
 [Debug]
-sDumpDataOnceNames = "skelly, fp_skelly, geometry"
+aDumpDataOnce = ["skelly", "fp_skelly", "geometry"]
 ```
 
-## `sAddItemsOnceNames`
+## `aAddItemsOnce`
 
-Runs **one** inventory operation against one or more item categories. Like the dumps, the value is
-cleared (from memory and the file) before it's parsed — so even an invalid request has to be entered
-again, and a valid one never runs twice.
+Runs inventory requests, each an operation on one or more item categories with an optional filter.
+Like the dumps, the array is cleared (from memory and the file) before it's read, so even an
+invalid request has to be entered again, and a valid one never runs twice. All the requests are read
+before any runs: when one is not valid, the log says which and why, by its key, and **none of them
+runs**. The array is written back as `[]`, so a comment inside it goes too: keep notes above the key.
 
-**Syntax:** `operation, category[:filter], category[:filter], …` — operation and category names are
-case-insensitive.
+```toml
+[Debug]
+aAddItemsOnce = [
+  { op = "print", category = "weapons", class = "gun", keyword = "laser" },
+  { op = "get", category = ["weapons", "throwables"] },
+]
+```
 
 > **Start with a `print`.** `get`/`get-all` can add a lot of items to your character. Preview with a
 > print operation and keep a save before committing.
+
+### Request keys
+
+| Key        | Required | Value                                                                 |
+| ---------- | -------- | --------------------------------------------------------------------- |
+| `op`       | yes      | The [operation](#operations)                                          |
+| `category` | yes      | One [category](#categories), or an array of them                      |
+| `name`     |          | Case-insensitive display-name substring                               |
+| `keyword`  |          | Case-insensitive keyword editor-ID substring                          |
+| `slot`     |          | Armor only: one [slot](#armor-slots), or an array of them, OR-matched |
+| `class`    |          | Armor: `light`, `heavy` or `none`. Weapons: `melee`, `gun` or `unarmed` |
+
+An item has to match every filter key of its request. Values are case-insensitive, keys are not, and
+a key not in the table is an error. `slot` and `class` are skipped, with a warning, for a category
+they don't apply to, so one request can cover weapons and armor.
 
 ### Operations
 
@@ -226,23 +252,11 @@ relevant armor/weapon details.
 | `aid`        | Aid / alchemy items                        | 1                  |
 | `misc`       | Miscellaneous items                        | 1                  |
 
-### Filters
+### Armor slots
 
-Add `:` after a category, then join clauses with `|`. Multiple clauses on one category are **AND-ed**.
+A slot is a Creation Kit number `30 … 61`, written as a number, or one of these names, in quotes:
 
-| Filter           | Applies to | Meaning                                      |
-| ---------------- | ---------- | -------------------------------------------- |
-| `name=<text>`    | Any        | Case-insensitive display-name substring      |
-| `keyword=<text>` | Any        | Case-insensitive keyword editor-ID substring |
-| `slot=<list>`    | Armor      | One or more `+`-separated slots, OR-matched  |
-| `class=<value>`  | Armor      | `light`, `heavy`, or `none`                  |
-| `class=<value>`  | Weapons    | `melee`, `gun`, or `unarmed`                 |
-
-A bare clause is shorthand for `name=`, so `weapons:laser` means `weapons:name=laser`.
-
-Armor slots accept Creation Kit numbers `30 … 61` or these aliases:
-
-| Alias                                                          | Slot(s)               |
+| Name                                                           | Slot(s)               |
 | -------------------------------------------------------------- | --------------------- |
 | `head`, `helmet`, `hair`                                       | 30                    |
 | `body`, `outfit`, `underarmor`                                 | 33                    |
@@ -252,20 +266,20 @@ Armor slots accept Creation Kit numbers `30 … 61` or these aliases:
 | `legs`, `lleg`, `leftleg`, `rleg`, `rightleg`                  | 44 and/or 45          |
 | `headband`, `eyes`, `glasses`, `mouth`, `mask`, `neck`, `ring` | 46, 47, 49, 50, or 51 |
 
+### Examples
+
 ```toml
 [Debug]
-# Preview obtainable laser guns
-sAddItemsOnceNames = "print, weapons:class=gun|keyword=laser"
-
-# or one of these, a key appears once in the file:
-# Add obtainable weapons and five of each obtainable throwable
-# sAddItemsOnceNames = "get, weapons, throwables"
-
-# Preview every heavy torso armor, including unobtainable
-# sAddItemsOnceNames = "print-all, armor:slot=torso|class=heavy"
-
-# Add all named aid items containing "stimpak"
-# sAddItemsOnceNames = "get-all, aid:stimpak"
+aAddItemsOnce = [
+  # Preview obtainable laser guns
+  { op = "print", category = "weapons", class = "gun", keyword = "laser" },
+  # Add obtainable weapons and five of each obtainable throwable
+  { op = "get", category = ["weapons", "throwables"] },
+  # Preview every heavy torso or body armor, including unobtainable
+  { op = "print-all", category = "armor", slot = ["torso", 33], class = "heavy" },
+  # Add all named aid items containing "stimpak"
+  { op = "get-all", category = "aid", name = "stimpak" },
+]
 ```
 
 ## Flow values

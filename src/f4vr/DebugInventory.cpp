@@ -1,13 +1,14 @@
 #include "DebugInventory.h"
 
+#include <format>
 #include <functional>
-#include <sstream>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
 
 #include "Logger.h"
 #include "common/CommonUtils.h"
+#include "common/TomlEditor.h"
 
 namespace
 {
@@ -273,31 +274,88 @@ namespace
     }
 
     /**
-     * Parse a '+'-separated armor slot list ("torso+head+41") into a slot mask: entries are slot aliases
-     * (torso, head, legs, ...) and/or CK slot numbers (30..61). Unknown entries warn and are skipped.
+     * The slot-mask bits of one armor slot: a slot alias as a string (torso, head, legs, ...), in any case, or a
+     * CK slot number (30..61) as an integer.
      */
-    std::uint32_t parseSlotList(const std::string& value)
+    std::expected<std::uint32_t, std::string> slotMaskOfOne(const toml::node& slot)
     {
+        if (const auto* number = slot.as_integer()) {
+            const auto value = number->get();
+            if (value < 30 || value > 61) {
+                return std::unexpected(std::format("slot {} is not a CK slot number, 30 to 61", value));
+            }
+            return slotBit(static_cast<int>(value));
+        }
+        if (const auto* name = slot.as_string()) {
+            if (const auto bits = slotMaskFromAlias(f4cf::common::str_tolower(name->get())); bits != 0) {
+                return bits;
+            }
+            return std::unexpected(std::format("slot '{}' is not a slot name (torso, head, legs, arms, ...), and a slot number has no quotes", name->get()));
+        }
+        return std::unexpected("a slot is a slot name in quotes or a CK slot number, 30 to 61");
+    }
+
+    /**
+     * The slot mask of a request's slot: one slot, or an array of slots that any one of matches, see slotMaskOfOne.
+     */
+    std::expected<std::uint32_t, std::string> slotMaskOf(const toml::node& slot)
+    {
+        const auto* slots = slot.as_array();
+        if (!slots) {
+            return slotMaskOfOne(slot);
+        }
+        if (slots->empty()) {
+            return std::unexpected("slot is an empty array");
+        }
         std::uint32_t mask = 0;
-        std::stringstream ss{ value };
-        std::string piece;
-        while (std::getline(ss, piece, '+')) {
-            piece = f4cf::common::str_tolower(f4cf::common::trim(piece));
-            if (piece.empty()) {
-                continue;
+        for (const auto& one : *slots) {
+            const auto bits = slotMaskOfOne(one);
+            if (!bits) {
+                return bits;
             }
-            std::uint32_t bits = slotMaskFromAlias(piece);
-            if (bits == 0) {
-                if (const auto slot = std::atoi(piece.c_str()); std::to_string(slot) == piece) {
-                    bits = slotBit(slot);
-                }
-            }
-            if (bits == 0) {
-                logger::warn("DebugInventory: unknown armor slot '{}' (use 30-61 or names like torso/head/legs/arms)", piece);
-            }
-            mask |= bits;
+            mask |= *bits;
         }
         return mask;
+    }
+
+    /**
+     * The categories of a request's category: one category name, or an array of them.
+     */
+    std::expected<std::vector<DebugInventory::ItemCategory>, std::string> categoriesOf(const toml::node& category)
+    {
+        std::vector<const toml::node*> names;
+        if (const auto* array = category.as_array()) {
+            for (const auto& name : *array) {
+                names.push_back(&name);
+            }
+        } else {
+            names.push_back(&category);
+        }
+        if (names.empty()) {
+            return std::unexpected("category is an empty array");
+        }
+
+        std::vector<DebugInventory::ItemCategory> categories;
+        for (const auto* name : names) {
+            const auto* text = name->as_string();
+            const auto parsed = text ? parseCategory(text->get()) : std::nullopt;
+            if (!parsed) {
+                return std::unexpected(std::format("category {} is not one of weapons, throwables, ammo, armor, aid, misc", f4cf::common::TomlEditor::Value(*name).text()));
+            }
+            categories.push_back(*parsed);
+        }
+        return categories;
+    }
+
+    /**
+     * The string of a request's key, or why it is not one.
+     */
+    std::expected<std::string, std::string> stringOf(const std::string_view key, const toml::node& value)
+    {
+        if (const auto* text = value.as_string()) {
+            return text->get();
+        }
+        return std::unexpected(std::format("{} is not a string, it goes in quotes", key));
     }
 
     /** Map a "class=" value (case-insensitive) to the ItemClass enum. Returns nullopt for unknown values. */
@@ -463,41 +521,6 @@ namespace
         }
         return out;
     }
-
-    DebugInventory::ItemFilter parseFilter(const std::string_view filter)
-    {
-        DebugInventory::ItemFilter result;
-        std::stringstream ss{ std::string(filter) };
-        std::string clause;
-        while (std::getline(ss, clause, '|')) {
-            clause = common::trim(clause);
-            if (clause.empty()) {
-                continue;
-            }
-            const auto eq = clause.find('=');
-            if (eq == std::string::npos) {
-                result.name = clause; // bare shorthand for name=<clause>
-                continue;
-            }
-            const auto key = common::str_tolower(common::trim(clause.substr(0, eq)));
-            const auto value = common::trim(clause.substr(eq + 1));
-            if (key == "name") {
-                result.name = value;
-            } else if (key == "keyword" || key == "kw") {
-                result.keyword = value;
-            } else if (key == "slot") {
-                result.slotMask = parseSlotList(value);
-            } else if (key == "class" || key == "type") {
-                result.itemClass = parseItemClass(common::str_tolower(value));
-                if (!result.itemClass) {
-                    logger::warn("DebugInventory: unknown class '{}' (armor light|heavy|none or weapon melee|gun|unarmed)", value);
-                }
-            } else {
-                logger::warn("DebugInventory: unknown filter key '{}' (use name=, keyword=, slot=, class=)", key);
-            }
-        }
-        return result;
-    }
 }
 
 namespace f4cf::f4vr
@@ -521,7 +544,7 @@ namespace f4cf::f4vr
         const auto* reachable = obtainableOnly ? &reachableSet : nullptr;
 
         // Needles are matched case-insensitively, so lower them at the point of use; this lets typed callers set
-        // the fields in any case (parseFilter leaves them as authored).
+        // the fields in any case (parseRequest leaves them as authored).
         const auto name = common::str_tolower(filter.name);
         const auto kw = common::str_tolower(filter.keyword);
 
@@ -620,64 +643,107 @@ namespace f4cf::f4vr
     }
 
     /**
-     * Parse a config spec and run it against the player.
-     * Spec is a comma-separated list whose FIRST token is the operation (get | get-all | print, see Operation),
-     * followed by "category[:filter]" tokens, e.g. "get, weapons:name=laser, ammo" or "print, armor:slot=torso".
-     * Categories: weapons, throwables, ammo, armor, aid, misc. Unknown categories are logged and skipped; a
-     * missing/invalid leading operation aborts the whole spec.
-     *
-     * The ":filter" is a '|'-separated list of "key=value" clauses, AND-ed together:
-     *   name=<substr>     full-name substring (any category)
-     *   keyword=<substr>  keyword editor-ID substring (any category), e.g. keyword=laser to pick laser sub-types
-     *   slot=<list>       armor body slot(s): '+'-separated aliases (torso, head, legs, arms, ...) and/or CK
-     *                     slot numbers 30..61 (armor only)
-     *   class=<value>     armor weight (light|heavy|none) or weapon type (melee|gun|unarmed)
-     * A clause with no '=' is shorthand for name=, so "weapons:laser" == "weapons:name=laser".
+     * Read one request of the aAddItemsOnce config, an inline table such as
+     * { op = "print", category = ["weapons", "armor"], name = "combat", keyword = "laser", slot = ["torso", 33], class = "heavy" }.
+     * op and category are required, the others are the filter, see ItemFilter, all of which an item has to match:
+     *   op        get | get-all | print | print-all, see Operation
+     *   category  one category or an array of them: weapons, throwables, ammo, armor, aid, misc
+     *   name      full-name substring (any category), case-insensitive
+     *   keyword   keyword editor-ID substring (any category), case-insensitive, e.g. "laser" to pick laser sub-types
+     *   slot      armor body slot(s) any one of matches: a slot alias (torso, head, legs, arms, ...) or a CK slot
+     *             number 30..61, or an array of them (armor only)
+     *   class     armor weight (light | heavy | none) or weapon type (melee | gun | unarmed)
+     * Values are case-insensitive, keys are not. Returns why the request is not valid, naming the key, for a key it
+     * does not know, a value of the wrong type, or a name that is none of its kind. Reads no game state.
      */
-    void DebugInventory::iterateObjects(const std::string_view spec)
+    std::expected<DebugInventory::Request, std::string> DebugInventory::parseRequest(const toml::node& request)
     {
-        // Split into comma-separated tokens; the first is the required operation (get | get-all | print), the rest
-        // are "category[:filter]" requests.
-        std::vector<std::string> tokens;
-        std::stringstream ss{ std::string(spec) };
-        std::string token;
-        while (std::getline(ss, token, ',')) {
-            if (const auto trimmed = common::trim(token); !trimmed.empty()) {
-                tokens.push_back(trimmed);
+        const auto* table = request.as_table();
+        if (!table) {
+            return std::unexpected(R"(a request is a table, { op = "print", category = "weapons" })");
+        }
+
+        Request result;
+        bool hasOperation = false;
+        bool hasCategory = false;
+        for (const auto& [keyName, value] : *table) {
+            const std::string_view key = keyName.str();
+            if (key == "op") {
+                const auto text = stringOf(key, value);
+                const auto operation = text ? parseOperation(common::str_tolower(*text)) : std::nullopt;
+                if (!operation) {
+                    return std::unexpected(std::format("op {} is not one of get, get-all, print, print-all", common::TomlEditor::Value(value).text()));
+                }
+                result.operation = *operation;
+                hasOperation = true;
+            } else if (key == "category") {
+                auto categories = categoriesOf(value);
+                if (!categories) {
+                    return std::unexpected(categories.error());
+                }
+                result.categories = std::move(*categories);
+                hasCategory = true;
+            } else if (key == "name" || key == "keyword") {
+                auto text = stringOf(key, value);
+                if (!text) {
+                    return std::unexpected(text.error());
+                }
+                (key == "name" ? result.filter.name : result.filter.keyword) = std::move(*text);
+            } else if (key == "slot") {
+                const auto mask = slotMaskOf(value);
+                if (!mask) {
+                    return std::unexpected(mask.error());
+                }
+                result.filter.slotMask = *mask;
+            } else if (key == "class") {
+                const auto text = stringOf(key, value);
+                const auto itemClass = text ? parseItemClass(common::str_tolower(*text)) : std::nullopt;
+                if (!itemClass) {
+                    return std::unexpected(
+                        std::format("class {} is not an armor weight (light, heavy, none) or a weapon type (melee, gun, unarmed)", common::TomlEditor::Value(value).text()));
+                }
+                result.filter.itemClass = *itemClass;
+            } else {
+                return std::unexpected(std::format("'{}' is not a key of a request: op, category, name, keyword, slot, class", key));
             }
         }
-        if (tokens.empty()) {
+        if (!hasOperation) {
+            return std::unexpected("op is missing: get, get-all, print or print-all");
+        }
+        if (!hasCategory) {
+            return std::unexpected("category is missing: weapons, throwables, ammo, armor, aid or misc");
+        }
+        return result;
+    }
+
+    /**
+     * Run the requests of the aAddItemsOnce config against the player, in their order, each for each of its
+     * categories, see parseRequest. All of them are read first, and when any is not valid none runs: the reasons
+     * are logged, and the requests have to be written again.
+     */
+    void DebugInventory::iterateObjects(const toml::array& requests)
+    {
+        std::vector<Request> parsed;
+        bool valid = true;
+        for (std::size_t i = 0; i < requests.size(); ++i) {
+            auto request = parseRequest(requests[i]);
+            if (request) {
+                parsed.push_back(std::move(*request));
+            } else {
+                logger::warn("DebugInventory: request {} {}: {}", i + 1, common::TomlEditor::Value(requests[i]).text(), request.error());
+                valid = false;
+            }
+        }
+        if (!valid) {
+            logger::warn("DebugInventory: no request was run, as not all of them are valid");
             return;
         }
 
-        const auto operation = parseOperation(common::str_tolower(tokens.front()));
-        if (!operation) {
-            logger::warn("DebugInventory: spec must start with an operation: get | get-all | print (got '{}')", tokens.front());
-            return;
-        }
-
-        // Parse the remaining tokens into category + filter requests before running any of them.
-        std::vector<std::pair<ItemCategory, std::string>> requests;
-        for (std::size_t i = 1; i < tokens.size(); ++i) {
-            const auto& tok = tokens[i];
-            std::string categoryStr = tok;
-            std::string filter;
-            if (const auto colon = tok.find(':'); colon != std::string::npos) {
-                categoryStr = common::trim(tok.substr(0, colon));
-                filter = common::trim(tok.substr(colon + 1));
+        for (std::size_t i = 0; i < parsed.size(); ++i) {
+            logger::info("DebugInventory: processing request {} {}", i + 1, common::TomlEditor::Value(requests[i]).text());
+            for (const auto category : parsed[i].categories) {
+                iterateObjects(parsed[i].operation, category, parsed[i].filter);
             }
-            const auto category = parseCategory(categoryStr);
-            if (!category) {
-                logger::warn("DebugInventory: unknown item category '{}' (expected weapons/throwables/ammo/armor/aid/misc)", categoryStr);
-                continue;
-            }
-            requests.emplace_back(*category, std::move(filter));
-        }
-
-        logger::info("DebugInventory: processing '{}'", spec);
-        for (const auto& [category, filter] : requests) {
-            const auto itemFilter = parseFilter(filter);
-            iterateObjects(*operation, category, itemFilter);
         }
     }
 }

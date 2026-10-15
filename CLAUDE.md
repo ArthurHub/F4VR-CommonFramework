@@ -93,9 +93,10 @@ iLogLevel = 2                 # 0=trace, 1=debug, 2=info
 sLogPattern = "%H:%M:%S.%e %l: %v"
 fFlowFlag1 = 0.0              # also 2 and 3: runtime feature toggles, read via g_config.debug.flowFlag1
 sFlowText1 = ""               # also 2: debug text fields
-sDumpDataOnceNames = ""       # Comma-separated: ui_tree, skelly, fp_skelly, geometry, world, all_nodes, perf (log the perf table), perf_reset (log it and start a new window; the first one switches recording on)
-sAddItemsOnceNames = ""       # Bulk-add items once: first token = operation (get=obtainable/get-all=everything/print=dry-run of get/print-all=dry-run of get-all), then "category[:filter]" tokens (weapons/throwables/ammo/armor/aid/misc); filter is '|'-sep key=value (name=/keyword= any; armor slot=/class=light|heavy|none; weapon class=melee|gun|unarmed)
+aDumpDataOnce = []            # Names of dumps to log once, each removed from the file when it runs: ui_tree, skelly, fp_skelly, geometry, world, all_nodes, perf (log the perf table), perf_reset (log it and start a new window; the first one switches recording on)
+aAddItemsOnce = []            # Inventory requests run once, the array cleared before it is read: { op, category, name?, keyword?, slot?, class? } each, see f4vr::DebugInventory::parseRequest; any invalid request and none runs
 ```
+An `a` prefix is an array key, read with `ConfigReaders::getStringListValue` for a list of strings. A one-shot array is cleared by saving its new TOML text (`saveConfigValue(section, key, "[]")`), which `typedLike` reads as the array it is.
 
 ### Logging (`src/Logger.h`)
 spdlog-based, in the `f4cf::logger` namespace (PCH does `using namespace f4cf;`, so call them unqualified as `logger::info(...)`). Levels: `logger::trace` / `debug` / `info` / `warn` / `error` / `critical`; plus `logger::sample(ms, fmt, ...)` for rate-limited logs and `logger::infoRaw` for unformatted lines. Guard expensive work with `logger::isDebugEnabled()` etc. Logger is initialized during `onF4SEPluginLoad`.
@@ -129,7 +130,7 @@ layer at `DRAW_ORDER_DEBUG` — on top of everything and deliberately not occlud
 shape behind a wall is exactly the one you need to see. Call each frame to keep a shape visible
 (auto-clears per frame); `sec > 0` persists a one-shot for that long. Zero cost and no hooks until
 the first draw call (lazy install, driven by `ModBase` around `onFrameUpdate`).
-`[Debug]` config keys: `bDebugDrawEnabled`, `sDebugDrawDisabledChannels`, `sDebugDrawToggleBinding`.
+`[Debug]` config keys: `bDebugDrawEnabled`, `aDebugDrawDisabledChannels`, `sDebugDrawToggleBinding`.
 Usage: [`src/debug/README.md`](src/debug/README.md); design: [`docs/tech/debug-draw-overlay.md`](docs/tech/debug-draw-overlay.md).
 
 ### Overlay Rendering (`src/render/`)

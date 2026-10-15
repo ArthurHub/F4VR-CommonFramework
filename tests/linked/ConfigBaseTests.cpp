@@ -230,6 +230,37 @@ TEST_CASE("ConfigBase: a save of the values the file already has does not write 
     REQUIRE(readFile(configPath(folder)) == USER_FILE);
 }
 
+TEST_CASE("ConfigBase: a one-shot debug request is taken out of the file when it is consumed")
+{
+    const TempFolder folder;
+    writeFile(configPath(folder),
+        "[Main]\nfScale = 1.0\niMode = 0\n\n[Debug]\niVersion = 2\naDumpDataOnce = [\"skelly\", \"perf\", \"skelly\"]\n"
+        "aAddItemsOnce = [\n  { op = \"print\", category = \"weapons\" },\n  { op = \"get\", category = \"ammo\" },\n]\n");
+    TestConfig config(configPath(folder));
+    REQUIRE(config.loadConfigValues());
+
+    SECTION("a dump, every copy of its name and only it")
+    {
+        REQUIRE(config.checkDebugDumpDataOnceFor("skelly"));
+        REQUIRE(config.debug.dumpDataOnce == std::vector<std::string>{ "perf" });
+        REQUIRE(fileValue(configPath(folder), "Debug", "aDumpDataOnce") == R"(["perf"])");
+
+        REQUIRE_FALSE(config.checkDebugDumpDataOnceFor("skelly"));
+        REQUIRE_FALSE(config.checkDebugDumpDataOnceFor("perf_reset"));
+        REQUIRE(config.checkDebugDumpDataOnceFor("perf"));
+        REQUIRE(fileValue(configPath(folder), "Debug", "aDumpDataOnce") == "[]");
+    }
+    SECTION("the inventory requests, all of them at once, written over all their lines")
+    {
+        const auto requests = config.consumeDebugAddItemsOnce();
+
+        REQUIRE(requests.size() == 2);
+        REQUIRE(config.debug.addItemsOnce.empty());
+        REQUIRE(readFile(configPath(folder)).ends_with("aAddItemsOnce = []\n"));
+        REQUIRE(config.consumeDebugAddItemsOnce().empty());
+    }
+}
+
 TEST_CASE("ConfigBase: a file that is not TOML is left for its user to fix")
 {
     const TempFolder folder;

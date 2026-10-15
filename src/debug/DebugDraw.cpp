@@ -128,7 +128,7 @@ namespace f4cf::debug
     }
 
     /**
-     * Runtime per-channel override, layered over the config-disabled set (sDebugDrawDisabledChannels).
+     * Runtime per-channel override, layered over the config-disabled set (aDebugDrawDisabledChannels).
      */
     void DebugDraw::setChannelEnabled(const std::string_view channel, const bool enabled)
     {
@@ -462,7 +462,7 @@ namespace f4cf::debug
 
     /**
      * A channel's own gate: its runtime override when one is set, else whether the config-disabled set
-     * (sDebugDrawDisabledChannels) leaves it on.
+     * (aDebugDrawDisabledChannels) leaves it on.
      */
     bool DebugDraw::isChannelEnabled(const std::string& channel) const
     {
@@ -714,7 +714,7 @@ namespace f4cf::debug
             return;
         }
         const bool configEnabled = config->debug.drawEnabled;
-        const std::string& configDisabledChannels = config->debug.drawDisabledChannels;
+        const std::vector<std::string>& configDisabledChannels = config->debug.drawDisabledChannels;
         const std::string& configToggleBinding = config->debug.drawToggleBinding;
         const std::string& configHudPlacement = config->debug.drawHudPlacement;
 
@@ -733,10 +733,7 @@ namespace f4cf::debug
         }
         if (configDisabledChannels != self._configDisabledChannelsRaw) {
             self._configDisabledChannelsRaw = configDisabledChannels;
-            self._configDisabledChannels.clear();
-            for (const auto& name : splitTrimmed(configDisabledChannels, ',')) {
-                self._configDisabledChannels.insert(name);
-            }
+            self._configDisabledChannels = { configDisabledChannels.begin(), configDisabledChannels.end() };
         }
         self.handleToggleHotkey(configToggleBinding);
         self.refreshAppendActive();

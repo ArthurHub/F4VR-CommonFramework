@@ -3,7 +3,6 @@
 #include <nlohmann/json.hpp>
 
 #include "ConfigMigration.h"
-#include "ValueParsers.h"
 #include "devbench/DevBench.h"
 #include "perf/Perf.h"
 
@@ -112,36 +111,41 @@ namespace f4cf
     }
 
     /**
-     * Check if a debug data dump is requested for the given name in sDumpDataOnceNames, see config::takeName.
-     * The name is then removed from the list, in memory and in the file, so the dump runs once and a reload does
-     * not request it again.
+     * Check if a debug data dump is requested for the given name in aDumpDataOnce, matched as a whole and in its case.
+     * Every copy of the name is then removed from the list, in memory and in the file, so the dump runs once and a
+     * reload does not request it again.
      */
     bool ConfigBase::checkDebugDumpDataOnceFor(const char* name)
     {
-        if (!config::takeName(debug.dumpDataOnceNames, name)) {
+        if (std::erase(debug.dumpDataOnce, name) == 0) {
             return false;
         }
         // write to the file for auto-reload not to re-enable it
-        saveConfigValue(CONFIG_SECTION_DEBUG, "sDumpDataOnceNames", debug.dumpDataOnceNames.c_str());
+        toml::array remaining;
+        for (const auto& other : debug.dumpDataOnce) {
+            remaining.push_back(other);
+        }
+        saveConfigValue(CONFIG_SECTION_DEBUG, "aDumpDataOnce", common::TomlEditor::Value(remaining).text());
 
         logger::info("---- Debug Dump Data check passed for '{}' ----", name);
         return true;
     }
 
     /**
-     * Consume the one-shot "sAddItemsOnceNames" flag.
-     * Returns the current value and clears it (in memory + file) so the bulk item-add runs exactly once,
-     * and is not re-triggered by the file-watcher reloading the same value.
+     * Consume the one-shot "aAddItemsOnce" requests.
+     * Returns them as written and clears them (in memory and in the file) before any is read, so the bulk item-add
+     * runs exactly once, a request that is not valid has to be written again, and the file-watcher reloading the
+     * same value does not run them again.
      */
-    std::string ConfigBase::consumeDebugAddItemsOnce()
+    toml::array ConfigBase::consumeDebugAddItemsOnce()
     {
-        if (debug.addItemsOnceNames.empty()) {
+        if (debug.addItemsOnce.empty()) {
             return {};
         }
-        auto spec = debug.addItemsOnceNames;
-        debug.addItemsOnceNames.clear();
-        saveConfigValue(CONFIG_SECTION_DEBUG, "sAddItemsOnceNames", "");
-        return spec;
+        auto requests = std::move(debug.addItemsOnce);
+        debug.addItemsOnce.clear();
+        saveConfigValue(CONFIG_SECTION_DEBUG, "aAddItemsOnce", "[]");
+        return requests;
     }
 
     /**

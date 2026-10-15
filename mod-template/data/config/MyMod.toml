@@ -53,28 +53,27 @@ fFlowFlag3 = 0.0
 sFlowText1 = ""
 sFlowText2 = ""
 
+# Mod-defined scratch transform, read as config->debug.transform; tune it in-game with sAdjustTarget = "transform".
+# Format: "x, y, z; heading, roll, attitude; scale", rotation in degrees.
+tTransform = "0.0, 0.0, 0.0; 0.0, 0.0, 0.0; 1.0"
+
 # Selects an in-game live-tuning target; "none" or "" disables it and restores controller input.
 # Examples: "flag123"; "haptictest"; "MyMod::tSomeTransform"
 # Guide: https://github.com/ArthurHub/F4VR-CommonFramework/blob/main/docs/debug-config.md
 sAdjustTarget = "none"
 
 # Writes named game-state dumps to the mod log and removes each name after it runs.
-# Examples: "ui_tree"; "skelly, fp_skelly"; "geometry, pipboy, all_nodes"
-# Timing: perf_reset starts a perf window, then perf logs what each part of the frame cost since
+# Examples: ["ui_tree"]; ["skelly", "fp_skelly"]; ["geometry", "pipboy", "all_nodes"]
+# Timing: "perf_reset" starts a perf window, then "perf" logs what each part of the frame cost since
 # Guide: https://github.com/ArthurHub/F4VR-CommonFramework/blob/main/docs/debug-config.md
-sDumpDataOnceNames = ""
+aDumpDataOnce = []
 
-# Runs a one-shot inventory add or dry run from an operation plus category filters.
-# Examples: "get, weapons, throwables"; "print, weapons:laser"; "print-all, armor:slot=torso|class=heavy"
-# Guide: https://github.com/ArthurHub/F4VR-CommonFramework/blob/main/docs/debug-config.md
-sAddItemsOnceNames = ""
-
-# In-world debug draw overlay: master switch, comma-separated channel names to skip (e.g. npc-detection),
+# In-world debug draw overlay: master switch, names of the channels to skip (e.g. ["npc-detection"]),
 # and a controller binding to enable/disable the overlay in-headset.
 # HUD placement: center, center-left, center-right, center-top, center-top-left, center-top-right.
 bDebugDrawEnabled = true
 sDebugDrawToggleBinding = "offhand longpress A"
-sDebugDrawDisabledChannels = ""
+aDebugDrawDisabledChannels = []
 sDebugDrawHudPlacement = "center-top-left"
 
 # Which implementation resolves the world depth that hides overlays behind the world.

@@ -23,6 +23,23 @@ namespace
             return DebugAdjustTarget::HapticTest;
         return DebugAdjustTarget::None;
     }
+
+    /**
+     * The inventory requests of aAddItemsOnce, as written: an empty array when the key is missing, and with a warning
+     * when it is not an array. Each request is read when it runs, see f4vr::DebugInventory::parseRequest.
+     */
+    toml::array readAddItemsOnce(const toml::table& config)
+    {
+        const auto* node = config[f4cf::CONFIG_SECTION_DEBUG]["aAddItemsOnce"].node();
+        if (!node) {
+            return {};
+        }
+        if (const auto* array = node->as_array()) {
+            return *array;
+        }
+        logger::warn("Config: 'Debug.aAddItemsOnce' is not an array, write it as [{{ op = \"print\", category = \"weapons\" }}]. Ignored.");
+        return {};
+    }
 }
 
 namespace f4cf::config
@@ -51,10 +68,10 @@ namespace f4cf::config
             adjustTarget = parseDebugAdjustTarget(target);
             adjustField.clear();
         }
-        dumpDataOnceNames = debug["sDumpDataOnceNames"].value_or(std::string());
-        addItemsOnceNames = debug["sAddItemsOnceNames"].value_or(std::string());
+        dumpDataOnce = ConfigReaders::getStringListValue(config, CONFIG_SECTION_DEBUG, "aDumpDataOnce", {});
+        addItemsOnce = readAddItemsOnce(config);
         drawEnabled = debug["bDebugDrawEnabled"].value_or(true);
-        drawDisabledChannels = debug["sDebugDrawDisabledChannels"].value_or(std::string());
+        drawDisabledChannels = ConfigReaders::getStringListValue(config, CONFIG_SECTION_DEBUG, "aDebugDrawDisabledChannels", {});
         drawToggleBinding = debug["sDebugDrawToggleBinding"].value_or(std::string());
         drawHudPlacement = debug["sDebugDrawHudPlacement"].value_or(std::string("center"));
         sceneDepthStrategy = debug["sSceneDepthStrategy"].value_or(std::string("auto"));
