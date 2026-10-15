@@ -72,6 +72,7 @@ add_executable(${PROJECT_NAME}_linked_tests
   linked/BindingPromptTests.cpp
   linked/CommonUtilsTests.cpp
   linked/ConfigBaseTests.cpp
+  linked/DebugInventoryTests.cpp
   linked/DebugSectionTests.cpp
   linked/ConfigReadersTests.cpp
   linked/InputBindingParserTests.cpp

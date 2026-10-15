@@ -187,6 +187,35 @@ namespace f4cf::config
     }
 
     /**
+     * Read an array of strings, such as ["skelly", "perf"], in its order.
+     * Returns defaultValue if the key is missing, and with a warning if it is not an array. An item of the array that
+     * is not a string is skipped with a warning.
+     */
+    std::vector<std::string> ConfigReaders::getStringListValue(const toml::table& config, const char* section, const char* key, const std::vector<std::string>& defaultValue)
+    {
+        const auto* node = nodeOf(config, { section, key });
+        if (!node) {
+            return defaultValue;
+        }
+        const auto* array = node->as_array();
+        if (!array) {
+            logger::warn("Config: '{}.{}' is not an array, write it as [\"one\", \"two\"]. Using default.", section, key);
+            return defaultValue;
+        }
+
+        std::vector<std::string> list;
+        list.reserve(array->size());
+        for (const auto& item : *array) {
+            if (const auto* string = item.as_string()) {
+                list.push_back(string->get());
+            } else {
+                logger::warn("Config: '{}.{}' has an item that is not a string, it goes in quotes. Skipped.", section, key);
+            }
+        }
+        return list;
+    }
+
+    /**
      * Parse a 22-float hand pose from the value at section/key, see parseHandPose for its format.
      * Returns defaultValue (and logs a warning) if the key is missing or the structure doesn't match.
      */

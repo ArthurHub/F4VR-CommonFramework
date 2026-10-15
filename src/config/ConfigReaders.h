@@ -1,7 +1,9 @@
 #pragma once
 
 #include <array>
+#include <string>
 #include <toml++/toml.hpp>
+#include <vector>
 
 namespace f4cf::vrcf
 {
@@ -31,6 +33,7 @@ namespace f4cf::config
         static std::array<float, 22> getHandPoseValue(const toml::table& config, const char* section, const char* key, const std::array<float, 22>& defaultValue);
         static vrcf::InputBinding getInputBindingValue(const toml::table& config, const char* section, const char* key, const vrcf::InputBinding& defaultValue);
         static render::Color getColorValue(const toml::table& config, const char* section, const char* key, const render::Color& defaultValue);
+        static std::vector<std::string> getStringListValue(const toml::table& config, const char* section, const char* key, const std::vector<std::string>& defaultValue);
         static f4vr::WandActivationConfig loadWandActivationConfig(const toml::table& config, const char* section, const f4vr::WandActivationConfig& defaults);
     };
 }

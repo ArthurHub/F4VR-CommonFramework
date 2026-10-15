@@ -70,7 +70,7 @@ the game thread (the one `ModBase::onFrameUpdateSafe` runs on) first:
   when the game loaded.
 
 `format: "text"` puts the same tree in `text` as a table, which is also what the `perf` debug dump
-(`sDumpDataOnceNames`) writes to the log. An excerpt from FRIK, sites under a caller in the order
+(`aDumpDataOnce`) writes to the log. An excerpt from FRIK, sites under a caller in the order
 they run:
 
 ```
@@ -130,7 +130,7 @@ void MyMod::onModLoaded(const F4SE::LoadInterface*)
   mod's state provider does with it, such as emitting an event when a value changes. It arms, for
   the rest of the session, as soon as something can read that: devbench is installed (the tool
   registers when the game loads), a [Tracy](../perf/README.md#tracy) viewer connects, or
-  `perf_reset` in `sDumpDataOnceNames` starts a perf window. A game with none of them pays two
+  `perf_reset` in `aDumpDataOnce` starts a perf window. A game with none of them pays two
   relaxed loads a frame. Arming does not wait for a devbench client: the plugin can't tell whether
   one is attached, so a trace sees the mod's state events from the start.
 - **Arguments.** All actions share one flat input schema, so start each argument's description

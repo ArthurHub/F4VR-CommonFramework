@@ -3,7 +3,6 @@
 #include <array>
 #include <optional>
 #include <string>
-#include <string_view>
 
 // The text forms of the config values that are more than one number or word, apart from the game: plain std only,
 // so it is unit tested.
@@ -28,6 +27,4 @@ namespace f4cf::config
     std::optional<std::array<float, 22>> parseHandPose(const char* text);
 
     bool parseColor255(const std::string& text, std::array<float, 4>& color);
-
-    bool takeName(std::string& names, std::string_view name);
 }

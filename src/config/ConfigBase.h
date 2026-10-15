@@ -99,7 +99,7 @@ namespace f4cf
 
         bool checkDebugDumpDataOnceFor(const char* name);
 
-        std::string consumeDebugAddItemsOnce();
+        toml::array consumeDebugAddItemsOnce();
 
         // The values of the [Debug] section: access as e.g. config->debug.flowFlag1.
         using Debug = config::DebugSection;

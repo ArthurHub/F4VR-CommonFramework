@@ -40,7 +40,7 @@ namespace f4cf::debug
      * the sDebugDrawToggleBinding hotkey) appends are skipped at the call site.
      *
      * Channels: setChannel()/channelScope() tags subsequent draws with a name so independent systems
-     * can be toggled separately (config sDebugDrawDisabledChannels or setChannelEnabled()).
+     * can be toggled separately (config aDebugDrawDisabledChannels or setChannelEnabled()).
      *
      * Design + provenance: reference library knowledge-base/debug_draw_overlay.md (a generalization
      * of ROCK's DebugBodyOverlay).
@@ -233,7 +233,7 @@ namespace f4cf::debug
         std::string _channel;
         bool _appendActive = true;
         std::unordered_set<std::string> _configDisabledChannels;
-        std::string _configDisabledChannelsRaw;
+        std::vector<std::string> _configDisabledChannelsRaw;
         std::unordered_map<std::string, bool> _channelOverrides;
 
         // default-HUD placement, parsed from config on change

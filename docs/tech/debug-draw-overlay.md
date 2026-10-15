@@ -176,6 +176,6 @@ after a game/runtime change, suspect it first.
 ## 8. Configuration
 
 `[Debug]` config keys provided by `ConfigBase` for every mod (hot-reloadable):
-`bDebugDrawEnabled` (master, default on), `sDebugDrawDisabledChannels` (comma-separated),
+`bDebugDrawEnabled` (master, default on), `aDebugDrawDisabledChannels` (an array of channel names),
 `sDebugDrawToggleBinding` (in-headset toggle, [input-binding grammar](../input-binding.md)).
 Runtime equivalents: `setEnabled()`, `setChannelEnabled()`.

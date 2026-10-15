@@ -1,6 +1,7 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <string>
+#include <vector>
 
 #include "TestMath.h"
 #include "common/MatrixUtils.h"
@@ -123,6 +124,22 @@ TEST_CASE("ConfigReaders: a hand pose is the four numbers of each finger and the
         REQUIRE(ConfigReaders::getHandPoseValue(file.table, MAIN, "hPose", fallback) == fallback);
         REQUIRE(ConfigReaders::getHandPoseValue(file.table, MAIN, "hShort", fallback) == fallback);
     }
+}
+
+TEST_CASE("ConfigReaders: a list of strings is read in its order")
+{
+    const std::vector<std::string> fallback{ "fallback" };
+    const Config file("aNames = [\"skelly\", \"perf\", \"skelly\"]\naEmpty = []\naMixed = [\"one\", 2, \"three\"]\naText = \"skelly, perf\"\n");
+
+    REQUIRE(ConfigReaders::getStringListValue(file.table, MAIN, "aNames", fallback) == std::vector<std::string>{ "skelly", "perf", "skelly" });
+    // an empty array is a value, not a missing key
+    REQUIRE(ConfigReaders::getStringListValue(file.table, MAIN, "aEmpty", fallback).empty());
+    // an item that is not a string is skipped, and the others stay
+    REQUIRE(ConfigReaders::getStringListValue(file.table, MAIN, "aMixed", fallback) == std::vector<std::string>{ "one", "three" });
+
+    // the default for a key that is missing, and for a value that is not an array
+    REQUIRE(ConfigReaders::getStringListValue(file.table, MAIN, "aMissing", fallback) == fallback);
+    REQUIRE(ConfigReaders::getStringListValue(file.table, MAIN, "aText", fallback) == fallback);
 }
 
 TEST_CASE("ConfigReaders: an input binding is read as the binding grammar has it")

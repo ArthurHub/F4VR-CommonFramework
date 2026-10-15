@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <string>
 #include <toml++/toml.hpp>
+#include <vector>
 
 namespace f4cf
 {
@@ -51,11 +52,11 @@ namespace f4cf::config
         DebugAdjustTarget adjustTarget = DebugAdjustTarget::None;
         // For DebugAdjustTarget::Field: the "Section::Key" of the arbitrary config field being tuned.
         std::string adjustField;
-        // f4cf::debug::DebugDraw overlay: the master switch, comma-separated channel names to skip, a controller
+        // f4cf::debug::DebugDraw overlay: the master switch, the names of the channels to skip, a controller
         // binding (vrcf::parseInputBinding grammar) that flips the overlay in the headset, and where the watch
         // table sits in the view (center, or center- with left / right / top / top-left / top-right).
         bool drawEnabled = true;
-        std::string drawDisabledChannels;
+        std::vector<std::string> drawDisabledChannels;
         std::string drawToggleBinding;
         std::string drawHudPlacement = "center";
         // f4cf::render::sceneDepth: which implementation resolves the world's depth for overlay
@@ -72,10 +73,12 @@ namespace f4cf::config
         // f4cf::vrui: the dev layout, which tunes the placement of the attached UI through a file of its
         // own while the game runs, see vrui::UIDevLayout.
         bool vruiDevLayout = false;
-        // One-shot name lists consumed via ConfigBase::checkDebugDumpDataOnceFor() / consumeDebugAddItemsOnce();
-        // each is cleared (in memory + file) once consumed so the file-watch reload doesn't re-trigger it.
-        std::string dumpDataOnceNames;
-        std::string addItemsOnceNames;
+        // One-shot requests, consumed via ConfigBase::checkDebugDumpDataOnceFor() / consumeDebugAddItemsOnce(): the
+        // names of the dumps to write, and the inventory requests as written, each a table, see
+        // f4vr::DebugInventory::parseRequest. A request is removed (in memory and in the file) once consumed, so the
+        // file-watch reload doesn't run it again.
+        std::vector<std::string> dumpDataOnce;
+        toml::array addItemsOnce;
 
         void load(const toml::table& config);
     };

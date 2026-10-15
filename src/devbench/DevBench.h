@@ -82,7 +82,7 @@ namespace f4cf::devbench
 
     /**
      * Whether anything can read what the tool collects: devbench is installed (the tool registered), a Tracy viewer
-     * connected, or perf_reset in sDumpDataOnceNames asked for a perf window. Collection that costs per-frame work
+     * connected, or perf_reset in aDumpDataOnce asked for a perf window. Collection that costs per-frame work
      * waits for this, and it stays armed for the rest of the session, so a game with none of them pays nothing. Any
      * thread.
      */
