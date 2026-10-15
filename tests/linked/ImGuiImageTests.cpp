@@ -27,10 +27,8 @@ namespace
             auto& io = ImGui::GetIO();
             io.IniFilename = nullptr;
             io.DisplaySize = ImVec2(400.0f, 300.0f);
-            unsigned char* pixels = nullptr;
-            int width = 0;
-            int height = 0;
-            io.Fonts->GetTexDataAsRGBA32(&pixels, &width, &height);
+            // a renderer that takes ImGui's texture requests, as the canvases have
+            io.BackendFlags |= ImGuiBackendFlags_RendererHasTextures;
             ImGui::NewFrame();
             ImGui::Begin("test");
         }
@@ -81,7 +79,7 @@ TEST_CASE("ImGui image: an image is drawn between the callbacks that set its sta
     REQUIRE(commands.Size >= before + 3);
     const ImDrawCmd* image = nullptr;
     for (int i = 1; i + 1 < commands.Size; ++i) {
-        if (commands[i].TextureId == view.Get() && commands[i].ElemCount == 6) {
+        if (commands[i].TexRef.GetTexID() == reinterpret_cast<std::uintptr_t>(view.Get()) && commands[i].ElemCount == 6) {
             image = &commands[i];
         }
     }

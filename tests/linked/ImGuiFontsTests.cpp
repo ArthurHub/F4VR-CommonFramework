@@ -13,20 +13,20 @@ using Catch::Matchers::WithinAbs;
 
 namespace
 {
-    // the size and the supersample the framework draws its canvases with by default
+    // the size the framework draws its canvases with by default
     constexpr float FONT_SIZE = 24.0f;
-    constexpr float SUPERSAMPLE = 1.5f;
 
     /**
-     * An ImGui context with the canvas font loaded and its atlas built, as a canvas has it, with no renderer.
+     * An ImGui context with the canvas font loaded, as a canvas has it, with no renderer: the flag of a
+     * renderer that takes ImGui's texture requests, so the font is rasterized at each size it is drawn at.
      */
     struct TestFonts
     {
         TestFonts()
         {
             ImGui::CreateContext();
-            imgui::internal::loadCanvasFont(FONT_SIZE, SUPERSAMPLE);
-            ImGui::GetIO().Fonts->Build();
+            ImGui::GetIO().BackendFlags |= ImGuiBackendFlags_RendererHasTextures;
+            imgui::internal::loadCanvasFont(FONT_SIZE);
         }
 
         ~TestFonts()
@@ -35,18 +35,18 @@ namespace
         }
     };
 
-    float widthOf(const ImFont* font, const char* text)
+    float widthOf(ImFont* font, const char* text)
     {
-        return font->CalcTextSizeA(font->FontSize, FLT_MAX, 0.0f, text).x;
+        return font->CalcTextSizeA(FONT_SIZE, FLT_MAX, 0.0f, text).x;
     }
 }
 
 TEST_CASE("ImGui fonts: the canvas font has a regular, a bold and an italic face")
 {
     const TestFonts fonts;
-    const ImFont* regular = imgui::canvasFont(imgui::FontStyle::Regular);
-    const ImFont* bold = imgui::canvasFont(imgui::FontStyle::Bold);
-    const ImFont* italic = imgui::canvasFont(imgui::FontStyle::Italic);
+    ImFont* regular = imgui::canvasFont(imgui::FontStyle::Regular);
+    ImFont* bold = imgui::canvasFont(imgui::FontStyle::Bold);
+    ImFont* italic = imgui::canvasFont(imgui::FontStyle::Italic);
     REQUIRE(regular);
     REQUIRE(bold);
     REQUIRE(italic);
@@ -61,18 +61,20 @@ TEST_CASE("ImGui fonts: the canvas font has a regular, a bold and an italic face
 TEST_CASE("ImGui fonts: a word in bold or italic is as large as the words around it, on their line")
 {
     const TestFonts fonts;
-    const ImFont* regular = imgui::canvasFont(imgui::FontStyle::Regular);
-    const ImFontGlyph* regularCapital = regular->FindGlyph('H');
+    // copied, as baking another face may move the regular one's
+    ImFontBaked* regular = imgui::canvasFont(imgui::FontStyle::Regular)->GetFontBaked(FONT_SIZE);
+    const float regularAscent = regular->Ascent;
+    const float regularDescent = regular->Descent;
+    const ImFontGlyph regularCapital = *regular->FindGlyph('H');
 
     for (const auto style : { imgui::FontStyle::Bold, imgui::FontStyle::Italic }) {
-        const ImFont* face = imgui::canvasFont(style);
-        CHECK(common::fEqual(face->FontSize, regular->FontSize));
-        CHECK(common::fEqual(face->Ascent, regular->Ascent));
-        CHECK(common::fEqual(face->Descent, regular->Descent));
+        ImFontBaked* face = imgui::canvasFont(style)->GetFontBaked(FONT_SIZE);
+        CHECK(common::fEqual(face->Ascent, regularAscent));
+        CHECK(common::fEqual(face->Descent, regularDescent));
 
         // a capital's top and bottom, within a pixel of the rounding of its raster
         const ImFontGlyph* capital = face->FindGlyph('H');
-        CHECK_THAT(capital->Y0, WithinAbs(regularCapital->Y0, 1.0));
-        CHECK_THAT(capital->Y1, WithinAbs(regularCapital->Y1, 1.0));
+        CHECK_THAT(capital->Y0, WithinAbs(regularCapital.Y0, 1.0));
+        CHECK_THAT(capital->Y1, WithinAbs(regularCapital.Y1, 1.0));
     }
 }

@@ -14,6 +14,12 @@
 #include "ImGuiPointer.h"
 #include "ImGuiRenderer.h"
 #include "ImGuiSettings.h"
+#include "ImGuiTextures.h"
+
+// the font texture's requests and the rasterizing at the framebuffer scale are ImGui 1.92's
+#if IMGUI_VERSION_NUM < 19290
+#error "F4VR-CommonFramework needs Dear ImGui 1.92.9: add { \"name\": \"imgui\", \"version\": \"1.92.9\" } to the overrides of the mod's vcpkg.json"
+#endif
 
 namespace f4cf::imgui::internal
 {
@@ -26,9 +32,10 @@ namespace f4cf::imgui::internal
         constexpr int ATLAS_HEIGHT = MAX_CANVAS_PIXEL_SIZE;
 
         // The atlas texture's side and the scale from layout to texture pixels, fixed on the first
-        // frame a canvas draws: the texture and the font raster are built from them, so they cannot
-        // follow a later setSupersample. The scale is taken from the whole-pixel texture size rather
-        // than the requested factor, so the scaled frame lands exactly on what the quads' UVs address.
+        // frame a canvas draws: the texture is built from them and ImGui rasterizes at the scale, so
+        // they cannot follow a later setSupersample. The scale is taken from the whole-pixel texture
+        // size rather than the requested factor, so the scaled frame lands exactly on what the quads'
+        // UVs address.
         // A dedicated canvas is rasterized at the same scale, into a texture of its own.
         int s_atlasTextureSize = 0;
         float s_atlasScale = 1.0f;
@@ -147,11 +154,12 @@ namespace f4cf::imgui::internal
             // so they would pile up and the pointer would fall behind the hand.
             io.ConfigInputTrickleEventQueue = false;
             io.DisplaySize = ImVec2(static_cast<float>(ATLAS_WIDTH), static_cast<float>(ATLAS_HEIGHT));
-            // glyphs are rasterized at the atlas scale and laid out at 1x
-            io.FontGlobalScale = 1.0f / s_atlasScale;
+            // laid out at 1x and rasterized at the atlas scale: ImGui bakes the glyphs of every size at it,
+            // and its DX11 backend sets its viewport and clip rects from it
+            io.DisplayFramebufferScale = ImVec2(s_atlasScale, s_atlasScale);
 
             ImGui::StyleColorsDark();
-            loadCanvasFont(fontSizePixels(), s_atlasScale);
+            loadCanvasFont(fontSizePixels());
 
             if (!ImGui_ImplDX11_Init(device, context)) {
                 ImGui::DestroyContext();
@@ -274,33 +282,15 @@ namespace f4cf::imgui::internal
         drawData.DisplaySize = source.DisplaySize;
         drawData.FramebufferScale = source.FramebufferScale;
         drawData.OwnerViewport = nullptr; // the viewport is game-thread state; the renderer does not use it
-        for (int i = 0; i < source.CmdListsCount; ++i) {
-            drawData.CmdLists.push_back(source.CmdLists[i]->CloneOutput());
-        }
-        drawData.CmdListsCount = drawData.CmdLists.Size;
-    }
-
-    /**
-     * The DX11 backend takes its viewport and clip rects straight from the draw data, so scaling the
-     * data is all it takes to rasterize at a multiple - the backend needs no changes.
-     */
-    void ClonedDrawData::scale(const float factor)
-    {
-        drawData.DisplayPos.x *= factor;
-        drawData.DisplayPos.y *= factor;
-        drawData.DisplaySize.x *= factor;
-        drawData.DisplaySize.y *= factor;
-        for (ImDrawList* list : drawData.CmdLists) {
-            for (ImDrawVert& vertex : list->VtxBuffer) {
-                vertex.pos.x *= factor;
-                vertex.pos.y *= factor;
+        for (const ImDrawList* list : source.CmdLists) {
+            ImDrawList* clone = list->CloneOutput();
+            // A command names a texture of ImGui's by the texture, whose id is read here: ImGui may destroy
+            // the texture before the render thread draws the clone. The textures list stays empty, as the
+            // game thread has answered its requests (updateTextures).
+            for (ImDrawCmd& command : clone->CmdBuffer) {
+                command.TexRef = ImTextureRef(command.TexRef.GetTexID());
             }
-            for (ImDrawCmd& command : list->CmdBuffer) {
-                command.ClipRect.x *= factor;
-                command.ClipRect.y *= factor;
-                command.ClipRect.z *= factor;
-                command.ClipRect.w *= factor;
-            }
+            drawData.CmdLists.push_back(clone);
         }
     }
 
@@ -555,10 +545,11 @@ namespace f4cf::imgui::internal
         ImGui::Render();
 
         RenderFrame frame;
+        frame.textureWrites = updateTextures(render::getDevice());
         frame.drawData = std::make_shared<ClonedDrawData>();
         frame.drawData->copyFrom(*ImGui::GetDrawData());
         frame.drawData->textures = takeFrameTextures();
-        frame.drawData->scale(s_atlasScale);
+        addTextureViews(frame.drawData->textures);
         frame.dedicated = display.dedicated;
         frame.textureWidth = display.textureWidth;
         frame.textureHeight = display.textureHeight;

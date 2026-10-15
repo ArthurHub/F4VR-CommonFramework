@@ -176,9 +176,22 @@ major version is `0`, a minor bump may break the API; the **Upgrading** notes sa
   for a run of text in the content: `imgui::canvasFont(FontStyle)`. They are the embedded Roboto
   Black and Roboto Medium Italic, or a mod's own `<ModName>-Bold.ttf` and `<ModName>-Italic.ttf`
   beside its `<ModName>.ttf`.
+- **imgui on Dear ImGui 1.92.9**: text of every size is sharp. ImGui rasterizes each size the first
+  time it is drawn, at the supersample factor, where it used to resample one raster of the default
+  size. Content pushes a size with `ImGui::PushFont(nullptr, size)`. The font texture ImGui keeps
+  growing is created on the game thread and written by the render thread before each frame it draws.
 
 **Upgrading**
 
+- The ImGui layer needs Dear ImGui 1.92.9, which the pinned vcpkg baseline does not have: add
+  `{ "name": "imgui", "version": "1.92.9" }` to the `overrides` of the mod's `vcpkg.json`, as the
+  template has it. A build without it stops with an error that says so.
+- ImGui's own API changed between 1.90 and 1.92 (its
+  [changelog](https://github.com/ocornut/imgui/blob/master/docs/CHANGELOG.txt) has each change). For
+  content code the usual ones: `ImGui::SetWindowFontScale(f)` becomes
+  `ImGui::PushFont(nullptr, size)` and `PopFont()`, `PushFont(font)` takes a size (`0` keeps the
+  current one), and a font's `FontSize`, `Ascent`, `Descent` and `FindGlyph` are on
+  `font->GetFontBaked(size)`. `imgui::internal::loadCanvasFont` takes no raster scale.
 - The embedded Roboto is Google Fonts' build, 2.137. Its line is shorter, and ImGui sizes a font by
   its line, so the text of an ImGui canvas is drawn 12.5% larger at the same `setFontSizePixels`:
   21.3 is now as large as 24 was. The text of vrui keeps its size, and kerns more pairs of letters.

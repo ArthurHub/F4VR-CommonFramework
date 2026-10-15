@@ -1,6 +1,8 @@
 #include "ImGuiRenderer.h"
 
+#include <iterator>
 #include <mutex>
+#include <utility>
 #include <vector>
 
 #include <d3d11.h>
@@ -451,6 +453,7 @@ float4 main(PS_INPUT input) : SV_Target {
             // game thread sets once at init and never changes - a stable read from here.
             std::shared_ptr<ClonedDrawData> drawData;
             std::vector<CanvasQuad> quads;
+            std::vector<TextureWrite> textureWrites;
             bool dedicated = false;
             int textureWidth = 0;
             int textureHeight = 0;
@@ -458,10 +461,14 @@ float4 main(PS_INPUT input) : SV_Target {
                 std::scoped_lock lock(s_frameMutex);
                 drawData = s_frame.drawData;
                 quads = s_frame.quads;
+                // written once, also when the frame is drawn again
+                textureWrites = std::exchange(s_frame.textureWrites, {});
                 dedicated = s_frame.dedicated;
                 textureWidth = s_frame.textureWidth;
                 textureHeight = s_frame.textureHeight;
             }
+            auto* context = submitFrame.context;
+            writeTextures(context, textureWrites);
             if (!drawData || quads.empty()) {
                 return;
             }
@@ -470,8 +477,6 @@ float4 main(PS_INPUT input) : SV_Target {
             if (!ensureTarget(submitFrame.device, target, textureWidth, textureHeight)) {
                 return;
             }
-
-            auto* context = submitFrame.context;
 
             // pass 1: ImGui into the texture. ImGui_ImplDX11_RenderDrawData sets its own viewport
             // and projection from the draw data's display size, and backs up / restores the
@@ -548,6 +553,8 @@ float4 main(PS_INPUT input) : SV_Target {
         const bool hasContent = !frame.empty();
         {
             std::scoped_lock lock(s_frameMutex);
+            // the texture writes of a frame that was not drawn come before this frame's
+            frame.textureWrites.insert(frame.textureWrites.begin(), std::make_move_iterator(s_frame.textureWrites.begin()), std::make_move_iterator(s_frame.textureWrites.end()));
             s_frame = std::move(frame);
         }
         render::setDrawCallbackActive(s_drawCallback, hasContent);

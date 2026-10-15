@@ -22,11 +22,12 @@ and a `vrui::UITextPanel` standing side by side read as one UI.
 | [`UIImGuiPanel.h`](UIImGuiPanel.h) / [`.cpp`](UIImGuiPanel.cpp) | The vrui adapter: a `UIElement` whose rectangle a `Canvas` fills. Takes `vrui::UIPanelStyle` and the vrui sizing modes, in vrui units. |
 | [`ImGuiPointer.h`](ImGuiPointer.h) / [`.cpp`](ImGuiPointer.cpp) | `Pointer`, reached as `imgui::pointer()` — the one pointer of the interactive canvases: a wand's ray as ImGui's mouse, its trigger as the mouse button, and that wand hidden from the game. Its state, which hands point, and its `PointerStyle`: where the ray is on the hand, and how the ray and its mark are drawn. |
 | [`ImGuiPointerLogic.h`](ImGuiPointerLogic.h) | The pointer's logic apart from the game, so it is unit tested: where a ray meets a quad and its plane, the quad of a curved canvas bent around its cylinder, whether a hand operates the UI and presses it, which hand owns the pointer, and how much a thumbstick scrolls. |
-| [`ImGuiImage.h`](ImGuiImage.h) / [`.cpp`](ImGuiImage.cpp) | `imgui::image` and `imgui::addImage` � a `render::Texture` in the content of a canvas, kept until the frame that draws it has been drawn. |
+| [`ImGuiImage.h`](ImGuiImage.h) / [`.cpp`](ImGuiImage.cpp) | `imgui::image` and `imgui::addImage` — a `render::Texture` in the content of a canvas, kept until the frame that draws it has been drawn. |
 | [`ImGuiSettings.h`](ImGuiSettings.h) / [`.cpp`](ImGuiSettings.cpp) | The two process-wide knobs: `setFontSizePixels` and `setSupersample`. |
 | [`ImGuiFonts.h`](ImGuiFonts.h) / [`.cpp`](ImGuiFonts.cpp) | Loads the framework's text font into the ImGui atlas, from the same bytes the primitive renderer draws with, with its bold and italic faces: `imgui::canvasFont`. |
 | [`ImGuiLayer.h`](ImGuiLayer.h) / [`.cpp`](ImGuiLayer.cpp) | Game-thread pump: one ImGui frame holding every visible canvas, or the dedicated canvas alone, cloned and published with each canvas's quad. |
 | [`ImGuiRenderer.h`](ImGuiRenderer.h) / [`.cpp`](ImGuiRenderer.cpp) | Render-thread half: rasterizes the frame into the shared atlas texture, or into the dedicated canvas's own, then composites each canvas's slice as a world-space quad. |
+| [`ImGuiTextures.h`](ImGuiTextures.h) / [`.cpp`](ImGuiTextures.cpp) | ImGui's own textures, its font atlas: created and destroyed on the game thread as ImGui asks, and the glyphs ImGui adds copied for the render thread to write. |
 
 ## A panel in a vrui layout
 
@@ -322,10 +323,10 @@ Three separate things, deliberately:
 | `setFontSizePixels` (default 24, clamped 16..128) | process-wide | how big the text *looks*, without touching layout |
 | `setSupersample` (default 1.5, clamped 1..4) | process-wide | how finely everything is rasterized — detail only; layout is always at 1x |
 
-Both process-wide settings are read when the **first canvas draws**, since the font raster and the
-atlas texture are built from them then — set them before that; later calls do nothing. A single
-canvas that wants larger text can push `ImGui::SetWindowFontScale` from inside its content callback,
-which resamples the raster rather than rebuilding it.
+Both process-wide settings are read when the **first canvas draws**, since the font is loaded and the
+atlas texture is built from them then — set them before that; later calls do nothing. Content that
+wants text of another size pushes it with `ImGui::PushFont(nullptr, size)`: ImGui rasterizes each size
+it draws, at the supersample factor, so text of any size is as sharp as the default.
 
 The atlas texture is `MAX_CANVAS_PIXEL_SIZE` (1024) times the supersample factor on each side, so
 memory grows with the square — about 9MB at 1.5, 16MB at 2 — and past the headset's own resolution a
@@ -338,14 +339,14 @@ same factor.
 The canvases load the framework's text font — a mod's own TTF/OTF at
 `Data\Interface\<ModName>\<ModName>.ttf` when it ships a usable one, the embedded Roboto Medium
 otherwise — from the same bytes `render::TextFont` draws with, so a `UIImGuiPanel` and a
-`UITextPanel` always share a typeface. ImGui's own embedded bitmap font is the last resort, logged as
-a warning.
+`UITextPanel` always share a typeface. ImGui's own embedded font is the last resort, logged as a
+warning.
 
 It has a bold and an italic face too, for a run of text in the content: `imgui::canvasFont(FontStyle)`
-gives each, to push or to draw with.
+gives each, to push or to draw with, at the current size or at any other.
 
 ```cpp
-ImGui::PushFont(imgui::canvasFont(imgui::FontStyle::Bold));
+ImGui::PushFont(imgui::canvasFont(imgui::FontStyle::Bold), 0.0f);  // 0 keeps the current size
 ImGui::TextUnformatted("Warning");
 ImGui::PopFont();
 ```
@@ -353,8 +354,8 @@ ImGui::PopFont();
 A mod's own font has its faces beside it, `<ModName>-Bold.ttf` and `<ModName>-Italic.ttf`
 (`render::CUSTOM_BOLD_FONT_PATH`, `render::CUSTOM_ITALIC_FONT_PATH`, beside `CUSTOM_TEXT_FONT_PATH`
 in [`TextFont.h`](../render/TextFont.h)). A face it does not ship is the embedded one: Roboto Black,
-and Roboto Medium Italic. The faces are loaded at one size, and are drawn at one size and on one
-baseline only when the files have the same vertical metrics, as the faces of one family do.
+and Roboto Medium Italic. Faces drawn at one size are as tall and on one baseline only when the
+files have the same vertical metrics, as the faces of one family do.
 
 ## How it is drawn
 
@@ -362,15 +363,17 @@ baseline only when the files have the same vertical metrics, as the faces of one
 game thread (frame end)                         render thread (Submit hook)
 ──────────────────────────────────              ─────────────────────────────────
 imgui::internal::onFrameEnd()                   draw callback (DRAW_ORDER_PANELS)
-  ├─ resolve placements → world quads             ├─ rasterize the frame into the atlas
-  ├─ the pointer: a wand's ray on the quads       ├─ group quads by occluded / on-top
-  │    of the interactive canvases → ImGui's      └─ composite each canvas's atlas slice
-  │    mouse, its ray and mark → their own             as a world quad, back to front
-  │    layer over the panels, and the wand
+  ├─ resolve placements → world quads             ├─ write the glyphs ImGui added
+  ├─ the pointer: a wand's ray on the quads       ├─ rasterize the frame into the atlas
+  │    of the interactive canvases → ImGui's      ├─ group quads by occluded / on-top
+  │    mouse, its ray and mark → their own        └─ composite each canvas's atlas slice
+  │    layer over the panels, and the wand             as a world quad, back to front
   │    hidden from the game
   ├─ one ImGui frame, every visible canvas
   │    as its own window packed into the atlas
   ├─ measure each canvas's content
+  ├─ ImGui's texture requests: the font
+  │    texture created, new glyphs copied
   └─ clone the draw data + publish  ────────────►
 ```
 
@@ -388,6 +391,12 @@ imgui::internal::onFrameEnd()                   draw callback (DRAW_ORDER_PANELS
 - **The draw data is cloned** across the thread boundary (`ImDrawList::CloneOutput`): ImGui's own
   buffers are recycled by the next `NewFrame`, so a render thread still reading last frame's lists
   would be a use-after-free. A few KB of memcpy per frame for canvas-sized UI.
+- **ImGui's font texture is answered on the game thread** (`ImGuiTextures.cpp`). ImGui rasterizes a
+  size the first time it is drawn, into its font texture, and asks for the texture to be created or
+  written; its DX11 backend would do that while drawing, on the render thread, while ImGui writes the
+  same pixels for the next frame. So the texture is created on the game thread, through the device,
+  and the glyphs ImGui adds are copied there and written by the render thread before it draws. The
+  frame holds the texture's view, like an image's, and names it by that view alone.
 - **Canvases never write depth**, so they do not hide each other: overlapping ones are drawn back to
   front by distance to the viewer. Against the *world* they are occluded by default (`setOccluded`) —
   see [render/](../render/README.md#occlusion-by-the-world); where the engine's depth cannot be
@@ -404,11 +413,13 @@ imgui::internal::onFrameEnd()                   draw callback (DRAW_ORDER_PANELS
 ## Building without it
 
 `F4CF_WITH_IMGUI_UI` (default `ON`) compiles the layer into the archive; the vcpkg manifest pulls
-`imgui` with the `dx11-binding` feature. Configure with `-DF4CF_WITH_IMGUI_UI=OFF` to cut the compile
-time or drop the port entirely — then `src/imgui/` is not built and its headers are not exposed, so
-code using `f4cf::imgui` fails to **compile** rather than linking clean and mysteriously drawing
-nothing. Everything else, the text font included, still builds: `stb_truetype` is vendored rather
-than taken from the imgui port for exactly that reason.
+`imgui` with the `dx11-binding` feature, at 1.92.9 by an entry in its `overrides`, since the pinned
+baseline has an older one. A mod's own `vcpkg.json` needs both, as vcpkg reads the top-level
+project's manifest. Configure with `-DF4CF_WITH_IMGUI_UI=OFF` to cut the compile time or drop the
+port entirely — then `src/imgui/` is not built and its headers are not exposed, so code using
+`f4cf::imgui` fails to **compile** rather than linking clean and mysteriously drawing nothing.
+Everything else, the text font included, still builds: `stb_truetype` is vendored rather than taken
+from the imgui port for exactly that reason.
 
 ## Provenance
 
