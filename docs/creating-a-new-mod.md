@@ -467,7 +467,7 @@ That's a complete mod: it builds, loads, responds to input, and reads live confi
 | ------- | ------------------ |
 | CMake: `F4VR-CommonFramework path not found` | Submodules not fetched — run `git submodule update --init --recursive`. |
 | CMake: `VCPKG_ROOT is not set` | Set the `VCPKG_ROOT` env var to your vcpkg checkout, then re-open the terminal. |
-| vcpkg fails building CommonLibF4VR | Keep the `"builtin-baseline"` in `vcpkg.json` (`b4a3d89…`) — newer baselines break the build. |
+| vcpkg fails building CommonLibF4VR | Keep the `"builtin-baseline"` in `vcpkg.json` (`5cd4931…`), the one the framework is built and tested against. |
 | Build succeeds, DLL never loads in-game | You're launching the flatscreen `Fallout4.exe` or plain launcher — launch through **`f4sevr_loader.exe`**. Also check the DLL is under `Data/F4SE/Plugins/`. |
 | Loads (log appears) but no notification | Make sure a save is fully loaded (the `no player data` guard), and that you're pressing the *primary* (weapon-hand) trigger. |
 | Config edits don't apply | Edit the **live** copy under `Documents\My Games\Fallout4VR\Mods_Config\HelloVR\`, not `data/config/` in your repo. |

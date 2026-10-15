@@ -119,7 +119,7 @@ endif()
 
 # Bring in CLF4 (expects it to export CommonLibF4::CommonLibF4)
 add_subdirectory(${COMMON_LIB_F4VR_PATH_SELECTED} "CommonLibF4" EXCLUDE_FROM_ALL)
-# NOTE: Ensure your vcpkg manifest pins the CLF4-compatible baseline (e.g. "builtin-baseline": "b4a3d89125e45bc8f80fb94bef9761d4f4e14fb9")
+# NOTE: Ensure your vcpkg manifest pins the CLF4-compatible baseline (e.g. "builtin-baseline": "5cd4931b18d49c77074703cf293a7837ac7506fa")
 
 
 # >>> Version stamping
@@ -253,9 +253,9 @@ if(F4CF_WITH_IMGUI_UI)
 "
                         ">>   { \"name\": \"imgui\", \"features\": [ \"dx11-binding\" ] }
 "
-                        ">> and this to its overrides, as the layer needs Dear ImGui 1.92.9:
+                        ">> on a vcpkg baseline with Dear ImGui 1.92.9, which the layer needs, as the framework's is:
 "
-                        ">>   { \"name\": \"imgui\", \"version\": \"1.92.9\" }
+                        ">>   \"builtin-baseline\": \"5cd4931b18d49c77074703cf293a7837ac7506fa\"
 "
                         ">> or configure with -DF4CF_WITH_IMGUI_UI=OFF to build without the UI layer.")
   endif()
