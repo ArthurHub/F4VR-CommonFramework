@@ -5,6 +5,7 @@
 #include <cmath>
 
 #include <imgui_impl_dx11.h>
+#include <imgui_internal.h>
 
 #include "../common/MatrixUtils.h"
 #include "../f4vr/PlayerNodes.h"
@@ -433,15 +434,16 @@ namespace f4cf::imgui::internal
         ImGui::NewFrame();
         pointer().setWanted(io.WantCaptureMouse);
 
+        // ImGui's anti-aliasing fringe is one layout pixel; scaled by this it stays one atlas pixel instead of
+        // softening every edge by the atlas scale. NewFrame sets it to 1, and each window takes it as it begins,
+        // so set here it reaches every window of the frame, the popups the content opens too.
+        ImGui::GetDrawListSharedData()->InitialFringeScale = 1.0f / s_atlasScale;
+
         // no scrollbar: the content child can be given more room than the window, and a scrollbar is what
         // ImGui would otherwise answer that with
         constexpr ImGuiWindowFlags CANVAS_FLAGS = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse |
                                                   ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNav |
                                                   ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoScrollbar;
-
-        // ImGui's anti-aliasing fringe is one layout pixel; scaled by this it stays one atlas pixel
-        // instead of softening every edge by the atlas scale
-        const float fringeScale = 1.0f / s_atlasScale;
 
         for (const auto& entry : packed) {
             const auto& textColor = entry.canvas->textColor();
@@ -477,13 +479,11 @@ namespace f4cf::imgui::internal
             const bool windowOpen = ImGui::Begin(entry.canvas->name().c_str(), nullptr, CANVAS_FLAGS);
             ImGui::PopStyleVar(2);
             if (windowOpen) {
-                // ImGui draws a window's own background and border inside Begin, before its draw list
-                // can take the fringe scale, so the canvas draws them here instead - the same two
-                // calls. One radius rounds both, so no background shows past the border at a corner;
-                // taking off the inset puts the border's outer arc on the radius asked for. Clipped to
-                // the slot rather than the window, since half the stroke lies outside the window rect.
+                // The canvas draws the window's background and border itself. One radius rounds both, so
+                // no background shows past the border at a corner; taking off the inset puts the border's
+                // outer arc on the radius asked for. Clipped to the slot rather than the window, since half
+                // the stroke lies outside the window rect.
                 ImDrawList* drawList = ImGui::GetWindowDrawList();
-                drawList->_FringeScale = fringeScale;
                 const ImVec2 windowMin(windowX, windowY);
                 const ImVec2 windowMax(windowX + windowWidth, windowY + windowHeight);
                 const float rounding = (std::max)(0.0f, entry.canvas->cornerRadius() - halfBorder);
@@ -496,7 +496,6 @@ namespace f4cf::imgui::internal
                         windowMax,
                         ImGui::ColorConvertFloat4ToU32(ImVec4(borderColor.r, borderColor.g, borderColor.b, borderColor.a)),
                         rounding,
-                        0,
                         borderThickness);
                 }
                 drawList->PopClipRect();
@@ -526,8 +525,6 @@ namespace f4cf::imgui::internal
                         ImVec2(roomWidth, roomHeight),
                         ImGuiChildFlags_None,
                         ImGuiWindowFlags_NoBackground | (roomGiven ? ImGuiWindowFlags_NoScrollbar : 0))) {
-                    ImGui::GetWindowDrawList()->_FringeScale = fringeScale;
-
                     // the group's rectangle is everything the content laid out, which is what measures it;
                     // rounded up so the size it is given back never clips its last column of pixels
                     ImGui::BeginGroup();

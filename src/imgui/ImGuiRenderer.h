@@ -32,6 +32,6 @@ namespace f4cf::imgui::internal
          */
         void publish(RenderFrame&& frame);
 
-        void setImageRenderState(const ImDrawList* drawList, const ImDrawCmd* command);
+        void setSrgbImageShader(const ImDrawList* drawList, const ImDrawCmd* command);
     }
 }
