@@ -8,20 +8,6 @@
 namespace
 {
     /**
-     * Replace the content of a file. Opened so that nobody reads the file while it is written.
-     */
-    bool writeFile(const std::string& path, const std::string& content)
-    {
-        FILE* file = nullptr;
-        if (fopen_s(&file, path.c_str(), "wb") != 0 || !file) {
-            return false;
-        }
-
-        const bool written = std::fwrite(content.data(), 1, content.size(), file) == content.size();
-        return std::fclose(file) == 0 && written;
-    }
-
-    /**
      * The file's name, which names it in a parse error.
      */
     std::string fileNameOf(const std::string& path)
@@ -52,6 +38,20 @@ namespace f4cf::config
         const bool failed = std::ferror(file) != 0;
         std::fclose(file);
         return failed ? std::nullopt : std::optional{ std::move(content) };
+    }
+
+    /**
+     * Replace the content of a file. Opened so that nobody reads the file while it is written.
+     */
+    bool ConfigFile::writeFile(const std::string& path, const std::string& content)
+    {
+        FILE* file = nullptr;
+        if (fopen_s(&file, path.c_str(), "wb") != 0 || !file) {
+            return false;
+        }
+
+        const bool written = std::fwrite(content.data(), 1, content.size(), file) == content.size();
+        return std::fclose(file) == 0 && written;
     }
 
     /**

@@ -16,6 +16,12 @@ major version is `0`, a minor bump may break the API; the **Upgrading** notes sa
   editing, is logged with its line and what is wrong at it, and is never written over: the values loaded
   before it stay, and before any were the embedded default's apply. **Upgrading:**
   - Ship the default config as `<Mod>.toml` (embedded as RCDATA as before), and pass a `.toml` path.
+    A player's `<Mod>.ini` moves to it by itself: on a load with no `<Mod>.toml`, the INI beside it is
+    written as `<Mod>.toml` at version 0, each value read as the mod read it, by SimpleIni's getter of
+    the type the default has for the key, and is then updated as any older version. Ship the TOML at
+    `iVersion = 1` or above, and move what it changed from the INI (a renamed key, a string that is now
+    an array) in `updateConfigToLatestVersionCustom` from version 0. The INI is kept as
+    `<Mod>_backup_v<N>.ini`, and the version 0 file as `<Mod>_backup_v0.toml`.
   - `loadIniConfigInternal(const CSimpleIniA&)` is `loadConfigInternal(const toml::table&)`: read a value
     as `config[section][key].value_or(default)`, and pass the table to the readers
     (`getTransformValue(config, ...)`, `getInputBindingValue`, `loadWandActivationConfig`, ...).

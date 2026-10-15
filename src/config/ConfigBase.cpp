@@ -130,7 +130,8 @@ namespace f4cf
 
     /**
      * Load all config values.
-     * If the file doesn't exist it is created from the default embedded in the mod's DLL.
+     * If the file doesn't exist it is made from the mod's INI config beside it, see importIniConfig, and with no INI
+     * it is created from the default embedded in the mod's DLL.
      * If the file's version is older than the default's, the file is brought up to it, see updateConfigToLatestVersion.
      * A file that is not TOML is left as it is, for its user to fix: the values are the embedded default's until then.
      */
@@ -139,10 +140,11 @@ namespace f4cf
         F4CF_PERF_FUNCTION();
 
         // create the file if it doesn't exist
+        importIniConfig();
         common::createFileFromResourceIfNotExists(_configFilePath, _module, _defaultConfigEmbeddedResourceId, true);
 
         if (loadConfigValues()) {
-            const auto latestVersion = loadEmbeddedDefault()[CONFIG_SECTION_DEBUG]["iVersion"].value_or(0);
+            const auto latestVersion = loadEmbeddedDefault()[config::VERSION_SECTION][config::VERSION_KEY].value_or(0);
             if (_configVersion < latestVersion) {
                 logger::info("Updating config version {} -> {}", _configVersion, latestVersion);
                 updateConfigToLatestVersion(_configVersion, latestVersion);
@@ -161,7 +163,7 @@ namespace f4cf
     void ConfigBase::loadDebugSection(const toml::table& config)
     {
         const auto section = config[CONFIG_SECTION_DEBUG];
-        _configVersion = section["iVersion"].value_or(0);
+        _configVersion = config[config::VERSION_SECTION][config::VERSION_KEY].value_or(0);
         _logLevel = section["iLogLevel"].value_or(2);
         _logPattern = section["sLogPattern"].value_or(std::string("%H:%M:%S.%e %l [%-20!k] %v"));
         debug.load(config);
@@ -543,13 +545,13 @@ namespace f4cf
         }
 
         // set the version to latest
-        latest.set({ CONFIG_SECTION_DEBUG, "iVersion" }, latestVersion);
+        latest.set({ config::VERSION_SECTION, config::VERSION_KEY }, latestVersion);
 
         updateConfigToLatestVersionCustom(currentVersion, latestVersion, *old, latest);
 
         // backup the old file before overwriting
         const fs::path path(_configFilePath);
-        const auto backup = path.parent_path() / std::format("{}_backup_v{}{}", path.stem().string(), currentVersion, path.extension().string());
+        const auto backup = config::backupPathOf(path, currentVersion);
         std::error_code renameError;
         fs::rename(path, backup, renameError);
         if (renameError) {
@@ -562,6 +564,37 @@ namespace f4cf
         }
 
         logger::info("Config updated successfully");
+    }
+
+    /**
+     * Make the config file from the mod's INI config of the same name beside it, when there is the INI and no config
+     * file, so a mod that moves its config from INI to TOML keeps its players' values. The file is the INI as TOML at
+     * version 0, see config::importIniFile, and the load then updates it as any file of an older version, see
+     * updateConfigToLatestVersion: the mod's own migration from version 0 is where it moves what its TOML config
+     * changed from the INI, and the version 0 file is kept as that update's backup, to see what the INI was read as.
+     * An INI that can't be imported is left as it is, and the caller creates the file from the default.
+     */
+    void ConfigBase::importIniConfig()
+    {
+        const fs::path path(_configFilePath);
+        const auto iniPath = fs::path(path).replace_extension(".ini");
+        std::error_code ec;
+        if (iniPath == path || fs::exists(path, ec) || !fs::exists(iniPath, ec)) {
+            return;
+        }
+
+        F4CF_PERF_FUNCTION();
+        const auto iniName = iniPath.filename().string();
+        logger::info("Config: importing {} into {}", iniName, fileName());
+        const auto imported = config::importIniFile(iniPath, path, loadEmbeddedDefault());
+        if (!imported) {
+            logger::error("Config: {}, the config starts from its default", imported.error());
+            return;
+        }
+        if (!imported->backupError.empty()) {
+            logger::warn("Config: failed to keep '{}' as '{}': {}", iniPath.string(), imported->backup.string(), imported->backupError);
+        }
+        logger::info("Config: imported {} of version {} as {} of version 0", iniName, imported->version, fileName());
     }
 
     /**
