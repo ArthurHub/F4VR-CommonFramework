@@ -801,7 +801,8 @@ namespace f4cf::devbench
             {
                 for (const auto& entry : _actions) {
                     if (const auto it = entry.action.arguments.find(name); it != entry.action.arguments.end()) {
-                        return *it;
+                        // constructed explicitly: json converts to std::optional<json> by itself, which makes a plain `return *it` ambiguous
+                        return std::optional<json>(*it);
                     }
                 }
                 return std::nullopt;

@@ -407,4 +407,4 @@ F4VR/
 | `src/render/` | Shared OpenVR Submit hook, primitive/text/image renderers, and the scene-depth capture that occludes overlays behind the world (design + the `sSceneDepthStrategy` key: [`docs/tech/scene-depth-occlusion.md`](docs/tech/scene-depth-occlusion.md)) |
 | `src/imgui/` | Dear ImGui canvases + `UIImGuiPanel`; compiled out by `F4CF_WITH_IMGUI_UI=OFF` |
 | `CMakePresets.json` | VS2022/VS2026 preset definitions |
-| `vcpkg.json` | Dependency manifest (spdlog, xbyak, nlohmann-json, simpleini, tomlplusplus, filewatch, cpptrace, catch2 for the tests, imgui with `dx11-binding`, at 1.92.9 by an `overrides` entry that a mod's manifest repeats) |
+| `vcpkg.json` | Dependency manifest (spdlog, xbyak, nlohmann-json, simpleini, tomlplusplus, filewatch, cpptrace, catch2 for the tests, imgui with `dx11-binding`, at 1.92.9 from its `builtin-baseline`, which a mod's manifest repeats) |

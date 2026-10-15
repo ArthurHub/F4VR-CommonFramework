@@ -182,12 +182,21 @@ major version is `0`, a minor bump may break the API; the **Upgrading** notes sa
   time it is drawn, at the supersample factor, where it used to resample one raster of the default
   size. Content pushes a size with `ImGui::PushFont(nullptr, size)`. The font texture ImGui keeps
   growing is created on the game thread and written by the render thread before each frame it draws.
+- **vcpkg baseline of 2026-09-09**: the framework and the mod template pin vcpkg `5cd4931b`, with
+  fmt 12, spdlog 1.17, nlohmann-json 3.12, xbyak 7.28, cpptrace 1.0.4 and Dear ImGui 1.92.9, and
+  pin no version in `overrides`. A mod still on the old `b4a3d89` baseline keeps building with its
+  `overrides` of `cpptrace` 1.0.0 and `imgui` 1.92.9, and moves to the new one when it chooses.
 
 **Upgrading**
 
-- The ImGui layer needs Dear ImGui 1.92.9, which the pinned vcpkg baseline does not have: add
-  `{ "name": "imgui", "version": "1.92.9" }` to the `overrides` of the mod's `vcpkg.json`, as the
-  template has it. A build without it stops with an error that says so.
+- A mod that moves its `builtin-baseline` to `5cd4931b` may need two changes in its own code. fmt 12
+  refuses `%z` and `%Z` for a `std::tm` at compile time (MSVC's has no `tm_gmtoff`): format a local
+  time with its offset through `common::toDateTimeString`. nlohmann-json 3.12 converts a `json` to
+  `std::optional<json>` by itself, so returning a `json` where an optional is expected is ambiguous:
+  construct it, `std::optional<json>(value)`.
+- The ImGui layer needs Dear ImGui 1.92.9: move the mod's `builtin-baseline` to `5cd4931b`, as the
+  template has it, or on the old `b4a3d89` add `{ "name": "imgui", "version": "1.92.9" }` to its
+  `overrides`.
 - ImGui's own API changed between 1.90 and 1.92 (its
   [changelog](https://github.com/ocornut/imgui/blob/master/docs/CHANGELOG.txt) has each change). For
   content code the usual ones: `ImGui::SetWindowFontScale(f)` becomes

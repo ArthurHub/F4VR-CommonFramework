@@ -414,8 +414,8 @@ imgui::internal::onFrameEnd()                   draw callback (DRAW_ORDER_PANELS
 ## Building without it
 
 `F4CF_WITH_IMGUI_UI` (default `ON`) compiles the layer into the archive; the vcpkg manifest pulls
-`imgui` with the `dx11-binding` feature, at 1.92.9 by an entry in its `overrides`, since the pinned
-baseline has an older one. A mod's own `vcpkg.json` needs both, as vcpkg reads the top-level
+`imgui` with the `dx11-binding` feature, at 1.92.9, the version of its `builtin-baseline`. A mod's
+own `vcpkg.json` needs both, as vcpkg reads the top-level
 project's manifest. Configure with `-DF4CF_WITH_IMGUI_UI=OFF` to cut the compile time or drop the
 port entirely — then `src/imgui/` is not built and its headers are not exposed, so code using
 `f4cf::imgui` fails to **compile** rather than linking clean and mysteriously drawing nothing.

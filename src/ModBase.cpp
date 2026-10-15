@@ -1,9 +1,9 @@
 #include "ModBase.h"
 
 #include <cpptrace/from_current.hpp>
-#include <fmt/chrono.h>
 
 #include "MainLoopHook.h"
+#include "common/CommonUtils.h"
 #include "debug/DebugDraw.h"
 #include "devbench/DevBench.h"
 #include "f4vr/DebugDump.h"
@@ -287,13 +287,12 @@ namespace f4cf
     {
         const auto game = REL::Module::IsVR() ? "Fallout4VR" : "Fallout4";
         const auto runtimeVer = REL::Module::get().version();
-        const auto dateTime = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
-        logger::info("Starting '{}' v{} ; {} v{} ; {:%Y-%m-%d %H:%M:%S%Ez} ; BaseAddress: 0x{:X}",
+        logger::info("Starting '{}' v{} ; {} v{} ; {} ; BaseAddress: 0x{:X}",
             _settings.name,
             _settings.version,
             game,
             runtimeVer.string(),
-            fmt::localtime(dateTime),
+            common::toDateTimeString(std::chrono::system_clock::now(), "%Y-%m-%d %H:%M:%S%z"),
             REL::Module::get().base());
     }
 
