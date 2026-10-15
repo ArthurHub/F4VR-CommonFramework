@@ -38,10 +38,10 @@ namespace
     }
 
     /**
-     * Adds a face to the current ImGui context's atlas, rasterized at rasterSize. ImGui's embedded bitmap
-     * font stands in for one ImGui will not take, so every face keeps its place in the atlas.
+     * Adds a face to the current ImGui context's atlas, at its default size. ImGui's embedded font stands
+     * in for one ImGui will not take, so every face keeps its place in the atlas.
      */
-    ImFont* addFace(const FontStyle style, const float rasterSize)
+    ImFont* addFace(const FontStyle style, const float sizePixels)
     {
         auto& io = ImGui::GetIO();
         const auto& file = faceFile(style);
@@ -50,14 +50,14 @@ namespace
         // the bytes live for the whole process, so the atlas must not free them - and with ownership
         // off, ImGui only reads through the mutable pointer it asks for
         config.FontDataOwnedByAtlas = false;
-        if (ImFont* font = io.Fonts->AddFontFromMemoryTTF(const_cast<unsigned char*>(bytes.data()), static_cast<int>(bytes.size()), rasterSize, &config)) {
+        if (ImFont* font = io.Fonts->AddFontFromMemoryTTF(const_cast<unsigned char*>(bytes.data()), static_cast<int>(bytes.size()), sizePixels, &config)) {
             return font;
         }
 
-        logger::warn("Canvas font: ImGui would not take {}; falling back to its embedded bitmap font - canvases will look pixelated", file.source);
+        logger::warn("Canvas font: ImGui would not take {}; falling back to its embedded font", file.source);
         ImFontConfig fallback;
-        fallback.SizePixels = rasterSize;
-        return io.Fonts->AddFontDefault(&fallback);
+        fallback.SizePixels = sizePixels;
+        return io.Fonts->AddFontDefaultVector(&fallback);
     }
 }
 
@@ -80,23 +80,17 @@ namespace f4cf::imgui::internal
     /**
      * Loads the canvas font into the current ImGui context's atlas: its regular face from the bytes the
      * primitive renderer draws with, so a UIImGuiPanel and a UITextPanel share a typeface, then its bold
-     * and italic, in the order of FontStyle. sizePixels is clamped as setFontSizePixels clamps it, and
-     * rasterized rasterScale times larger: the caller sets io.FontGlobalScale to its inverse.
+     * and italic, in the order of FontStyle. sizePixels, clamped as setFontSizePixels clamps it, is the
+     * size text is drawn at by default; ImGui rasterizes each size it draws as it is first drawn.
      * Returns the regular face, which is ImGui's default font.
      */
-    ImFont* loadCanvasFont(const float sizePixels, const float rasterScale)
+    ImFont* loadCanvasFont(const float sizePixels)
     {
         const float size = std::clamp(sizePixels, MIN_FONT_SIZE_PIXELS, MAX_FONT_SIZE_PIXELS);
-        const float rasterSize = size * (std::max)(1.0f, rasterScale);
-        ImFont* regular = addFace(FontStyle::Regular, rasterSize);
-        addFace(FontStyle::Bold, rasterSize);
-        addFace(FontStyle::Italic, rasterSize);
-        logger::info("Canvas font: {}, {} and {} at {:.0f}px, rasterized at {:.0f}px",
-            faceFile(FontStyle::Regular).source,
-            faceFile(FontStyle::Bold).source,
-            faceFile(FontStyle::Italic).source,
-            size,
-            rasterSize);
+        ImFont* regular = addFace(FontStyle::Regular, size);
+        addFace(FontStyle::Bold, size);
+        addFace(FontStyle::Italic, size);
+        logger::info("Canvas font: {}, {} and {} at {:.0f}px", faceFile(FontStyle::Regular).source, faceFile(FontStyle::Bold).source, faceFile(FontStyle::Italic).source, size);
         return regular;
     }
 }

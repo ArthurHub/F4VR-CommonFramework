@@ -253,6 +253,10 @@ if(F4CF_WITH_IMGUI_UI)
 "
                         ">>   { \"name\": \"imgui\", \"features\": [ \"dx11-binding\" ] }
 "
+                        ">> and this to its overrides, as the layer needs Dear ImGui 1.92.9:
+"
+                        ">>   { \"name\": \"imgui\", \"version\": \"1.92.9\" }
+"
                         ">> or configure with -DF4CF_WITH_IMGUI_UI=OFF to build without the UI layer.")
   endif()
   # PUBLIC: mods write their own ImGui calls in their content callbacks, so they need the headers too.

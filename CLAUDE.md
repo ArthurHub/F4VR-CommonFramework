@@ -171,6 +171,10 @@ and composited as one quad, so N canvases cost one ImGui frame and one draw call
 
 - Content and placement callbacks run on the **game thread**; the draw data is cloned across to the
   render thread, since ImGui recycles its own buffers on the next `NewFrame`.
+- **ImGui's font texture is answered on the game thread** (`ImGuiTextures.cpp`): created there through
+  the device when ImGui asks, and the glyphs ImGui adds for a new size copied for the render thread to
+  write before it draws. Text of any size is rasterized at that size, at the supersample factor
+  (`io.DisplayFramebufferScale`); content pushes a size with `ImGui::PushFont(nullptr, size)`.
 - **Display only until `setInteractive(true)`** — then a wand's ray is ImGui's mouse on the canvas and
   its trigger the left button (`imgui::pointer()` in `ImGuiPointer.h`: `state`, `setHands`,
   `setStyle`). One hand owns the pointer at a time, and while it is on a canvas its ray and a mark
@@ -403,4 +407,4 @@ F4VR/
 | `src/render/` | Shared OpenVR Submit hook, primitive/text/image renderers, and the scene-depth capture that occludes overlays behind the world (design + the `sSceneDepthStrategy` key: [`docs/tech/scene-depth-occlusion.md`](docs/tech/scene-depth-occlusion.md)) |
 | `src/imgui/` | Dear ImGui canvases + `UIImGuiPanel`; compiled out by `F4CF_WITH_IMGUI_UI=OFF` |
 | `CMakePresets.json` | VS2022/VS2026 preset definitions |
-| `vcpkg.json` | Dependency manifest (spdlog, xbyak, nlohmann-json, simpleini, tomlplusplus, filewatch, cpptrace, catch2 for the tests, imgui with `dx11-binding`) |
+| `vcpkg.json` | Dependency manifest (spdlog, xbyak, nlohmann-json, simpleini, tomlplusplus, filewatch, cpptrace, catch2 for the tests, imgui with `dx11-binding`, at 1.92.9 by an `overrides` entry that a mod's manifest repeats) |

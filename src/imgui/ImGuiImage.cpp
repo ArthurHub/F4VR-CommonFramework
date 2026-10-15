@@ -46,7 +46,7 @@ namespace f4cf::imgui
         // the callback's data is only whether the view decodes sRGB
         static int srgbView = 0;
         drawList->AddCallback(&renderer::setImageRenderState, srgb ? &srgbView : nullptr);
-        drawList->AddImage(view.Get(), min, max, ImVec2(0.0f, 0.0f), ImVec2(1.0f, 1.0f), tint);
+        drawList->AddImage(static_cast<ImTextureID>(reinterpret_cast<std::uintptr_t>(view.Get())), min, max, ImVec2(0.0f, 0.0f), ImVec2(1.0f, 1.0f), tint);
         drawList->AddCallback(ImDrawCallback_ResetRenderState, nullptr);
         s_frameTextures.push_back(std::move(view));
     }

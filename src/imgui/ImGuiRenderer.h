@@ -27,7 +27,8 @@ namespace f4cf::imgui::internal
 
         /**
          * Hand this frame's ImGui pixels and quads to the render thread (game thread). An empty
-         * frame goes dormant. The texture the frame names is created when its first frame is drawn.
+         * frame goes dormant, and its texture writes wait for the next frame that is drawn. The
+         * texture the frame names is created when its first frame is drawn.
          */
         void publish(RenderFrame&& frame);
 

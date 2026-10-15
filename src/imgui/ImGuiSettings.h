@@ -21,10 +21,10 @@ namespace f4cf::imgui
      * MAX_FONT_SIZE_PIXELS. The glyphs are rasterized at the supersample factor times this, so they
      * keep their detail in the supersampled atlas.
      *
-     * Process-wide, not a property of a canvas: there is one font, built when the first canvas draws,
-     * so set this before then - later calls do nothing. A canvas that wants text of its own size can
-     * push a scale from inside its content callback with ImGui::SetWindowFontScale, which resamples
-     * the raster rather than rebuilding it.
+     * Process-wide, not a property of a canvas: there is one font, loaded when the first canvas draws,
+     * so set this before then - later calls do nothing. A canvas that wants text of another size pushes
+     * it from inside its content callback with ImGui::PushFont(nullptr, size): ImGui rasterizes each
+     * size it draws, so text of any size is as sharp.
      *
      * For a UIImGuiPanel this is exactly how big the text is at scale 1, 48px being one vrui unit to
      * the em (CANVAS_PIXELS_PER_UNIT); a container's scale enlarges it with the rest of the panel.
@@ -41,8 +41,8 @@ namespace f4cf::imgui
      * 1.5, 16MB at 2 - and past the headset's own resolution a larger factor adds nothing visible.
      * The texture of a dedicated canvas is the canvas's own pixels times this on each side.
      *
-     * Process-wide, and read when the first canvas draws, since the atlas texture and the font raster
-     * are built from it then: set it before that - later calls do nothing.
+     * Process-wide, and read when the first canvas draws, since the atlas texture is built from it then
+     * and ImGui is set to rasterize at it: set it before that - later calls do nothing.
      */
     void setSupersample(float factor);
 }

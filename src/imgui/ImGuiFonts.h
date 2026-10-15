@@ -22,5 +22,5 @@ namespace f4cf::imgui
 
 namespace f4cf::imgui::internal
 {
-    ImFont* loadCanvasFont(float sizePixels, float rasterScale);
+    ImFont* loadCanvasFont(float sizePixels);
 }

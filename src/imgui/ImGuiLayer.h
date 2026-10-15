@@ -7,6 +7,7 @@
 
 #include "../render/Texture.h"
 #include "ImGuiCanvas.h"
+#include "ImGuiTextures.h"
 
 namespace f4cf::imgui::internal
 {
@@ -31,16 +32,11 @@ namespace f4cf::imgui::internal
          */
         void copyFrom(const ImDrawData& source);
 
-        /**
-         * Multiply every position in the copy by `factor` - vertices, clip rects and the display
-         * rect - so a frame laid out at 1x rasterizes at that multiple.
-         */
-        void scale(float factor);
-
         ImDrawData drawData{};
 
-        // The views of the images in the draw data, which names each by its pointer alone. Held here, a
-        // texture the mod drops is alive until the last frame that draws it is drawn and let go.
+        // The views of the textures in the draw data, which names each by its pointer alone: the images, and
+        // ImGui's font texture. Held here, a texture that is dropped is alive until the last frame that draws
+        // it is drawn and let go.
         std::vector<render::TextureView> textures;
     };
 
@@ -83,6 +79,10 @@ namespace f4cf::imgui::internal
         bool dedicated = false;
         int textureWidth = 0;
         int textureHeight = 0;
+
+        // The parts of ImGui's textures to write before the frame is drawn, in order. A frame that replaces
+        // another before it is drawn takes the other's first.
+        std::vector<TextureWrite> textureWrites;
 
         bool empty() const
         {
