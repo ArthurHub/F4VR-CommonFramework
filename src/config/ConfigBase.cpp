@@ -20,6 +20,22 @@ namespace f4cf
     }
 
     /**
+     * Move the config to another file and load it, for a mod that changes its config file at runtime, as FRIK does
+     * for Fallout London VR. The watch of the file before stops, and the new file is loaded as load() loads one:
+     * created from the embedded default, or imported from its INI, when it does not exist, and updated when it is
+     * of an older version, and then watched. Its values are not merged over the file before: a key it does not have
+     * is the mod's default. The session overrides stay, and apply over it. Call it on the game thread.
+     */
+    void ConfigBase::switchConfigFile(const std::string& configFilePath)
+    {
+        logger::info("Config: switch to '{}'", configFilePath);
+        stopConfigFileWatch();
+        _configFilePath = configFilePath;
+        common::createDirDeep(_configFilePath);
+        loadConfig();
+    }
+
+    /**
      * Re-read all values from the file on disk. Skips version migration and watcher setup so it's safe to call
      * repeatedly at runtime (e.g. from the DebugAdjuster reload action).
      */
@@ -626,32 +642,50 @@ namespace f4cf
      * Watch the config file and reload the config when it changes.
      * One change fires 3-5 events, and the mod's own save fires them too. Every event reads the file, and it is
      * loaded only when it holds something else than the mod last loaded or saved, see config::ConfigFile.
+     * The watch is made on a thread of its own, as making it here deadlocks. That thread takes the file's path now,
+     * and drops the watch it makes when a stop came before it, so a switch of the file right after a load does not
+     * leave a watch of a file the config no longer uses. A file that can't be watched is logged, and not reloaded.
      */
     void ConfigBase::startConfigFileWatch()
     {
-        if (_configFileWatch) {
+        std::lock_guard lock(_watchMutex);
+        if (_watchStarted) {
             return;
         }
-        // use thread as otherwise there is a deadlock
-        std::thread([this]() {
-            logger::info("Start file watch in config '{}'", _configFilePath.c_str());
-            _configFileWatch = std::make_unique<filewatch::FileWatch<std::string>>(_configFilePath, [this](const std::string&, const filewatch::Event changeType) {
-                if (changeType != filewatch::Event::modified) {
-                    return;
-                }
+        _watchStarted = true;
+        const auto generation = ++_watchGeneration;
 
-                waitForConfigFileWriteToEnd();
+        std::thread([this, path = _configFilePath, generation]() {
+            logger::info("Start file watch in config '{}'", path);
+            std::unique_ptr<filewatch::FileWatch<std::string>> watch;
+            try {
+                watch = std::make_unique<filewatch::FileWatch<std::string>>(path, [this](const std::string&, const filewatch::Event changeType) {
+                    if (changeType != filewatch::Event::modified) {
+                        return;
+                    }
 
-                if (!loadConfigValues(config::ConfigFile::Source::ChangedFile)) {
-                    logger::debug("Config file event: nothing new loaded");
-                    return;
-                }
+                    waitForConfigFileWriteToEnd();
 
-                // the values are loaded, and the subscribers are called at the start of the next frame
-                devbench::emit("config.reloaded", [&] {
-                    return nlohmann::json{ { "file", fileName() }, { "trigger", "file" } };
+                    if (!loadConfigValues(config::ConfigFile::Source::ChangedFile)) {
+                        logger::debug("Config file event: nothing new loaded");
+                        return;
+                    }
+
+                    // the values are loaded, and the subscribers are called at the start of the next frame
+                    devbench::emit("config.reloaded", [&] {
+                        return nlohmann::json{ { "file", fileName() }, { "trigger", "file" } };
+                    });
                 });
-            });
+            } catch (const std::exception& e) {
+                logger::error("Config: failed to watch '{}', a change of it is not loaded: {}", path, e.what());
+                return;
+            }
+
+            // a watch that a stop overtook is destroyed after the lock is released, as it joins its own thread
+            std::lock_guard watchLock(_watchMutex);
+            if (generation == _watchGeneration) {
+                _configFileWatch = std::move(watch);
+            }
         }).detach();
     }
 
@@ -674,11 +708,16 @@ namespace f4cf
     }
 
     /**
-     * Stop current file watch.
+     * Stop the file watch, and a start of it whose watch is not made yet, see startConfigFileWatch. The watch is
+     * destroyed out of the lock, as it joins its thread, which may be in a load.
      */
     void ConfigBase::stopConfigFileWatch()
     {
         logger::info("Stop current file watch in config");
-        _configFileWatch.reset();
+        std::unique_ptr<filewatch::FileWatch<std::string>> watch;
+        std::lock_guard lock(_watchMutex);
+        ++_watchGeneration;
+        _watchStarted = false;
+        watch = std::move(_configFileWatch);
     }
 }

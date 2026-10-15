@@ -52,6 +52,8 @@ namespace f4cf
             return _configFilePath;
         }
 
+        void switchConfigFile(const std::string& configFilePath);
+
         void applyConfigWithOverride(const char* section, const char* key, const char* value);
 
         RE::NiTransform readTransformValue(const char* section, const char* key, const RE::NiTransform& defaultValue) const;
@@ -119,17 +121,13 @@ namespace f4cf
         virtual void updateConfigToLatestVersionCustom(int /*currentVersion*/, int /*latestVersion*/, const toml::table& /*old*/, common::TomlEditor& /*latest*/) const
         {}
 
-        void stopConfigFileWatch();
-
         // name of the module DLL to read resources from
         std::string _module;
 
-        // location of the config file on disk
-        // TODO: a switchConfigFile(path) for a mod that moves to another file at runtime (FRIK's Fallout London VR
-        // config), in place of stopConfigFileWatch, setting this, and loadConfig.
+    private:
+        // location of the config file on disk, see switchConfigFile
         std::string _configFilePath;
 
-    private:
         // resource id of the default config, embedded in the module
         WORD _defaultConfigEmbeddedResourceId;
 
@@ -154,10 +152,18 @@ namespace f4cf
         void updateConfigToLatestVersion(int currentVersion, int latestVersion);
         void importIniConfig();
         void startConfigFileWatch();
+        void stopConfigFileWatch();
         void waitForConfigFileWriteToEnd() const;
 
-        // filesystem watch for changes to the config file to have live reload
+        // filesystem watch for changes to the config file to have live reload, made on a thread of its own, see
+        // startConfigFileWatch. Under _watchMutex.
         std::unique_ptr<filewatch::FileWatch<std::string>> _configFileWatch;
+
+        // Counts the starts and stops of the watch: a watch made after a stop, or after a later start, is dropped.
+        // Under _watchMutex, as whether the watch is started, made yet or not.
+        std::uint64_t _watchGeneration = 0;
+        bool _watchStarted = false;
+        std::mutex _watchMutex;
 
         // The config file as the mod last loaded or saved it. By it the file watch tells a change by someone else
         // from the mod's own save, and from one more event of a write that is already loaded.
