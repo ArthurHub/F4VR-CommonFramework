@@ -543,7 +543,8 @@ namespace f4cf::devbench
                               handler(&Tool::readConfig) },
                     true);
                 addAction({ "set",
-                              "override one config value for this session without writing the file; the mod reloads its config at once",
+                              "override one config value for this session without writing the file, in the type the file has for the key; "
+                              "the mod reloads its config at once. A value not of that type is an error and sets nothing",
                               { { "section", section }, { "key", key }, { "value", argument("string", "set: the new value") } },
                               handler(&Tool::setConfig) },
                     true);
@@ -649,8 +650,18 @@ namespace f4cf::devbench
                 }
                 const auto value = argString(args, "value");
                 // rewrites every typed config member, which the mod reads mid-frame: the reason set is a game-thread action
-                config().setConfigOverride(OVERRIDE_OWNER, section.c_str(), key.c_str(), config::ConfigValue(value));
-                return { { "section", section }, { "key", key }, { "value", value }, { "note", "session override; the file is unchanged" } };
+                if (!config().setConfigOverride(OVERRIDE_OWNER, section.c_str(), key.c_str(), config::ConfigValue(value))) {
+                    throw std::invalid_argument(std::format("'{}' is not a value of the type {}.{} has in the config file, which has {}: nothing is set",
+                        value,
+                        section,
+                        key,
+                        config().getConfigValue(section.c_str(), key.c_str())));
+                }
+                // the value as it applies in the file's type: "no" over a bool is "false"
+                return { { "section", section },
+                    { "key", key },
+                    { "value", config().getConfigValue(section.c_str(), key.c_str()) },
+                    { "note", "session override; the file is unchanged" } };
             }
 
             /**

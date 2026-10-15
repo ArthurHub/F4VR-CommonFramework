@@ -263,11 +263,13 @@ TEST_CASE("INI as TOML: a text that is not a value of the type is a string, and 
     REQUIRE(latest.text() == SHIPPED_TOML);
 }
 
-TEST_CASE("INI as TOML: an empty text that is not a value of the type is left out, and an empty string stays")
+TEST_CASE("INI as TOML: an empty text that is not a value of the type, or of a key the TOML config does not have, is left out")
 {
-    const auto table = toml::parse(asToml("[Main]\nfScale =\nsName =\n"));
+    const auto table = toml::parse(asToml("[Main]\nfScale =\nsName =\ntExtra =\n"));
 
     REQUIRE_FALSE(table["Main"]["fScale"]);
+    REQUIRE_FALSE(table["Main"]["tExtra"]);
+    // an empty string is a string's value
     REQUIRE(table["Main"]["sName"].value<std::string>() == "");
 }
 

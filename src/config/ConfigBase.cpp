@@ -283,34 +283,52 @@ namespace f4cf
 
     /**
      * Override the value of a section/key in memory for the rest of the session, and reload the config so the
-     * members have it. It is applied again on every load and never written to disk. A string value is taken in the
-     * type the file has for the key, see config::applyOverride.
+     * members have it. It is applied again on every load and never written to disk. The value is taken in the type
+     * the file has for the key, and kept as it applies, see config::appliedText: "no" over a bool is "false", which
+     * getConfigValue and getConfigOverrides then give. A value that is not of the type is refused, and nothing is set.
      * `owner` is the name of who sets it. An owner sets and clears only its own overrides, and when two override
      * the same key the one set last applies, see config::Overrides.
+     * Returns whether it is set.
      */
-    void ConfigBase::setConfigOverride(const std::string& owner, const char* section, const char* key, const config::ConfigValue& value)
+    bool ConfigBase::setConfigOverride(const std::string& owner, const char* section, const char* key, const config::ConfigValue& value)
     {
-        setConfigOverrides(owner, { config::ConfigEntry{ section, key, value } });
+        return setConfigOverrides(owner, { config::ConfigEntry{ section, key, value } });
     }
 
     /**
-     * Set several session overrides of one owner with one reload of the config, see setConfigOverride.
+     * Set several session overrides of one owner with one reload of the config, see setConfigOverride. When one of
+     * them is not of the type the file has for its key, none is set, and it returns false.
      * The reload reads no disk, so a value can be set many times a second while it is previewed. For that reason
      * only a key the owner did not override before is logged at the info level and is a devbench event.
      */
-    void ConfigBase::setConfigOverrides(const std::string& owner, const std::vector<config::ConfigEntry>& overrides)
+    bool ConfigBase::setConfigOverrides(const std::string& owner, const std::vector<config::ConfigEntry>& overrides)
     {
         if (overrides.empty()) {
-            return;
+            return true;
+        }
+
+        // each value as it applies over the file's, the form it is kept and read back in; a file that can't be read
+        // has no type to check a value against
+        toml::table kept;
+        _configFile.read(_configFilePath, kept);
+        std::vector<config::ConfigEntry> applied;
+        applied.reserve(overrides.size());
+        for (const auto& [section, key, value] : overrides) {
+            auto text = config::appliedText(kept[section][key].node(), value.toString());
+            if (!text) {
+                logger::warn("Config: '{}' session override \"{}.{} = {}\" refused, the file's value for the key is of another type", owner, section, key, value.toString());
+                return false;
+            }
+            applied.push_back({ section, key, std::move(*text) });
         }
 
         // the ones for a key that the owner did not override before this call
-        const auto added = _overrides.set(owner, overrides);
+        const auto added = _overrides.set(owner, applied);
         for (const auto& entry : added) {
             logger::info("Config: '{}' set session override \"{}.{} = {}\"", owner, entry.section, entry.key, entry.value);
         }
         if (logger::isDebugEnabled()) {
-            for (const auto& entry : overrides) {
+            for (const auto& entry : applied) {
                 logger::debug("Config: '{}' session override \"{}.{} = {}\"", owner, entry.section, entry.key, entry.value.toString());
             }
         }
@@ -322,6 +340,7 @@ namespace f4cf
                 return nlohmann::json{ { "section", entry.section }, { "key", entry.key }, { "value", entry.value }, { "owner", owner } };
             });
         }
+        return true;
     }
 
     /**
@@ -433,7 +452,8 @@ namespace f4cf
 
     /**
      * Save values of any sections in a single read and write of the file, see common::TomlEditor: only the values
-     * change in it, and its comments and layout stay, and the file is not written when it already holds them.
+     * change in it, and its comments and layout stay. Only a value the file does not hold yet is written and logged,
+     * and the file is not written when it holds them all.
      * Every save routes through here, so this is the one place that writes the file. A string value is written in the
      * type the file has for the key, see config::ConfigValue::toTomlLike. A file that is not TOML is not written, so
      * a person in the middle of editing it does not lose their edit.
@@ -454,12 +474,17 @@ namespace f4cf
 
         std::vector<common::TomlEditor::Edit> edits;
         for (const auto& [section, key, value] : values) {
-            auto tomlValue = value.toTomlLike(editor.table()[section][key].node());
+            const auto* existing = editor.table()[section][key].node();
+            auto tomlValue = value.toTomlLike(existing);
             if (!tomlValue) {
                 logger::warn("Config: not saved \"{}.{} = {}\", the file's value for the key is of another type", section, key, value.toString());
                 continue;
             }
-            logger::info("Config: Saving \"{}.{} = {}\"", section, key, value.toString());
+            // a value the file already holds is not written, and not logged
+            if (existing && common::TomlEditor::Value(*existing).text() == tomlValue->text()) {
+                continue;
+            }
+            logger::info("Config: Saving \"{}.{} = {}\"", section, key, tomlValue->text());
             edits.push_back({ { section, key }, std::move(*tomlValue) });
         }
         if (!editor.set(edits)) {

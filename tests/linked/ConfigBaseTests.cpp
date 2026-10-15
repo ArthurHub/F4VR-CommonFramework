@@ -132,12 +132,26 @@ TEST_CASE("ConfigBase: a session override is in the loaded values and not in the
         REQUIRE(config.scale == 2.5f);
         REQUIRE(fileValue(configPath(folder), MAIN, "fScale") == "3.0");
     }
-    SECTION("given as text, in the type of the file's value")
+    SECTION("given as text, in the type of the file's value, and read back as it applies")
     {
-        config.setConfigOverride("tests", MAIN, "iMode", "7");
+        REQUIRE(config.setConfigOverride("tests", MAIN, "iMode", "7"));
+        REQUIRE(config.setConfigOverride("tests", MAIN, "fScale", "3"));
 
         REQUIRE(config.mode == 7);
         REQUIRE(config.getConfigValue(MAIN, "iMode") == "7");
+        REQUIRE(config.getConfigValue(MAIN, "fScale") == "3.0");
+        for (const auto& applied : config.getConfigOverrides()) {
+            REQUIRE(applied.value == (applied.key == "fScale" ? "3.0" : "7"));
+        }
+    }
+    SECTION("refused when it is not of the type of the file's value, with the others of the same set")
+    {
+        REQUIRE_FALSE(config.setConfigOverride("tests", MAIN, "iMode", "two"));
+        REQUIRE_FALSE(config.setConfigOverrides("tests", { { MAIN, "fScale", "4" }, { MAIN, "iMode", "1.5" } }));
+
+        REQUIRE(config.mode == 0);
+        REQUIRE_FALSE(config.hasConfigOverride(MAIN, "iMode"));
+        REQUIRE(config.getConfigValue(MAIN, "fScale") == "2.5");
     }
 }
 

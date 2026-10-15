@@ -39,6 +39,9 @@ major version is `0`, a minor bump may break the API; the **Upgrading** notes sa
     latestVersion, const toml::table& old, common::TomlEditor& latest)`. The generic migration carries a
     value only into a key of the same type (an integer into a float too): one whose type changed is left
     to it.
+  - `setConfigOverride(s)` return whether they set: a value that is not of the type the file has for
+    the key is refused, with the rest of its set. An override is read back as it applies
+    (`getConfigValue`, `getConfigOverrides`, devbench `config`): `no` over a bool is `false`.
   - `ConfigBase.h` no longer includes SimpleIni, and with it Windows' `min` / `max` macros: write
     `(std::min)(a, b)`.
 - **TOML editing**: `common::TomlEditor` sets values in the text of a TOML file and keeps every other

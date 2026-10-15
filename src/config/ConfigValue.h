@@ -60,4 +60,6 @@ namespace f4cf::config
     };
 
     std::optional<toml::table> typedLike(const toml::node* existing, std::string_view text);
+
+    std::optional<std::string> appliedText(const toml::node* existing, std::string_view text);
 }
