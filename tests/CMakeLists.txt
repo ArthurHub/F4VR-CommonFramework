@@ -24,8 +24,10 @@ add_executable(${PROJECT_NAME}_tests
   ImGuiPointerLogicTests.cpp
   PerfReportTests.cpp
   PerfSiteTests.cpp
+  TomlEditorTests.cpp
   UIDevLayoutFileTests.cpp
   # the plain-std sources under test
+  ${SOURCE_DIR}/common/TomlEditor.cpp
   ${SOURCE_DIR}/config/IniFile.cpp
   ${SOURCE_DIR}/config/IniMigration.cpp
   ${SOURCE_DIR}/config/IniValue.cpp
@@ -49,6 +51,9 @@ target_include_directories(${PROJECT_NAME}_tests PRIVATE ${SOURCE_DIR})
 # SimpleIni is one header with no CMake target of its own
 find_path(SIMPLEINI_INCLUDE_DIR "SimpleIni.h" REQUIRED)
 target_include_directories(${PROJECT_NAME}_tests SYSTEM PRIVATE ${SIMPLEINI_INCLUDE_DIR})
+# toml++ for common/TomlEditor, header-only here: the test binary does not link the framework's compiled toml++
+find_path(TOMLPLUSPLUS_INCLUDE_DIR "toml++/toml.hpp" REQUIRED)
+target_include_directories(${PROJECT_NAME}_tests SYSTEM PRIVATE ${TOMLPLUSPLUS_INCLUDE_DIR})
 target_compile_options(${PROJECT_NAME}_tests PRIVATE /utf-8 /permissive- /W4 /external:anglebrackets /external:W0)
 
 # for config/OffsetsJson.h
