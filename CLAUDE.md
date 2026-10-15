@@ -195,6 +195,8 @@ and composited as one quad, so N canvases cost one ImGui frame and one draw call
 - **An image in the content is `imgui::image` / `imgui::addImage`** (`ImGuiImage.h`), with a
   `render::Texture`, and never `ImGui::Image` with a raw view: the published frame then holds the
   texture's view until it has been drawn, so the mod can drop the texture at any time.
+- **Bold and italic text is `imgui::canvasFont(FontStyle)`** (`ImGuiFonts.h`): the faces the canvas
+  font is loaded with, to push or to pass to `ImDrawList::AddText`.
 - Content can only be measured by drawing it, which happens after vrui lays the frame out, so a panel
   sized to its content is laid out at **last frame's** size.
 - `setFontSizePixels` / `setSupersample` are process-wide and read when the first canvas draws.
@@ -344,6 +346,8 @@ Ship `f4cf\` as the template has it and refresh it from the template when updati
 Text is not part of `f4cf\`: it is drawn in the framework's embedded font unless the mod ships its
 own TrueType/OpenType file at `Data\Interface\<ModName>\<ModName>.ttf` — one file serves both the
 vrui panels and the ImGui canvases, and it is read once at first use, so replacing it takes a restart.
+The canvases' bold and italic faces are `<ModName>-Bold.ttf` and `<ModName>-Italic.ttf` beside it, or
+else the embedded Roboto ones.
 
 ## Modding Reference Library
 

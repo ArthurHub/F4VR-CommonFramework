@@ -97,7 +97,7 @@ target_link_options(${PROJECT_NAME}_linked_tests PRIVATE /DELAYLOAD:openvr_api.d
 
 # the tests of the Dear ImGui UI layer, which a build without it does not have
 if(F4CF_WITH_IMGUI_UI)
-  target_sources(${PROJECT_NAME}_linked_tests PRIVATE linked/ImGuiImageTests.cpp)
+  target_sources(${PROJECT_NAME}_linked_tests PRIVATE linked/ImGuiFontsTests.cpp linked/ImGuiImageTests.cpp)
 endif()
 
 catch_discover_tests(${PROJECT_NAME}_linked_tests)

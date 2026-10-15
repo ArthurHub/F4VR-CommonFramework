@@ -28,7 +28,7 @@ why something drew where it did.
 | [`SceneDepthCapture.h`](SceneDepthCapture.h) / [`.cpp`](SceneDepthCapture.cpp) | Takes hold of the engine's scene depth for the frame being submitted, read-only, so a layer can be occluded by the world. |
 | [`SceneDepthResample.h`](SceneDepthResample.h) / [`.cpp`](SceneDepthResample.cpp) | The copy made under an upscaler (DLSS/FSR), which draws the world into a sub-viewport of a full-size buffer and clears it before submit. |
 | [`SceneDepthDiagnostics.h`](SceneDepthDiagnostics.h) / [`.cpp`](SceneDepthDiagnostics.cpp) | `sSceneDepthStrategy` / `bSceneDepthDiagnostics`, the watch rows, and the shadow A/B that elected the shipped policy. |
-| [`fonts/`](fonts/) | The embedded Roboto Medium (and its license), used when a mod ships no font of its own. |
+| [`fonts/`](fonts/) | The embedded Roboto Medium (and its license), used when a mod ships no font of its own, and the bold and italic faces the ImGui canvases add ([`imgui/`](../imgui/README.md#font)): Roboto Black and Roboto Medium Italic. The bold face is Black, as the regular one is Medium: Bold is too close to it to tell apart. All three are Roboto 2.137 as Google Fonts ships it. |
 
 ## Drawing a frame
 
@@ -85,7 +85,9 @@ Text is the framework's font — the embedded **Roboto Medium**, or a mod's own 
 `Data\Interface\<ModName>\<ModName>.ttf` (`CUSTOM_TEXT_FONT_PATH`) — drawn from a distance-field
 atlas, so it stays sharp at any size, distance or angle. The file is read once, the first time any
 text needs the font, so replacing it takes a restart. The same bytes feed the ImGui canvases, so a
-`vrui::UITextPanel` and an `imgui::UIImGuiPanel` always share a typeface.
+`vrui::UITextPanel` and an `imgui::UIImGuiPanel` always share a typeface. The canvases also draw
+its bold and italic faces, a mod's own beside it at `<ModName>-Bold.ttf` and `<ModName>-Italic.ttf`
+(`CUSTOM_BOLD_FONT_PATH`, `CUSTOM_ITALIC_FONT_PATH`).
 
 Building the atlas takes about a tenth of a second, and it happens on the first draw of anything
 (lines and fills sample it too), stalling that frame. A mod that draws sets

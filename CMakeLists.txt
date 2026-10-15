@@ -194,20 +194,25 @@ target_include_directories(${PROJECT_NAME}
 )
 
 
-# >>> Embedded text font for src/render/TextFont.cpp: the TTF is compiled in as a byte array, so the
-# framework carries its own font and no mod has to ship one
-set(F4CF_TEXT_FONT "${SOURCE_DIR}/render/fonts/Roboto-Medium.ttf")
-set(F4CF_TEXT_FONT_SOURCE "${BUILD_DIR}/generated/EmbeddedTextFont.cpp")
-add_custom_command(
-  OUTPUT "${F4CF_TEXT_FONT_SOURCE}"
-  COMMAND "${CMAKE_COMMAND}" "-DINPUT=${F4CF_TEXT_FONT}" "-DOUTPUT=${F4CF_TEXT_FONT_SOURCE}" -DNAMESPACE=f4cf::render::internal -DSYMBOL=TEXT_FONT_TTF -P "${ROOT_DIR}/cmake/embed-binary.cmake"
-  DEPENDS "${F4CF_TEXT_FONT}" "${ROOT_DIR}/cmake/embed-binary.cmake"
-  COMMENT "Embedding Roboto-Medium.ttf"
-  VERBATIM
-)
-set_source_files_properties("${F4CF_TEXT_FONT_SOURCE}" PROPERTIES GENERATED TRUE SKIP_PRECOMPILE_HEADERS ON)
-target_sources(${PROJECT_NAME} PRIVATE "${F4CF_TEXT_FONT_SOURCE}")
-source_group("Generated Files" FILES "${F4CF_TEXT_FONT_SOURCE}")
+# >>> Embedded fonts: a TTF is compiled in as a byte array, so the framework carries its own font and
+# no mod has to ship one. <namespace>::<symbol> holds the bytes of font, in the generated source output.
+function(f4cf_embed_font font output namespace symbol)
+  set(source "${BUILD_DIR}/generated/${output}")
+  get_filename_component(name "${font}" NAME)
+  add_custom_command(
+    OUTPUT "${source}"
+    COMMAND "${CMAKE_COMMAND}" "-DINPUT=${font}" "-DOUTPUT=${source}" -DNAMESPACE=${namespace} -DSYMBOL=${symbol} -P "${ROOT_DIR}/cmake/embed-binary.cmake"
+    DEPENDS "${font}" "${ROOT_DIR}/cmake/embed-binary.cmake"
+    COMMENT "Embedding ${name}"
+    VERBATIM
+  )
+  set_source_files_properties("${source}" PROPERTIES GENERATED TRUE SKIP_PRECOMPILE_HEADERS ON)
+  target_sources(${PROJECT_NAME} PRIVATE "${source}")
+  source_group("Generated Files" FILES "${source}")
+endfunction()
+
+# the text font of src/render/TextFont.cpp
+f4cf_embed_font("${SOURCE_DIR}/render/fonts/Roboto-Medium.ttf" EmbeddedTextFont.cpp f4cf::render::internal TEXT_FONT_TTF)
 # stb_truetype rasterizes it - vendored rather than taken from the imgui port, so text still builds
 # with F4CF_WITH_IMGUI_UI off
 target_include_directories(${PROJECT_NAME} PRIVATE "${ROOT_DIR}/external/stb")
@@ -245,6 +250,9 @@ if(F4CF_WITH_IMGUI_UI)
   # would give us a different sizeof(ImGuiIO) than the library we link against.
   target_link_libraries(${PROJECT_NAME} PUBLIC imgui::imgui)
   target_compile_definitions(${PROJECT_NAME} PUBLIC F4CF_WITH_IMGUI_UI=1)
+  # the bold and italic faces of the canvas font, beside the text font (src/imgui/ImGuiFonts.cpp)
+  f4cf_embed_font("${SOURCE_DIR}/render/fonts/Roboto-Black.ttf" EmbeddedBoldFont.cpp f4cf::imgui::internal BOLD_FONT_TTF)
+  f4cf_embed_font("${SOURCE_DIR}/render/fonts/Roboto-MediumItalic.ttf" EmbeddedItalicFont.cpp f4cf::imgui::internal ITALIC_FONT_TTF)
   message(">>> Dear ImGui UI layer (f4cf::imgui): enabled")
 else()
   message(">>> Dear ImGui UI layer (f4cf::imgui): disabled")
