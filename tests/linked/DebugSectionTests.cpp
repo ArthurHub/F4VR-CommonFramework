@@ -36,6 +36,7 @@ TEST_CASE("DebugSection: a section with no keys is its defaults")
     REQUIRE(section.adjustTarget == DebugAdjustTarget::None);
     REQUIRE(section.adjustField.empty());
     REQUIRE(section.drawEnabled);
+    REQUIRE_FALSE(section.drawToggleBinding.isEnabled());
     REQUIRE(section.drawHudPlacement == "center");
     REQUIRE(section.sceneDepthStrategy == "auto");
     REQUIRE_FALSE(section.sceneDepthDiagnostics);
@@ -60,7 +61,7 @@ TEST_CASE("DebugSection: its keys are read into its fields")
         "aAddItemsOnce = [{ op = \"get\", category = \"weapons\" }]\n"
         "bDebugDrawEnabled = false\n"
         "aDebugDrawDisabledChannels = [\"physics\", \"npc-detection\"]\n"
-        "sDebugDrawToggleBinding = \"left longpress a\"\n"
+        "kDebugDrawToggleBinding = { hand = \"left\", type = \"longpress\", button = \"a\" }\n"
         "sDebugDrawHudPlacement = \"top\"\n"
         "sSceneDepthStrategy = \"copy\"\n"
         "bSceneDepthDiagnostics = true\n"
@@ -80,7 +81,7 @@ TEST_CASE("DebugSection: its keys are read into its fields")
     REQUIRE(section.addItemsOnce[0].as_table()->at("op").value<std::string>() == "get");
     REQUIRE_FALSE(section.drawEnabled);
     REQUIRE(section.drawDisabledChannels == std::vector<std::string>{ "physics", "npc-detection" });
-    REQUIRE(section.drawToggleBinding == "left longpress a");
+    REQUIRE(section.drawToggleBinding == vrcf::InputBinding{ vrcf::Hand::Left, vrcf::ActivationType::LongPress, vr::k_EButton_A });
     REQUIRE(section.drawHudPlacement == "top");
     REQUIRE(section.sceneDepthStrategy == "copy");
     REQUIRE(section.sceneDepthDiagnostics);

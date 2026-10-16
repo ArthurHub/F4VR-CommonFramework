@@ -87,33 +87,34 @@ if (VRControllers.check(openMenu)) { /* binding triggered */ }
 must be held down for the binding to fire — on the binding's own hand by default, or on the
 `InputModifier::hand` you specify.
 
-To load bindings from the config, [`InputBindingParser.h`](InputBindingParser.h) parses a forgiving,
-case-insensitive string into an `InputBinding` (token helpers `parseHand` / `parseActivationType` /
-`parseButton` / `parseAxis` / `parseDirection` are also exposed, and `buttonName` / `axisName` /
-`buttonNames(mask)` go the other way, to the grammar's words, for logs and messages that should read
-like the config). If your config derives from
+A config has a binding as an inline table, `{ hand = "offhand", type = "longpress", button = "grip" }`,
+which [`InputBindingParser.h`](InputBindingParser.h) reads into an `InputBinding` with
+`parseInputBindingTable`, case-insensitive, and writes back with `inputBindingTomlText` (for a UI that
+rebinds, to save with `saveConfigValue`). Its word helpers `parseHand` / `parseActivationType` /
+`parseButton` / `parseAxis` / `parseDirection` are also exposed, and `handName` / `activationTypeName` /
+`buttonName` / `axisName` / `directionName` / `buttonNames(mask)` go the other way, to the config's words,
+for logs and messages that should read like the config. If your config derives from
 `ConfigBase`, prefer its `getInputBindingValue(config, section, key, default)` helper — it reads the key,
 falls back to your default, and logs a warning that names the wrong word on a malformed value (same pattern as
 `getTransformValue` / `getHandPoseValue`):
 
 ```cpp
 // In your Config's loadConfigInternal(const toml::table& config):
-openMenuBinding = getInputBindingValue(config, "Controls", "sOpenMenu",
+openMenuBinding = getInputBindingValue(config, "Controls", "kOpenMenu",
     InputBinding{ Hand::Offhand, ActivationType::LongPress, vr::k_EButton_Grip });
-
-// Or parse a string directly anywhere else:
-#include "vrcf/InputBindingParser.h"
-auto chord = parseInputBinding("primary press trigger +offhand:grip"); // -> std::expected<InputBinding, std::string>, the error saying why
 ```
 
-Format: `"<hand> <type> <button> [duration] [+[hand:]modifier]"`. Examples: `"primary press trigger"`,
-`"left double a"`, `"primary thumbstick up"`, `"right axis trigger up 0.7"`,
-`"offhand longpress grip 0.6 +trigger"`. See the header doc comment for the full grammar and aliases.
+Keys: `hand`, `type`, and `button` for a button type or `direction` (and an optional `axis`, the thumbstick
+when left out) for `type = "axis"`, with an optional `duration` / `threshold`, `suppress` and
+`modifier = { button = .., hand = .. }`. Examples: `{ hand = "primary", type = "press", button = "trigger" }`,
+`{ hand = "primary", type = "axis", direction = "up" }`, `{ hand = "right", type = "axis", axis = "trigger",
+direction = "up", threshold = 0.7 }`. See the [input-binding guide](../../docs/input-binding.md#the-binding)
+for every key and word. The text form `parseInputBinding` reads, `"offhand longpress grip 0.6 +trigger"`, is
+the one of a mod's INI config, which the INI import moves to the table.
 
-To **disable** a binding, set its value to `none`, `off`, `disabled`, or leave it empty — it parses to a
-`Disabled` binding whose `check()` always returns `false`, so the input never fires (no warning is logged).
-Note the difference from a *missing* key: an absent key falls back to the code default, while a present-but-empty
-value is an explicit "off". Example: `sOpenMenu = "none"`. The value is a string, so it goes in quotes.
+To **disable** a binding, set it to `{ type = "none" }` — it reads as a `Disabled` binding whose `check()`
+always returns `false`, so the input never fires (no warning is logged). Note the difference from a *missing*
+key: an absent key falls back to the code default, while `none` is an explicit "off".
 
 To **show** a binding in your UI, do not spell the button out in a string literal — it goes stale as
 soon as someone edits the config. `vrui::appendBindingPrompt(spans, binding)`

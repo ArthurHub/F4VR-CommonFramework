@@ -345,6 +345,39 @@ TEST_CASE("INI as TOML: a text that is not a transform, or of a table that is no
     REQUIRE(latest.text() == SHIPPED_ZONE);
 }
 
+TEST_CASE("INI as TOML: a binding's line is its table, under the key of another type prefix that the TOML config has")
+{
+    constexpr auto SHIPPED_KEYS =
+        "[Main]\n"
+        "kOpenButton = { hand = \"primary\", type = \"press\", button = \"a\" }\n"
+        "kCloseButton = { hand = \"primary\", type = \"press\", button = \"b\" }\n";
+    const auto toml = asToml("[Main]\nsOpenButton = OFFHAND longpress thumbstick 2.0 +offhand:grip\nsCloseButton = offhand squeeze grip\n", SHIPPED_KEYS);
+
+    // the line in its canonical words and the table's own order of keys, and a line that does not parse as its text
+    REQUIRE(toml ==
+            "[Main]\n"
+            "kOpenButton = { hand = \"offhand\", type = \"longpress\", button = \"thumbstick\", duration = 2.0, modifier = { hand = \"offhand\", button = \"grip\" } }\n"
+            "kCloseButton = \"offhand squeeze grip\"\n");
+
+    // carried as any value, in that order of keys, and the default kept for the line that did not parse
+    TomlEditor latest(SHIPPED_KEYS);
+    const auto values = migrateValues(toml::parse(toml), latest);
+    REQUIRE(outcomeOf(values, "Main.kOpenButton") == Outcome::Carried);
+    REQUIRE(outcomeOf(values, "Main.kCloseButton") == Outcome::NotCarried);
+    REQUIRE(latest.text() ==
+            "[Main]\n"
+            "kOpenButton = { hand = \"offhand\", type = \"longpress\", button = \"thumbstick\", duration = 2.0, modifier = { hand = \"offhand\", button = \"grip\" } }\n"
+            "kCloseButton = { hand = \"primary\", type = \"press\", button = \"b\" }\n");
+}
+
+TEST_CASE("INI as TOML: a key is matched to one of another type prefix only when it is the one")
+{
+    // two keys of the name with other prefixes, and a name with no prefix
+    const auto toml = asToml("[Main]\nsScale = 2\nscale = 3\n", "[Main]\nfScale = 1.0\niScale = 1\ntscale = 1\n");
+
+    REQUIRE(toml == "[Main]\nsScale = \"2\"\nscale = \"3\"\n");
+}
+
 TEST_CASE("INI file import: the INI as TOML at version 0, which says what it is, and the INI kept by its own version")
 {
     const test_files::TempFolder folder;

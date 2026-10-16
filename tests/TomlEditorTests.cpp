@@ -394,6 +394,15 @@ TEST_CASE("TomlEditor: a set of several values is the same as a set of each in o
     }
 }
 
+TEST_CASE("TomlEditor: a table read from text is written with its keys in the order of the text")
+{
+    const auto parsed = toml::parse("v = { hand = \"left\", type = \"tap\", button = \"grip\" }");
+
+    CHECK(setOne("[M]\nk = 1\n", { "M", "k" }, *parsed.get("v")) == "[M]\nk = { hand = \"left\", type = \"tap\", button = \"grip\" }\n");
+    // a table made in code has no text, and its keys are sorted
+    CHECK(setOne("[M]\nk = 1\n", { "M", "k" }, toml::table{ { "y", 2 }, { "x", 1 } }) == "[M]\nk = { x = 1, y = 2 }\n");
+}
+
 TEST_CASE("TomlEditor: a value the text already holds stays as it is written")
 {
     SECTION("written another way")

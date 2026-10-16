@@ -11,7 +11,6 @@
 #include "../f4vr/PlayerNodes.h"
 #include "../perf/Perf.h"
 #include "../render/TextFont.h"
-#include "../vrcf/InputBindingParser.h"
 #include "../vrcf/VRControllersManager.h"
 
 using namespace common;
@@ -63,10 +62,6 @@ namespace f4cf::debug
         // constant apparent size. Floored so a marker right on top of you doesn't collapse to nothing.
         constexpr float MARKER_REFERENCE_DIST = 250.0f;
         constexpr float MARKER_MIN_DIST = 60.0f;
-
-        // hotkey toggle state lives here (not in the header) to keep vrcf types out of DebugDraw.h
-        std::string s_toggleBindingRaw;
-        std::optional<vrcf::InputBinding> s_toggleBinding;
 
         /**
          * The codebase's local->world direction convention (rotation stored transposed — same as
@@ -521,19 +516,12 @@ namespace f4cf::debug
     }
 
     /**
-     * Parse (on change) and poll the in-headset master toggle hotkey (sDebugDrawToggleBinding).
+     * Poll the in-headset master toggle hotkey (kDebugDrawToggleBinding), which the config reads, warning of one
+     * that is not valid.
      */
-    void DebugDraw::handleToggleHotkey(const std::string& configToggleBinding)
+    void DebugDraw::handleToggleHotkey(const vrcf::InputBinding& toggleBinding)
     {
-        if (configToggleBinding != s_toggleBindingRaw) {
-            s_toggleBindingRaw = configToggleBinding;
-            const auto parsed = vrcf::parseInputBinding(configToggleBinding);
-            s_toggleBinding = parsed ? std::optional{ *parsed } : std::nullopt;
-            if (!parsed) {
-                logger::warn("DebugDraw: sDebugDrawToggleBinding '{}' is not valid: {}", configToggleBinding, parsed.error());
-            }
-        }
-        if (s_toggleBinding && s_toggleBinding->isEnabled() && vrcf::VRControllers.check(*s_toggleBinding)) {
+        if (toggleBinding.isEnabled() && vrcf::VRControllers.check(toggleBinding)) {
             _enabledOverride = !effectiveEnabled();
             refreshAppendActive();
             logger::info("DebugDraw: hotkey toggled overlay {}", effectiveEnabled() ? "ON" : "OFF");
@@ -716,7 +704,6 @@ namespace f4cf::debug
         }
         const bool configEnabled = config->debug.drawEnabled;
         const std::vector<std::string>& configDisabledChannels = config->debug.drawDisabledChannels;
-        const std::string& configToggleBinding = config->debug.drawToggleBinding;
         const std::string& configHudPlacement = config->debug.drawHudPlacement;
 
         auto& self = get();
@@ -736,7 +723,7 @@ namespace f4cf::debug
             self._configDisabledChannelsRaw = configDisabledChannels;
             self._configDisabledChannels = { configDisabledChannels.begin(), configDisabledChannels.end() };
         }
-        self.handleToggleHotkey(configToggleBinding);
+        self.handleToggleHotkey(config->debug.drawToggleBinding);
         self.refreshAppendActive();
 
         self._building.clear();

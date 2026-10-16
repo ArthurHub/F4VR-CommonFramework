@@ -6,6 +6,8 @@
 #include <toml++/toml.hpp>
 #include <vector>
 
+#include "../vrcf/VRControllersManager.h"
+
 namespace f4cf
 {
     constexpr auto CONFIG_SECTION_DEBUG = "Debug";
@@ -53,11 +55,11 @@ namespace f4cf::config
         // For DebugAdjustTarget::Field: the "Section::Key" of the arbitrary config field being tuned.
         std::string adjustField;
         // f4cf::debug::DebugDraw overlay: the master switch, the names of the channels to skip, a controller
-        // binding (vrcf::parseInputBinding grammar) that flips the overlay in the headset, and where the watch
-        // table sits in the view (center, or center- with left / right / top / top-left / top-right).
+        // binding (kDebugDrawToggleBinding, disabled when missing) that flips the overlay in the headset, and where
+        // the watch table sits in the view (center, or center- with left / right / top / top-left / top-right).
         bool drawEnabled = true;
         std::vector<std::string> drawDisabledChannels;
-        std::string drawToggleBinding;
+        vrcf::InputBinding drawToggleBinding = vrcf::VRControllersManager::DisabledBinding;
         std::string drawHudPlacement = "center";
         // f4cf::render::sceneDepth: which implementation resolves the world's depth for overlay
         // occlusion (auto / direct / off) - see render::sceneDepth::internal::Strategy. A support

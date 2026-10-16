@@ -1,7 +1,9 @@
 #include "InputBindingParser.h"
 
+#include <algorithm>
 #include <cctype>
 #include <charconv>
+#include <cmath>
 #include <format>
 #include <vector>
 
@@ -67,6 +69,9 @@ namespace f4cf::vrcf
         constexpr auto BUTTONS = "trigger, grip, a, b, thumbstick, menu, system";
         constexpr auto AXES = "thumbstick, trigger, grip";
         constexpr auto DIRECTIONS = "up, down, left, right";
+        // the types of a binding's table, where an axis is one type and none is the disabled binding
+        constexpr auto TABLE_TYPES = "tap, press, longpress, double, hold, release, touch, axis, none";
+        constexpr auto TABLE_KEYS = "hand, type, button, axis, direction, duration, threshold, suppress, modifier";
 
         /**
          * The error of a word that is none of the words of its part of the line.
@@ -82,6 +87,67 @@ namespace f4cf::vrcf
         std::unexpected<std::string> beyondTheLine(const std::string_view token, const std::string_view form)
         {
             return std::unexpected(std::format("'{}' is past the end of the line, which is {} with an optional suppress or nosuppress and +modifier", token, form));
+        }
+
+        /**
+         * The word of a key of a binding's table, read by `parse`, one of its part's `words`. No value for a key the
+         * table does not have. The error says when the value is not a string or is none of the words.
+         */
+        template <typename T>
+        std::expected<std::optional<T>, std::string> wordOf(const toml::table& table, const std::string_view key, std::optional<T> (*parse)(std::string_view),
+            const std::string_view part, const std::string_view words)
+        {
+            const auto* node = table.get(key);
+            if (!node) {
+                return std::optional<T>();
+            }
+            const auto* text = node->as_string();
+            if (!text) {
+                return std::unexpected(std::format("{} is not a string, one of {}", key, words));
+            }
+            const auto value = parse(text->get());
+            if (!value) {
+                return notOneOf(text->get(), part, words);
+            }
+            return value;
+        }
+
+        /**
+         * The number of a key of a binding's table, an integer or a float. No value for a key the table does not
+         * have, and the error when it is not a number.
+         */
+        std::expected<std::optional<float>, std::string> numberOf(const toml::table& table, const std::string_view key)
+        {
+            const auto* node = table.get(key);
+            if (!node) {
+                return std::optional<float>();
+            }
+            const auto number = node->value<double>();
+            if (!number || node->is_boolean()) {
+                return std::unexpected(std::format("{} is not a number", key));
+            }
+            return std::optional{ static_cast<float>(*number) };
+        }
+
+        /**
+         * The error of a key of a binding's table that its type does not have.
+         */
+        std::unexpected<std::string> notOfType(const std::string_view key, const std::string_view type, const std::string_view keysOfType)
+        {
+            return std::unexpected(std::format("{} is not a key of a {} binding, which has {}", key, type, keysOfType));
+        }
+
+        /**
+         * A seconds or threshold value as TOML text: the shortest text of it at 4 decimals, so a float read from "0.3"
+         * is written 0.3 and not 0.30000001192092896, with ".0" added to a whole number so it stays a float.
+         */
+        std::string numberText(const float value)
+        {
+            auto text = std::format("{}", std::round(static_cast<double>(value) * 10000.0) / 10000.0);
+            if (text.find_first_of(".eE") == std::string::npos) {
+                text += ".0";
+            }
+            return text;
         }
     }
 
@@ -224,6 +290,68 @@ namespace f4cf::vrcf
         }
     }
 
+    /**
+     * The canonical word for a hand - primary, offhand, right, left - which parseHand reads back as the same hand.
+     */
+    std::string handName(const Hand hand)
+    {
+        switch (hand) {
+        case Hand::Offhand:
+            return "offhand";
+        case Hand::Right:
+            return "right";
+        case Hand::Left:
+            return "left";
+        default:
+            return "primary";
+        }
+    }
+
+    /**
+     * The canonical word for an activation type - none, touch, press, hold, release, tap, longpress, double, axis -
+     * which parseInputBindingTable reads back as the same type.
+     */
+    std::string activationTypeName(const ActivationType type)
+    {
+        switch (type) {
+        case ActivationType::Touch:
+            return "touch";
+        case ActivationType::Press:
+            return "press";
+        case ActivationType::HoldDown:
+            return "hold";
+        case ActivationType::Release:
+            return "release";
+        case ActivationType::Tap:
+            return "tap";
+        case ActivationType::LongPress:
+            return "longpress";
+        case ActivationType::DoublePress:
+            return "double";
+        case ActivationType::AxisDirection:
+            return "axis";
+        default:
+            return "none";
+        }
+    }
+
+    /**
+     * The canonical word for a direction - up, down, left, right - which parseDirection reads back as the same one.
+     */
+    std::string directionName(const Direction direction)
+    {
+        switch (direction) {
+        case Direction::Down:
+            return "down";
+        case Direction::Left:
+            return "left";
+        case Direction::Right:
+            return "right";
+        default:
+            return "up";
+        }
+    }
+
     std::vector<std::string> buttonNames(const uint64_t buttonMask)
     {
         std::vector<std::string> names;
@@ -236,8 +364,18 @@ namespace f4cf::vrcf
     }
 
     /**
-     * Parse a full binding line, see the grammar above. A blank line or "none"/"off"/"disabled" yields a disabled
-     * binding (ActivationType::Disabled, which never triggers).
+     * Parse a binding line, the text form a mod's INI config has a binding in, which the INI import reads to move a
+     * player's binding to the table (see parseInputBindingTable). Its words are separated by spaces, commas or
+     * colons, and are the table's words (see InputBindingParser.h):
+     *
+     *   <hand> <type> <button> [duration] [suppress|nosuppress] [+modifier]            a button type
+     *   <hand> axis <axis> <direction> [threshold] [suppress|nosuppress] [+modifier]   an axis
+     *   <hand> thumbstick <direction> [threshold] [suppress|nosuppress] [+modifier]    the thumbstick axis
+     *   none | off | disabled | (empty)                                               the disabled binding
+     *
+     * A modifier is "+button", held on the binding's own hand, or "+hand:button", as in
+     * "primary longpress thumbstick 1.5 +offhand:thumbstick". A blank line or "none"/"off"/"disabled" yields a
+     * disabled binding (ActivationType::Disabled, which never triggers).
      * Returns why the line is not a binding, naming the word that is wrong and the words that would fit there, for
      * one that can't be read: a hand, type, button, axis or direction that is none of its words, one that is
      * missing, a duration or threshold that is not a number, or a word past the end of the line's form. Nothing is
@@ -391,5 +529,183 @@ namespace f4cf::vrcf
             return beyondTheLine(tokens[4], "<hand> <type> <button> [duration]");
         }
         return binding;
+    }
+
+    /**
+     * Read a binding from its inline table, the form a config has it in, see the examples above. Every binding has
+     * a `type`, and all but the disabled one ("none", with no other key) a `hand`. A button type (tap, press,
+     * longpress, double, hold, release, touch) has a `button` and an optional `duration` in seconds; the axis type
+     * has a `direction`, an optional `axis` (the thumbstick when left out) and an optional `threshold` (0..1). Any
+     * of them takes an optional `suppress` (false when left out) and `modifier`, { button = .., hand = .. }, a
+     * button held while the binding fires, on the binding's own hand when the hand is left out. The words are read
+     * as the line's are, with no regard to case and with their aliases.
+     * Returns why the table is not a binding, naming the key or the word that is wrong and what fits there: a key
+     * that is not one of a binding, or not one of its type's, as a misspelled one would be read as its default, a
+     * key that is missing, a word that is none of its part's, and a value of another type. Nothing is left out, so a
+     * mistake never gives a binding other than the one written.
+     */
+    std::expected<InputBinding, std::string> parseInputBindingTable(const toml::node& node)
+    {
+        const auto* table = node.as_table();
+        if (!table) {
+            return std::unexpected(std::string(R"(it is not a table, as { hand = "offhand", type = "tap", button = "grip" })"));
+        }
+        constexpr std::string_view KEYS[] = { "hand", "type", "button", "axis", "direction", "duration", "threshold", "suppress", "modifier" };
+        for (const auto& [key, value] : *table) {
+            if (std::ranges::find(KEYS, key.str()) == std::end(KEYS)) {
+                return std::unexpected(std::format("it has the key '{}', which is not one of {}", key.str(), TABLE_KEYS));
+            }
+        }
+
+        const auto* typeNode = table->get("type");
+        if (!typeNode) {
+            return std::unexpected(std::format("the type is missing, one of {}", TABLE_TYPES));
+        }
+        const auto* typeText = typeNode->as_string();
+        if (!typeText) {
+            return std::unexpected(std::format("type is not a string, one of {}", TABLE_TYPES));
+        }
+        InputBinding binding;
+        const auto typeWord = normalize(typeText->get());
+        if (typeWord == "none" || typeWord == "off" || typeWord == "disabled") {
+            if (table->size() > 1) {
+                return std::unexpected(std::string("a none binding has no key but its type"));
+            }
+            binding.type = ActivationType::Disabled;
+            return binding;
+        }
+        const auto type = parseActivationType(typeWord);
+        if (!type) {
+            return notOneOf(typeText->get(), "a type", TABLE_TYPES);
+        }
+        binding.type = *type;
+
+        const auto hand = wordOf<Hand>(*table, "hand", parseHand, "a hand", HANDS);
+        if (!hand) {
+            return std::unexpected(hand.error());
+        }
+        if (!*hand) {
+            return std::unexpected(std::format("the hand is missing, one of {}", HANDS));
+        }
+        binding.hand = **hand;
+
+        if (binding.type == ActivationType::AxisDirection) {
+            constexpr auto AXIS_KEYS = "hand, type, axis, direction, threshold, suppress and modifier";
+            for (const auto* key : { "button", "duration" }) {
+                if (table->contains(key)) {
+                    return notOfType(key, "axis", AXIS_KEYS);
+                }
+            }
+            const auto axis = wordOf<Axis>(*table, "axis", parseAxis, "an axis", AXES);
+            if (!axis) {
+                return std::unexpected(axis.error());
+            }
+            binding.axis = axis->value_or(Axis::Thumbstick);
+            const auto direction = wordOf<Direction>(*table, "direction", parseDirection, "a direction", DIRECTIONS);
+            if (!direction) {
+                return std::unexpected(direction.error());
+            }
+            if (!*direction) {
+                return std::unexpected(std::format("the direction is missing, one of {}", DIRECTIONS));
+            }
+            binding.direction = **direction;
+            const auto threshold = numberOf(*table, "threshold");
+            if (!threshold) {
+                return std::unexpected(threshold.error());
+            }
+            binding.threshold = threshold->value_or(binding.threshold);
+        } else {
+            constexpr auto BUTTON_KEYS = "hand, type, button, duration, suppress and modifier";
+            for (const auto* key : { "axis", "direction", "threshold" }) {
+                if (table->contains(key)) {
+                    return notOfType(key, activationTypeName(binding.type), BUTTON_KEYS);
+                }
+            }
+            const auto button = wordOf<vr::EVRButtonId>(*table, "button", parseButton, "a button", BUTTONS);
+            if (!button) {
+                return std::unexpected(button.error());
+            }
+            if (!*button) {
+                return std::unexpected(std::format("the button is missing, one of {}", BUTTONS));
+            }
+            binding.button = **button;
+            const auto duration = numberOf(*table, "duration");
+            if (!duration) {
+                return std::unexpected(duration.error());
+            }
+            binding.duration = duration->value_or(0.0f);
+        }
+
+        if (const auto* suppress = table->get("suppress")) {
+            if (!suppress->is_boolean()) {
+                return std::unexpected(std::string("suppress is not true or false"));
+            }
+            binding.suppress = suppress->as_boolean()->get();
+        }
+
+        if (const auto* modifierNode = table->get("modifier")) {
+            const auto* modifierTable = modifierNode->as_table();
+            if (!modifierTable) {
+                return std::unexpected(std::string(R"(modifier is not a table, as { hand = "offhand", button = "grip" })"));
+            }
+            for (const auto& [key, value] : *modifierTable) {
+                if (key.str() != "button" && key.str() != "hand") {
+                    return std::unexpected(std::format("modifier has the key '{}', which is not button or hand", key.str()));
+                }
+            }
+            InputModifier modifier;
+            const auto modifierButton = wordOf<vr::EVRButtonId>(*modifierTable, "button", parseButton, "a button", BUTTONS);
+            if (!modifierButton) {
+                return std::unexpected("modifier: " + modifierButton.error());
+            }
+            if (!*modifierButton) {
+                return std::unexpected(std::format("modifier has no button, one of {}", BUTTONS));
+            }
+            modifier.button = **modifierButton;
+            const auto modifierHand = wordOf<Hand>(*modifierTable, "hand", parseHand, "a hand", HANDS);
+            if (!modifierHand) {
+                return std::unexpected("modifier: " + modifierHand.error());
+            }
+            modifier.hand = *modifierHand;
+            binding.modifier = modifier;
+        }
+        return binding;
+    }
+
+    /**
+     * A binding as the TOML text of its inline table, which parseInputBindingTable reads back as the same binding:
+     * the canonical words, the keys in the order hand, type, button or axis and direction, duration or threshold,
+     * suppress, modifier, and a value left out where it is the default (no duration, the default threshold, no
+     * suppress, no modifier), so it is the table a person writes. A disabled binding is { type = "none" }.
+     */
+    std::string inputBindingTomlText(const InputBinding& binding)
+    {
+        if (!binding.isEnabled()) {
+            return R"({ type = "none" })";
+        }
+
+        auto text = std::format(R"({{ hand = "{}", type = "{}")", handName(binding.hand), activationTypeName(binding.type));
+        if (binding.type == ActivationType::AxisDirection) {
+            text += std::format(R"(, axis = "{}", direction = "{}")", axisName(binding.axis), directionName(binding.direction));
+            if (std::abs(binding.threshold - InputBinding{}.threshold) > 0.0001f) {
+                text += ", threshold = " + numberText(binding.threshold);
+            }
+        } else {
+            text += std::format(R"(, button = "{}")", buttonName(binding.button));
+            if (binding.duration > 0.0f) {
+                text += ", duration = " + numberText(binding.duration);
+            }
+        }
+        if (binding.suppress) {
+            text += ", suppress = true";
+        }
+        if (binding.modifier) {
+            text += ", modifier = { ";
+            if (binding.modifier->hand) {
+                text += std::format(R"(hand = "{}", )", handName(*binding.modifier->hand));
+            }
+            text += std::format(R"(button = "{}" }})", buttonName(binding.modifier->button));
+        }
+        return text + " }";
     }
 }

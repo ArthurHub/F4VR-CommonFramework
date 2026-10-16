@@ -150,21 +150,23 @@ TEST_CASE("ConfigReaders: a list of strings is read in its order")
     REQUIRE(ConfigReaders::getStringListValue(file.table, MAIN, "aText", fallback) == fallback);
 }
 
-TEST_CASE("ConfigReaders: an input binding is read as the binding grammar has it")
+TEST_CASE("ConfigReaders: an input binding is read from its table")
 {
     const auto fallback = binding("left press grip");
-    const Config file("sBinding = \"right double a\"\nsOff = \"none\"\nsEmpty = \"\"\nsWrong = \"right squeeze a\"\nsNumber = 2\n");
+    const Config file(
+        "kBinding = { hand = \"right\", type = \"double\", button = \"a\" }\n"
+        "kOff = { type = \"none\" }\n"
+        "kWrong = { hand = \"right\", type = \"squeeze\", button = \"a\" }\n"
+        "kText = \"right double a\"\n");
 
-    REQUIRE(ConfigReaders::getInputBindingValue(file.table, MAIN, "sBinding", fallback) == binding("right double a"));
+    REQUIRE(ConfigReaders::getInputBindingValue(file.table, MAIN, "kBinding", fallback) == binding("right double a"));
+    // off by its type, which is not a missing key
+    REQUIRE_FALSE(ConfigReaders::getInputBindingValue(file.table, MAIN, "kOff", fallback).isEnabled());
 
-    // off by its word and by an empty value, which is not a missing key
-    REQUIRE_FALSE(ConfigReaders::getInputBindingValue(file.table, MAIN, "sOff", fallback).isEnabled());
-    REQUIRE_FALSE(ConfigReaders::getInputBindingValue(file.table, MAIN, "sEmpty", fallback).isEnabled());
-
-    // the default for a key that is missing, for a line that does not parse, and for a value that is not a string
-    REQUIRE(ConfigReaders::getInputBindingValue(file.table, MAIN, "sMissing", fallback) == fallback);
-    REQUIRE(ConfigReaders::getInputBindingValue(file.table, MAIN, "sWrong", fallback) == fallback);
-    REQUIRE(ConfigReaders::getInputBindingValue(file.table, MAIN, "sNumber", fallback) == fallback);
+    // the default for a key that is missing, for a table that is not a binding, and for the INI's line of it
+    REQUIRE(ConfigReaders::getInputBindingValue(file.table, MAIN, "kMissing", fallback) == fallback);
+    REQUIRE(ConfigReaders::getInputBindingValue(file.table, MAIN, "kWrong", fallback) == fallback);
+    REQUIRE(ConfigReaders::getInputBindingValue(file.table, MAIN, "kText", fallback) == fallback);
 }
 
 TEST_CASE("ConfigReaders: an activation sphere with nothing in its section is its defaults")
@@ -208,8 +210,8 @@ TEST_CASE("ConfigReaders: an activation sphere is read from the keys of its sect
     const Config file(
         "tZone = { pos = [1, 2, 3], scale = 4 }\n"
         "tZonePA = { pos = [5, 6, 7], scale = 8 }\n"
-        "sPrimaryBinding = \"right press trigger suppress\"\n"
-        "sSecondaryBinding = \"right longpress trigger\"\n"
+        "kPrimaryBinding = { hand = \"right\", type = \"press\", button = \"trigger\", suppress = true }\n"
+        "kSecondaryBinding = { hand = \"right\", type = \"longpress\", button = \"trigger\" }\n"
         "sEntryHaptic = \"none\"\n"
         "sPrimaryHaptic = \"Success\"\n"
         "sSecondaryHaptic = \"double-click\"\n"

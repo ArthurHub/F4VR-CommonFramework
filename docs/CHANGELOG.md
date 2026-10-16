@@ -56,6 +56,19 @@ major version is `0`, a minor bump may break the API; the **Upgrading** notes sa
   writes a player's transform text as the table, for a key the shipped TOML has as a transform, so it is
   carried as any value. **Upgrading:** write the transforms of the mod's TOML as tables, as the template
   has them.
+- **Bindings are TOML tables**: a controller binding is a `k` value, `{ hand = "offhand", type = "tap",
+  button = "grip" }`, with `duration`, `suppress` and `modifier = { button, hand }` optional, and
+  `{ hand, type = "axis", direction, axis, threshold }` for a thumbstick or an axis, in place of the line
+  `"offhand tap grip"`, which only the INI import reads now. `{ type = "none" }` disables one. Every key and
+  word is checked, and the warning names the one that is wrong. `vrcf::inputBindingTomlText` writes a
+  binding as its table, for a UI that rebinds. The INI import converts a player's binding line into the
+  table, and matches an INI key to a TOML key of another type prefix (`sOpenButton` to `kOpenButton`), so
+  a binding renamed with its prefix keeps the player's value. A table saved or migrated keeps the order its
+  keys are written in. **Upgrading:**
+  - Rename the mod's binding keys from `s` to `k` and write them as tables, as the template has them.
+    An activation sphere's are `kPrimaryBinding` / `kSecondaryBinding`, and `[Debug]` has
+    `kDebugDrawToggleBinding` (not moved from `sDebugDrawToggleBinding`).
+  - `DebugSection::drawToggleBinding` is a `vrcf::InputBinding`.
 - **Colors are TOML tables**: a color is a `c` value, `{ rgb = [r, g, b], alpha = a }`, each a whole
   number in 0..255, read by `getColorValue` in place of the text `"r,g,b,a"`. A key left out keeps the
   default's channels, so `{ alpha = 60 }` changes only the opacity. An activation sphere's look is

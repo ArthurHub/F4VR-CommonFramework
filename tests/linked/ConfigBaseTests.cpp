@@ -205,6 +205,19 @@ TEST_CASE("ConfigBase: a transform saved as the TOML text of its table is writte
     REQUIRE(fileValue(configPath(folder), MAIN, "tZone") == "{ pos = [1.0, 2.3, -3.0], rot = [0.0, 90.0, 0.0], scale = 24.0 }");
 }
 
+TEST_CASE("ConfigBase: a binding saved as the TOML text of its table is written with its keys in the order of the text")
+{
+    const TempFolder folder;
+    writeFile(configPath(folder), "[Main]\nkOpen = { type = \"none\" }\n\n[Debug]\niVersion = 2\n");
+    TestConfig config(configPath(folder));
+    REQUIRE(config.loadConfigValues());
+
+    // as a UI saves a binding, by vrcf::inputBindingTomlText
+    config.saveConfigValue(MAIN, "kOpen", R"({ hand = "offhand", type = "tap", button = "grip", suppress = true })");
+
+    REQUIRE(readFile(configPath(folder)) == "[Main]\nkOpen = { hand = \"offhand\", type = \"tap\", button = \"grip\", suppress = true }\n\n[Debug]\niVersion = 2\n");
+}
+
 TEST_CASE("ConfigBase: values of several sections are saved together, from a list made at runtime or written in place")
 {
     const TempFolder folder;

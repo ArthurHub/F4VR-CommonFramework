@@ -425,9 +425,10 @@ its line, and the values stay as they were until it is fixed.
 
 **Want the *button* itself configurable too?** Swap the hard-coded `isPressed` for a data-driven
 binding: declare an `f4cf::vrcf::InputBinding` in your config, load it with
-`getInputBindingValue(config, "HelloVR", "sGreetButton", …)`, and evaluate it each frame with
-`vrcf::VRControllers.check(binding)`. Then players rebind it from the config (`sGreetButton = "offhand
-longpress b"`) with no rebuild. Full grammar: the [input-binding guide](input-binding.md).
+`getInputBindingValue(config, "HelloVR", "kGreetButton", …)`, and evaluate it each frame with
+`vrcf::VRControllers.check(binding)`. Then players rebind it from the config (`kGreetButton = { hand =
+"offhand", type = "longpress", button = "b" }`) with no rebuild. Every key of a binding: the
+[input-binding guide](input-binding.md).
 
 ---
 

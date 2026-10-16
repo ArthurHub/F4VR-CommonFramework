@@ -7,12 +7,13 @@ your head or your other hand, and press a button there. Each of those spots is a
 The config file is `Documents\My Games\Fallout4VR\Mods_Config\<ModName>\<ModName>.toml`. Which settings it has,
 and their defaults, is up to each mod. The formats on this page are the same in every mod.
 
-The file is TOML: a binding, and any other text value, goes in double quotes, a number is written as it is,
-and a Windows path goes in single quotes, where a backslash is just a backslash (`sIcon = 'f4cf\icon.dds'`).
+The file is TOML: a binding is a small table in braces, `{ hand = "offhand", type = "tap", button = "grip" }`,
+any text value goes in double quotes, a number is written as it is, and a Windows path goes in single quotes,
+where a backslash is just a backslash (`sIcon = 'f4cf\icon.dds'`).
 
 > **Edits apply live.** Save the file while the game runs and the change takes effect right away, with no
 > restart. A value that can't be read is logged as a warning, and the setting uses the mod's default. A
-> typo that breaks the file, such as a binding without its quotes, is logged with its line, and every setting
+> typo that breaks the file, such as a word without its quotes, is logged with its line, and every setting
 > keeps its value until it is fixed.
 
 This page has three parts:
@@ -20,7 +21,7 @@ This page has three parts:
 - **[Common changes](#common-changes)**: change a button, turn an action off, and hide or adjust a
   gesture's icon and sphere, vibration or zone.
 - **The full reference**, for advanced players and mod authors: every option of
-  [the binding line](#the-binding-line) and of [activation spheres](#activation-spheres).
+  [a binding](#the-binding) and of [activation spheres](#activation-spheres).
 - **[For mod authors](#for-mod-authors)**: the code behind them.
 
 ---
@@ -29,41 +30,40 @@ This page has three parts:
 
 ## Change a button
 
-A binding is one string: the hand, how you press, and the button.
+A binding is the hand, how you press, and the button:
 
 ```toml
-sOpenMenu = "offhand longpress grip"
+kOpenMenu = { hand = "offhand", type = "longpress", button = "grip" }
 ```
 
-| Part   | Common values                                                                                                             |
-| ------ | ------------------------------------------------------------------------------------------------------------------------- |
-| Hand   | `primary` (your weapon hand), `offhand` (the other hand)                                                                  |
-| Press  | `tap` (a quick press and release), `press` (the moment it goes down), `longpress` (hold it 0.6 s), `double` (press twice) |
-| Button | `trigger`, `grip`, `a` (A / X), `b` (B / Y), `thumbstick` (click the stick)                                               |
+| Key      | Common values                                                                                                             |
+| -------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `hand`   | `primary` (your weapon hand), `offhand` (the other hand)                                                                  |
+| `type`   | `tap` (a quick press and release), `press` (the moment it goes down), `longpress` (hold it 0.6 s), `double` (press twice) |
+| `button` | `trigger`, `grip`, `a` (A / X), `b` (B / Y), `thumbstick` (click the stick)                                               |
 
-| Example                   | Meaning                                     |
-| ------------------------- | ------------------------------------------- |
-| `offhand tap grip`        | Tap the off-hand grip                       |
-| `primary longpress a`     | Hold **A** on your weapon hand              |
-| `primary longpress a 1.2` | The same, but you have to hold it for 1.2 s |
-| `offhand double b`        | Double-press **B** on the off hand          |
+| Example                                                                  | Meaning                                     |
+| ------------------------------------------------------------------------ | ------------------------------------------- |
+| `{ hand = "offhand", type = "tap", button = "grip" }`                    | Tap the off-hand grip                       |
+| `{ hand = "primary", type = "longpress", button = "a" }`                 | Hold **A** on your weapon hand              |
+| `{ hand = "primary", type = "longpress", button = "a", duration = 1.2 }` | The same, but you have to hold it for 1.2 s |
+| `{ hand = "offhand", type = "double", button = "b" }`                    | Double-press **B** on the off hand          |
 
 Upper or lower case doesn't matter. `primary` and `offhand` follow the game's left-handed mode, so a binding
 keeps working when you switch hands.
 
-The binding line can do more, such as pushing the thumbstick in a direction or holding one button while
-pressing another. See [the binding line](#the-binding-line).
+A binding can do more, such as pushing the thumbstick in a direction or holding one button while pressing
+another. See [the binding](#the-binding).
 
 ## Turn an action off
 
-Set it to `none`:
+Set its type to `none`:
 
 ```toml
-sOpenMenu = "none"
+kOpenMenu = { type = "none" }
 ```
 
-An empty string (`sOpenMenu = ""`) turns it off too. Deleting the whole line doesn't: the mod then uses its
-default binding.
+Deleting the whole line doesn't turn it off: the mod then uses its default binding.
 
 ## Gestures
 
@@ -73,8 +73,8 @@ in every mod. The ones you're most likely to change:
 ```toml
 [MyMod_SomeActivation]
 tZone = { pos = [0, 0, 0], scale = 18 }
-sPrimaryBinding = "offhand tap trigger suppress"
-sSecondaryBinding = "offhand longpress trigger suppress"
+kPrimaryBinding = { hand = "offhand", type = "tap", button = "trigger", suppress = true }
+kSecondaryBinding = { hand = "offhand", type = "longpress", button = "trigger", suppress = true }
 sEntryHaptic = "Tick"
 sShowIcon = "wheninside"
 fIconSize = 1.0
@@ -111,11 +111,12 @@ To change how they look:
 
 ### Change the button, or turn the gesture off
 
-`sPrimaryBinding` and `sSecondaryBinding` take a binding, as in [Change a button](#change-a-button). Keep
-`suppress` at the end: it stops the button's normal action, such as firing your weapon, while your hand is in
-the zone.
+`kPrimaryBinding` and `kSecondaryBinding` take a binding, as in [Change a button](#change-a-button). Keep
+`suppress = true` in it: it stops the button's normal action, such as firing your weapon, while your hand is
+in the zone.
 
-To turn the gesture off, set both to `none`. Its icon and sphere go with it, unless they're set to `always`.
+To turn the gesture off, set both to `{ type = "none" }`. Its icon and sphere go with it, unless they're set
+to `always`.
 
 ### Turn off the vibration
 
@@ -132,42 +133,52 @@ then shows the zone's real size, as long as `fSphereScale` is left at `1`.
 
 ---
 
-# The binding line
+# The binding
 
-The full format, of which [Change a button](#change-a-button) uses the first three parts:
+A binding is a table of these keys, of which [Change a button](#change-a-button) uses the first three:
 
-```
-<hand> <type> <button> [duration] [suppress|nosuppress] [+modifier]
-```
+| Key         | Needed                      | What it is                                                                                                         |
+| ----------- | --------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `hand`      | Always, but for `none`      | Which controller, see [Hand](#hand)                                                                                |
+| `type`      | Always                      | How it is pressed, see [Activation type](#activation-type). `none` turns the binding off                           |
+| `button`    | For a button type           | Which button, see [Button](#button)                                                                                |
+| `duration`  | Optional, for a button type | Seconds, whose meaning depends on the type, see [Activation type](#activation-type)                                |
+| `axis`      | Optional, for `axis`        | Which analog axis, the thumbstick when left out, see [Thumbstick & axis](#thumbstick--axis-bindings)               |
+| `direction` | For `axis`                  | Which way it is pushed: `up`, `down`, `left` or `right`                                                            |
+| `threshold` | Optional, for `axis`        | How far it is pushed, 0–1, `0.85` when left out                                                                    |
+| `suppress`  | Optional                    | `true` hides the button from the game while the binding is in use, see [Suppressing](#suppressing-the-game-input) |
+| `modifier`  | Optional                    | A button held down at the same time, see [Modifiers](#modifiers-chords)                                            |
 
-- **Case-insensitive** and forgiving of spacing: tokens may be separated by spaces, commas, or colons.
-- `<hand>` and `<type>` are always required. Button activations also need a `<button>`; thumbstick /
-  axis activations need a `<direction>` instead (see [Thumbstick & axis bindings](#thumbstick--axis-bindings)).
-- `[duration]`, `[suppress|nosuppress]`, and `[+modifier]` are optional and may be omitted.
-- `none`, or an empty value, disables the binding (see [Turn an action off](#turn-an-action-off)).
-- Nothing on the line is skipped: a misspelled word, a duration that isn't a number (`1.2s`) or a word too
-  many makes the binding invalid. The log says which word is wrong and what fits there, e.g.
-  `'thumbstik' is not a button, one of trigger, grip, a, b, thumbstick, menu, system`, and the mod uses its
-  default for the binding until it is fixed.
+- **Case-insensitive**: the words can be written in any case, and a few have aliases (`holddown` for
+  `hold`, `click` for `press`, `menu` for `b`).
+- `{ type = "none" }` disables the binding (see [Turn an action off](#turn-an-action-off)); it takes no other
+  key.
+- Nothing in the table is skipped: a misspelled key or word, a key the type doesn't have (a `direction` on a
+  `tap`), or a value of the wrong kind (a duration in quotes) makes the binding invalid. The log says what is
+  wrong and what fits there, e.g. `'thumbstik' is not a button, one of trigger, grip, a, b, thumbstick, menu,
+  system`, and the mod uses its default for the binding until it is fixed.
 
-| Example                             | Meaning                                                       |
-| ----------------------------------- | ------------------------------------------------------------- |
-| `offhand tap grip`                  | Quick press-and-release of the off-hand grip                  |
-| `primary press trigger`             | Primary trigger pressed this frame                            |
-| `primary longpress a 0.6`           | Hold the primary **A** button for 0.6 s                       |
-| `left double b`                     | Double-press **B** (menu) on the left controller              |
-| `offhand tap trigger suppress`      | Tap the off-hand trigger; hide it from the game while active  |
-| `primary press trigger +grip`       | Press the trigger while gripping the **same** hand (a chord)  |
-| `offhand longpress grip +primary:a` | Long-press off-hand grip while holding **A** on the main hand |
-| `primary thumbstick up`             | Push the primary thumbstick up                                |
-| `none`                              | Binding disabled — never fires                                |
+| Example                                                                                                    | Meaning                                                       |
+| ---------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
+| `{ hand = "offhand", type = "tap", button = "grip" }`                                                      | Quick press-and-release of the off-hand grip                  |
+| `{ hand = "primary", type = "press", button = "trigger" }`                                                 | Primary trigger pressed this frame                            |
+| `{ hand = "primary", type = "longpress", button = "a", duration = 0.6 }`                                   | Hold the primary **A** button for 0.6 s                       |
+| `{ hand = "left", type = "double", button = "b" }`                                                         | Double-press **B** (menu) on the left controller              |
+| `{ hand = "offhand", type = "tap", button = "trigger", suppress = true }`                                  | Tap the off-hand trigger; hide it from the game while active  |
+| `{ hand = "primary", type = "press", button = "trigger", modifier = { button = "grip" } }`                  | Press the trigger while gripping the **same** hand (a chord)  |
+| `{ hand = "offhand", type = "longpress", button = "grip", modifier = { hand = "primary", button = "a" } }` | Long-press off-hand grip while holding **A** on the main hand |
+| `{ hand = "primary", type = "axis", direction = "up" }`                                                    | Push the primary thumbstick up                                |
+| `{ type = "none" }`                                                                                        | Binding disabled — never fires                                |
+
+A mod that moved its config from an INI file reads a player's old binding lines (`sOpenMenu = offhand longpress
+grip`) into these tables the first time it starts, so a changed binding is kept.
 
 ## Hand
 
 Which controller the binding watches. Names are **handedness-aware**: `primary` follows your weapon
 hand and `offhand` the other, so a binding keeps working when left-handed mode is on.
 
-| Token     | Controller                        |
+| Word      | Controller                        |
 | --------- | --------------------------------- |
 | `primary` | Weapon / dominant hand            |
 | `offhand` | Non-weapon hand                   |
@@ -179,26 +190,27 @@ hand and `offhand` the other, so a binding keeps working when left-handed mode i
 ## Activation type
 
 How the button must be pressed for the binding to fire. This also decides what an optional
-`[duration]` means.
+`duration` means.
 
-| Token        | Fires when…                                                 | `[duration]` controls                       |
-| ------------ | ----------------------------------------------------------- | ------------------------------------------- |
-| `tap`        | Quick press-and-release (held under ~0.3 s)                 | _(ignored)_                                 |
-| `press`      | The button is first pressed this frame                      | _(ignored)_                                 |
-| `release`    | The button is released this frame                           | **Max** hold to still count (default: any)  |
-| `longpress`  | The button is held past the threshold                       | Hold threshold in seconds (default `0.6`)   |
-| `double`     | The button is pressed twice in quick succession             | Max gap between presses (default `0.4`)     |
-| `hold`       | The button is held down — fires **every frame** while held  | **Min** hold before it starts (default `0`) |
-| `touch`      | The button is touched (capacitive), not necessarily pressed | _(ignored)_                                 |
-| `thumbstick` | An analog axis is pushed in a direction — see below         | _(uses `threshold` instead; see below)_     |
+| Word        | Fires when…                                                 | `duration` controls                         |
+| ----------- | ----------------------------------------------------------- | ------------------------------------------- |
+| `tap`       | Quick press-and-release (held under ~0.3 s)                 | _(ignored)_                                 |
+| `press`     | The button is first pressed this frame                      | _(ignored)_                                 |
+| `release`   | The button is released this frame                           | **Max** hold to still count (default: any)  |
+| `longpress` | The button is held past the threshold                       | Hold threshold in seconds (default `0.6`)   |
+| `double`    | The button is pressed twice in quick succession             | Max gap between presses (default `0.4`)     |
+| `hold`      | The button is held down — fires **every frame** while held  | **Min** hold before it starts (default `0`) |
+| `touch`     | The button is touched (capacitive), not necessarily pressed | _(ignored)_                                 |
+| `axis`      | An analog axis is pushed in a direction — see below         | _(uses `threshold` instead; see below)_     |
+| `none`      | Never — the binding is off                                  | —                                           |
 
-`duration` is in **seconds**. Leaving it off (or `0`) uses the per-type default shown above.
+`duration` is in **seconds**. Leaving it out (or `0`) uses the per-type default shown above.
 
 ## Button
 
 The button the activation watches.
 
-| Token        | Button                                   |
+| Word         | Button                                   |
 | ------------ | ---------------------------------------- |
 | `trigger`    | Trigger                                  |
 | `grip`       | Grip                                     |
@@ -209,48 +221,44 @@ The button the activation watches.
 
 ## Thumbstick & axis bindings
 
-To trigger on the thumbstick (or another analog axis) being **pushed in a direction**, use an axis
-activation. There are two spellings:
+To trigger on the thumbstick (or another analog axis) being **pushed in a direction**, use the `axis` type:
 
+```toml
+kScrollUp = { hand = "primary", type = "axis", direction = "up" }
+kSqueeze = { hand = "right", type = "axis", axis = "trigger", direction = "up", threshold = 0.7 }
 ```
-<hand> thumbstick <direction> [threshold] [suppress|nosuppress] [+modifier]   # shorthand — implies the thumbstick axis
-<hand> axis <axis> <direction> [threshold] [suppress|nosuppress] [+modifier]   # explicit axis
-```
 
-- `<direction>` is `up`, `down`, `left`, or `right`.
-- `<axis>` (explicit form only) is `thumbstick` (also `touchpad` / `joystick`), `trigger`, or `grip`.
-- The optional trailing number is the **threshold** — how far the axis must travel (0–1) before it
-  counts. Default `0.85`.
+- `direction` is `up`, `down`, `left`, or `right`.
+- `axis` is `thumbstick` (also `touchpad` / `joystick`), `trigger`, or `grip`. Leave it out for the
+  thumbstick.
+- `threshold` is how far the axis must travel (0–1) before it counts. Default `0.85`.
 
-| Example                       | Meaning                                                  |
-| ----------------------------- | -------------------------------------------------------- |
-| `primary thumbstick up`       | Primary thumbstick pushed up                             |
-| `offhand thumbstick left 0.5` | Off-hand thumbstick pushed left past half travel         |
-| `right axis trigger up 0.7`   | Right trigger squeezed past 0.7 (analog, not the button) |
+| Example                                                                                  | Meaning                                                  |
+| ---------------------------------------------------------------------------------------- | -------------------------------------------------------- |
+| `{ hand = "primary", type = "axis", direction = "up" }`                                  | Primary thumbstick pushed up                             |
+| `{ hand = "offhand", type = "axis", direction = "left", threshold = 0.5 }`               | Off-hand thumbstick pushed left past half travel         |
+| `{ hand = "right", type = "axis", axis = "trigger", direction = "up", threshold = 0.7 }` | Right trigger squeezed past 0.7 (analog, not the button) |
 
 ## Modifiers (chords)
 
-Append `+<button>` to require a second button be **held down** while the binding fires — a chord. By
-default the modifier is checked on the binding's own hand; prefix it with a hand to pin it elsewhere.
+Add a `modifier` to require a second button be **held down** while the binding fires — a chord. By
+default the modifier is checked on the binding's own hand; give it a `hand` to pin it elsewhere.
 
-| Form            | Meaning                                                        |
-| --------------- | -------------------------------------------------------------- |
-| `+grip`         | Hold grip on the **binding's own hand**                        |
-| `+offhand:grip` | Hold grip on the **off hand** (regardless of the binding hand) |
-| `+primary:a`    | Hold **A** on the primary hand                                 |
-
-The modifier can sit anywhere on the line, but by convention it goes last:
+| Modifier                                           | Meaning                                                        |
+| -------------------------------------------------- | -------------------------------------------------------------- |
+| `modifier = { button = "grip" }`                   | Hold grip on the **binding's own hand**                        |
+| `modifier = { hand = "offhand", button = "grip" }` | Hold grip on the **off hand** (regardless of the binding hand) |
+| `modifier = { hand = "primary", button = "a" }`    | Hold **A** on the primary hand                                 |
 
 ```toml
-sFastTravel = "primary press trigger +offhand:grip"
+kFastTravel = { hand = "primary", type = "press", button = "trigger", modifier = { hand = "offhand", button = "grip" } }
 ```
 
 ## Suppressing the game input
 
-Add `suppress` (or `nosuppress`) anywhere on the line to opt this binding **in or out of input
-suppression**: while a consumer treats the binding as active, its physical button is hidden from the
-game so it can't _also_ fire its normal action. It is **off by default** — most bindings simply read
-the input and leave it alone.
+Add `suppress = true` to opt this binding **in to input suppression**: while a consumer treats the binding as
+active, its physical button is hidden from the game so it can't _also_ fire its normal action. It is **off by
+default** — most bindings simply read the input and leave it alone.
 
 Suppression only has an effect where something applies it. Today that consumer is an
 [activation sphere](#activation-spheres), which suppresses a `suppress` binding for as long as the
@@ -258,7 +266,7 @@ hand is inside its zone (so, e.g., the trigger you use to grab the flashlight do
 weapon while your hand is in the grab zone).
 
 ```toml
-sGrab = "offhand tap trigger suppress"
+kGrab = { hand = "offhand", type = "tap", button = "trigger", suppress = true }
 ```
 
 ---
@@ -285,16 +293,16 @@ sphere.
 | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `tZone`             | The zone as a transform `{ pos = [x, y, z], rot = [heading, roll, attitude], scale = s }`, each key optional. Only **`pos` + `scale`** matter — the zone is a sphere, so `rot` is ignored and `scale` is its **diameter**. |
 | `tZonePA`           | Optional **power-armor variant** of `tZone` (for a zone whose anchor moves in PA). Omit to reuse `tZone`.                                                                      |
-| `sPrimaryBinding`   | The main [binding line](#the-binding-line). Append `suppress` to hide its button while the hand is in the zone.                                                                |
-| `sSecondaryBinding` | An optional second binding line (e.g. a `longpress` variant of the same button). `none` to omit.                                                                               |
+| `kPrimaryBinding`   | The main [binding](#the-binding). Give it `suppress = true` to hide its button while the hand is in the zone.                                                                |
+| `kSecondaryBinding` | An optional second binding (e.g. a `longpress` variant of the same button). `{ type = "none" }` to omit.                                                                               |
 
 ## Haptics
 
 | Key                | Played                                |
 | ------------------ | ------------------------------------- |
 | `sEntryHaptic`     | **Once**, when a hand enters the zone |
-| `sPrimaryHaptic`   | When `sPrimaryBinding` fires          |
-| `sSecondaryHaptic` | When `sSecondaryBinding` fires        |
+| `sPrimaryHaptic`   | When `kPrimaryBinding` fires          |
+| `sSecondaryHaptic` | When `kSecondaryBinding` fires        |
 
 Each takes one of these names (case-insensitive), or `none` for silent:
 
@@ -369,8 +377,8 @@ to `never`.
 ```toml
 [MyMod_SomeActivation]
 tZone = { pos = [0, 0, 0], scale = 18 }
-sPrimaryBinding = "offhand tap trigger suppress"
-sSecondaryBinding = "offhand longpress trigger suppress"
+kPrimaryBinding = { hand = "offhand", type = "tap", button = "trigger", suppress = true }
+kSecondaryBinding = { hand = "offhand", type = "longpress", button = "trigger", suppress = true }
 sEntryHaptic = "Tick"
 sPrimaryHaptic = "DoubleClick"
 sSecondaryHaptic = "Click"
@@ -390,8 +398,9 @@ the sphere lights up once your hand is in it.
 
 **A single binding** is `f4cf::vrcf::InputBinding`, evaluated each frame with one
 `VRControllers.check(binding)`. Load one from the config with `ConfigBase::getInputBindingValue(...)`, or
-parse a string directly with `parseInputBinding(...)`, which returns the binding or, as its error, the reason
-the line is not one. The `suppress` flag rides on the binding
+read a table directly with `parseInputBindingTable(...)`, which returns the binding or, as its error, the
+reason the table is not one. `inputBindingTomlText(binding)` writes a binding as its table, for a UI that
+rebinds to save with `saveConfigValue`. The `suppress` flag rides on the binding
 (`InputBinding::suppress`); a consumer that wants exclusive use of the button applies it via
 `VRControllersSuppress`. Full API, code examples, and the button map are in
 [`src/vrcf/README.md`](../src/vrcf/README.md).

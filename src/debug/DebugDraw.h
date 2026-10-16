@@ -12,6 +12,11 @@
 
 #include "../render/PrimitiveDrawRenderer.h"
 
+namespace f4cf::vrcf
+{
+    struct InputBinding;
+}
+
 namespace f4cf::debug
 {
     // The overlay's colors and its frame buffer are the framework's generic primitive-drawing types;
@@ -37,7 +42,7 @@ namespace f4cf::debug
      * Zero cost until used: no hook is installed and the per-frame driver early-returns until the
      * first draw/watch call of the session; the OpenVR Submit hook + D3D resources are then
      * installed lazily. When the overlay is disabled (config bDebugDrawEnabled, setEnabled(false), or
-     * the sDebugDrawToggleBinding hotkey) appends are skipped at the call site.
+     * the kDebugDrawToggleBinding hotkey) appends are skipped at the call site.
      *
      * Channels: setChannel()/channelScope() tags subsequent draws with a name so independent systems
      * can be toggled separately (config aDebugDrawDisabledChannels or setChannelEnabled()).
@@ -180,7 +185,7 @@ namespace f4cf::debug
         void addLine(const RE::NiPoint3& start, const RE::NiPoint3& end, const Color& color, float sec);
         void circle(const RE::NiPoint3& center, const RE::NiPoint3& axisU, const RE::NiPoint3& axisV, float radius, const Color& color, float sec, int segments = 24);
         float distanceScale(const RE::NiPoint3& p) const;
-        void handleToggleHotkey(const std::string& configToggleBinding);
+        void handleToggleHotkey(const vrcf::InputBinding& toggleBinding);
         void layoutWatchTable();
         bool isChannelEnabled(const std::string& channel) const;
         static HudPlacement parseHudPlacement(const std::string& text);
