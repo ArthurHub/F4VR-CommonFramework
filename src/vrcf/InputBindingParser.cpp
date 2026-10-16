@@ -60,6 +60,29 @@ namespace f4cf::vrcf
             }
             return std::nullopt;
         }
+
+        // The words of each part of a line, as an error lists them: the common ones, not every alias.
+        constexpr auto HANDS = "primary, offhand, left, right";
+        constexpr auto TYPES = "tap, press, longpress, double, hold, release, touch, thumbstick, axis";
+        constexpr auto BUTTONS = "trigger, grip, a, b, thumbstick, menu, system";
+        constexpr auto AXES = "thumbstick, trigger, grip";
+        constexpr auto DIRECTIONS = "up, down, left, right";
+
+        /**
+         * The error of a word that is none of the words of its part of the line.
+         */
+        std::unexpected<std::string> notOneOf(const std::string_view token, const std::string_view part, const std::string_view words)
+        {
+            return std::unexpected(std::format("'{}' is not {}, one of {}", token, part, words));
+        }
+
+        /**
+         * The error of a word past the end of the line's form, as a typo or a word left over from an edit is.
+         */
+        std::unexpected<std::string> beyondTheLine(const std::string_view token, const std::string_view form)
+        {
+            return std::unexpected(std::format("'{}' is past the end of the line, which is {} with an optional suppress or nosuppress and +modifier", token, form));
+        }
     }
 
     std::optional<Hand> parseHand(const std::string_view text)
@@ -212,7 +235,15 @@ namespace f4cf::vrcf
         return names;
     }
 
-    std::optional<InputBinding> parseInputBinding(const std::string_view text)
+    /**
+     * Parse a full binding line, see the grammar above. A blank line or "none"/"off"/"disabled" yields a disabled
+     * binding (ActivationType::Disabled, which never triggers).
+     * Returns why the line is not a binding, naming the word that is wrong and the words that would fit there, for
+     * one that can't be read: a hand, type, button, axis or direction that is none of its words, one that is
+     * missing, a duration or threshold that is not a number, or a word past the end of the line's form. Nothing is
+     * left out of a line, so a typo never gives a binding other than the one written.
+     */
+    std::expected<InputBinding, std::string> parseInputBinding(const std::string_view text)
     {
         // A blank value or an explicit off keyword disables the binding: it parses successfully but never triggers.
         const std::string whole = normalize(text);
@@ -223,10 +254,6 @@ namespace f4cf::vrcf
         }
 
         std::vector<std::string> tokens = tokenize(text);
-        if (tokens.size() < 2) {
-            return std::nullopt;
-        }
-
         InputBinding binding;
 
         // Pull out an optional "+[hand:]button" modifier (held while the binding fires) before positional parsing.
@@ -240,11 +267,11 @@ namespace f4cf::vrcf
             if (const auto modifierHand = parseHand(rest)) {
                 // "+hand button" / "+hand:button" - explicit hand, button is the next token.
                 if (i + 1 >= tokens.size()) {
-                    return std::nullopt;
+                    return std::unexpected(std::format("'{}' has no button after it, as in '{}:grip'", tokens[i], tokens[i]));
                 }
                 const auto modifierButton = parseButton(tokens[i + 1]);
                 if (!modifierButton) {
-                    return std::nullopt;
+                    return notOneOf(tokens[i + 1], "a button", BUTTONS);
                 }
                 modifier.hand = modifierHand;
                 modifier.button = *modifierButton;
@@ -253,7 +280,7 @@ namespace f4cf::vrcf
                 // "+button" - modifier on the binding's own hand.
                 const auto modifierButton = parseButton(rest);
                 if (!modifierButton) {
-                    return std::nullopt;
+                    return std::unexpected(std::format("'{}' is not a modifier, which is '+button' or '+hand:button' with a button of {}", tokens[i], BUTTONS));
                 }
                 modifier.button = *modifierButton;
                 tokens.erase(tokens.begin() + i);
@@ -277,15 +304,30 @@ namespace f4cf::vrcf
             }
         }
 
-        // Re-check after removing modifier tokens: still need at least a hand and an activation type.
-        if (tokens.size() < 2) {
-            return std::nullopt;
+        // A second modifier or suppress flag is still in the line, where it would be read as a positional word.
+        for (const auto& token : tokens) {
+            if (token.front() == '+') {
+                return std::unexpected(std::format("'{}' is a second modifier, and a binding has one", token));
+            }
+            if (token == "suppress" || token == "nosuppress") {
+                return std::unexpected(std::format("'{}' is a second suppress or nosuppress, and a binding has one", token));
+            }
         }
 
+        // Re-check after removing modifier tokens: still need at least a hand and an activation type.
+        if (tokens.empty()) {
+            return std::unexpected("the hand and the type are missing, as in 'offhand tap grip'");
+        }
         const auto hand = parseHand(tokens[0]);
+        if (!hand) {
+            return notOneOf(tokens[0], "a hand", HANDS);
+        }
+        if (tokens.size() < 2) {
+            return std::unexpected(std::format("the type is missing after '{}', one of {}", tokens[0], TYPES));
+        }
         const auto type = parseActivationType(tokens[1]);
-        if (!hand || !type) {
-            return std::nullopt;
+        if (!type) {
+            return notOneOf(tokens[1], "a type", TYPES);
         }
         binding.hand = *hand;
         binding.type = *type;
@@ -295,45 +337,58 @@ namespace f4cf::vrcf
             // "axis" type spells out the axis; "thumbstick"/"stick" shorthand implies the thumbstick axis.
             if (tokens[1] == "axis") {
                 if (idx >= tokens.size()) {
-                    return std::nullopt;
+                    return std::unexpected(std::format("the axis is missing after 'axis', one of {}", AXES));
                 }
-                const auto axis = parseAxis(tokens[idx++]);
+                const auto axis = parseAxis(tokens[idx]);
                 if (!axis) {
-                    return std::nullopt;
+                    return notOneOf(tokens[idx], "an axis", AXES);
                 }
                 binding.axis = *axis;
+                ++idx;
             } else {
                 binding.axis = Axis::Thumbstick;
             }
             if (idx >= tokens.size()) {
-                return std::nullopt;
+                return std::unexpected(std::format("the direction is missing after '{}', one of {}", tokens[idx - 1], DIRECTIONS));
             }
-            const auto direction = parseDirection(tokens[idx++]);
+            const auto direction = parseDirection(tokens[idx]);
             if (!direction) {
-                return std::nullopt;
+                return notOneOf(tokens[idx], "a direction", DIRECTIONS);
             }
             binding.direction = *direction;
+            ++idx;
             if (idx < tokens.size()) {
-                if (const auto threshold = parseFloat(tokens[idx])) {
-                    binding.threshold = *threshold;
+                const auto threshold = parseFloat(tokens[idx]);
+                if (!threshold) {
+                    return std::unexpected(std::format("'{}' is not a number, the threshold the axis is pushed past", tokens[idx]));
                 }
+                binding.threshold = *threshold;
+                ++idx;
+            }
+            if (idx < tokens.size()) {
+                return beyondTheLine(tokens[idx], tokens[1] == "axis" ? "<hand> axis <axis> <direction> [threshold]" : "<hand> thumbstick <direction> [threshold]");
             }
             return binding;
         }
 
         // Button activation types: <hand> <type> <button> [duration]
         if (tokens.size() < 3) {
-            return std::nullopt;
+            return std::unexpected(std::format("the button is missing after '{}', one of {}", tokens[1], BUTTONS));
         }
         const auto button = parseButton(tokens[2]);
         if (!button) {
-            return std::nullopt;
+            return notOneOf(tokens[2], "a button", BUTTONS);
         }
         binding.button = *button;
         if (tokens.size() > 3) {
-            if (const auto duration = parseFloat(tokens[3])) {
-                binding.duration = *duration;
+            const auto duration = parseFloat(tokens[3]);
+            if (!duration) {
+                return std::unexpected(std::format("'{}' is not a number, the duration in seconds", tokens[3]));
             }
+            binding.duration = *duration;
+        }
+        if (tokens.size() > 4) {
+            return beyondTheLine(tokens[4], "<hand> <type> <button> [duration]");
         }
         return binding;
     }

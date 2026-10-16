@@ -527,9 +527,10 @@ namespace f4cf::debug
     {
         if (configToggleBinding != s_toggleBindingRaw) {
             s_toggleBindingRaw = configToggleBinding;
-            s_toggleBinding = vrcf::parseInputBinding(configToggleBinding);
-            if (!s_toggleBinding) {
-                logger::warn("DebugDraw: invalid sDebugDrawToggleBinding '{}'", configToggleBinding);
+            const auto parsed = vrcf::parseInputBinding(configToggleBinding);
+            s_toggleBinding = parsed ? std::optional{ *parsed } : std::nullopt;
+            if (!parsed) {
+                logger::warn("DebugDraw: sDebugDrawToggleBinding '{}' is not valid: {}", configToggleBinding, parsed.error());
             }
         }
         if (s_toggleBinding && s_toggleBinding->isEnabled() && vrcf::VRControllers.check(*s_toggleBinding)) {

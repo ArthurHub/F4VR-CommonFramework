@@ -1,5 +1,6 @@
 #pragma once
 
+#include <expected>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -48,12 +49,7 @@ namespace f4cf::vrcf
     std::optional<Axis> parseAxis(std::string_view text);
     std::optional<Direction> parseDirection(std::string_view text);
 
-    /**
-     * Parse a full binding line. A blank line or "none"/"off"/"disabled" yields a disabled binding
-     * (ActivationType::Disabled, which never triggers). Returns std::nullopt if the hand, type, or the
-     * required button/axis/direction tokens cannot be resolved.
-     */
-    std::optional<InputBinding> parseInputBinding(std::string_view text);
+    std::expected<InputBinding, std::string> parseInputBinding(std::string_view text);
 
     /**
      * The grammar's word for a button - system, menu, grip, a, trigger, thumbstick - the inverse of parseButton, so
