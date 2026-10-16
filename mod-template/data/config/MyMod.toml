@@ -20,8 +20,8 @@ fMyConfigValue = 3.0
 # A sphere for activating functionality when player hand/wand is inside it.
 # https://github.com/ArthurHub/F4VR-CommonFramework/blob/main/docs/input-binding.md#activation-spheres
 [MyMod_AnActivationSphere]
-tZone = "3.91,7.11,0.67;0.00,0.00,0.00;20.00"
-tZonePA = "4.01,10.21,-4.60;0.00,0.00,0.00;24.00"
+tZone = { pos = [3.91, 7.11, 0.67], scale = 20.0 }
+tZonePA = { pos = [4.01, 10.21, -4.6], scale = 24.0 }
 sPrimaryBinding = "offhand tap trigger suppress"
 sSecondaryBinding = "primary tap trigger suppress"
 sEntryHaptic = "Tick"

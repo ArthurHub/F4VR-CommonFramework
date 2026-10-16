@@ -11,6 +11,7 @@
 
 #include "ConfigFile.h"
 #include "ConfigValue.h"
+#include "ValueParsers.h"
 
 // last: on Windows it includes windows.h, whose min and max macros break headers that come after it
 #include <SimpleIni.h>
@@ -98,7 +99,9 @@ namespace
      * that type, so it is the value a mod read from the INI: "yes" and "on" are true, "0x10" is 16, and a number with
      * text after it is not one. No value when the text is not a value of the type, for which a getter returns its
      * default, so a bool and an integer are read with two defaults that differ, and a float with NaN, as floats are
-     * not compared exactly. A type the INI has no getter of is the text read as TOML, see config::typedLike.
+     * not compared exactly. A transform, a table the config reads as one (see config::parseTransform), is the INI's
+     * text of it, "x,y,z;heading,roll,attitude;scale", as the table, see config::transformTableFromText. Any other
+     * type the INI has no getter of is the text read as TOML, see config::typedLike.
      */
     std::optional<TomlEditor::Value> iniValueAs(const CSimpleIniA& ini, const char* section, const char* key, const toml::node& like)
     {
@@ -120,6 +123,13 @@ namespace
             return std::nullopt;
         case toml::node_type::string:
             return TomlEditor::Value(ini.GetValue(section, key, ""));
+        case toml::node_type::table:
+            if (f4cf::config::parseTransform(like)) {
+                if (const auto table = f4cf::config::transformTableFromText(ini.GetValue(section, key, ""))) {
+                    return TomlEditor::Value(*table);
+                }
+            }
+            [[fallthrough]];
         default:
             if (const auto typed = f4cf::config::typedLike(&like, ini.GetValue(section, key, ""))) {
                 return TomlEditor::Value(*typed->get("v"));

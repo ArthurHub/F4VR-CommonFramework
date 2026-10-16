@@ -1,15 +1,18 @@
 #pragma once
 
 #include <array>
+#include <expected>
 #include <optional>
 #include <string>
+#include <string_view>
+#include <toml++/toml.hpp>
 
-// The text forms of the config values that are more than one number or word, apart from the game: plain std only,
-// so it is unit tested.
+// The forms of the config values that are more than one number or word, apart from the game: plain std and toml++
+// only, so it is unit tested.
 namespace f4cf::config
 {
     /**
-     * A transform as its text form has it: the position, the rotation as Euler angles in degrees, and the scale.
+     * A transform as the config has it: the position, the rotation as Euler angles in degrees, and the scale.
      */
     struct ParsedTransform
     {
@@ -22,7 +25,9 @@ namespace f4cf::config
         float scale = 1.0f;
     };
 
-    std::optional<ParsedTransform> parseTransform(const char* text);
+    std::expected<ParsedTransform, std::string> parseTransform(const toml::node& node);
+
+    std::optional<toml::table> transformTableFromText(std::string_view text);
 
     std::optional<std::array<float, 22>> parseHandPose(const char* text);
 

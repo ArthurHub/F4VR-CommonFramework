@@ -118,11 +118,11 @@ namespace
         "iVersion = 18\n";
 
     /**
-     * An INI as TOML text, typed by SHIPPED_TOML, which has to succeed.
+     * An INI as TOML text, typed by `shipped`, the TOML config the mod ships, which has to succeed.
      */
-    std::string asToml(const std::string& ini)
+    std::string asToml(const std::string& ini, const std::string& shipped = SHIPPED_TOML)
     {
-        const auto toml = iniToToml(ini, toml::parse(SHIPPED_TOML));
+        const auto toml = iniToToml(ini, toml::parse(shipped));
         REQUIRE(toml);
         return *toml;
     }
@@ -308,6 +308,41 @@ TEST_CASE("INI as TOML: a migration sets the INI's values in the TOML config the
     REQUIRE(outcomeOf(values, "Main.sName") == Outcome::Unchanged);
     REQUIRE(outcomeOf(values, "Main.fSpeed") == Outcome::Removed);
     REQUIRE(outcomeOf(values, "Old.bLegacy") == Outcome::Removed);
+}
+
+TEST_CASE("INI as TOML: a transform's text is the table of its numbers, which a migration carries as any value")
+{
+    constexpr auto SHIPPED_ZONE =
+        "[Zone]\n"
+        "tZone = { pos = [0.0, 0.0, 0.0], scale = 18.0 }\n"
+        "tZonePA = { pos = [1.0, 1.0, 1.0] }\n";
+    const auto old = toml::parse(asToml("[Zone]\ntZone = 5,-2,1;0,0.3,0;24.00\n", SHIPPED_ZONE));
+
+    TomlEditor latest(SHIPPED_ZONE);
+    const auto values = migrateValues(old, latest);
+
+    REQUIRE(outcomeOf(values, "Zone.tZone") == Outcome::Carried);
+    // each number as the text has it, not as the float nearest to it, and the INI's key the user does not have keeps
+    // its default
+    REQUIRE(latest.text() ==
+            "[Zone]\n"
+            "tZone = { pos = [5.0, -2.0, 1.0], rot = [0.0, 0.3, 0.0], scale = 24.0 }\n"
+            "tZonePA = { pos = [1.0, 1.0, 1.0] }\n");
+}
+
+TEST_CASE("INI as TOML: a text that is not a transform, or of a table that is not one, is a string, and a migration keeps the default")
+{
+    constexpr auto SHIPPED_ZONE =
+        "[Zone]\n"
+        "tZone = { scale = 18.0 }\n"
+        "g = { x = 1 }\n";
+    const auto old = toml::parse(asToml("[Zone]\ntZone = 5,-2,1\ng = 1,2,3;4,5,6;7\n", SHIPPED_ZONE));
+    REQUIRE(old["Zone"]["tZone"].value<std::string>() == "5,-2,1");
+    REQUIRE(old["Zone"]["g"].value<std::string>() == "1,2,3;4,5,6;7");
+
+    TomlEditor latest(SHIPPED_ZONE);
+    REQUIRE(outcomeOf(migrateValues(old, latest), "Zone.tZone") == Outcome::NotCarried);
+    REQUIRE(latest.text() == SHIPPED_ZONE);
 }
 
 TEST_CASE("INI file import: the INI as TOML at version 0, which says what it is, and the INI kept by its own version")
