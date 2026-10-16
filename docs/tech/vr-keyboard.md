@@ -5,9 +5,11 @@ shows SteamVR's keyboard, and the keys of the game's window reach ImGui too, so 
 keyboard overlay that types into the window works as well. The content calls `ImGui::InputText` as on a
 screen and has nothing else to call.
 
-This is the design. None of it is built yet. It goes in [`src/imgui/`](../../src/imgui/), beside the
-pointer that is the canvas's mouse ([`ImGuiPointer.cpp`](../../src/imgui/ImGuiPointer.cpp)), and runs
-in the ImGui frame of [`ImGuiLayer.cpp`](../../src/imgui/ImGuiLayer.cpp).
+This is the design. The keys of the game's window are built, in
+[`ImGuiKeyboard.cpp`](../../src/imgui/ImGuiKeyboard.cpp); SteamVR's keyboard is not yet. It goes in
+[`src/imgui/`](../../src/imgui/), beside the pointer that is the canvas's mouse
+([`ImGuiPointer.cpp`](../../src/imgui/ImGuiPointer.cpp)), and runs in the ImGui frame of
+[`ImGuiLayer.cpp`](../../src/imgui/ImGuiLayer.cpp).
 
 The framework draws no keyboard of its own. A field that takes a number is typed on the same keyboard.
 
@@ -55,12 +57,22 @@ of the game's window.
 
 ## The keys of the game's window
 
-The framework subclasses the game's window procedure (`SetWindowLongPtr`, on the window of the swap
-chain) and hands its keyboard messages (`WM_KEYDOWN`, `WM_KEYUP`, `WM_SYSKEYDOWN`, `WM_SYSKEYUP`,
-`WM_CHAR`) to Dear ImGui's Win32 backend, `ImGui_ImplWin32_WndProcHandler`. That backend maps a Windows
-key to ImGui's key and character events, as it does for the flat game's ImGui menus (F4SEMenuFramework,
-DearModdingUI). It needs the `win32-binding` feature of vcpkg's `imgui` and `ImGui_ImplWin32_Init`
-with the window.
+The framework subclasses the game's window procedure (`SetWindowLongPtr`) and hands its keyboard
+messages (`WM_KEYDOWN`, `WM_KEYUP`, `WM_SYSKEYDOWN`, `WM_SYSKEYUP`, `WM_CHAR`) to Dear ImGui's Win32
+backend, `ImGui_ImplWin32_WndProcHandler`. That backend maps a Windows key to ImGui's key and character
+events, as it does for the flat game's ImGui menus (F4SEMenuFramework, DearModdingUI). It needs the
+`win32-binding` feature of vcpkg's `imgui` and `ImGui_ImplWin32_Init` with the window. Every message
+goes on to the game's procedure.
+
+The window is found by its class, `Fallout4VR`, which `WinMain` registers (`0xD8DF37`) and looks for
+to keep a second copy of the game from starting (`0xD80BA3`). It is hooked when the ImGui context is
+created, so only once a canvas is shown, and only when its messages come on the thread that builds the
+ImGui frame: ImGui's input queue is not thread-safe. The window is made by the thread that runs the
+game's main loop, so they do; were they not, the framework would log it and hand no keys on.
+
+When the window loses focus (`WM_KILLFOCUS`), the keys ImGui holds down are let go, as the release of a
+key then goes to another window: a Backspace that stayed down would repeat in the field. ImGui's own
+answer to a lost focus is not used, as it lets go of the mouse button too, which is the pointer's.
 
 Mouse messages are not handed on, and `ImGui_ImplWin32_NewFrame` is not called: the pointer stays the
 canvas's mouse, and the canvas's display stays the layer's.
@@ -116,7 +128,7 @@ game's window.
   `SetKeyboardTransformAbsolute`.
 - Whether the game still sees the controllers while the keyboard is shown: the ray, and a Back button
   that would hide it.
-- That the window's messages come on the thread that makes the ImGui frame, as ImGui's input queue is
-  not thread-safe.
+- That the log says the keys of the game's window reach a text field, and not that the window is on
+  another thread.
 - Whether a key typed into a field also reaches the game. F4SEMenuFramework keeps the keys from the
   flat game by not passing the window's messages on while its menu is open.
