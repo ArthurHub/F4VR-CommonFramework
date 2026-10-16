@@ -1,11 +1,16 @@
 #include "ValueParsers.h"
 
+#include <algorithm>
 #include <cstdio>
 #include <format>
+#include <iterator>
 #include <string_view>
 
 namespace
 {
+    // the keys of a hand pose's fingers, in the order of the pose's floats
+    constexpr std::string_view FINGERS[] = { "thumb", "index", "middle", "ring", "pinky" };
+
     /**
      * A color channel of a whole number in 0..255 as its 0..1 value. No value for a float, as 0.5 would read as
      * the 0..1 form a channel is not written in, and for a number out of the range.
@@ -118,11 +123,75 @@ namespace f4cf::config
     }
 
     /**
-     * Parse a 22-float hand pose: 5 ';'-separated groups of 4 ','-separated floats (thumb, index, middle, ring,
-     * pinky, each prox,mid,dist,splay), then the 2 of the palm (palmPitch,palmYaw). Spaces around a separator
-     * are allowed. Returns no value when the structure doesn't match.
+     * Read a 22-float hand pose from its inline table: an array [prox, mid, dist, splay] for each finger, `thumb`,
+     * `index`, `middle`, `ring` and `pinky`, and `palm` = [pitch, yaw], into the layout of the FRIK API's
+     * HandPoseData (the fingers thumb to pinky, then the palm). Each key is optional, and one that is missing is
+     * zeros, so an authored pose can name only the fingers it bends.
+     * Returns why not when the node is not a table, or has a key other than the six, as a misspelled one would be
+     * read as its default, or an array that is not its count of numbers.
      */
-    std::optional<std::array<float, 22>> parseHandPose(const char* text)
+    std::expected<std::array<float, 22>, std::string> parseHandPose(const toml::node& node)
+    {
+        const auto* table = node.as_table();
+        if (!table) {
+            return std::unexpected(std::string("it is not a table"));
+        }
+
+        std::array<float, 22> pose{};
+        for (const auto& [key, value] : *table) {
+            const auto name = key.str();
+            const auto finger = std::ranges::find(FINGERS, name);
+            const bool isPalm = name == "palm";
+            if (finger == std::end(FINGERS) && !isPalm) {
+                return std::unexpected(std::format("it has the key '{}', which is not thumb, index, middle, ring, pinky or palm", name));
+            }
+            const std::size_t count = isPalm ? 2 : 4;
+            const std::size_t first = isPalm ? 20 : static_cast<std::size_t>(finger - std::begin(FINGERS)) * 4;
+            const auto* array = value.as_array();
+            bool valid = array && array->size() == count;
+            for (std::size_t i = 0; valid && i < count; ++i) {
+                const auto number = (*array)[i].value<double>();
+                valid = number.has_value() && !(*array)[i].is_boolean();
+                if (valid) {
+                    pose[first + i] = static_cast<float>(*number);
+                }
+            }
+            if (!valid) {
+                return std::unexpected(
+                    isPalm ? std::string("palm is not an array of two numbers, [pitch, yaw]") : std::format("{} is not an array of four numbers, [prox, mid, dist, splay]", name));
+            }
+        }
+        return pose;
+    }
+
+    /**
+     * A hand pose as the TOML text of its inline table, which parseHandPose reads back as the same pose: every
+     * finger thumb to pinky, then the palm, each number as the shortest text that reads back as its float (0.48,
+     * not 0.4799999892711639), with ".0" added to a whole number so it stays a float.
+     */
+    std::string handPoseTomlText(const std::array<float, 22>& pose)
+    {
+        const auto number = [](const float value) {
+            auto text = std::format("{}", value);
+            if (text.find_first_of(".eE") == std::string::npos) {
+                text += ".0";
+            }
+            return text;
+        };
+        std::string text = "{ ";
+        for (std::size_t f = 0; f < std::size(FINGERS); ++f) {
+            text += std::format("{} = [{}, {}, {}, {}], ", FINGERS[f], number(pose[f * 4]), number(pose[f * 4 + 1]), number(pose[f * 4 + 2]), number(pose[f * 4 + 3]));
+        }
+        return text + std::format("palm = [{}, {}] }}", number(pose[20]), number(pose[21]));
+    }
+
+    /**
+     * Parse a 22-float hand pose in the text form of a mod's INI config, for the import of the INI config (see
+     * config::iniToToml): 5 ';'-separated groups of 4 ','-separated floats (thumb, index, middle, ring, pinky, each
+     * prox,mid,dist,splay), then the 2 of the palm (palmPitch,palmYaw). Spaces around a separator are allowed.
+     * Returns no value when the structure doesn't match.
+     */
+    std::optional<std::array<float, 22>> parseHandPoseText(const char* text)
     {
         std::array<float, 22> r{};
         const int parsed = sscanf_s(text,

@@ -29,7 +29,11 @@ namespace f4cf::config
 
     std::optional<toml::table> transformTableFromText(std::string_view text);
 
-    std::optional<std::array<float, 22>> parseHandPose(const char* text);
+    std::expected<std::array<float, 22>, std::string> parseHandPose(const toml::node& node);
+
+    std::string handPoseTomlText(const std::array<float, 22>& pose);
+
+    std::optional<std::array<float, 22>> parseHandPoseText(const char* text);
 
     std::expected<void, std::string> parseColor(const toml::node& node, std::array<float, 4>& color);
 }

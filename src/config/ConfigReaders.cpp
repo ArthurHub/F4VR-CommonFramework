@@ -247,24 +247,27 @@ namespace f4cf::config
     }
 
     /**
-     * Parse a 22-float hand pose from the value at section/key, see parseHandPose for its format.
-     * Returns defaultValue (and logs a warning) if the key is missing or the structure doesn't match.
+     * Read a 22-float hand pose from its inline table at section/key, { thumb = [prox, mid, dist, splay], index =
+     * [..], middle = [..], ring = [..], pinky = [..], palm = [pitch, yaw] } with each key optional, see
+     * parseHandPose.
+     * Returns defaultValue if the key is missing, and with a warning if the value is malformed.
      */
     std::array<float, 22> ConfigReaders::getHandPoseValue(const toml::table& config, const char* section, const char* key, const std::array<float, 22>& defaultValue)
     {
-        const auto raw = stringOf(config, section, key);
-        if (!raw) {
+        const auto* node = nodeOf(config, { section, key });
+        if (!node) {
             return defaultValue;
         }
 
-        const auto parsed = parseHandPose(raw->c_str());
+        const auto parsed = parseHandPose(*node);
         if (!parsed) {
             logger::warn(
-                "Config: malformed hand pose value for '{}.{}' = '{}' "
-                "(expected 'p,m,d,s;p,m,d,s;p,m,d,s;p,m,d,s;p,m,d,s;pp,py'). Using default.",
+                "Config: malformed hand pose value for '{}.{}' = {}: {} (expected {{ thumb = [prox, mid, dist, splay], index = .., middle = .., ring = .., "
+                "pinky = .., palm = [pitch, yaw] }}). Using default.",
                 section,
                 key,
-                *raw);
+                common::TomlEditor::Value(*node).text(),
+                parsed.error());
             return defaultValue;
         }
         return *parsed;
