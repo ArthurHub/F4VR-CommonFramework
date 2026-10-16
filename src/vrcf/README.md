@@ -93,7 +93,7 @@ case-insensitive string into an `InputBinding` (token helpers `parseHand` / `par
 `buttonNames(mask)` go the other way, to the grammar's words, for logs and messages that should read
 like the config). If your config derives from
 `ConfigBase`, prefer its `getInputBindingValue(config, section, key, default)` helper — it reads the key,
-falls back to your default, and logs a warning on a malformed value (same pattern as
+falls back to your default, and logs a warning that names the wrong word on a malformed value (same pattern as
 `getTransformValue` / `getHandPoseValue`):
 
 ```cpp
@@ -103,7 +103,7 @@ openMenuBinding = getInputBindingValue(config, "Controls", "sOpenMenu",
 
 // Or parse a string directly anywhere else:
 #include "vrcf/InputBindingParser.h"
-auto chord = parseInputBinding("primary press trigger +offhand:grip"); // -> std::optional<InputBinding>
+auto chord = parseInputBinding("primary press trigger +offhand:grip"); // -> std::expected<InputBinding, std::string>, the error saying why
 ```
 
 Format: `"<hand> <type> <button> [duration] [+[hand:]modifier]"`. Examples: `"primary press trigger"`,

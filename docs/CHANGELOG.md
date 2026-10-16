@@ -49,6 +49,12 @@ major version is `0`, a minor bump may break the API; the **Upgrading** notes sa
   - `consumeDebugAddItemsOnce` returns a `toml::array`, and
     `f4vr::DebugInventory::iterateObjects(std::string_view)` is
     `iterateObjects(const toml::array&)`, with `parseRequest` for one request.
+- **A binding that is not valid says why**: the warning names the word that is wrong and the words that
+  fit there (`'thumbstik' is not a button, one of trigger, grip, ...`). Nothing on a line is skipped any
+  more: a duration or threshold that is not a number, a word past the end of the line, and a second
+  modifier or suppress make it invalid, where they were dropped, and the mod's default applies.
+  **Upgrading:** `vrcf::parseInputBinding` returns `std::expected<InputBinding, std::string>`; code that
+  stored it in a `std::optional` takes the value when there is one.
   - `updateIniConfigToLatestVersionCustom` is `updateConfigToLatestVersionCustom(currentVersion,
     latestVersion, const toml::table& old, common::TomlEditor& latest)`. The generic migration carries a
     value only into a key of the same type (an integer into a float too): one whose type changed is left

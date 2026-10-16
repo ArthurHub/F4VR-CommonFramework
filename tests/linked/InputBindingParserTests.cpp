@@ -90,9 +90,9 @@ TEST_CASE("InputBindingParser: a button binding is a hand, how the button is wor
     {
         REQUIRE(parsed("left hold trigger 0.5").duration == 0.5f);
     }
-    SECTION("a duration that is not a number is left out")
+    SECTION("a duration that is not a number fails the line, and is not left out")
     {
-        REQUIRE(parsed("left hold trigger 0.5x").duration == defaults.duration);
+        REQUIRE_FALSE(parseInputBinding("left hold trigger 0.5x"));
     }
     SECTION("the thumbstick as a button, pressed in")
     {
@@ -224,6 +224,47 @@ TEST_CASE("InputBindingParser: a line without a hand, a type or what the type ne
         CAPTURE(text);
         REQUIRE_FALSE(parseInputBinding(text));
     }
+}
+
+TEST_CASE("InputBindingParser: a line that does not parse says why, naming the word that is wrong")
+{
+    const auto errorOf = [](const std::string_view text) {
+        const auto binding = parseInputBinding(text);
+        CAPTURE(text);
+        REQUIRE_FALSE(binding);
+        return binding.error();
+    };
+    const auto contains = [](const std::string& error, const std::string_view part) {
+        CAPTURE(error, part);
+        return error.find(part) != std::string::npos;
+    };
+
+    // a word that is none of its part's words, with the words that would fit
+    CHECK(contains(errorOf("nobody press trigger"), "'nobody' is not a hand, one of primary, offhand"));
+    CHECK(contains(errorOf("primary squeeze trigger"), "'squeeze' is not a type, one of tap,"));
+    CHECK(contains(errorOf("primary longpress thumbstik"), "'thumbstik' is not a button, one of trigger,"));
+    CHECK(contains(errorOf("primary axis elbow up"), "'elbow' is not an axis"));
+    CHECK(contains(errorOf("primary thumbstick sideways"), "'sideways' is not a direction, one of up,"));
+    CHECK(contains(errorOf("primary press trigger +elbow"), "'+elbow' is not a modifier"));
+    CHECK(contains(errorOf("primary press trigger +offhand:elbow"), "'elbow' is not a button"));
+
+    // a part that is missing, by what it comes after
+    CHECK(contains(errorOf("suppress"), "the hand and the type are missing"));
+    CHECK(contains(errorOf("primary"), "the type is missing after 'primary'"));
+    CHECK(contains(errorOf("primary press"), "the button is missing after 'press'"));
+    CHECK(contains(errorOf("primary axis"), "the axis is missing after 'axis'"));
+    CHECK(contains(errorOf("primary axis trigger"), "the direction is missing after 'trigger'"));
+    CHECK(contains(errorOf("primary press trigger +offhand"), "'+offhand' has no button after it"));
+
+    // a number that is not one, and a word past the end of the line
+    CHECK(contains(errorOf("primary longpress a 1.2s"), "'1.2s' is not a number, the duration in seconds"));
+    CHECK(contains(errorOf("right axis trigger up hard"), "'hard' is not a number, the threshold"));
+    CHECK(contains(errorOf("primary longpress a 1.2 extra"), "'extra' is past the end of the line, which is <hand> <type> <button> [duration]"));
+    CHECK(contains(errorOf("primary thumbstick up 0.5 more"), "'more' is past the end of the line, which is <hand> thumbstick"));
+    // a second modifier or suppress, wherever it is
+    CHECK(contains(errorOf("primary press trigger +grip +a"), "'+a' is a second modifier"));
+    CHECK(contains(errorOf("primary +grip press trigger +a 0.5"), "'+a' is a second modifier"));
+    CHECK(contains(errorOf("primary press trigger suppress nosuppress"), "'nosuppress' is a second suppress or nosuppress"));
 }
 
 TEST_CASE("InputBindingParser: the name of a button and of an axis parses back to it")

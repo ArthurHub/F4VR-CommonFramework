@@ -11,7 +11,7 @@ The file is TOML: a binding, and any other text value, goes in double quotes, a 
 and a Windows path goes in single quotes, where a backslash is just a backslash (`sIcon = 'f4cf\icon.dds'`).
 
 > **Edits apply live.** Save the file while the game runs and the change takes effect right away, with no
-> restart. A value that can't be read is logged as a warning, and the setting keeps its previous value. A
+> restart. A value that can't be read is logged as a warning, and the setting uses the mod's default. A
 > typo that breaks the file, such as a binding without its quotes, is logged with its line, and every setting
 > keeps its value until it is fixed.
 
@@ -145,6 +145,10 @@ The full format, of which [Change a button](#change-a-button) uses the first thr
   axis activations need a `<direction>` instead (see [Thumbstick & axis bindings](#thumbstick--axis-bindings)).
 - `[duration]`, `[suppress|nosuppress]`, and `[+modifier]` are optional and may be omitted.
 - `none`, or an empty value, disables the binding (see [Turn an action off](#turn-an-action-off)).
+- Nothing on the line is skipped: a misspelled word, a duration that isn't a number (`1.2s`) or a word too
+  many makes the binding invalid. The log says which word is wrong and what fits there, e.g.
+  `'thumbstik' is not a button, one of trigger, grip, a, b, thumbstick, menu, system`, and the mod uses its
+  default for the binding until it is fixed.
 
 | Example                             | Meaning                                                       |
 | ----------------------------------- | ------------------------------------------------------------- |
@@ -386,7 +390,8 @@ the sphere lights up once your hand is in it.
 
 **A single binding** is `f4cf::vrcf::InputBinding`, evaluated each frame with one
 `VRControllers.check(binding)`. Load one from the config with `ConfigBase::getInputBindingValue(...)`, or
-parse a string directly with `parseInputBinding(...)`. The `suppress` flag rides on the binding
+parse a string directly with `parseInputBinding(...)`, which returns the binding or, as its error, the reason
+the line is not one. The `suppress` flag rides on the binding
 (`InputBinding::suppress`); a consumer that wants exclusive use of the button applies it via
 `VRControllersSuppress`. Full API, code examples, and the button map are in
 [`src/vrcf/README.md`](../src/vrcf/README.md).

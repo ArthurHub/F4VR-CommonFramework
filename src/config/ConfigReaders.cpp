@@ -242,7 +242,7 @@ namespace f4cf::config
     /**
      * Parse a controller input binding from the value at section/key.
      * Delegates to vrcf::parseInputBinding (see vrcf/InputBindingParser.h for the grammar).
-     * Returns defaultValue (and logs a warning) if the key is missing or the value is malformed.
+     * Returns defaultValue if the key is missing, and with a warning that says what is wrong if the value is malformed.
      */
     vrcf::InputBinding ConfigReaders::getInputBindingValue(const toml::table& config, const char* section, const char* key, const vrcf::InputBinding& defaultValue)
     {
@@ -253,7 +253,7 @@ namespace f4cf::config
 
         const auto parsed = vrcf::parseInputBinding(*raw);
         if (!parsed) {
-            logger::warn("Config: malformed input binding for '{}.{}' = '{}'. Using default.", section, key, *raw);
+            logger::warn("Config: input binding '{}.{}' = '{}' is not valid: {}. Using default.", section, key, *raw, parsed.error());
             return defaultValue;
         }
         return *parsed;
