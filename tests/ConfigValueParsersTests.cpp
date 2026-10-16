@@ -8,9 +8,28 @@
 using f4cf::config::parseColor255;
 using f4cf::config::parseHandPose;
 using f4cf::config::parseTransform;
+using f4cf::config::transformTableFromText;
 
 namespace
 {
+    /**
+     * A transform read from the TOML text of its value, as a config has it.
+     */
+    auto transformOf(const std::string& value)
+    {
+        const auto table = toml::parse("v = " + value);
+        return parseTransform(*table.get("v"));
+    }
+
+    /**
+     * Why the TOML text of a value is not a transform, or "(read)" when it is one.
+     */
+    std::string transformErrorOf(const std::string& value)
+    {
+        const auto transform = transformOf(value);
+        return transform ? std::string("(read)") : transform.error();
+    }
+
     // a color as a preset has it before its config value is read: white, at an opacity of its own
     constexpr std::array<float, 4> PRESET{ 1.0f, 1.0f, 1.0f, 0.4f };
 
@@ -23,9 +42,9 @@ namespace
     }
 }
 
-TEST_CASE("ConfigValueParsers: a transform is its position, its rotation in degrees and its scale")
+TEST_CASE("ConfigValueParsers: a transform is its position, its rotation in degrees and its scale, integers or floats")
 {
-    const auto transform = parseTransform("1.5,-2,3;90,0,-45.5;0.8");
+    const auto transform = transformOf("{ pos = [1.5, -2, 3], rot = [90, 0, -45.5], scale = 0.8 }");
     REQUIRE(transform);
     REQUIRE(transform->x == 1.5f);
     REQUIRE(transform->y == -2.0f);
@@ -36,28 +55,63 @@ TEST_CASE("ConfigValueParsers: a transform is its position, its rotation in degr
     REQUIRE(transform->scale == 0.8f);
 }
 
-TEST_CASE("ConfigValueParsers: a transform is read with spaces around its numbers")
+TEST_CASE("ConfigValueParsers: a transform without a key has no move, no rotation or a scale of 1 for it")
 {
-    const auto transform = parseTransform("  1 , 2 , 3 ; 4 , 5 , 6 ; 7  ");
+    const auto transform = transformOf("{ pos = [1, 2, 3] }");
     REQUIRE(transform);
     REQUIRE(transform->x == 1.0f);
     REQUIRE(transform->z == 3.0f);
-    REQUIRE(transform->heading == 4.0f);
-    REQUIRE(transform->attitude == 6.0f);
-    REQUIRE(transform->scale == 7.0f);
+    REQUIRE(transform->heading == 0.0f);
+    REQUIRE(transform->attitude == 0.0f);
+    REQUIRE(transform->scale == 1.0f);
+
+    const auto none = transformOf("{}");
+    REQUIRE(none);
+    REQUIRE(none->x == 0.0f);
+    REQUIRE(none->scale == 1.0f);
 }
 
-TEST_CASE("ConfigValueParsers: a transform that lacks a number or a separator is malformed")
+TEST_CASE("ConfigValueParsers: a transform that is not a table, or has a key of another form or name, is malformed")
 {
-    REQUIRE_FALSE(parseTransform(""));
-    REQUIRE_FALSE(parseTransform("none"));
+    // the text form of the INI config
+    REQUIRE(transformErrorOf("\"1,2,3;4,5,6;7\"") == "it is not a table");
+    // an array of two numbers, and of a word
+    REQUIRE(transformErrorOf("{ pos = [1, 2] }") == "pos is not an array of three numbers");
+    REQUIRE(transformErrorOf("{ rot = [1, \"five\", 3] }") == "rot is not an array of three numbers");
+    REQUIRE(transformErrorOf("{ scale = [1, 1, 1] }") == "scale is not a number");
+    // a misspelled key, which would read as its default
+    REQUIRE(transformErrorOf("{ position = [1, 2, 3] }") == "it has the key 'position', which is not pos, rot or scale");
+}
+
+TEST_CASE("ConfigValueParsers: a transform in the INI's text form is the table of its numbers, each as the text has it")
+{
+    const auto table = transformTableFromText(" 5 , -2 , 1 ; 0 , 0.3 , 0 ; 24.00 ");
+    REQUIRE(table);
+    REQUIRE(table->is_inline());
+    REQUIRE((*table)["pos"][1].value<double>() == -2.0);
+    // a double, not the float nearest to 0.3
+    REQUIRE((*table)["rot"][1].value<double>() == 0.3);
+    REQUIRE((*table)["scale"].value<double>() == 24.0);
+
+    // read back as the transform
+    const auto transform = parseTransform(*table);
+    REQUIRE(transform);
+    REQUIRE(transform->x == 5.0f);
+    REQUIRE(transform->roll == 0.3f);
+    REQUIRE(transform->scale == 24.0f);
+}
+
+TEST_CASE("ConfigValueParsers: a text that lacks a number or a separator is not a transform")
+{
+    REQUIRE_FALSE(transformTableFromText(""));
+    REQUIRE_FALSE(transformTableFromText("none"));
     // no scale
-    REQUIRE_FALSE(parseTransform("1,2,3;4,5,6"));
-    REQUIRE_FALSE(parseTransform("1,2,3;4,5,6;"));
+    REQUIRE_FALSE(transformTableFromText("1,2,3;4,5,6"));
+    REQUIRE_FALSE(transformTableFromText("1,2,3;4,5,6;"));
     // a comma where the rotation starts
-    REQUIRE_FALSE(parseTransform("1,2,3,4,5,6;7"));
+    REQUIRE_FALSE(transformTableFromText("1,2,3,4,5,6;7"));
     // a word in place of a number
-    REQUIRE_FALSE(parseTransform("1,2,3;4,five,6;7"));
+    REQUIRE_FALSE(transformTableFromText("1,2,3;4,five,6;7"));
 }
 
 TEST_CASE("ConfigValueParsers: a hand pose is four numbers for each finger and two for the palm, in that order")

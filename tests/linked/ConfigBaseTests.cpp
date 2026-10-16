@@ -192,6 +192,19 @@ TEST_CASE("ConfigBase: a saved value given as text is written in the type of the
     REQUIRE(fileValue(configPath(folder), MAIN, "iMode") == "4");
 }
 
+TEST_CASE("ConfigBase: a transform saved as the TOML text of its table is written as the table, each number as the text has it")
+{
+    const TempFolder folder;
+    writeFile(configPath(folder), "[Main]\ntZone = { pos = [0.0, 0.0, 0.0], scale = 1.0 }\n\n[Debug]\niVersion = 2\n");
+    TestConfig config(configPath(folder));
+    REQUIRE(config.loadConfigValues());
+
+    // as the DebugAdjuster saves a transform, in its fixed text
+    config.saveConfigValue(MAIN, "tZone", "{ pos = [1.00, 2.30, -3.00], rot = [0.00, 90.00, 0.00], scale = 24.00 }");
+
+    REQUIRE(fileValue(configPath(folder), MAIN, "tZone") == "{ pos = [1.0, 2.3, -3.0], rot = [0.0, 90.0, 0.0], scale = 24.0 }");
+}
+
 TEST_CASE("ConfigBase: values of several sections are saved together, from a list made at runtime or written in place")
 {
     const TempFolder folder;

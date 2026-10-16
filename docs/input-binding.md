@@ -72,7 +72,7 @@ in every mod. The ones you're most likely to change:
 
 ```toml
 [MyMod_SomeActivation]
-tZone = "0,0,0;0,0,0;18"
+tZone = { pos = [0, 0, 0], scale = 18 }
 sPrimaryBinding = "offhand tap trigger suppress"
 sSecondaryBinding = "offhand longpress trigger suppress"
 sEntryHaptic = "Tick"
@@ -125,10 +125,10 @@ To turn the gesture off, set both to `none`. Its icon and sphere go with it, unl
 
 ### Move or resize the zone
 
-`tZone` is `x,y,z;0,0,0;size`. The first three numbers place the zone relative to what it's attached to (a
-hand, your head, or a prop on your body), and the last one is its diameter in game units. The three in the
-middle aren't used. To see the zone while you move it, set `sShowSphere = "always"`; the sphere then shows the
-zone's real size, as long as `fSphereScale` is left at `1`.
+`tZone` is `{ pos = [x, y, z], scale = size }`. `pos` places the zone relative to what it's attached to (a
+hand, your head, or a prop on your body), and `scale` is its diameter in game units. A transform can also have
+a `rot`, which a zone doesn't use. To see the zone while you move it, set `sShowSphere = "always"`; the sphere
+then shows the zone's real size, as long as `fSphereScale` is left at `1`.
 
 ---
 
@@ -283,7 +283,7 @@ sphere.
 
 | Key                 | What it sets                                                                                                                                                                   |
 | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `tZone`             | The zone as a transform `x,y,z;heading,roll,attitude;scale`. Only **translate + scale** matter — the zone is a sphere, so rotation is ignored and `scale` is its **diameter**. |
+| `tZone`             | The zone as a transform `{ pos = [x, y, z], rot = [heading, roll, attitude], scale = s }`, each key optional. Only **`pos` + `scale`** matter — the zone is a sphere, so `rot` is ignored and `scale` is its **diameter**. |
 | `tZonePA`           | Optional **power-armor variant** of `tZone` (for a zone whose anchor moves in PA). Omit to reuse `tZone`.                                                                      |
 | `sPrimaryBinding`   | The main [binding line](#the-binding-line). Append `suppress` to hide its button while the hand is in the zone.                                                                |
 | `sSecondaryBinding` | An optional second binding line (e.g. a `longpress` variant of the same button). `none` to omit.                                                                               |
@@ -368,7 +368,7 @@ to `never`.
 
 ```toml
 [MyMod_SomeActivation]
-tZone = "0,0,0;0,0,0;18"
+tZone = { pos = [0, 0, 0], scale = 18 }
 sPrimaryBinding = "offhand tap trigger suppress"
 sSecondaryBinding = "offhand longpress trigger suppress"
 sEntryHaptic = "Tick"

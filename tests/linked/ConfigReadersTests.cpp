@@ -53,11 +53,17 @@ TEST_CASE("ConfigReaders: a transform is a position, Euler angles in degrees and
 
     SECTION("read from its value")
     {
-        const Config file("tOffset = \"1, 2.5, -3; 30, 20, 10; 2\"\n");
+        const Config file("tOffset = { pos = [1, 2.5, -3], rot = [30, 20, 10], scale = 2 }\n");
 
         const auto transform = ConfigReaders::getTransformValue(file.table, MAIN, "tOffset", fallback);
 
         requireNear(transform, common::MatrixUtils::getTransform(1, 2.5f, -3, 30, 20, 10, 2));
+    }
+    SECTION("a key of it that is missing is no move, no rotation or a scale of 1, not the default's")
+    {
+        const Config file("tOffset = { pos = [1, 2, 3] }\n");
+
+        requireNear(ConfigReaders::getTransformValue(file.table, MAIN, "tOffset", fallback), common::MatrixUtils::getTransform(1, 2, 3, 0, 0, 0, 1));
     }
     SECTION("the default for a key that is missing")
     {
@@ -65,12 +71,13 @@ TEST_CASE("ConfigReaders: a transform is a position, Euler angles in degrees and
 
         requireNear(ConfigReaders::getTransformValue(file.table, MAIN, "tOffset", fallback), fallback);
     }
-    SECTION("the default for a value that is not one, and for one that is not a string")
+    SECTION("the default for a value that is not one: the INI's text of it, a number, and a table with a key misspelled")
     {
-        const Config file("tOffset = \"1, 2, 3; 30, 20\"\ntNumber = 5\n");
+        const Config file("tText = \"1, 2, 3; 30, 20, 10; 2\"\ntNumber = 5\ntMisspelled = { position = [1, 2, 3] }\n");
 
-        requireNear(ConfigReaders::getTransformValue(file.table, MAIN, "tOffset", fallback), fallback);
+        requireNear(ConfigReaders::getTransformValue(file.table, MAIN, "tText", fallback), fallback);
         requireNear(ConfigReaders::getTransformValue(file.table, MAIN, "tNumber", fallback), fallback);
+        requireNear(ConfigReaders::getTransformValue(file.table, MAIN, "tMisspelled", fallback), fallback);
     }
 }
 
@@ -198,8 +205,8 @@ TEST_CASE("ConfigReaders: an activation sphere is read from the keys of its sect
 {
     const f4vr::WandActivationConfig defaults;
     const Config file(
-        "tZone = \"1,2,3; 0,0,0; 4\"\n"
-        "tZonePA = \"5,6,7; 0,0,0; 8\"\n"
+        "tZone = { pos = [1, 2, 3], scale = 4 }\n"
+        "tZonePA = { pos = [5, 6, 7], scale = 8 }\n"
         "sPrimaryBinding = \"right press trigger suppress\"\n"
         "sSecondaryBinding = \"right longpress trigger\"\n"
         "sEntryHaptic = \"none\"\n"
@@ -233,7 +240,7 @@ TEST_CASE("ConfigReaders: an activation sphere is read from the keys of its sect
 TEST_CASE("ConfigReaders: an activation sphere with no power armor zone uses its zone in power armor")
 {
     const f4vr::WandActivationConfig defaults;
-    const Config file("tZone = \"1,2,3; 0,0,0; 4\"\n");
+    const Config file("tZone = { pos = [1, 2, 3], scale = 4 }\n");
 
     const auto config = ConfigReaders::loadWandActivationConfig(file.table, MAIN, defaults);
 

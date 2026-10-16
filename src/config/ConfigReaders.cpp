@@ -4,6 +4,7 @@
 #include "ValueParsers.h"
 #include "common/CommonUtils.h"
 #include "common/MatrixUtils.h"
+#include "common/TomlEditor.h"
 #include "f4vr/WandActivationSphere.h"
 #include "render/PrimitiveDraw.h"
 #include "vrcf/InputBindingParser.h"
@@ -141,19 +142,26 @@ namespace
 namespace f4cf::config
 {
     /**
-     * Parse an NiTransform from "x,y,z;heading,roll,attitude;scale" (rotation in degrees), see parseTransform.
-     * Returns defaultValue if the key is missing or the value is malformed.
+     * Read an NiTransform from its inline table, { pos = [x, y, z], rot = [heading, roll, attitude], scale = s } with
+     * the rotation in degrees and each key optional, see parseTransform.
+     * Returns defaultValue if the key is missing, and with a warning if the value is malformed.
      */
     RE::NiTransform ConfigReaders::getTransformValue(const toml::table& config, const char* section, const char* key, const RE::NiTransform& defaultValue)
     {
-        const auto raw = stringOf(config, section, key);
-        if (!raw) {
+        const auto* node = nodeOf(config, { section, key });
+        if (!node) {
             return defaultValue;
         }
 
-        const auto parsed = parseTransform(raw->c_str());
+        const auto parsed = parseTransform(*node);
         if (!parsed) {
-            logger::warn("Config: malformed transform value for '{}.{}' = '{}' (expected 'x,y,z;heading,roll,attitude;scale' in degrees). Using default.", section, key, *raw);
+            logger::warn(
+                "Config: malformed transform value for '{}.{}' = {}: {} (expected {{ pos = [x, y, z], rot = [heading, roll, attitude], scale = s }} in degrees). "
+                "Using default.",
+                section,
+                key,
+                common::TomlEditor::Value(*node).text(),
+                parsed.error());
             return defaultValue;
         }
 

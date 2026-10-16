@@ -74,15 +74,16 @@ namespace f4cf
         }
 
         /**
-         * Format an NiTransform as a fixed-precision "x,y,z;heading,roll,attitude;scale" string
-         * (rotation in degrees). Mirrors the framework's transform format but at SAVE_PRECISION
-         * decimals so saved debug transforms stay readable.
+         * Format an NiTransform as the TOML text of the inline table the config has a transform in,
+         * { pos = [x, y, z], rot = [heading, roll, attitude], scale = s } with the rotation in degrees, at
+         * SAVE_PRECISION decimals so saved debug transforms stay readable. A save or an override reads the
+         * text as the table, see config::typedLike.
          */
         std::string transformToFixedString(const RE::NiTransform& transform)
         {
             float heading, roll, attitude;
             common::MatrixUtils::getEulerAnglesFromMatrixDegrees(transform.rotate, &heading, &roll, &attitude);
-            return fmt::format("{},{},{};{},{},{};{}",
+            return fmt::format("{{ pos = [{}, {}, {}], rot = [{}, {}, {}], scale = {} }}",
                 toFixed(transform.translate.x),
                 toFixed(transform.translate.y),
                 toFixed(transform.translate.z),

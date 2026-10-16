@@ -90,8 +90,8 @@ an all-zero pose if the field is missing, and saving creates/updates it under `[
 **`Section::Key`** edits a real field in place. The value type is inferred from the first letter of
 the key:
 
-- **`t…`** — a transform, `x,y,z;heading,roll,attitude;scale` (translation in game units, rotation
-  in degrees).
+- **`t…`** — a transform, `{ pos = [x, y, z], rot = [heading, roll, attitude], scale = s }`
+  (translation in game units, rotation in degrees).
 - **`h…`** — a 22-float hand pose.
 - **`f…`** — a float.
 

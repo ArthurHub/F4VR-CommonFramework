@@ -3,6 +3,7 @@
 #include <cctype>
 #include <charconv>
 #include <cstdio>
+#include <format>
 #include <string_view>
 #include <vector>
 
@@ -39,28 +40,103 @@ namespace
         }
         return parts;
     }
+
+    /**
+     * Read the three numbers of an array of a transform, each an integer or a float.
+     * Returns false and leaves the numbers as they were when the node is not an array of three numbers.
+     */
+    bool readThree(const toml::node& node, float& a, float& b, float& c)
+    {
+        const auto* array = node.as_array();
+        if (!array || array->size() != 3) {
+            return false;
+        }
+        const auto first = (*array)[0].value<double>();
+        const auto second = (*array)[1].value<double>();
+        const auto third = (*array)[2].value<double>();
+        if (!first || !second || !third) {
+            return false;
+        }
+        a = static_cast<float>(*first);
+        b = static_cast<float>(*second);
+        c = static_cast<float>(*third);
+        return true;
+    }
+
+    /**
+     * An array of three numbers, for a transform's table.
+     */
+    toml::array arrayOfThree(const double a, const double b, const double c)
+    {
+        toml::array array;
+        array.push_back(a);
+        array.push_back(b);
+        array.push_back(c);
+        return array;
+    }
 }
 
 namespace f4cf::config
 {
     /**
-     * Parse a transform from "x,y,z;heading,roll,attitude;scale", the rotation in degrees. Spaces around a number
-     * are allowed.
+     * Read a transform from its inline table: `pos` the position [x, y, z], `rot` the rotation as Euler angles in
+     * degrees [heading, roll, attitude], and `scale` a number, each optional, for no move, no rotation and a scale of
+     * 1: { pos = [5, -2, 1], rot = [0, 90, 0], scale = 24 }.
+     * Returns why not when the node is not a table, or has a key other than the three, as a misspelled one would be
+     * read as its default, or one of them is not a value of its form.
+     */
+    std::expected<ParsedTransform, std::string> parseTransform(const toml::node& node)
+    {
+        const auto* table = node.as_table();
+        if (!table) {
+            return std::unexpected(std::string("it is not a table"));
+        }
+
+        ParsedTransform transform;
+        for (const auto& [key, value] : *table) {
+            if (key.str() == "pos") {
+                if (!readThree(value, transform.x, transform.y, transform.z)) {
+                    return std::unexpected(std::string("pos is not an array of three numbers"));
+                }
+            } else if (key.str() == "rot") {
+                if (!readThree(value, transform.heading, transform.roll, transform.attitude)) {
+                    return std::unexpected(std::string("rot is not an array of three numbers"));
+                }
+            } else if (key.str() == "scale") {
+                const auto scale = value.value<double>();
+                if (!scale) {
+                    return std::unexpected(std::string("scale is not a number"));
+                }
+                transform.scale = static_cast<float>(*scale);
+            } else {
+                return std::unexpected(std::format("it has the key '{}', which is not pos, rot or scale", key.str()));
+            }
+        }
+        return transform;
+    }
+
+    /**
+     * The table parseTransform reads, of a transform in the text form of a mod's INI config,
+     * "x,y,z;heading,roll,attitude;scale" with the rotation in degrees and spaces around a number allowed, for the
+     * import of the INI config, see config::iniToToml: { pos = [x, y, z], rot = [heading, roll, attitude], scale = s }.
+     * The numbers are read as doubles, so each is written as the text has it, not as the float nearest to it.
      * Returns no value when the text does not have the seven numbers.
      */
-    std::optional<ParsedTransform> parseTransform(const char* text)
+    std::optional<toml::table> transformTableFromText(const std::string_view text)
     {
-        ParsedTransform transform;
-        const int parsed = sscanf_s(text,
-            " %f , %f , %f ; %f , %f , %f ; %f",
-            &transform.x,
-            &transform.y,
-            &transform.z,
-            &transform.heading,
-            &transform.roll,
-            &transform.attitude,
-            &transform.scale);
-        return parsed == 7 ? std::optional{ transform } : std::nullopt;
+        const std::string terminated(text);
+        double x, y, z, heading, roll, attitude, scale;
+        const int parsed = sscanf_s(terminated.c_str(), " %lf , %lf , %lf ; %lf , %lf , %lf ; %lf", &x, &y, &z, &heading, &roll, &attitude, &scale);
+        if (parsed != 7) {
+            return std::nullopt;
+        }
+
+        toml::table table;
+        table.insert("pos", arrayOfThree(x, y, z));
+        table.insert("rot", arrayOfThree(heading, roll, attitude));
+        table.insert("scale", scale);
+        table.is_inline(true);
+        return table;
     }
 
     /**

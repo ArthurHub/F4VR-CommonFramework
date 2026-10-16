@@ -49,6 +49,13 @@ major version is `0`, a minor bump may break the API; the **Upgrading** notes sa
   - `consumeDebugAddItemsOnce` returns a `toml::array`, and
     `f4vr::DebugInventory::iterateObjects(std::string_view)` is
     `iterateObjects(const toml::array&)`, with `parseRequest` for one request.
+- **Transforms are TOML tables**: a `t` value is `{ pos = [x, y, z], rot = [heading, roll, attitude],
+  scale = s }` (rotation in degrees), each key optional, in place of the text
+  `"x,y,z;heading,roll,attitude;scale"`, which is no longer read. A misspelled key or an array that is
+  not three numbers is logged and the default applies. `DebugAdjuster` saves the table. The INI import
+  writes a player's transform text as the table, for a key the shipped TOML has as a transform, so it is
+  carried as any value. **Upgrading:** write the transforms of the mod's TOML as tables, as the template
+  has them.
 - **A binding that is not valid says why**: the warning names the word that is wrong and the words that
   fit there (`'thumbstik' is not a button, one of trigger, grip, ...`). Nothing on a line is skipped any
   more: a duration or threshold that is not a number, a word past the end of the line, and a second
