@@ -56,6 +56,12 @@ major version is `0`, a minor bump may break the API; the **Upgrading** notes sa
   writes a player's transform text as the table, for a key the shipped TOML has as a transform, so it is
   carried as any value. **Upgrading:** write the transforms of the mod's TOML as tables, as the template
   has them.
+- **Colors are TOML tables**: a color is a `c` value, `{ rgb = [r, g, b], alpha = a }`, each a whole
+  number in 0..255, read by `getColorValue` in place of the text `"r,g,b,a"`. A key left out keeps the
+  default's channels, so `{ alpha = 60 }` changes only the opacity. An activation sphere's look is
+  `cSphereColor`, `cIconColor` and `aSphereFalloff = [center, rim]` in place of `sSphereColor`,
+  `sIconColor` and `sSphereFalloff`. **Upgrading:** rename those keys in the mod's TOML and write their
+  values in the new form: a player's value of an old key is not moved.
 - **A binding that is not valid says why**: the warning names the word that is wrong and the words that
   fit there (`'thumbstik' is not a button, one of trigger, grip, ...`). Nothing on a line is skipped any
   more: a duration or threshold that is not a number, a word past the end of the line, and a second

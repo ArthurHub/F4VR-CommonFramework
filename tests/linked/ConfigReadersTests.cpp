@@ -81,30 +81,31 @@ TEST_CASE("ConfigReaders: a transform is a position, Euler angles in degrees and
     }
 }
 
-TEST_CASE("ConfigReaders: a color is three or four whole numbers of 0 to 255")
+TEST_CASE("ConfigReaders: a color is its rgb and its alpha, each a whole number of 0 to 255")
 {
     const render::Color fallback{ 0.1f, 0.2f, 0.3f, 0.4f };
 
     SECTION("with its opacity")
     {
-        const Config file("sColor = \"255, 0, 51, 102\"\n");
+        const Config file("cColor = { rgb = [255, 0, 51], alpha = 102 }\n");
 
-        requireNear(ConfigReaders::getColorValue(file.table, MAIN, "sColor", fallback), { 1.0f, 0.0f, 0.2f, 0.4f });
+        requireNear(ConfigReaders::getColorValue(file.table, MAIN, "cColor", fallback), { 1.0f, 0.0f, 0.2f, 0.4f });
     }
-    SECTION("without it, the default's opacity stays")
+    SECTION("without it, the default's opacity stays, and without the rgb the default's color")
     {
-        const Config file("sColor = \"255,0,51\"\n");
+        const Config file("cColor = { rgb = [255, 0, 51] }\ncOpacity = { alpha = 51 }\n");
 
-        requireNear(ConfigReaders::getColorValue(file.table, MAIN, "sColor", fallback), { 1.0f, 0.0f, 0.2f, 0.4f });
+        requireNear(ConfigReaders::getColorValue(file.table, MAIN, "cColor", fallback), { 1.0f, 0.0f, 0.2f, 0.4f });
+        requireNear(ConfigReaders::getColorValue(file.table, MAIN, "cOpacity", fallback), { 0.1f, 0.2f, 0.3f, 0.2f });
     }
-    SECTION("the default for a key that is missing, empty or not a color")
+    SECTION("the default for a key that is missing or not a color")
     {
-        const Config file("sEmpty = \"\"\nsWords = \"red\"\nsTooLarge = \"256,0,0\"\n");
+        const Config file("cText = \"255,0,0\"\ncArray = [255, 0, 0]\ncTooLarge = { rgb = [256, 0, 0] }\n");
 
-        requireNear(ConfigReaders::getColorValue(file.table, MAIN, "sColor", fallback), fallback);
-        requireNear(ConfigReaders::getColorValue(file.table, MAIN, "sEmpty", fallback), fallback);
-        requireNear(ConfigReaders::getColorValue(file.table, MAIN, "sWords", fallback), fallback);
-        requireNear(ConfigReaders::getColorValue(file.table, MAIN, "sTooLarge", fallback), fallback);
+        requireNear(ConfigReaders::getColorValue(file.table, MAIN, "cColor", fallback), fallback);
+        requireNear(ConfigReaders::getColorValue(file.table, MAIN, "cText", fallback), fallback);
+        requireNear(ConfigReaders::getColorValue(file.table, MAIN, "cArray", fallback), fallback);
+        requireNear(ConfigReaders::getColorValue(file.table, MAIN, "cTooLarge", fallback), fallback);
     }
 }
 
@@ -268,9 +269,9 @@ TEST_CASE("ConfigReaders: the look of an activation sphere is a preset with sing
             "sSphereStyle = \"cyan-subtle\"\n"
             "sSphereNif = \"my-sphere.nif\"\n"
             "sSphereTexture = \"my-sphere.dds\"\n"
-            "sSphereColor = \"255, 0, 51, 102\"\n"
+            "cSphereColor = { rgb = [255, 0, 51], alpha = 102 }\n"
             "fSphereGlow = 0.25\n"
-            "sSphereFalloff = \"0.1, 0.9\"\n"
+            "aSphereFalloff = [0.1, 0.9]\n"
             "fSphereScale = 1\n");
 
         const auto style = ConfigReaders::loadWandActivationConfig(file.table, MAIN, defaults).sphereStyle;
@@ -296,9 +297,9 @@ TEST_CASE("ConfigReaders: the look of an activation sphere is a preset with sing
     {
         const Config file(
             "sSphereStyle = \"cyan-loud\"\n"
-            "sSphereColor = \"cyan\"\n"
+            "cSphereColor = { rgb = [0, 255] }\n"
             "fSphereGlow = 1.5\n"
-            "sSphereFalloff = \"0.1\"\n"
+            "aSphereFalloff = [0.1]\n"
             "fSphereScale = \"big\"\n");
 
         REQUIRE(ConfigReaders::loadWandActivationConfig(file.table, MAIN, defaults).sphereStyle == defaults.sphereStyle);
@@ -311,7 +312,7 @@ TEST_CASE("ConfigReaders: the look of an activation sphere's icon is single valu
 
     SECTION("each key sets one value")
     {
-        const Config file("sIcon = \"my-icon.dds\"\nsIconColor = \"255, 0, 51, 102\"\nfIconSize = 2.5\n");
+        const Config file("sIcon = \"my-icon.dds\"\ncIconColor = { rgb = [255, 0, 51], alpha = 102 }\nfIconSize = 2.5\n");
 
         const auto style = ConfigReaders::loadWandActivationConfig(file.table, MAIN, defaults).iconStyle;
 
@@ -324,7 +325,7 @@ TEST_CASE("ConfigReaders: the look of an activation sphere's icon is single valu
     }
     SECTION("values out of their range are left out")
     {
-        const Config file("sIconColor = \"1,2\"\nfIconSize = -1\n");
+        const Config file("cIconColor = { rgb = [1, 2] }\nfIconSize = -1\n");
 
         REQUIRE(ConfigReaders::loadWandActivationConfig(file.table, MAIN, defaults).iconStyle == defaults.iconStyle);
     }

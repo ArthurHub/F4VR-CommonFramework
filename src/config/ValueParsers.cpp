@@ -1,44 +1,22 @@
 #include "ValueParsers.h"
 
-#include <cctype>
-#include <charconv>
 #include <cstdio>
 #include <format>
 #include <string_view>
-#include <vector>
 
 namespace
 {
     /**
-     * The parts of a text between commas, each without the spaces around it. An empty part is left out.
-     * As common::splitTrimmed, which does not build apart from the game.
+     * A color channel of a whole number in 0..255 as its 0..1 value. No value for a float, as 0.5 would read as
+     * the 0..1 form a channel is not written in, and for a number out of the range.
      */
-    std::vector<std::string_view> splitByComma(const std::string_view text)
+    std::optional<float> channel255(const toml::node& node)
     {
-        const auto isSpace = [](const char ch) {
-            return std::isspace(static_cast<unsigned char>(ch)) != 0;
-        };
-
-        std::vector<std::string_view> parts;
-        std::size_t start = 0;
-        while (start <= text.size()) {
-            const auto end = text.find(',', start);
-            auto part = text.substr(start, end == std::string_view::npos ? std::string_view::npos : end - start);
-            while (!part.empty() && isSpace(part.front())) {
-                part.remove_prefix(1);
-            }
-            while (!part.empty() && isSpace(part.back())) {
-                part.remove_suffix(1);
-            }
-            if (!part.empty()) {
-                parts.push_back(part);
-            }
-            if (end == std::string_view::npos) {
-                break;
-            }
-            start = end + 1;
+        const auto* integer = node.as_integer();
+        if (!integer || integer->get() < 0 || integer->get() > 255) {
+            return std::nullopt;
         }
-        return parts;
+        return static_cast<float>(integer->get()) / 255.0f;
     }
 
     /**
@@ -180,27 +158,44 @@ namespace f4cf::config
     }
 
     /**
-     * Parse "r,g,b" or "r,g,b,a", each channel a whole number in 0..255, into `color`'s 0..1 channels. Without the
-     * alpha, `color`'s own alpha stays. Anything else returns false and leaves `color` untouched.
+     * Read a color from its inline table into `color`'s 0..1 channels: `rgb` the color [r, g, b] and `alpha` its
+     * opacity, each a whole number in 0..255: { rgb = [255, 51, 51], alpha = 40 }. Each key is optional, and one
+     * that is missing keeps `color`'s own channels, so a color can change only the opacity of a preset.
+     * Returns why not, and leaves `color` as it was, when the node is not a table, or has a key other than the two,
+     * as a misspelled one would be read as its default, or one of them is not a value of its form.
      */
-    bool parseColor255(const std::string& text, std::array<float, 4>& color)
+    std::expected<void, std::string> parseColor(const toml::node& node, std::array<float, 4>& color)
     {
-        const auto tokens = splitByComma(text);
-        if (tokens.size() != 3 && tokens.size() != 4) {
-            return false;
+        const auto* table = node.as_table();
+        if (!table) {
+            return std::unexpected(std::string("it is not a table"));
         }
 
         auto parsed = color;
-        for (std::size_t i = 0; i < tokens.size(); ++i) {
-            const auto& token = tokens[i];
-            int channel = -1;
-            const auto [end, error] = std::from_chars(token.data(), token.data() + token.size(), channel);
-            if (error != std::errc{} || end != token.data() + token.size() || channel < 0 || channel > 255) {
-                return false;
+        for (const auto& [key, value] : *table) {
+            if (key.str() == "rgb") {
+                const auto* array = value.as_array();
+                if (!array || array->size() != 3) {
+                    return std::unexpected(std::string("rgb is not an array of three numbers"));
+                }
+                for (std::size_t i = 0; i < 3; ++i) {
+                    const auto channel = channel255((*array)[i]);
+                    if (!channel) {
+                        return std::unexpected(std::string("rgb has a number that is not a whole number in 0..255"));
+                    }
+                    parsed[i] = *channel;
+                }
+            } else if (key.str() == "alpha") {
+                const auto alpha = channel255(value);
+                if (!alpha) {
+                    return std::unexpected(std::string("alpha is not a whole number in 0..255"));
+                }
+                parsed[3] = *alpha;
+            } else {
+                return std::unexpected(std::format("it has the key '{}', which is not rgb or alpha", key.str()));
             }
-            parsed[i] = static_cast<float>(channel) / 255.0f;
         }
         color = parsed;
-        return true;
+        return {};
     }
 }

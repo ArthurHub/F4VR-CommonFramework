@@ -202,8 +202,8 @@ imgui::pointer().setStyle(style);
 ```
 
 A mod that wants the player to set these reads the fields from its own config and calls `setStyle`
-with them: `ConfigBase::getColorValue` reads a color written as `r,g,b,a`, and `getTransformValue`
-the offset. The framework has no config keys for it.
+with them: `ConfigBase::getColorValue` reads a color written as `{ rgb = [r, g, b], alpha = a }`, and
+`getTransformValue` the offset. The framework has no config keys for it.
 
 ## Images
 

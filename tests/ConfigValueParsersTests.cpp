@@ -1,11 +1,13 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <array>
+#include <initializer_list>
 #include <string>
+#include <utility>
 
 #include "config/ValueParsers.h"
 
-using f4cf::config::parseColor255;
+using f4cf::config::parseColor;
 using f4cf::config::parseHandPose;
 using f4cf::config::parseTransform;
 using f4cf::config::transformTableFromText;
@@ -39,6 +41,16 @@ namespace
     float channel(const int value)
     {
         return static_cast<float>(value) / 255.0f;
+    }
+
+    /**
+     * Read the TOML text of a color's value over `color`. Returns why it is not a color, or "(read)" when it is one.
+     */
+    std::string readColor(const std::string& value, std::array<float, 4>& color)
+    {
+        const auto table = toml::parse("v = " + value);
+        const auto parsed = parseColor(*table.get("v"), color);
+        return parsed ? std::string("(read)") : parsed.error();
     }
 }
 
@@ -144,42 +156,45 @@ TEST_CASE("ConfigValueParsers: a hand pose with a finger short of a number, or w
     REQUIRE_FALSE(parseHandPose("0,0,0,0, 1,2,3,4, 5,6,7,8, 9,10,11,12, 13,14,15,16, 0.5,0.25"));
 }
 
-TEST_CASE("ConfigValueParsers: a color of three channels keeps the opacity it had")
+TEST_CASE("ConfigValueParsers: a color is its rgb and its alpha, the opacity, each a whole number in 0..255")
 {
     auto color = PRESET;
-    REQUIRE(parseColor255("255,128,0", color));
-    REQUIRE(color == std::array{ 1.0f, channel(128), 0.0f, 0.4f });
+    REQUIRE(readColor("{ rgb = [0, 64, 255], alpha = 51 }", color) == "(read)");
+    REQUIRE(color == std::array{ 0.0f, channel(64), 1.0f, channel(51) });
 }
 
-TEST_CASE("ConfigValueParsers: the fourth channel of a color is its opacity")
+TEST_CASE("ConfigValueParsers: a color without a key keeps the channels it had for it")
 {
     auto color = PRESET;
-    REQUIRE(parseColor255("0,64,255,51", color));
-    REQUIRE(color == std::array{ 0.0f, channel(64), 1.0f, channel(51) });
+    REQUIRE(readColor("{ rgb = [255, 128, 0] }", color) == "(read)");
+    REQUIRE(color == std::array{ 1.0f, channel(128), 0.0f, 0.4f });
 
-    REQUIRE(parseColor255(" 10 , 20 , 30 , 0 ", color));
-    REQUIRE(color == std::array{ channel(10), channel(20), channel(30), 0.0f });
+    // the opacity of a preset alone
+    color = PRESET;
+    REQUIRE(readColor("{ alpha = 0 }", color) == "(read)");
+    REQUIRE(color == std::array{ 1.0f, 1.0f, 1.0f, 0.0f });
 }
 
 TEST_CASE("ConfigValueParsers: a malformed color leaves the color as it was")
 {
-    for (const std::string text : {
-             "",
-             "red",
-             // two channels, and five
-             "255,128",
-             "1,2,3,4,5",
-             // over 255 and under 0
-             "256,0,0",
-             "0,-1,0",
-             // not a whole number
-             "0.5,0,0",
-             "255,128,0x",
-             "255,12 8,0",
+    for (const auto& [value, error] : std::initializer_list<std::pair<std::string, std::string>>{
+             // the text form of the INI config, and an array with no names
+             { "\"255,128,0\"", "it is not a table" },
+             { "[255, 128, 0]", "it is not a table" },
+             // two channels, and four
+             { "{ rgb = [255, 128] }", "rgb is not an array of three numbers" },
+             { "{ rgb = [255, 128, 0, 40] }", "rgb is not an array of three numbers" },
+             // over 255, under 0, and not a whole number
+             { "{ rgb = [256, 0, 0] }", "rgb has a number that is not a whole number in 0..255" },
+             { "{ rgb = [0, -1, 0] }", "rgb has a number that is not a whole number in 0..255" },
+             { "{ rgb = [0.5, 0, 0] }", "rgb has a number that is not a whole number in 0..255" },
+             { "{ alpha = 0.5 }", "alpha is not a whole number in 0..255" },
+             // a key misspelled, which would read as its default
+             { "{ rgb = [0, 0, 0], a = 40 }", "it has the key 'a', which is not rgb or alpha" },
          }) {
-        CAPTURE(text);
+        CAPTURE(value);
         auto color = PRESET;
-        REQUIRE_FALSE(parseColor255(text, color));
+        REQUIRE(readColor(value, color) == error);
         REQUIRE(color == PRESET);
     }
 }
