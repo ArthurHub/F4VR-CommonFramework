@@ -6,6 +6,7 @@
 #include <format>
 #include <sstream>
 #include <type_traits>
+#include <utility>
 #include <vector>
 
 namespace
@@ -190,21 +191,64 @@ namespace
     }
 
     /**
-     * A toml++ node as TOML text: an array and a table inline, one line each. Dates and times are written by toml++.
+     * The keys of a table in the order its text has them. toml++ keeps a table's keys sorted by name, so a table
+     * parsed from text, as { hand = .., type = .., button = .. }, would be written back in another order than it was
+     * written in. A key with no position, of a table made in code, keeps the sorted order, after the ones with one.
      */
-    std::string nodeText(const toml::node& node)
+    std::vector<std::pair<std::string_view, const toml::node*>> keysInTextOrder(const toml::table& table)
+    {
+        std::vector<std::pair<std::string_view, const toml::node*>> keys;
+        std::vector<toml::source_position> positions;
+        for (const auto& [key, child] : table) {
+            keys.emplace_back(key.str(), &child);
+            positions.push_back(key.source().begin);
+        }
+        std::vector<std::size_t> order(keys.size());
+        for (std::size_t i = 0; i < order.size(); i++) {
+            order[i] = i;
+        }
+        std::ranges::stable_sort(order, [&positions](const std::size_t a, const std::size_t b) {
+            const auto& first = positions[a];
+            const auto& second = positions[b];
+            // a key with no position (line 0) goes after the ones with one
+            if ((first.line == 0) != (second.line == 0)) {
+                return second.line == 0;
+            }
+            return std::pair(first.line, first.column) < std::pair(second.line, second.column);
+        });
+        std::vector<std::pair<std::string_view, const toml::node*>> ordered;
+        ordered.reserve(keys.size());
+        for (const auto i : order) {
+            ordered.push_back(keys[i]);
+        }
+        return ordered;
+    }
+
+    /**
+     * A toml++ node as TOML text: an array and a table inline, one line each, a table's keys in the order its text
+     * has them (see keysInTextOrder), or sorted by name for a comparison of two values that is apart from how their
+     * keys are ordered. Dates and times are written by toml++.
+     */
+    std::string nodeText(const toml::node& node, const bool sortedKeys = false)
     {
         std::string text;
-        node.visit([&text]<typename T>(const T& value) {
+        node.visit([&text, sortedKeys]<typename T>(const T& value) {
             if constexpr (std::is_same_v<T, toml::table>) {
-                for (const auto& [key, child] : value) {
-                    const auto name = key.str();
-                    text += std::format("{}{} = {}", text.empty() ? "{ " : ", ", keyText(std::span(&name, 1)), nodeText(child));
+                std::vector<std::pair<std::string_view, const toml::node*>> keys;
+                if (sortedKeys) {
+                    for (const auto& [key, child] : value) {
+                        keys.emplace_back(key.str(), &child);
+                    }
+                } else {
+                    keys = keysInTextOrder(value);
+                }
+                for (const auto& [name, child] : keys) {
+                    text += std::format("{}{} = {}", text.empty() ? "{ " : ", ", keyText(std::span(&name, 1)), nodeText(*child, sortedKeys));
                 }
                 text += text.empty() ? "{}" : " }";
             } else if constexpr (std::is_same_v<T, toml::array>) {
                 for (const auto& child : value) {
-                    text += std::format("{}{}", text.empty() ? "[" : ", ", nodeText(child));
+                    text += std::format("{}{}", text.empty() ? "[" : ", ", nodeText(child, sortedKeys));
                 }
                 text += text.empty() ? "[]" : "]";
             } else if constexpr (std::is_same_v<T, toml::value<std::string>>) {
@@ -226,11 +270,12 @@ namespace
 
     /**
      * Whether an existing value already holds a value, compared by the text both are written as here: 71.000 holds
-     * 71.0 and 0x10 holds 16, and floats are not compared with ==. An integer does not hold the float of its number.
+     * 71.0 and 0x10 holds 16, a table holds one of the same keys in another order, and floats are not compared with
+     * ==. An integer does not hold the float of its number.
      */
     bool holdsValue(const toml::node& existing, const toml::node& value)
     {
-        return nodeText(existing) == nodeText(value);
+        return nodeText(existing, true) == nodeText(value, true);
     }
 
     /**

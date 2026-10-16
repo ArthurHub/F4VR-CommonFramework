@@ -271,20 +271,20 @@ namespace f4cf::config
     }
 
     /**
-     * Parse a controller input binding from the value at section/key.
-     * Delegates to vrcf::parseInputBinding (see vrcf/InputBindingParser.h for the grammar).
+     * Read a controller input binding from its inline table at section/key, { hand = "offhand", type = "tap",
+     * button = "grip" }, see vrcf::parseInputBindingTable.
      * Returns defaultValue if the key is missing, and with a warning that says what is wrong if the value is malformed.
      */
     vrcf::InputBinding ConfigReaders::getInputBindingValue(const toml::table& config, const char* section, const char* key, const vrcf::InputBinding& defaultValue)
     {
-        const auto raw = stringOf(config, section, key);
-        if (!raw) {
+        const auto* node = nodeOf(config, { section, key });
+        if (!node) {
             return defaultValue;
         }
 
-        const auto parsed = vrcf::parseInputBinding(*raw);
+        const auto parsed = vrcf::parseInputBindingTable(*node);
         if (!parsed) {
-            logger::warn("Config: input binding '{}.{}' = '{}' is not valid: {}. Using default.", section, key, *raw, parsed.error());
+            logger::warn("Config: input binding '{}.{}' = {} is not valid: {}. Using default.", section, key, common::TomlEditor::Value(*node).text(), parsed.error());
             return defaultValue;
         }
         return *parsed;
@@ -292,8 +292,8 @@ namespace f4cf::config
 
     /**
      * Read the whole section of an activation sphere into a f4vr::WandActivationConfig, each key falling back to the
-     * matching field of `defaults`: the zone (tZone, and tZonePA for power armor), the two bindings (sPrimaryBinding,
-     * sSecondaryBinding), the haptics (sEntryHaptic, sPrimaryHaptic, sSecondaryHaptic), the sphere (sShowSphere,
+     * matching field of `defaults`: the zone (tZone, and tZonePA for power armor), the two bindings (kPrimaryBinding,
+     * kSecondaryBinding), the haptics (sEntryHaptic, sPrimaryHaptic, sSecondaryHaptic), the sphere (sShowSphere,
      * sSphereOrientation, and its look, see readSphereStyle) and the icon (sShowIcon, and its look, see readIconStyle).
      */
     f4vr::WandActivationConfig ConfigReaders::loadWandActivationConfig(const toml::table& config, const char* section, const f4vr::WandActivationConfig& defaults)
@@ -301,8 +301,8 @@ namespace f4cf::config
         f4vr::WandActivationConfig cfg;
         cfg.zone = getTransformValue(config, section, "tZone", defaults.zone);
         cfg.zonePA = nodeOf(config, { section, "tZonePA" }) ? std::optional{ getTransformValue(config, section, "tZonePA", cfg.zone) } : defaults.zonePA;
-        cfg.primary = getInputBindingValue(config, section, "sPrimaryBinding", defaults.primary);
-        cfg.secondary = getInputBindingValue(config, section, "sSecondaryBinding", defaults.secondary);
+        cfg.primary = getInputBindingValue(config, section, "kPrimaryBinding", defaults.primary);
+        cfg.secondary = getInputBindingValue(config, section, "kSecondaryBinding", defaults.secondary);
 
         const auto entryHaptic = stringOf(config, section, "sEntryHaptic");
         cfg.entryHaptic = entryHaptic ? vrcf::parseHapticPattern(*entryHaptic) : defaults.entryHaptic;

@@ -7,8 +7,9 @@
 #
 # -------------------------------------
 # Input Binding and Activation Spheres:
-# Controller bindings are a case-insensitive string in quotes: "<hand> <type> <button> [duration] [+modifier]".
-# Examples: "none"; "offhand tap grip"; "primary longpress A"; "primary press trigger +grip".
+# A controller binding is a 'k' key: { hand = "offhand", type = "tap", button = "grip" }, with an optional
+# duration (seconds), suppress (true/false) and modifier = { hand = "offhand", button = "grip" }.
+# A thumbstick push is { hand = "primary", type = "axis", direction = "up" }; { type = "none" } turns it off.
 # Guide: https://github.com/ArthurHub/F4VR-CommonFramework/blob/main/docs/input-binding.md
 # A Windows path goes in single quotes, where a backslash is just a backslash: 'f4cf\icon.dds'.
 
@@ -22,8 +23,8 @@ fMyConfigValue = 3.0
 [MyMod_AnActivationSphere]
 tZone = { pos = [3.91, 7.11, 0.67], scale = 20.0 }
 tZonePA = { pos = [4.01, 10.21, -4.6], scale = 24.0 }
-sPrimaryBinding = "offhand tap trigger suppress"
-sSecondaryBinding = "primary tap trigger suppress"
+kPrimaryBinding = { hand = "offhand", type = "tap", button = "trigger", suppress = true }
+kSecondaryBinding = { hand = "primary", type = "tap", button = "trigger", suppress = true }
 sEntryHaptic = "Tick"
 sPrimaryHaptic = "DoubleClick"
 sSecondaryHaptic = "DoubleClick"
@@ -72,7 +73,7 @@ aDumpDataOnce = []
 # and a controller binding to enable/disable the overlay in-headset.
 # HUD placement: center, center-left, center-right, center-top, center-top-left, center-top-right.
 bDebugDrawEnabled = true
-sDebugDrawToggleBinding = "offhand longpress A"
+kDebugDrawToggleBinding = { hand = "offhand", type = "longpress", button = "a" }
 aDebugDrawDisabledChannels = []
 sDebugDrawHudPlacement = "center-top-left"
 

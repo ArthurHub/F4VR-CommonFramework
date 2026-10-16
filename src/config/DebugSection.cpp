@@ -72,7 +72,7 @@ namespace f4cf::config
         addItemsOnce = readAddItemsOnce(config);
         drawEnabled = debug["bDebugDrawEnabled"].value_or(true);
         drawDisabledChannels = ConfigReaders::getStringListValue(config, CONFIG_SECTION_DEBUG, "aDebugDrawDisabledChannels", {});
-        drawToggleBinding = debug["sDebugDrawToggleBinding"].value_or(std::string());
+        drawToggleBinding = ConfigReaders::getInputBindingValue(config, CONFIG_SECTION_DEBUG, "kDebugDrawToggleBinding", vrcf::VRControllersManager::DisabledBinding);
         drawHudPlacement = debug["sDebugDrawHudPlacement"].value_or(std::string("center"));
         sceneDepthStrategy = debug["sSceneDepthStrategy"].value_or(std::string("auto"));
         sceneDepthDiagnostics = debug["bSceneDepthDiagnostics"].value_or(false);

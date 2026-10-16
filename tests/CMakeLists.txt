@@ -22,6 +22,7 @@ add_executable(${PROJECT_NAME}_tests
   FrameContextTests.cpp
   HistogramTests.cpp
   ImGuiPointerLogicTests.cpp
+  InputBindingParserTests.cpp
   PerfReportTests.cpp
   PerfSiteTests.cpp
   TomlEditorTests.cpp
@@ -37,6 +38,7 @@ add_executable(${PROJECT_NAME}_tests
   ${SOURCE_DIR}/perf/FrameContext.cpp
   ${SOURCE_DIR}/perf/Perf.cpp
   ${SOURCE_DIR}/perf/Report.cpp
+  ${SOURCE_DIR}/vrcf/InputBindingParser.cpp
   ${SOURCE_DIR}/vrui/UIDevLayoutFile.cpp
 )
 
@@ -75,7 +77,6 @@ add_executable(${PROJECT_NAME}_linked_tests
   linked/DebugInventoryTests.cpp
   linked/DebugSectionTests.cpp
   linked/ConfigReadersTests.cpp
-  linked/InputBindingParserTests.cpp
   linked/MatrixUtilsTests.cpp
   linked/OffsetsFilesTests.cpp
   linked/QuaternionTests.cpp

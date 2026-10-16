@@ -1,5 +1,10 @@
 #include <catch2/catch_test_macros.hpp>
 
+#include <expected>
+#include <initializer_list>
+#include <string>
+#include <utility>
+
 #include "vrcf/InputBindingParser.h"
 
 using namespace f4cf::vrcf;
@@ -290,4 +295,96 @@ TEST_CASE("InputBindingParser: the buttons of a mask are named lowest id first")
 
     REQUIRE(buttonNames(mask) == std::vector<std::string>{ "grip", "a", "trigger" });
     REQUIRE(buttonNames(0).empty());
+}
+
+namespace
+{
+    /**
+     * A binding read from the TOML text of its table, as a config has it.
+     */
+    std::expected<InputBinding, std::string> fromTable(const std::string& value)
+    {
+        const auto table = toml::parse("v = " + value);
+        return parseInputBindingTable(*table.get("v"));
+    }
+
+    /**
+     * Why the TOML text of a table is not a binding, or "(read)" when it is one.
+     */
+    std::string tableErrorOf(const std::string& value)
+    {
+        const auto binding = fromTable(value);
+        return binding ? std::string("(read)") : binding.error();
+    }
+}
+
+TEST_CASE("InputBindingParser: a table is the binding its line is, key by key")
+{
+    for (const auto& [table, line] : std::initializer_list<std::pair<std::string, std::string>>{
+             { R"({ hand = "offhand", type = "tap", button = "trigger" })", "offhand tap trigger" },
+             { R"({ hand = "offhand", type = "hold", button = "grip", duration = 0.3 })", "offhand holddown grip 0.3" },
+             { R"({ hand = "left", type = "tap", button = "grip", suppress = true })", "left tap grip suppress" },
+             { R"({ hand = "primary", type = "longpress", button = "thumbstick", duration = 1.5, modifier = { hand = "offhand", button = "thumbstick" } })",
+                 "primary longpress thumbstick 1.5 +offhand:thumbstick" },
+             { R"({ hand = "primary", type = "press", button = "trigger", modifier = { button = "grip" } })", "primary press trigger +grip" },
+             { R"({ hand = "right", type = "axis", axis = "trigger", direction = "up", threshold = 0.7 })", "right axis trigger up 0.7" },
+             // the axis is the thumbstick when left out, and the words are read with their aliases in any case
+             { R"({ hand = "Primary", type = "axis", direction = "UP" })", "primary thumbstick up" },
+             { R"({ hand = "main", type = "click", button = "menu" })", "primary press b" },
+             { R"({ type = "none" })", "none" },
+         }) {
+        CAPTURE(table);
+        const auto binding = fromTable(table);
+        REQUIRE(binding);
+        REQUIRE(*binding == parsed(line));
+    }
+}
+
+TEST_CASE("InputBindingParser: a table that is not a binding says why, naming the key or the word that is wrong")
+{
+    for (const auto& [table, error] : std::initializer_list<std::pair<std::string, std::string>>{
+             { R"("offhand tap grip")", R"(it is not a table, as { hand = "offhand", type = "tap", button = "grip" })" },
+             { R"({ hand = "offhand", type = "tap", buton = "grip" })",
+                 "it has the key 'buton', which is not one of hand, type, button, axis, direction, duration, threshold, suppress, modifier" },
+             { R"({ hand = "offhand", button = "grip" })", "the type is missing, one of tap, press, longpress, double, hold, release, touch, axis, none" },
+             { R"({ hand = "offhand", type = "squeeze", button = "grip" })", "'squeeze' is not a type, one of tap, press, longpress, double, hold, release, touch, axis, none" },
+             { R"({ type = "tap", button = "grip" })", "the hand is missing, one of primary, offhand, left, right" },
+             { R"({ hand = "middle", type = "tap", button = "grip" })", "'middle' is not a hand, one of primary, offhand, left, right" },
+             { R"({ hand = "offhand", type = "tap" })", "the button is missing, one of trigger, grip, a, b, thumbstick, menu, system" },
+             { R"({ hand = "offhand", type = "tap", button = 2 })", "button is not a string, one of trigger, grip, a, b, thumbstick, menu, system" },
+             { R"({ hand = "offhand", type = "longpress", button = "grip", duration = "long" })", "duration is not a number" },
+             { R"({ hand = "offhand", type = "tap", button = "grip", direction = "up" })",
+                 "direction is not a key of a tap binding, which has hand, type, button, duration, suppress and modifier" },
+             { R"({ hand = "offhand", type = "axis", button = "grip", direction = "up" })",
+                 "button is not a key of a axis binding, which has hand, type, axis, direction, threshold, suppress and modifier" },
+             { R"({ hand = "offhand", type = "axis" })", "the direction is missing, one of up, down, left, right" },
+             { R"({ hand = "offhand", type = "tap", button = "grip", suppress = "yes" })", "suppress is not true or false" },
+             { R"({ hand = "offhand", type = "tap", button = "grip", modifier = "grip" })", R"(modifier is not a table, as { hand = "offhand", button = "grip" })" },
+             { R"({ hand = "offhand", type = "tap", button = "grip", modifier = { hand = "left" } })",
+                 "modifier has no button, one of trigger, grip, a, b, thumbstick, menu, system" },
+             { R"({ type = "none", hand = "left" })", "a none binding has no key but its type" },
+         }) {
+        CAPTURE(table);
+        REQUIRE(tableErrorOf(table) == error);
+    }
+}
+
+TEST_CASE("InputBindingParser: a binding's table text reads back as the binding, in its canonical words and with no default written")
+{
+    for (const auto& [line, table] : std::initializer_list<std::pair<std::string, std::string>>{
+             { "offhand tap trigger", R"({ hand = "offhand", type = "tap", button = "trigger" })" },
+             { "OFFHAND HOLDDOWN GRIP 0.3", R"({ hand = "offhand", type = "hold", button = "grip", duration = 0.3 })" },
+             { "left tap grip suppress", R"({ hand = "left", type = "tap", button = "grip", suppress = true })" },
+             { "primary longpress thumbstick 2 +offhand:thumbstick",
+                 R"({ hand = "primary", type = "longpress", button = "thumbstick", duration = 2.0, modifier = { hand = "offhand", button = "thumbstick" } })" },
+             { "primary press b +grip", R"({ hand = "primary", type = "press", button = "menu", modifier = { button = "grip" } })" },
+             { "primary thumbstick up", R"({ hand = "primary", type = "axis", axis = "thumbstick", direction = "up" })" },
+             { "right axis trigger down 0.5", R"({ hand = "right", type = "axis", axis = "trigger", direction = "down", threshold = 0.5 })" },
+             { "none", R"({ type = "none" })" },
+         }) {
+        CAPTURE(line);
+        const auto binding = parsed(line);
+        REQUIRE(inputBindingTomlText(binding) == table);
+        REQUIRE(fromTable(table) == binding);
+    }
 }

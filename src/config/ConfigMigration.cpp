@@ -7,11 +7,13 @@
 #include <limits>
 #include <optional>
 #include <string_view>
+#include <tuple>
 #include <utility>
 
 #include "ConfigFile.h"
 #include "ConfigValue.h"
 #include "ValueParsers.h"
+#include "vrcf/InputBindingParser.h"
 
 // last: on Windows it includes windows.h, whose min and max macros break headers that come after it
 #include <SimpleIni.h>
@@ -95,13 +97,44 @@ namespace
     }
 
     /**
+     * The key of a table that is `key` with another type prefix, the lowercase letter a key's name starts with
+     * ("sPipboyOpenButton" for "kPipboyOpenButton"), the rest matched with no regard to case, and its node, so a
+     * value whose type changed with its prefix is found under its new name. Only when exactly one key matches; with
+     * none or more, or no table, it is `key` itself and null.
+     */
+    std::pair<std::string_view, const toml::node*> findByOtherPrefix(const toml::table* table, const std::string_view key)
+    {
+        const auto hasPrefix = [](const std::string_view name) {
+            return name.size() > 1 && std::islower(static_cast<unsigned char>(name[0])) && std::isupper(static_cast<unsigned char>(name[1]));
+        };
+        if (!table || !hasPrefix(key)) {
+            return { key, nullptr };
+        }
+        const auto sameLetter = [](const char a, const char b) {
+            return std::tolower(static_cast<unsigned char>(a)) == std::tolower(static_cast<unsigned char>(b));
+        };
+        std::pair<std::string_view, const toml::node*> found{ key, nullptr };
+        for (const auto& [name, node] : *table) {
+            if (hasPrefix(name.str()) && std::ranges::equal(name.str().substr(1), key.substr(1), sameLetter)) {
+                if (found.second) {
+                    return { key, nullptr };
+                }
+                found = { name.str(), &node };
+            }
+        }
+        return found;
+    }
+
+    /**
      * The value of an INI key in the type of `like`, the TOML config's value for it, read by SimpleIni's getter of
      * that type, so it is the value a mod read from the INI: "yes" and "on" are true, "0x10" is 16, and a number with
      * text after it is not one. No value when the text is not a value of the type, for which a getter returns its
      * default, so a bool and an integer are read with two defaults that differ, and a float with NaN, as floats are
      * not compared exactly. A transform, a table the config reads as one (see config::parseTransform), is the INI's
-     * text of it, "x,y,z;heading,roll,attitude;scale", as the table, see config::transformTableFromText. Any other
-     * type the INI has no getter of is the text read as TOML, see config::typedLike.
+     * text of it, "x,y,z;heading,roll,attitude;scale", as the table, see config::transformTableFromText, and a
+     * binding, a table the config reads as one (see vrcf::parseInputBindingTable), is the INI's line of it as the
+     * table, see vrcf::inputBindingTomlText. Any other type the INI has no getter of is the text read as TOML, see
+     * config::typedLike.
      */
     std::optional<TomlEditor::Value> iniValueAs(const CSimpleIniA& ini, const char* section, const char* key, const toml::node& like)
     {
@@ -127,6 +160,14 @@ namespace
             if (f4cf::config::parseTransform(like)) {
                 if (const auto table = f4cf::config::transformTableFromText(ini.GetValue(section, key, ""))) {
                     return TomlEditor::Value(*table);
+                }
+            }
+            if (f4cf::vrcf::parseInputBindingTable(like)) {
+                if (const auto binding = f4cf::vrcf::parseInputBinding(ini.GetValue(section, key, ""))) {
+                    // read from its text, so the table is written with its keys in the order of the text
+                    if (const auto table = f4cf::common::parseToml("v = " + f4cf::vrcf::inputBindingTomlText(*binding))) {
+                        return TomlEditor::Value(*table->get("v"));
+                    }
                 }
             }
             [[fallthrough]];
@@ -211,8 +252,9 @@ namespace f4cf::config
      * mod's own migration to read: a key `like` does not have, and a text that is not a value of the type, for which
      * the mod had its default. An empty text of either is left out, as for no key: it holds nothing for the mod's
      * migration, and the load of the version 0 file does not read it as a broken value of the key.
-     * The INI's names are matched with no regard to case, as SimpleIni matched them, and take `like`'s spelling. The
-     * sections and keys are in the INI's order, a key before its first section is a key of the root, and its comments
+     * The INI's names are matched with no regard to case, as SimpleIni matched them, and take `like`'s spelling. A key
+     * `like` does not have under its name is matched to one that has another type prefix, as "sOpenButton" to
+     * "kOpenButton", see findByOtherPrefix. The sections and keys are in the INI's order, a key before its first section is a key of the root, and its comments
      * are left out. Returns why when the INI can't be TOML, as when it has a key of the root and a section of the
      * same name.
      */
@@ -241,7 +283,10 @@ namespace f4cf::config
             ini.GetAllKeys(section.pItem, keys);
             keys.sort(CSimpleIniA::Entry::LoadOrder());
             for (const auto& key : keys) {
-                const auto [name, node] = findNoCase(table, key.pItem);
+                auto [name, node] = findNoCase(table, key.pItem);
+                if (!node) {
+                    std::tie(name, node) = findByOtherPrefix(table, key.pItem);
+                }
                 std::optional<TomlEditor::Value> value;
                 if (node && !isSection(*node) && !isArrayOfSections(*node)) {
                     value = iniValueAs(ini, section.pItem, key.pItem, *node);

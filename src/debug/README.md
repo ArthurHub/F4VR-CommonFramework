@@ -107,7 +107,7 @@ Channels are not only a mod's own: the framework tags its scene-depth readout `S
 | ---------------------------- | ------- | -------------------------------------------------------------------------- |
 | `bDebugDrawEnabled`          | `true`  | Master switch (runtime `setEnabled()` / hotkey override it until changed). |
 | `aDebugDrawDisabledChannels` | `[]`    | Names of the channels whose draws are skipped, e.g. `["physics"]`.         |
-| `sDebugDrawToggleBinding`    | empty   | Controller binding to flip the overlay in-headset (`vrcf::parseInputBinding` grammar, e.g. `offhand longpress grip`). |
+| `kDebugDrawToggleBinding`    | none    | Controller binding to flip the overlay in-headset (a [binding table](../../docs/input-binding.md#the-binding), e.g. `{ hand = "offhand", type = "longpress", button = "grip" }`). |
 | `sDebugDrawHudPlacement`     | `center`| Where the default watch-table HUD sits: `center` / `center-left` / `center-right` / `center-top` / `center-top-left` / `center-top-right` (bottom row a little below centre, top row higher above it; side variants are edge-aligned that way). |
 
 ## Files
