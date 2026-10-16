@@ -251,7 +251,7 @@ if(F4CF_WITH_IMGUI_UI)
     # must declare the dependency itself - name the fix rather than failing with "package not found"
     message(FATAL_ERROR ">> Dear ImGui not found. Add this to your mod's vcpkg.json dependencies:
 "
-                        ">>   { \"name\": \"imgui\", \"features\": [ \"dx11-binding\" ] }
+                        ">>   { \"name\": \"imgui\", \"features\": [ \"dx11-binding\", \"win32-binding\" ] }
 "
                         ">> on a vcpkg baseline with Dear ImGui 1.92.9, which the layer needs, as the framework's is:
 "

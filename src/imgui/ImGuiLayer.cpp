@@ -12,6 +12,7 @@
 #include "../render/RenderUtils.h"
 #include "ImGuiFonts.h"
 #include "ImGuiImage.h"
+#include "ImGuiKeyboard.h"
 #include "ImGuiPointer.h"
 #include "ImGuiRenderer.h"
 #include "ImGuiSettings.h"
@@ -166,6 +167,7 @@ namespace f4cf::imgui::internal
                 ImGui::DestroyContext();
                 return false;
             }
+            keyboard().install();
 
             s_lastFrameTime = std::chrono::steady_clock::now();
             s_contextReady = true;

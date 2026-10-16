@@ -22,6 +22,7 @@ and a `vrui::UITextPanel` standing side by side read as one UI.
 | [`UIImGuiPanel.h`](UIImGuiPanel.h) / [`.cpp`](UIImGuiPanel.cpp) | The vrui adapter: a `UIElement` whose rectangle a `Canvas` fills. Takes `vrui::UIPanelStyle` and the vrui sizing modes, in vrui units. |
 | [`ImGuiPointer.h`](ImGuiPointer.h) / [`.cpp`](ImGuiPointer.cpp) | `Pointer`, reached as `imgui::pointer()` — the one pointer of the interactive canvases: a wand's ray as ImGui's mouse, its trigger as the mouse button, and that wand hidden from the game. Its state, which hands point, and its `PointerStyle`: where the ray is on the hand, and how the ray and its mark are drawn. |
 | [`ImGuiPointerLogic.h`](ImGuiPointerLogic.h) | The pointer's logic apart from the game, so it is unit tested: where a ray meets a quad and its plane, the quad of a curved canvas bent around its cylinder, whether a hand operates the UI and presses it, which hand owns the pointer, and how much a thumbstick scrolls. |
+| [`ImGuiKeyboard.h`](ImGuiKeyboard.h) / [`.cpp`](ImGuiKeyboard.cpp) | The keyboard of the canvases: the keyboard messages of the game's window handed to ImGui's Win32 backend, so a focused text field is typed with a physical keyboard or an overlay that sends keys to the window ([VR keyboard](../../docs/tech/vr-keyboard.md)). |
 | [`ImGuiImage.h`](ImGuiImage.h) / [`.cpp`](ImGuiImage.cpp) | `imgui::image` and `imgui::addImage` — a `render::Texture` in the content of a canvas, kept until the frame that draws it has been drawn. |
 | [`ImGuiSettings.h`](ImGuiSettings.h) / [`.cpp`](ImGuiSettings.cpp) | The two process-wide knobs: `setFontSizePixels` and `setSupersample`. |
 | [`ImGuiFonts.h`](ImGuiFonts.h) / [`.cpp`](ImGuiFonts.cpp) | Loads the framework's text font into the ImGui atlas, from the same bytes the primitive renderer draws with, with its bold and italic faces: `imgui::canvasFont`. |
@@ -414,7 +415,7 @@ imgui::internal::onFrameEnd()                   draw callback (DRAW_ORDER_PANELS
 ## Building without it
 
 `F4CF_WITH_IMGUI_UI` (default `ON`) compiles the layer into the archive; the vcpkg manifest pulls
-`imgui` with the `dx11-binding` feature, at 1.92.9, the version of its `builtin-baseline`. A mod's
+`imgui` with the `dx11-binding` and `win32-binding` features, at 1.92.9, the version of its `builtin-baseline`. A mod's
 own `vcpkg.json` needs both, as vcpkg reads the top-level
 project's manifest. Configure with `-DF4CF_WITH_IMGUI_UI=OFF` to cut the compile time or drop the
 port entirely — then `src/imgui/` is not built and its headers are not exposed, so code using
