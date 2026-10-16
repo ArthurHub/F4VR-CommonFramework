@@ -5,11 +5,10 @@ shows SteamVR's keyboard, and the keys of the game's window reach ImGui too, so 
 keyboard overlay that types into the window works as well. The content calls `ImGui::InputText` as on a
 screen and has nothing else to call.
 
-This is the design. The keys of the game's window are built, in
-[`ImGuiKeyboard.cpp`](../../src/imgui/ImGuiKeyboard.cpp); SteamVR's keyboard is not yet. It goes in
-[`src/imgui/`](../../src/imgui/), beside the pointer that is the canvas's mouse
-([`ImGuiPointer.cpp`](../../src/imgui/ImGuiPointer.cpp)), and runs in the ImGui frame of
-[`ImGuiLayer.cpp`](../../src/imgui/ImGuiLayer.cpp).
+Both are in [`ImGuiKeyboard.cpp`](../../src/imgui/ImGuiKeyboard.cpp), beside the pointer that is
+the canvas's mouse ([`ImGuiPointer.cpp`](../../src/imgui/ImGuiPointer.cpp)), and run in the ImGui
+frame of [`ImGuiLayer.cpp`](../../src/imgui/ImGuiLayer.cpp). What the field is sent is decided in
+[`ImGuiKeyboardLogic.h`](../../src/imgui/ImGuiKeyboardLogic.h), which is unit tested.
 
 The framework draws no keyboard of its own. A field that takes a number is typed on the same keyboard.
 
@@ -83,34 +82,59 @@ runtime, while the game's window has focus.
 
 ## SteamVR's keyboard
 
-The bridge follows [imgui-vr-helper](https://github.com/alandtse/imgui-vr-helper)'s
+The bridge is like [imgui-vr-helper](https://github.com/alandtse/imgui-vr-helper)'s
 (`src/VRKeyboard.cpp`, and `PumpKeyboard()` in `api/ImGuiVRHelperClientSDK.h`), which does this for
-Skyrim VR. It is GPL-3.0-or-later, as the framework is GPL-3.0.
+Skyrim VR, and edits the field in its own way. It is GPL-3.0-or-later, as the framework is GPL-3.0.
 
 Before each ImGui frame:
 
-- **Shown.** When `io.WantTextInput` turns on, the keyboard is shown for an overlay the framework
-  creates, with the field's text as its starting text, in single-line mode. The text is in ImGui's
-  `InputTextState` while its id is the active one. The overlay shows nothing: it is the keyboard's
-  anchor, placed below the panel.
+- **Shown.** When ImGui edits a text field, the active item with an `InputTextState` that is not
+  read-only, the keyboard is shown for an overlay the framework creates, with the field's text as its
+  starting text, in single-line mode, for at least 256 characters. The overlay shows nothing and is not
+  placed: it only owns the keyboard's events. SteamVR puts the keyboard where its dashboard was last
+  opened, with the handle the player moves it by, and it does not go by the overlay, placed or shown.
+  `SetKeyboardTransformAbsolute` moves it, but before the show it is not used, right after the show the
+  keyboard closes, and a few frames later the keyboard loses its handle and sometimes closes: the
+  framework leaves it to SteamVR. Its key has the address of the mod's keyboard
+  in it, so each mod built on the framework has an overlay of its own.
+- **One keyboard at a time.** The keyboard closes itself on Done and on its close button, and sends
+  `VREvent_KeyboardClosed` after Done too. `HideKeyboard` is called only when the framework hides it: on a
+  keyboard that closed itself it would send another Closed, which can come after the next keyboard is
+  shown and close it. The events left in the queue are dropped before a keyboard is shown.
+- **The floor.** The keyboard's text starts with a no-break space, before the field's, which is not seen
+  and which the field never gets. SteamVR sends no event when the last character of its text is
+  deleted, so with nothing before the field's text the field would keep its last character.
 - **Read.** The keyboard's events are read from that overlay's own queue (`PollNextOverlayEvent`), so the
   game's VR events are left to the game.
-- **Typed.** On each `VREvent_KeyboardCharInput` the framework reads the keyboard's whole text and sends
-  the field what changed: one `ImGuiKey_Backspace` for each character removed, then the new characters
-  (`io.AddInputCharactersUTF8`). The diff is taken on whole UTF-8 characters, as ImGui deletes a whole
-  character for a Backspace. The keyboard's text is the one that counts: a focused `InputText` keeps
-  its own copy of its text, so the field follows the keyboard only through these events.
-- **Done.** `VREvent_KeyboardDone` hides the keyboard and leaves the field (`ImGui::ClearActiveID`),
-  with the text it has.
+- **Typed.** On each `VREvent_KeyboardCharInput` the framework reads the keyboard's whole text. When it
+  differs from the text read before, it turns the field's own text, in its `InputTextState`, into it with one edit, where it changed: the part between
+  the start and the end the two texts share. That part is selected in the field (`SetSelection`), and the
+  new characters are typed over it (`io.AddInputCharactersUTF8`), or a Backspace takes it away. So a
+  character changed in the middle is replaced there, in one frame. The texts are compared on whole UTF-8
+  characters. Only a change of the keyboard's text is made in the field, which is then left as it is
+  until the next one. So what the keys of the game's window type into the field stays, and so does what
+  the field's filter did: characters go through ImGui's input, and a filter can drop a character, as a
+  number field drops a letter, or change it, as an upper-case field does. OpenVR has no call that sets
+  the text of a keyboard that is shown, so the keyboard does not get what the keys of the window typed,
+  and its next change is made over it where the two texts differ. A Backspace is pressed in one
+  frame and let go of in the next: the layer has ImGui take every event in the frame it is given in, so a
+  press and a release given together would be lost.
+- **Done.** `VREvent_KeyboardDone` hides the keyboard. The field is sent what it was not sent yet, and is
+  then left (`ImGui::ClearActiveID`), with the text it has.
 - **Cancelled.** `VREvent_KeyboardClosed`, the keyboard's close button, hides the keyboard and sends the
   field `ImGuiKey_Escape`: ImGui gives the field back the text it had and leaves it.
-- **Left.** When the field is left from the content, or its panel is hidden, the keyboard is hidden
-  (`HideKeyboard`).
+- **Left.** When the field is left from the content, another field is focused in its place, or no
+  interactive canvas is shown, the keyboard is hidden (`HideKeyboard`). Once Done or a cancel has left
+  the field, it is not shown again until ImGui edits no field.
 
-While the keyboard is shown, the canvas's pointer presses nothing. The keyboard has its own lasers, and a
-press of the ray beside the field would leave the field. After Done or a cancel, the keyboard is not
-shown again until the trigger is let go: the press that pressed Done would otherwise focus the field
-again on its release.
+While the keyboard is shown, the canvas's pointer is on no canvas and draws no ray: the keyboard has its
+own lasers, and a press of the ray beside the field would leave the field. SteamVR keeps the controllers
+from the game, and from every mod's reads, until the keyboard is closed: a mod's Back button does nothing
+meanwhile, and the keyboard is closed with Done or its close button. The pointer waits five frames
+more after the keyboard is hidden: the game's wands are still where they were before it was shown until
+the game has the controllers' poses again, and the ray would show there for a frame. A trigger still down when it is
+hidden is the game's until it is released, as for any ray that comes to a canvas with the trigger down,
+so the press on Done does not press the canvas behind it.
 
 Every keyboard call is made on the game thread, in the ImGui frame, and none on the render thread.
 
@@ -124,10 +148,6 @@ game's window.
 
 ## To check in the headset
 
-- Where SteamVR puts the keyboard: by the anchor overlay's transform, or only by
-  `SetKeyboardTransformAbsolute`.
-- Whether the game still sees the controllers while the keyboard is shown: the ray, and a Back button
-  that would hide it.
 - That the log says the keys of the game's window reach a text field, and not that the window is on
   another thread.
 - Whether a key typed into a field also reaches the game. F4SEMenuFramework keeps the keys from the

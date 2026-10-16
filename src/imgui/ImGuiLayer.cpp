@@ -333,7 +333,9 @@ namespace f4cf::imgui::internal
             }
         }
         if (active.empty()) {
-            // no ImGui frame is built: the pointer is on nothing, and only a press that is still held is waited out
+            // no ImGui frame is built: the keyboard is hidden, the pointer is on nothing, and only a press that is
+            // still held is waited out
+            keyboard().update(false);
             pointer().update({});
             renderer::publish({});
             return;
@@ -404,6 +406,7 @@ namespace f4cf::imgui::internal
             }
         }
         if (packed.empty()) {
+            keyboard().update(false);
             pointer().update({});
             renderer::publish({});
             return;
@@ -429,8 +432,11 @@ namespace f4cf::imgui::internal
         io.DisplaySize = ImVec2(static_cast<float>(display.width), static_cast<float>(display.height));
         io.DeltaTime = frameDeltaSeconds();
 
-        // before the frame begins, so its widgets see where the pointer is now
-        pointer().update(pointerTargets);
+        // before the frame begins, so its widgets see where the pointer is now and what was typed. While SteamVR's
+        // keyboard is shown, its own lasers type on it, and the pointer is on no canvas: a press of the ray
+        // beside the field would leave it. SteamVR keeps the controllers from the game meanwhile.
+        keyboard().update(!pointerTargets.empty());
+        pointer().update(keyboard().holdsPointer() ? std::vector<PointerTarget>() : pointerTargets);
 
         ImGui_ImplDX11_NewFrame();
         ImGui::NewFrame();

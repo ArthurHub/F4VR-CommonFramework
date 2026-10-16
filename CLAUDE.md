@@ -195,10 +195,12 @@ and composited as one quad, so N canvases cost one ImGui frame and one draw call
 - **A wide panel is curved** (`setCurveRadius`): bent toward the player around a cylinder, so its
   sides read as its middle does. It is drawn as flat pieces side by side, and the pointer meets it
   on the cylinder, both from `CurvedQuad` in `ImGuiPointerLogic.h`. vrui still lays it out flat.
-- **A text field takes the keys of the game's window** (`ImGuiKeyboard.cpp`): its keyboard messages are
-  handed to ImGui's Win32 backend (vcpkg's `win32-binding`) and go on to the game, so a physical
-  keyboard or an overlay that sends keys to the window types into a focused `ImGui::InputText`. The
-  window's procedure is hooked only when its messages come on the game thread, which builds the frame.
+- **A text field is typed into** (`ImGuiKeyboard.cpp`): while ImGui edits one, SteamVR's keyboard is
+  shown, and each change of its text is made in the field with one edit where it changed: the part is
+  selected and typed over, so the field's filter applies. The game window's keyboard messages are handed to ImGui's Win32 backend
+  (vcpkg's `win32-binding`) and go on to the game, so a physical keyboard or an overlay that sends keys
+  to the window types too. The window's procedure is hooked only when its messages come on the game
+  thread, which builds the frame. See `docs/tech/vr-keyboard.md`.
 - **A panel in the world is moved by the player**: vrui does it, for every root attached with
   `attachPresetToWorldAtHMD`, once the mod sets `g_uiManager->setWorldMoveButton(...)`. While that
   button is held on the hand that owns the pointer, from a press on the panel, the root follows the
