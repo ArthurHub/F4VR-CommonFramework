@@ -378,6 +378,20 @@ TEST_CASE("INI as TOML: a key is matched to one of another type prefix only when
     REQUIRE(toml == "[Main]\nsScale = \"2\"\nscale = \"3\"\n");
 }
 
+TEST_CASE("INI as TOML: a hand pose's text is the table of its fingers and palm, which a migration carries as any value")
+{
+    constexpr auto SHIPPED_POSE = "[Light]\nhPose = { index = [0.0, 0.0, 0.0, 0.0] }\n";
+    const auto old =
+        toml::parse(asToml("[Light]\nhPose = 0.48,1.14,0.97,0.06;0.75,0.56,0.29,0.23;0.17,0.55,0.62,0.03;-0.38,0.87,0.53,0.03;-0.80,0.96,1.14,0.16;15.00,0.00\n", SHIPPED_POSE));
+
+    TomlEditor latest(SHIPPED_POSE);
+    REQUIRE(outcomeOf(migrateValues(old, latest), "Light.hPose") == Outcome::Carried);
+    // the fingers thumb to pinky, then the palm, each number as the text had it
+    REQUIRE(latest.text() ==
+            "[Light]\nhPose = { thumb = [0.48, 1.14, 0.97, 0.06], index = [0.75, 0.56, 0.29, 0.23], middle = [0.17, 0.55, 0.62, 0.03], "
+            "ring = [-0.38, 0.87, 0.53, 0.03], pinky = [-0.8, 0.96, 1.14, 0.16], palm = [15.0, 0.0] }\n");
+}
+
 TEST_CASE("INI file import: the INI as TOML at version 0, which says what it is, and the INI kept by its own version")
 {
     const test_files::TempFolder folder;

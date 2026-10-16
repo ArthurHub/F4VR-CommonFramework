@@ -126,14 +126,27 @@ namespace
     }
 
     /**
+     * The value of a value's TOML text, read from the text so a table is written with its keys in the order of the
+     * text, see TomlEditor::Value. No value for a text that is not TOML.
+     */
+    std::optional<TomlEditor::Value> valueOfText(const std::string& text)
+    {
+        if (const auto table = f4cf::common::parseToml("v = " + text)) {
+            return TomlEditor::Value(*table->get("v"));
+        }
+        return std::nullopt;
+    }
+
+    /**
      * The value of an INI key in the type of `like`, the TOML config's value for it, read by SimpleIni's getter of
      * that type, so it is the value a mod read from the INI: "yes" and "on" are true, "0x10" is 16, and a number with
      * text after it is not one. No value when the text is not a value of the type, for which a getter returns its
      * default, so a bool and an integer are read with two defaults that differ, and a float with NaN, as floats are
      * not compared exactly. A transform, a table the config reads as one (see config::parseTransform), is the INI's
-     * text of it, "x,y,z;heading,roll,attitude;scale", as the table, see config::transformTableFromText, and a
-     * binding, a table the config reads as one (see vrcf::parseInputBindingTable), is the INI's line of it as the
-     * table, see vrcf::inputBindingTomlText. Any other type the INI has no getter of is the text read as TOML, see
+     * text of it, "x,y,z;heading,roll,attitude;scale", as the table, see config::transformTableFromText. So are a
+     * binding (see vrcf::parseInputBindingTable) and a hand pose (see config::parseHandPose), the INI's line of a
+     * binding and its 22 numbers of a pose as their table, see vrcf::inputBindingTomlText and
+     * config::handPoseTomlText. Any other type the INI has no getter of is the text read as TOML, see
      * config::typedLike.
      */
     std::optional<TomlEditor::Value> iniValueAs(const CSimpleIniA& ini, const char* section, const char* key, const toml::node& like)
@@ -164,10 +177,12 @@ namespace
             }
             if (f4cf::vrcf::parseInputBindingTable(like)) {
                 if (const auto binding = f4cf::vrcf::parseInputBinding(ini.GetValue(section, key, ""))) {
-                    // read from its text, so the table is written with its keys in the order of the text
-                    if (const auto table = f4cf::common::parseToml("v = " + f4cf::vrcf::inputBindingTomlText(*binding))) {
-                        return TomlEditor::Value(*table->get("v"));
-                    }
+                    return valueOfText(f4cf::vrcf::inputBindingTomlText(*binding));
+                }
+            }
+            if (f4cf::config::parseHandPose(like)) {
+                if (const auto pose = f4cf::config::parseHandPoseText(ini.GetValue(section, key, ""))) {
+                    return valueOfText(f4cf::config::handPoseTomlText(*pose));
                 }
             }
             [[fallthrough]];

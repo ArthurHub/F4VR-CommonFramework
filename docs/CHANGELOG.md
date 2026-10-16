@@ -69,6 +69,11 @@ major version is `0`, a minor bump may break the API; the **Upgrading** notes sa
     An activation sphere's are `kPrimaryBinding` / `kSecondaryBinding`, and `[Debug]` has
     `kDebugDrawToggleBinding` (not moved from `sDebugDrawToggleBinding`).
   - `DebugSection::drawToggleBinding` is a `vrcf::InputBinding`.
+- **Hand poses are TOML tables**: an `h` value is `{ thumb = [prox, mid, dist, splay], index = [..],
+  middle = [..], ring = [..], pinky = [..], palm = [pitch, yaw] }`, a finger or the palm left out being
+  zeros, in place of the 22 numbers of `"p,m,d,s;...;pitch,yaw"`, which only the INI import reads now.
+  `DebugAdjuster` saves the table. The INI import converts a player's pose into the table, for a key the
+  shipped TOML has as a hand pose. **Upgrading:** write the hand poses of the mod's TOML as tables.
 - **Colors are TOML tables**: a color is a `c` value, `{ rgb = [r, g, b], alpha = a }`, each a whole
   number in 0..255, read by `getColorValue` in place of the text `"r,g,b,a"`. A key left out keeps the
   default's channels, so `{ alpha = 60 }` changes only the opacity. An activation sphere's look is

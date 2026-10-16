@@ -116,7 +116,9 @@ TEST_CASE("ConfigReaders: a hand pose is the four numbers of each finger and the
 
     SECTION("read from its value")
     {
-        const Config file("hPose = \"1,2,3,4; 5,6,7,8; 9,10,11,12; 13,14,15,16; 17,18,19,20; 21,22\"\n");
+        const Config file(
+            "hPose = { thumb = [1, 2, 3, 4], index = [5, 6, 7, 8], middle = [9, 10, 11, 12], ring = [13, 14, 15, 16], pinky = [17, 18, 19, 20], "
+            "palm = [21, 22] }\n");
 
         const auto pose = ConfigReaders::getHandPoseValue(file.table, MAIN, "hPose", fallback);
 
@@ -125,12 +127,13 @@ TEST_CASE("ConfigReaders: a hand pose is the four numbers of each finger and the
             REQUIRE(pose[i] == static_cast<float>(i + 1));
         }
     }
-    SECTION("the default for a key that is missing, and for a value that is short of a finger")
+    SECTION("the default for a key that is missing, for a finger short of a number, and for the INI's text of it")
     {
-        const Config file("hShort = \"1,2,3,4; 5,6,7,8; 9,10,11,12; 13,14,15,16; 21,22\"\n");
+        const Config file("hShort = { thumb = [1, 2, 3] }\nhText = \"1,2,3,4; 5,6,7,8; 9,10,11,12; 13,14,15,16; 17,18,19,20; 21,22\"\n");
 
         REQUIRE(ConfigReaders::getHandPoseValue(file.table, MAIN, "hPose", fallback) == fallback);
         REQUIRE(ConfigReaders::getHandPoseValue(file.table, MAIN, "hShort", fallback) == fallback);
+        REQUIRE(ConfigReaders::getHandPoseValue(file.table, MAIN, "hText", fallback) == fallback);
     }
 }
 

@@ -7,8 +7,10 @@
 
 #include "config/ValueParsers.h"
 
+using f4cf::config::handPoseTomlText;
 using f4cf::config::parseColor;
 using f4cf::config::parseHandPose;
+using f4cf::config::parseHandPoseText;
 using f4cf::config::parseTransform;
 using f4cf::config::transformTableFromText;
 
@@ -21,6 +23,15 @@ namespace
     {
         const auto table = toml::parse("v = " + value);
         return parseTransform(*table.get("v"));
+    }
+
+    /**
+     * A hand pose read from the TOML text of its value, as a config has it.
+     */
+    auto poseOf(const std::string& value)
+    {
+        const auto table = toml::parse("v = " + value);
+        return parseHandPose(*table.get("v"));
     }
 
     /**
@@ -128,7 +139,9 @@ TEST_CASE("ConfigValueParsers: a text that lacks a number or a separator is not 
 
 TEST_CASE("ConfigValueParsers: a hand pose is four numbers for each finger and two for the palm, in that order")
 {
-    const auto pose = parseHandPose("0.1,0.2,0.3,0.4; 1,2,3,4; 5,6,7,8; 9,10,11,12; 13,14,15,-16; 0.5,-0.25");
+    const auto pose = poseOf(
+        "{ thumb = [0.1, 0.2, 0.3, 0.4], index = [1, 2, 3, 4], middle = [5, 6, 7, 8], ring = [9, 10, 11, 12], "
+        "pinky = [13, 14, 15, -16], palm = [0.5, -0.25] }");
     REQUIRE(pose);
 
     // the thumb first
@@ -143,17 +156,66 @@ TEST_CASE("ConfigValueParsers: a hand pose is four numbers for each finger and t
     REQUIRE((*pose)[21] == -0.25f);
 }
 
-TEST_CASE("ConfigValueParsers: a hand pose with a finger short of a number, or with no palm, is malformed")
+TEST_CASE("ConfigValueParsers: a hand pose without a finger or the palm has zeros for it")
 {
-    REQUIRE_FALSE(parseHandPose(""));
+    const auto pose = poseOf("{ index = [1, 2, 3, 4] }");
+    REQUIRE(pose);
+
+    REQUIRE((*pose)[0] == 0.0f);
+    REQUIRE((*pose)[4] == 1.0f);
+    REQUIRE((*pose)[7] == 4.0f);
+    REQUIRE((*pose)[21] == 0.0f);
+}
+
+TEST_CASE("ConfigValueParsers: a hand pose that is not a table, or has a key of another form or name, is malformed")
+{
+    for (const auto& [value, error] : std::initializer_list<std::pair<std::string, std::string>>{
+             // the text form of the INI config
+             { "\"0,0,0,0; 1,2,3,4; 5,6,7,8; 9,10,11,12; 13,14,15,16; 0.5,0.25\"", "it is not a table" },
+             // a finger short of a number, and one with a word
+             { "{ thumb = [1, 2, 3] }", "thumb is not an array of four numbers, [prox, mid, dist, splay]" },
+             { "{ ring = [1, 2, \"three\", 4] }", "ring is not an array of four numbers, [prox, mid, dist, splay]" },
+             // the palm with its pitch only
+             { "{ palm = [0.5] }", "palm is not an array of two numbers, [pitch, yaw]" },
+             // a misspelled finger, which would read as zeros
+             { "{ pinkie = [1, 2, 3, 4] }", "it has the key 'pinkie', which is not thumb, index, middle, ring, pinky or palm" },
+         }) {
+        CAPTURE(value);
+        const auto pose = poseOf(value);
+        REQUIRE_FALSE(pose);
+        REQUIRE(pose.error() == error);
+    }
+}
+
+TEST_CASE("ConfigValueParsers: a hand pose's table text reads back as the pose, every number as the shortest text of its float")
+{
+    const auto pose = parseHandPoseText("0.48,1.14,0.97,0.06;0.75,0.56,0.29,0.23;0.17,0.55,0.62,0.03;-0.38,0.87,0.53,0.03;-0.80,0.96,1.14,0.16;15.00,0.00");
+    REQUIRE(pose);
+
+    const auto text = handPoseTomlText(*pose);
+    REQUIRE(text ==
+            "{ thumb = [0.48, 1.14, 0.97, 0.06], index = [0.75, 0.56, 0.29, 0.23], middle = [0.17, 0.55, 0.62, 0.03], ring = [-0.38, 0.87, 0.53, 0.03], "
+            "pinky = [-0.8, 0.96, 1.14, 0.16], palm = [15.0, 0.0] }");
+    REQUIRE(poseOf(text) == *pose);
+}
+
+TEST_CASE("ConfigValueParsers: a hand pose's INI text is four numbers for each finger and two for the palm")
+{
+    const auto pose = parseHandPoseText("0.1,0.2,0.3,0.4; 1,2,3,4; 5,6,7,8; 9,10,11,12; 13,14,15,-16; 0.5,-0.25");
+    REQUIRE(pose);
+    REQUIRE((*pose)[0] == 0.1f);
+    REQUIRE((*pose)[19] == -16.0f);
+    REQUIRE((*pose)[21] == -0.25f);
+
+    REQUIRE_FALSE(parseHandPoseText(""));
     // the thumb has three numbers
-    REQUIRE_FALSE(parseHandPose("1,2,3; 1,2,3,4; 5,6,7,8; 9,10,11,12; 13,14,15,16; 0.5,0.25"));
+    REQUIRE_FALSE(parseHandPoseText("1,2,3; 1,2,3,4; 5,6,7,8; 9,10,11,12; 13,14,15,16; 0.5,0.25"));
     // no palm
-    REQUIRE_FALSE(parseHandPose("0,0,0,0; 1,2,3,4; 5,6,7,8; 9,10,11,12; 13,14,15,16"));
+    REQUIRE_FALSE(parseHandPoseText("0,0,0,0; 1,2,3,4; 5,6,7,8; 9,10,11,12; 13,14,15,16"));
     // the palm has its pitch only
-    REQUIRE_FALSE(parseHandPose("0,0,0,0; 1,2,3,4; 5,6,7,8; 9,10,11,12; 13,14,15,16; 0.5"));
+    REQUIRE_FALSE(parseHandPoseText("0,0,0,0; 1,2,3,4; 5,6,7,8; 9,10,11,12; 13,14,15,16; 0.5"));
     // the fingers are not apart
-    REQUIRE_FALSE(parseHandPose("0,0,0,0, 1,2,3,4, 5,6,7,8, 9,10,11,12, 13,14,15,16, 0.5,0.25"));
+    REQUIRE_FALSE(parseHandPoseText("0,0,0,0, 1,2,3,4, 5,6,7,8, 9,10,11,12, 13,14,15,16, 0.5,0.25"));
 }
 
 TEST_CASE("ConfigValueParsers: a color is its rgb and its alpha, the opacity, each a whole number in 0..255")

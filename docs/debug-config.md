@@ -92,7 +92,8 @@ the key:
 
 - **`t…`** — a transform, `{ pos = [x, y, z], rot = [heading, roll, attitude], scale = s }`
   (translation in game units, rotation in degrees).
-- **`h…`** — a 22-float hand pose.
+- **`h…`** — a hand pose, `{ thumb = [prox, mid, dist, splay], index = [..], middle = [..], ring = [..],
+  pinky = [..], palm = [pitch, yaw] }`, a finger or the palm left out being zeros.
 - **`f…`** — a float.
 
 Integer, boolean, and string fields aren't supported by `Section::Key`.
@@ -122,8 +123,8 @@ The sticks drive translation by default; hold an offhand modifier to switch to r
 
 ### Hand-pose controls
 
-A hand pose is 22 floats: five finger groups (`proximal,middle,distal,splay`) followed by
-`palmPitch,palmYaw`. You edit **one slot at a time**, starting at the thumb. **Tap offhand A** to
+A hand pose is 22 floats: five fingers of `[proximal, middle, distal, splay]` followed by the palm's
+`[pitch, yaw]`. You edit **one slot at a time**, starting at the thumb. **Tap offhand A** to
 advance `thumb → index → middle → ring → pinky → palm → thumb` (wraps around); a notification names
 the new slot.
 

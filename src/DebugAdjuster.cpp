@@ -94,13 +94,16 @@ namespace f4cf
         }
 
         /**
-         * Format a 22-float hand pose in the canonical config layout:
-         * 5 ';'-separated groups of 4 ','-separated floats (thumb...pinky each prox,mid,dist,splay),
-         * then 2 trailing ',' separated palm floats (palmPitch, palmYaw).
+         * Format a 22-float hand pose as the TOML text of the inline table the config has a hand pose in,
+         * { thumb = [prox, mid, dist, splay], index .. pinky, palm = [pitch, yaw] }, at SAVE_PRECISION
+         * decimals so saved debug poses stay readable. A save or an override reads the text as the table,
+         * with its keys in this order, see config::typedLike.
          */
         std::string handPoseToFixedString(const std::array<float, 22>& v)
         {
-            return fmt::format("{},{},{},{};{},{},{},{};{},{},{},{};{},{},{},{};{},{},{},{};{},{}",
+            return fmt::format(
+                "{{ thumb = [{}, {}, {}, {}], index = [{}, {}, {}, {}], middle = [{}, {}, {}, {}], ring = [{}, {}, {}, {}], "
+                "pinky = [{}, {}, {}, {}], palm = [{}, {}] }}",
                 toFixed(v[0]),
                 toFixed(v[1]),
                 toFixed(v[2]),

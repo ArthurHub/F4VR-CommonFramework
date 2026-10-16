@@ -56,7 +56,7 @@ TEST_CASE("DebugSection: its keys are read into its fields")
         "sFlowText1 = \"one\"\n"
         "sFlowText2 = \"two words\"\n"
         "tTransform = { pos = [1, 2, 3], rot = [30, 20, 10], scale = 2 }\n"
-        "hHandPose = \"1,2,3,4; 5,6,7,8; 9,10,11,12; 13,14,15,16; 17,18,19,20; 21,22\"\n"
+        "hHandPose = { thumb = [1, 2, 3, 4], palm = [21, 22] }\n"
         "aDumpDataOnce = [\"skelly\", \"perf\"]\n"
         "aAddItemsOnce = [{ op = \"get\", category = \"weapons\" }]\n"
         "bDebugDrawEnabled = false\n"
