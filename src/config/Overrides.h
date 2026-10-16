@@ -79,4 +79,8 @@ namespace f4cf::config
     bool applyOverride(toml::table& table, const ConfigKey& key, std::string_view value);
 
     const toml::node* nodeOf(const toml::table& table, const ConfigKey& key);
+
+    std::optional<std::string> nameWithOtherPrefix(const toml::table& table, std::string_view name);
+
+    ConfigKey keyWithOtherPrefix(const toml::table& config, const ConfigKey& key);
 }

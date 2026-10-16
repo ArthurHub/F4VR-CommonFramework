@@ -361,3 +361,17 @@ TEST_CASE("ConfigOverrides: two spellings of one key's path are one override")
     REQUIRE(overrides.clear(DEVBENCH, ConfigKey{ "Main.hand", "x" }));
     REQUIRE(appliedValue(overrides, { "Main", "hand.x" }) == "none");
 }
+
+TEST_CASE("ConfigOverrides: a key the config does not have means the one beside it with another type prefix")
+{
+    const auto config = toml::parse("[Main]\nkOpen = 1\nfScale = 1.0\niScale = 1\nhand.kGrab = 1\n");
+    using f4cf::config::keyWithOtherPrefix;
+
+    REQUIRE(keyWithOtherPrefix(config, { "Main", "sOpen" }) == ConfigKey{ "Main", "kOpen" });
+    REQUIRE(keyWithOtherPrefix(config, { "Main", "hand.sGrab" }) == ConfigKey{ "Main", "hand.kGrab" });
+    // a key it has is itself, as is one with two keys of other prefixes, one with none, and one with no prefix
+    REQUIRE(keyWithOtherPrefix(config, { "Main", "kOpen" }) == ConfigKey{ "Main", "kOpen" });
+    REQUIRE(keyWithOtherPrefix(config, { "Main", "sScale" }) == ConfigKey{ "Main", "sScale" });
+    REQUIRE(keyWithOtherPrefix(config, { "Main", "sClose" }) == ConfigKey{ "Main", "sClose" });
+    REQUIRE(keyWithOtherPrefix(config, { "Main", "open" }) == ConfigKey{ "Main", "open" });
+}

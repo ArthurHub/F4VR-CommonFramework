@@ -282,17 +282,20 @@ namespace f4cf
      * Get the effective value of a section/key as text: the session override if one is set, otherwise the value in
      * the file as the mod last loaded or saved it, otherwise defaultValue. A string is its text and any other value
      * its TOML text ("true", "1.5", "[1, 2]"). The caller parses it. The key can be a value in a nested table, see
-     * config::ConfigKey.
+     * config::ConfigKey, and a key the file does not have reaches the one with another type prefix, see
+     * setConfigOverrides.
      * For a key the file does not have, defaultValue can differ from the default the mod loads its member with.
      */
     std::string ConfigBase::getConfigValue(const char* section, const char* key, const char* defaultValue) const
     {
-        if (const auto value = _overrides.find({ section, key })) {
+        toml::table config;
+        const bool loaded = loadKeptConfig(config);
+        const auto configKey = config::keyWithOtherPrefix(config, { section, key });
+        if (const auto value = _overrides.find(configKey)) {
             return *value;
         }
 
-        toml::table config;
-        const auto* node = loadKeptConfig(config) ? config::nodeOf(config, { section, key }) : nullptr;
+        const auto* node = loaded ? config::nodeOf(config, configKey) : nullptr;
         if (!node) {
             return defaultValue ? defaultValue : std::string{};
         }
@@ -310,6 +313,9 @@ namespace f4cf
      * and two spellings of one key's path are one override.
      * `owner` is the name of who sets it. An owner sets and clears only its own overrides, and when two override
      * the same key the one set last applies, see config::Overrides.
+     * A key the file does not have reaches the one beside it with another type prefix, so a caller that names a value
+     * by the key it had before its type changed still sets it, see config::keyWithOtherPrefix: "sOpenButton" =
+     * "none" sets kOpenButton, a binding that takes its line, see config::typedLike.
      * Refused, with why, and nothing set: a value that is not of the type, a key that is not a TOML key, and a key
      * under a value of the file that is not a table.
      */
@@ -338,14 +344,19 @@ namespace f4cf
         auto tried = kept;
         std::vector<config::ConfigEntry> applied;
         applied.reserve(overrides.size());
-        for (const auto& [section, key, value] : overrides) {
+        for (const auto& entry : overrides) {
             const auto refuse = [&](const std::string& why) {
-                logger::warn("Config: '{}' session override \"{}.{} = {}\" refused: {}", owner, section, key, value.toString(), why);
+                logger::warn("Config: '{}' session override \"{}.{} = {}\" refused: {}", owner, entry.section, entry.key, entry.value.toString(), why);
                 return std::unexpected(why);
             };
-            const config::ConfigKey configKey{ section, key };
-            if (!configKey.path()) {
-                return refuse(std::format("{}.{} is not a TOML key", section, key));
+            if (!config::ConfigKey{ entry.section, entry.key }.path()) {
+                return refuse(std::format("{}.{} is not a TOML key", entry.section, entry.key));
+            }
+            const auto configKey = config::keyWithOtherPrefix(kept, { entry.section, entry.key });
+            const auto& [section, key] = configKey;
+            const auto& value = entry.value;
+            if (section != entry.section || key != entry.key) {
+                logger::info("Config: '{}' session override of {}.{} is for {}.{}, the key of its value's type", owner, entry.section, entry.key, section, key);
             }
             const auto* existing = config::nodeOf(kept, configKey);
             auto text = config::appliedText(existing, value.toString());
@@ -397,7 +408,7 @@ namespace f4cf
      */
     std::size_t ConfigBase::clearConfigOverrides(const std::string& owner, const std::vector<config::ConfigKey>& keys)
     {
-        const auto removed = _overrides.clear(owner, keys);
+        const auto removed = _overrides.clear(owner, resolvedKeys(keys));
         if (removed.empty()) {
             return 0;
         }
@@ -437,7 +448,24 @@ namespace f4cf
      */
     bool ConfigBase::hasConfigOverride(const char* section, const char* key) const
     {
-        return _overrides.find({ section, key }).has_value();
+        return _overrides.find(resolvedKeys({ { section, key } }).front()).has_value();
+    }
+
+    /**
+     * The keys of the config that callers mean by `keys`, each itself or the one of the file with another type
+     * prefix, see config::keyWithOtherPrefix, so a caller that set an override by a key's name from before its type
+     * changed also reads and clears it by that name.
+     */
+    std::vector<config::ConfigKey> ConfigBase::resolvedKeys(const std::vector<config::ConfigKey>& keys) const
+    {
+        toml::table config;
+        _configFile.read(_configFilePath, config);
+        std::vector<config::ConfigKey> resolved;
+        resolved.reserve(keys.size());
+        for (const auto& key : keys) {
+            resolved.push_back(config::keyWithOtherPrefix(config, key));
+        }
+        return resolved;
     }
 
     /**

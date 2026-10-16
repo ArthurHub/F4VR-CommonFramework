@@ -69,6 +69,11 @@ major version is `0`, a minor bump may break the API; the **Upgrading** notes sa
     An activation sphere's are `kPrimaryBinding` / `kSecondaryBinding`, and `[Debug]` has
     `kDebugDrawToggleBinding` (not moved from `sDebugDrawToggleBinding`).
   - `DebugSection::drawToggleBinding` is a `vrcf::InputBinding`.
+- **A caller of the time values were text still sets them**: a session override, a save and devbench `set`
+  of a binding take its line (`"offhand tap grip"`, `"none"`) and write it as its table, and an override,
+  its clear and `getConfigValue` of a key the file does not have reach the one key beside it with another
+  type prefix (`sOpenButton` for `kOpenButton`, `config::keyWithOtherPrefix`), so a mod that overrides
+  another's binding by its old key and text keeps working.
 - **Hand poses are TOML tables**: an `h` value is `{ thumb = [prox, mid, dist, splay], index = [..],
   middle = [..], ring = [..], pinky = [..], palm = [pitch, yaw] }`, a finger or the palm left out being
   zeros, in place of the 22 numbers of `"p,m,d,s;...;pitch,yaw"`, which only the INI import reads now.

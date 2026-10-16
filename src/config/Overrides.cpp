@@ -1,6 +1,7 @@
 #include "Overrides.h"
 
 #include <algorithm>
+#include <cctype>
 #include <format>
 
 namespace
@@ -61,6 +62,23 @@ namespace
             return std::nullopt;
         }
     }
+
+    /**
+     * The key of a path from the file's root: the first key as the section and the rest as a dotted key, each bare
+     * when it can be, and a path of one key a key of the root.
+     */
+    f4cf::config::ConfigKey keyOfPath(const std::vector<std::string>& keys)
+    {
+        f4cf::config::ConfigKey key;
+        const auto first = keys.size() == 1 ? 0 : 1;
+        if (first == 1) {
+            key.section = keyText(keys.front());
+        }
+        for (auto it = keys.begin() + first; it != keys.end(); ++it) {
+            key.key += (key.key.empty() ? "" : ".") + keyText(*it);
+        }
+        return key;
+    }
 }
 
 namespace f4cf::config
@@ -89,18 +107,61 @@ namespace f4cf::config
     ConfigKey ConfigKey::canonical() const
     {
         const auto keys = path();
-        if (!keys) {
-            return *this;
+        return keys ? keyOfPath(*keys) : *this;
+    }
+
+    /**
+     * The name of the one key of `table` that is `name` with another type prefix, the lowercase letter a key's name
+     * starts with ("kOpenButton" for "sOpenButton"), the rest matched with no regard to case. No value when `name`
+     * has no prefix, or no key or more than one matches.
+     */
+    std::optional<std::string> nameWithOtherPrefix(const toml::table& table, const std::string_view name)
+    {
+        const auto hasPrefix = [](const std::string_view text) {
+            return text.size() > 1 && std::islower(static_cast<unsigned char>(text[0])) && std::isupper(static_cast<unsigned char>(text[1]));
+        };
+        if (!hasPrefix(name)) {
+            return std::nullopt;
         }
-        ConfigKey canonical;
-        const auto first = keys->size() == 1 ? 0 : 1;
-        if (first == 1) {
-            canonical.section = keyText(keys->front());
+        const auto sameLetter = [](const char a, const char b) {
+            return std::tolower(static_cast<unsigned char>(a)) == std::tolower(static_cast<unsigned char>(b));
+        };
+        std::optional<std::string> found;
+        for (const auto& [key, node] : table) {
+            if (hasPrefix(key.str()) && std::ranges::equal(key.str().substr(1), name.substr(1), sameLetter)) {
+                if (found) {
+                    return std::nullopt;
+                }
+                found = std::string(key.str());
+            }
         }
-        for (auto it = keys->begin() + first; it != keys->end(); ++it) {
-            canonical.key += (canonical.key.empty() ? "" : ".") + keyText(*it);
+        return found;
+    }
+
+    /**
+     * The key of a config that a caller means by `key`: `key` itself when the config has it, and otherwise the one
+     * key beside it with another type prefix (see nameWithOtherPrefix), so a caller that names a value by the key it
+     * had before its type, and with it its prefix, changed ("sOpenButton" for "kOpenButton") reaches it. `key`
+     * itself when there is none.
+     */
+    ConfigKey keyWithOtherPrefix(const toml::table& config, const ConfigKey& key)
+    {
+        auto keys = key.path();
+        if (!keys || nodeOf(config, key)) {
+            return key;
         }
-        return canonical;
+        const toml::node* parent = &config;
+        for (std::size_t i = 0; parent && i + 1 < keys->size(); i++) {
+            const auto* table = parent->as_table();
+            parent = table ? table->get((*keys)[i]) : nullptr;
+        }
+        const auto* table = parent ? parent->as_table() : nullptr;
+        const auto name = table ? nameWithOtherPrefix(*table, keys->back()) : std::nullopt;
+        if (!name) {
+            return key;
+        }
+        keys->back() = *name;
+        return keyOfPath(*keys);
     }
 
     /**

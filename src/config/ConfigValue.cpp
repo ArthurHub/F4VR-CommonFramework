@@ -5,6 +5,8 @@
 #include <charconv>
 #include <format>
 
+#include "vrcf/InputBindingParser.h"
+
 namespace
 {
     /**
@@ -119,8 +121,10 @@ namespace f4cf::config
     /**
      * A value given as text, in the type of `existing`, the value the file has for its key: a bool for a bool
      * (true/false, yes/no, on/off, 1/0), a number for a number, the text as it is for a string, and the text read as
-     * TOML for an array, a table or a date. With no existing value the text is read as a TOML value ("1.5" a float,
-     * "true" a bool, "[1, 2]" an array), and as a string when it is not one ("offhand tap grip").
+     * TOML for an array, a table or a date. A binding (see vrcf::parseInputBindingTable) also takes its line, as
+     * "offhand tap grip" or "none", written as its table (see vrcf::inputBindingTomlText), so a caller that gives a
+     * binding as the text a config had it in still sets it. With no existing value the text is read as a TOML value
+     * ("1.5" a float, "true" a bool, "[1, 2]" an array), and as a string when it is not one ("offhand tap grip").
      * Returns the value as the key "v" of a table, which owns it, or no value when the text is not of the existing
      * value's type. Session overrides and saves give their values as text, and the file keeps its types by it.
      */
@@ -148,10 +152,21 @@ namespace f4cf::config
             if (!existing || table.get("v")->type() == existing->type()) {
                 return table;
             }
-            return std::nullopt;
         } catch (const toml::parse_error&) {
-            return existing ? std::nullopt : std::optional{ holding(std::string(text)) };
+            if (!existing) {
+                return holding(std::string(text));
+            }
         }
+
+        // a binding given as its line, "offhand tap grip" or "none", as a caller of the time the config had bindings
+        // as text gives it
+        if (existing->is_table() && vrcf::parseInputBindingTable(*existing)) {
+            if (const auto binding = vrcf::parseInputBinding(text)) {
+                // read from its text, so the table keeps the order of its keys, see TomlEditor::Value
+                return toml::parse("v = " + vrcf::inputBindingTomlText(*binding));
+            }
+        }
+        return std::nullopt;
     }
 
     /**
