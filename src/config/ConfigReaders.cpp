@@ -56,10 +56,53 @@ namespace
     }
 
     /**
+     * Set the color of a section's key over `color`, each channel it does not have keeping `color`'s, see
+     * config::parseColor. A key that is missing changes nothing, and one that is not a color is logged and leaves
+     * `color` as it was.
+     */
+    void readColor(const toml::table& config, const char* section, const char* key, std::array<float, 4>& color)
+    {
+        const auto* node = nodeOf(config, section, key);
+        if (!node) {
+            return;
+        }
+        if (const auto parsed = f4cf::config::parseColor(*node, color); !parsed) {
+            logger::warn("Config: malformed color for '{}.{}' = {}: {} (expected {{ rgb = [r, g, b], alpha = a }} in 0..255). Using default.",
+                section,
+                key,
+                f4cf::common::TomlEditor::Value(*node).text(),
+                parsed.error());
+        }
+    }
+
+    /**
+     * The two numbers of a section's array key, as [center, rim] for a sphere's falloff. No value when the key is
+     * missing, and with a warning when it is not an array of two numbers.
+     */
+    std::optional<std::array<float, 2>> pairOf(const toml::table& config, const char* section, const char* key)
+    {
+        const auto* node = nodeOf(config, section, key);
+        if (!node) {
+            return std::nullopt;
+        }
+        const auto* array = node->as_array();
+        if (array && array->size() == 2) {
+            const auto first = (*array)[0].value<double>();
+            const auto second = (*array)[1].value<double>();
+            if (first && second) {
+                return std::array{ static_cast<float>(*first), static_cast<float>(*second) };
+            }
+        }
+        logger::warn("Config: '{}.{}' = {} is not an array of two numbers. Using default.", section, key, f4cf::common::TomlEditor::Value(*node).text());
+        return std::nullopt;
+    }
+
+    /**
      * Read how an activation sphere looks from its section. A preset (sSphereStyle) replaces `fallback`'s look but
      * not its size, then each key that is present overrides one value: sSphereNif, sSphereTexture ("none" keeps the
-     * mesh's own), sSphereColor ("r,g,b[,a]" in 0..255), fSphereGlow (0..1), sSphereFalloff ("center,rim" opacities)
-     * and fSphereScale (> 0). A malformed or out-of-range value is logged and ignored.
+     * mesh's own), cSphereColor ({ rgb = [r, g, b], alpha = a } in 0..255, each optional), fSphereGlow (0..1),
+     * aSphereFalloff ([center, rim] opacities) and fSphereScale (> 0). A malformed or out-of-range value is logged
+     * and ignored.
      */
     f4cf::f4vr::SphereStyle readSphereStyle(const toml::table& config, const char* section, const f4cf::f4vr::SphereStyle& fallback)
     {
@@ -80,11 +123,7 @@ namespace
         if (const auto texture = stringOf(config, section, "sSphereTexture"); texture && !texture->empty()) {
             style.texture = f4cf::common::normalizeConfigToken(*texture) == "none" ? "" : *texture;
         }
-        if (const auto color = stringOf(config, section, "sSphereColor"); color && !color->empty()) {
-            if (!f4cf::config::parseColor255(*color, style.color)) {
-                logger::warn("Config: malformed sphere color for '{}.sSphereColor' = '{}' (expected 'r,g,b' or 'r,g,b,a' in 0..255). Ignored.", section, *color);
-            }
-        }
+        readColor(config, section, "cSphereColor", style.color);
         if (const auto glow = numberOf(config, section, "fSphereGlow")) {
             if (*glow >= 0.0f && *glow <= 1.0f) {
                 style.glow = *glow;
@@ -92,14 +131,9 @@ namespace
                 logger::warn("Config: sphere glow '{}.fSphereGlow' = {} is out of range (expected 0..1). Ignored.", section, *glow);
             }
         }
-        if (const auto falloff = stringOf(config, section, "sSphereFalloff"); falloff && !falloff->empty()) {
-            float center, rim;
-            if (std::sscanf(falloff->c_str(), " %f , %f", &center, &rim) == 2) {
-                style.centerOpacity = center;
-                style.rimOpacity = rim;
-            } else {
-                logger::warn("Config: malformed sphere falloff for '{}.sSphereFalloff' = '{}' (expected 'center,rim' opacities in 0..1). Ignored.", section, *falloff);
-            }
+        if (const auto falloff = pairOf(config, section, "aSphereFalloff")) {
+            style.centerOpacity = (*falloff)[0];
+            style.rimOpacity = (*falloff)[1];
         }
         if (const auto scale = numberOf(config, section, "fSphereScale")) {
             if (*scale > 0.0f) {
@@ -113,8 +147,8 @@ namespace
 
     /**
      * Read how an activation sphere's icon looks from its section, each key that is present overriding one value of
-     * `fallback`: sIcon (a .dds path), sIconColor ("r,g,b[,a]" in 0..255) and fIconSize (the longer side in game
-     * units, > 0). A malformed or out-of-range value is logged and ignored.
+     * `fallback`: sIcon (a .dds path), cIconColor ({ rgb = [r, g, b], alpha = a } in 0..255, each optional) and
+     * fIconSize (the longer side in game units, > 0). A malformed or out-of-range value is logged and ignored.
      */
     f4cf::f4vr::ActivationIconStyle readIconStyle(const toml::table& config, const char* section, const f4cf::f4vr::ActivationIconStyle& fallback)
     {
@@ -123,11 +157,7 @@ namespace
         if (const auto texture = stringOf(config, section, "sIcon"); texture && !texture->empty()) {
             style.texture = *texture;
         }
-        if (const auto color = stringOf(config, section, "sIconColor"); color && !color->empty()) {
-            if (!f4cf::config::parseColor255(*color, style.color)) {
-                logger::warn("Config: malformed icon color for '{}.sIconColor' = '{}' (expected 'r,g,b' or 'r,g,b,a' in 0..255). Ignored.", section, *color);
-            }
-        }
+        readColor(config, section, "cIconColor", style.color);
         if (const auto size = numberOf(config, section, "fIconSize")) {
             if (*size > 0.0f) {
                 style.size = *size;
@@ -175,22 +205,15 @@ namespace f4cf::config
     }
 
     /**
-     * Parse a color from "r,g,b" or "r,g,b,a", each a whole number in 0..255, where a is the opacity. Without
-     * the a, the default's opacity stays. See parseColor255.
-     * Returns defaultValue if the key is missing or empty, and with a warning if the value is malformed.
+     * Read a color from its inline table, { rgb = [r, g, b], alpha = a } with each a whole number in 0..255, where
+     * alpha is the opacity. Each key is optional, and one that is missing keeps the default's channels, see
+     * parseColor.
+     * Returns defaultValue if the key is missing, and with a warning if the value is malformed.
      */
     render::Color ConfigReaders::getColorValue(const toml::table& config, const char* section, const char* key, const render::Color& defaultValue)
     {
-        const auto raw = stringOf(config, section, key);
-        if (!raw || raw->empty()) {
-            return defaultValue;
-        }
-
         std::array<float, 4> channels{ defaultValue.r, defaultValue.g, defaultValue.b, defaultValue.a };
-        if (!parseColor255(*raw, channels)) {
-            logger::warn("Config: malformed color value for '{}.{}' = '{}' (expected 'r,g,b' or 'r,g,b,a' in 0..255). Using default.", section, key, *raw);
-            return defaultValue;
-        }
+        readColor(config, section, key, channels);
         return { channels[0], channels[1], channels[2], channels[3] };
     }
 

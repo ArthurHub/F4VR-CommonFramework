@@ -31,5 +31,5 @@ namespace f4cf::config
 
     std::optional<std::array<float, 22>> parseHandPose(const char* text);
 
-    bool parseColor255(const std::string& text, std::array<float, 4>& color);
+    std::expected<void, std::string> parseColor(const toml::node& node, std::array<float, 4>& color);
 }
