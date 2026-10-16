@@ -239,6 +239,11 @@ major version is `0`, a minor bump may break the API; the **Upgrading** notes sa
   with a physical keyboard, or with a keyboard overlay that sends keys to the game's window. The
   window's keyboard messages are handed to Dear ImGui's Win32 backend, and go on to the game as
   before.
+- **imgui shows SteamVR's keyboard while a text field is edited**: what is typed on it is sent to the
+  field as ImGui's keys and characters, Done leaves the field with its text, and the close button gives
+  it back the text it had. The content calls `ImGui::InputText` as on a screen. While the keyboard is
+  shown the pointer presses nothing. A runtime with no keyboard (OpenComposite, xrizer) is logged once,
+  and its fields are typed with the keys of the game's window.
 - **vcpkg baseline of 2026-09-09**: the framework and the mod template pin vcpkg `5cd4931b`, with
   fmt 12, spdlog 1.17, nlohmann-json 3.12, xbyak 7.28, cpptrace 1.0.4 and Dear ImGui 1.92.9, and
   pin no version in `overrides`. A mod still on the old `b4a3d89` baseline keeps building with its

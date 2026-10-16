@@ -21,6 +21,7 @@ add_executable(${PROJECT_NAME}_tests
   ConfigValueTests.cpp
   FrameContextTests.cpp
   HistogramTests.cpp
+  ImGuiKeyboardLogicTests.cpp
   ImGuiPointerLogicTests.cpp
   InputBindingParserTests.cpp
   PerfReportTests.cpp
