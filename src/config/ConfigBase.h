@@ -149,6 +149,7 @@ namespace f4cf
         void loadDebugSection(const toml::table& config);
         void applyConfig(const toml::table& config);
         bool loadKeptConfig(toml::table& config) const;
+        std::vector<config::ConfigKey> resolvedKeys(const std::vector<config::ConfigKey>& keys) const;
         void updateConfigToLatestVersion(int currentVersion, int latestVersion);
         void importIniConfig();
         void startConfigFileWatch();

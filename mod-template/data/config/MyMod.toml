@@ -55,8 +55,8 @@ sFlowText1 = ""
 sFlowText2 = ""
 
 # Mod-defined scratch transform, read as config->debug.transform; tune it in-game with sAdjustTarget = "transform".
-# Format: "x, y, z; heading, roll, attitude; scale", rotation in degrees.
-tTransform = "0.0, 0.0, 0.0; 0.0, 0.0, 0.0; 1.0"
+# Format: { pos = [x, y, z], rot = [heading, roll, attitude], scale = s }, rotation in degrees, each key optional.
+tTransform = { pos = [0.0, 0.0, 0.0], rot = [0.0, 0.0, 0.0], scale = 1.0 }
 
 # Selects an in-game live-tuning target; "none" or "" disables it and restores controller input.
 # Examples: "flag123"; "haptictest"; "MyMod::tSomeTransform"

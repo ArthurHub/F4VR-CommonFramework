@@ -171,3 +171,20 @@ TEST_CASE("ConfigValue: a text as it applies over the file's value, in text agai
     REQUIRE_FALSE(appliedText(existing("i"), "1.5"));
     REQUIRE_FALSE(appliedText(existing("b"), "maybe"));
 }
+
+TEST_CASE("ConfigValue: a binding takes its line, written as its table")
+{
+    const auto file = toml::parse(R"(k = { hand = "primary", type = "press", button = "a" })"
+                                  "\n"
+                                  "t = { pos = [1.0, 2.0, 3.0] }\n");
+    const auto* binding = file.get("k");
+
+    REQUIRE(appliedText(binding, "offhand longpress grip 1.5") == R"({ hand = "offhand", type = "longpress", button = "grip", duration = 1.5 })");
+    REQUIRE(appliedText(binding, "none") == R"({ type = "none" })");
+    // its table as TOML, as it is
+    REQUIRE(appliedText(binding, R"({ hand = "left", type = "tap", button = "b" })") == R"({ hand = "left", type = "tap", button = "b" })");
+
+    // a line that is not a binding, and a line over a table that is not a binding
+    REQUIRE_FALSE(appliedText(binding, "offhand squeeze grip"));
+    REQUIRE_FALSE(appliedText(file.get("t"), "none"));
+}

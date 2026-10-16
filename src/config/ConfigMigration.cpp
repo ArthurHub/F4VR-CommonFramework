@@ -12,6 +12,7 @@
 
 #include "ConfigFile.h"
 #include "ConfigValue.h"
+#include "Overrides.h"
 #include "ValueParsers.h"
 #include "vrcf/InputBindingParser.h"
 
@@ -97,32 +98,19 @@ namespace
     }
 
     /**
-     * The key of a table that is `key` with another type prefix, the lowercase letter a key's name starts with
-     * ("sPipboyOpenButton" for "kPipboyOpenButton"), the rest matched with no regard to case, and its node, so a
-     * value whose type changed with its prefix is found under its new name. Only when exactly one key matches; with
-     * none or more, or no table, it is `key` itself and null.
+     * The key of a table that is `key` with another type prefix ("sPipboyOpenButton" for "kPipboyOpenButton", see
+     * config::nameWithOtherPrefix) and its node, so a value whose type changed with its prefix is found under its new
+     * name. With no such key, or no table, it is `key` itself and null.
      */
     std::pair<std::string_view, const toml::node*> findByOtherPrefix(const toml::table* table, const std::string_view key)
     {
-        const auto hasPrefix = [](const std::string_view name) {
-            return name.size() > 1 && std::islower(static_cast<unsigned char>(name[0])) && std::isupper(static_cast<unsigned char>(name[1]));
-        };
-        if (!table || !hasPrefix(key)) {
+        const auto name = table ? f4cf::config::nameWithOtherPrefix(*table, key) : std::nullopt;
+        if (!name) {
             return { key, nullptr };
         }
-        const auto sameLetter = [](const char a, const char b) {
-            return std::tolower(static_cast<unsigned char>(a)) == std::tolower(static_cast<unsigned char>(b));
-        };
-        std::pair<std::string_view, const toml::node*> found{ key, nullptr };
-        for (const auto& [name, node] : *table) {
-            if (hasPrefix(name.str()) && std::ranges::equal(name.str().substr(1), key.substr(1), sameLetter)) {
-                if (found.second) {
-                    return { key, nullptr };
-                }
-                found = { name.str(), &node };
-            }
-        }
-        return found;
+        // the table's own key, which outlives the name found
+        const auto it = table->find(*name);
+        return { it->first.str(), &it->second };
     }
 
     /**

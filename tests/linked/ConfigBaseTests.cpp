@@ -218,6 +218,23 @@ TEST_CASE("ConfigBase: a binding saved as the TOML text of its table is written 
     REQUIRE(readFile(configPath(folder)) == "[Main]\nkOpen = { hand = \"offhand\", type = \"tap\", button = \"grip\", suppress = true }\n\n[Debug]\niVersion = 2\n");
 }
 
+TEST_CASE("ConfigBase: an override of a binding by its line and its key's name from before it was a table sets the binding")
+{
+    const TempFolder folder;
+    writeFile(configPath(folder), "[Main]\nkOpen = { hand = \"primary\", type = \"press\", button = \"a\" }\n\n[Debug]\niVersion = 2\n");
+    TestConfig config(configPath(folder));
+    REQUIRE(config.loadConfigValues());
+
+    // as a mod of the time the key was sOpen and its value a line sets it
+    REQUIRE(config.setConfigOverride("tests", MAIN, "sOpen", "none"));
+
+    REQUIRE(config.hasConfigOverride(MAIN, "kOpen"));
+    REQUIRE(config.hasConfigOverride(MAIN, "sOpen"));
+    REQUIRE(config.getConfigValue(MAIN, "sOpen") == R"({ type = "none" })");
+    REQUIRE(config.clearConfigOverride("tests", MAIN, "sOpen"));
+    REQUIRE_FALSE(config.hasConfigOverride(MAIN, "kOpen"));
+}
+
 TEST_CASE("ConfigBase: values of several sections are saved together, from a list made at runtime or written in place")
 {
     const TempFolder folder;
