@@ -271,8 +271,9 @@ appendBindingPrompt(rows.back().spans, config.headActivation.primary);
 It resolves primary/offhand to the left or right controller by the player's handedness and names
 buttons as the controller prints them (the runtime's `A` is `X` on the left one), drawing the icons
 mod-template ships in `Textures\<ModName>\f4cf\bindings`. Every way of working a button has its icon:
-the button alone for a press or a tap, with a LONG, HOLD, 2X, RLSE or TCH caption for the rest, and
-the thumbstick with one arrow lit for a push. A chord is its two icons with " + " between them
+the button alone for a press or a tap, with a mark for the rest (a clock for a long press, an arrow
+down onto a bar for a hold, 2x, an arrow up off a bar for a release, ripples for a touch), and the
+thumbstick with its direction's arrow for a push. A chord is its two icons with " + " between them
 (`bindingIconPaths`). The system button, which has no icon, falls back to words (`bindingLabel`), and
 `samePrompt` tells whether two bindings read the same, for a caller listing several at once.
 

@@ -435,8 +435,9 @@ moment someone edits the config. `f4cf::vrui::appendBindingPrompt(spans, binding
 for a `UITextPanel` row, drawing the controller icon the binding actually resolves to - primary and
 offhand mapped to the left or right controller by the player's handedness, and buttons named the way
 the controller prints them (the runtime's `A` is `X` on the left one). Every way of working a button
-has its icon, the button with a caption saying how (LONG, HOLD, 2X, RLSE, TCH), a thumbstick push
-lights its arrow, and a chord shows both buttons. Only the system button falls back to words
+has its icon, the button with a mark saying how (a clock for a long press, an arrow down for a hold,
+2x, an arrow up for a release, ripples for a touch), a thumbstick push shows its arrow, and a chord
+shows both buttons. Only the system button falls back to words
 (`bindingLabel`), and `samePrompt(a, b)` tells whether two bindings read the same, for a caller
 listing several at once.
 The icons are the `Textures\<ModName>\f4cf\bindings\` set that `mod-template` ships; a mod that

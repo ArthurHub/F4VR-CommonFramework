@@ -53,8 +53,8 @@ namespace f4cf::vrui
 
         /**
          * The part of an icon's name that says how the button is worked, for the activation types drawn
-         * with a caption - LONG, HOLD, 2X, RLSE, TCH - and nothing for a press and a tap, which show the
-         * button alone.
+         * with a mark - a long press, a hold, a double press, a release, a touch - and nothing for a press
+         * and a tap, which show the button alone.
          */
         std::string_view activationPrefix(const vrcf::ActivationType type)
         {
@@ -204,10 +204,11 @@ namespace f4cf::vrui
      * - A button is drawn as the controller PRINTS it: the button the runtime calls A is marked A on the
      *   right controller and X on the left, and likewise B and Y. So "offhand press a" shows an X for a
      *   right-handed player.
-     * - Press and Tap show the button alone, and every other way of working it the button with its caption:
-     *   LONG, HOLD, 2X (a double press), RLSE (a release), TCH (a touch).
-     * - A thumbstick push shows the thumbstick with that direction's arrow lit, and a pull of the trigger or
-     *   the grip axis that button alone.
+     * - Press and Tap show the button alone, and every other way of working it the button with its mark: a
+     *   clock (a long press), an arrow down onto a bar (a hold), 2x (a double press), an arrow up off a bar
+     *   (a release), ripples (a touch).
+     * - A thumbstick push shows the thumbstick with that direction's arrow, and a pull of the trigger or the
+     *   grip axis that button alone.
      *
      * Empty for what no one icon shows: a chord (see bindingIconPaths), the system button, an axis other
      * than those three, and a disabled binding.
