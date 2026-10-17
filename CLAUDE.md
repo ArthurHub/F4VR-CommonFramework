@@ -353,7 +353,7 @@ The file watcher in `ConfigBase` calls `loadConfigInternal()` automatically when
 `data/mod/` is the mod's Data folder. Everything the framework ships and loads by path sits in an `f4cf` folder inside the mod's own folders, so what came from the framework stays apart from what the mod added:
 
 - `Meshes\MyMod\f4cf\activation-sphere.nif`, `Textures\MyMod\f4cf\activation-sphere.dds` / `debug-sphere.dds` — the sphere visuals (`f4vr::SphereStyle`)
-- `Textures\MyMod\f4cf\bindings\` — the controller icons binding prompts draw (`vrui::BINDING_ICONS_DIR`)
+- `Textures\MyMod\f4cf\bindings\` — the controller icons binding prompts draw (`vrui::BINDING_ICONS_DIR`), drawn by `tools/gen_binding_icons.py` (Pillow and NumPy): change the script and run it, never the icons
 - `Textures\MyMod\f4cf\vrui\` — shared VR UI icons (save, reset, exit, config, wiki, debug spheres) for `UIButtonPanel::setImage("f4cf\\vrui\\save.DDS")`
 
 Ship `f4cf\` as the template has it and refresh it from the template when updating the framework. The mod's own assets go beside it, e.g. its own icons in `Textures\MyMod\vrui\`.
@@ -412,6 +412,7 @@ F4VR/
 | `src/vrcf/VRControllersManager.h` | Controller button/trigger state |
 | `src/vrui/` | VR widget system (NIF widgets + primitive-drawn panels) |
 | `src/render/` | Shared OpenVR Submit hook, primitive/text/image renderers, and the scene-depth capture that occludes overlays behind the world (design + the `sSceneDepthStrategy` key: [`docs/tech/scene-depth-occlusion.md`](docs/tech/scene-depth-occlusion.md)) |
+| `tools/gen_binding_icons.py` | Draws the binding prompts' controller icons into `mod-template`'s `f4cf\bindings\`, one for every way a button is worked (`vrui::bindingIconPath` names them) |
 | `src/imgui/` | Dear ImGui canvases + `UIImGuiPanel`; compiled out by `F4CF_WITH_IMGUI_UI=OFF` |
 | `CMakePresets.json` | VS2022/VS2026 preset definitions |
 | `vcpkg.json` | Dependency manifest (spdlog, xbyak, nlohmann-json, simpleini, tomlplusplus, filewatch, cpptrace, catch2 for the tests, imgui with `dx11-binding` and `win32-binding`, at 1.92.9 from its `builtin-baseline`, which a mod's manifest repeats) |

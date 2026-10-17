@@ -100,6 +100,16 @@ major version is `0`, a minor bump may break the API; the **Upgrading** notes sa
     (`getConfigValue`, `getConfigOverrides`, devbench `config`): `no` over a bool is `false`.
   - `ConfigBase.h` no longer includes SimpleIni, and with it Windows' `min` / `max` macros: write
     `(std::min)(a, b)`.
+- **A binding prompt has an icon for every binding**: the binding icons are drawn again in one style, by
+  `tools/gen_binding_icons.py`: the button as the controller prints it, an L or R circle over its top left
+  for the controller, and a caption for how it is worked (LONG, HOLD, 2X, RLSE, TCH). A touch, a release
+  and a double press have their icons, the thumbstick is held and long pressed, a thumbstick push lights
+  its direction's arrow, a pull of the trigger or the grip axis is that button, and a chord is its two icons
+  with " + " between them (`vrui::bindingIconPaths`). Every icon is 64 px tall, so a prompt draws every
+  button at one scale. Only the system button falls back to words. **Upgrading:** re-copy
+  `Textures\MyMod\f4cf\bindings\` from `mod-template/`: the icons a mod has are replaced, and the new ones
+  are what `bindingIconPath` now names (`left-thumbstick-up.dds` for a push, where it was
+  `left-thumbstick.dds`).
 - **TOML editing**: `common::TomlEditor` sets values in the text of a TOML file and keeps every other
   byte (comments, blank lines, key order, how the other values are written), which toml++'s own writer
   doesn't. The framework depends on toml++, compiled once into it: **Upgrading:** add `"tomlplusplus"`
