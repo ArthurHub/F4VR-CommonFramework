@@ -170,7 +170,8 @@ A **panel** needs no mesh - only a texture, if it shows an image at all, named b
 resolves like any other: `setImage("Data\\Textures\\MyMod\\icon.dds")`, or a partial path under the
 mod's own `Textures\<ModName>\`. `mod-template` ships a set of common icons at
 `Textures\<ModName>\f4cf\vrui\` (save, reset, exit, config, wiki, debug spheres), plus the
-controller icons the binding prompts draw under `f4cf\bindings\`. Text is drawn in the framework's
+controller icons the binding prompts draw under `f4cf\bindings\`, which
+[`tools/gen_binding_icons.py`](../../tools/gen_binding_icons.py) draws. Text is drawn in the framework's
 font, or the mod's own TTF at `Data\Interface\<ModName>\<ModName>.ttf` - see
 [`render/`](../render/README.md#text).
 
@@ -269,9 +270,11 @@ appendBindingPrompt(rows.back().spans, config.headActivation.primary);
 
 It resolves primary/offhand to the left or right controller by the player's handedness and names
 buttons as the controller prints them (the runtime's `A` is `X` on the left one), drawing the icons
-mod-template ships in `Textures\<ModName>\f4cf\bindings`. A binding no icon covers - a chord, a touch,
-the system button - falls back to words (`bindingLabel`), and `samePrompt` tells whether two bindings
-read the same, for a caller listing several at once.
+mod-template ships in `Textures\<ModName>\f4cf\bindings`. Every way of working a button has its icon:
+the button alone for a press or a tap, with a LONG, HOLD, 2X, RLSE or TCH caption for the rest, and
+the thumbstick with one arrow lit for a push. A chord is its two icons with " + " between them
+(`bindingIconPaths`). The system button, which has no icon, falls back to words (`bindingLabel`), and
+`samePrompt` tells whether two bindings read the same, for a caller listing several at once.
 
 The rows callback runs once per frame during layout; the text is only re-laid-out when a row's text,
 spans or height, the width, the text height or the tab width changes (or an image's texture finishes

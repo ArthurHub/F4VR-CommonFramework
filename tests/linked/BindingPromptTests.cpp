@@ -55,36 +55,64 @@ TEST_CASE("BindingPrompt: a button's icon is the button as its controller prints
     REQUIRE(icon("left tap grip") == "left-grip.dds");
 }
 
-TEST_CASE("BindingPrompt: a held button's icon says how it is held")
+TEST_CASE("BindingPrompt: a button worked in another way than a press has its caption")
 {
     REQUIRE(icon("right hold trigger") == "right-hold-trigger.dds");
     REQUIRE(icon("left longpress grip") == "left-longpress-grip.dds");
     REQUIRE(icon("right hold a") == "right-hold-a.dds");
     REQUIRE(icon("left longpress a") == "left-longpress-x.dds");
+    REQUIRE(icon("right double trigger") == "right-double-trigger.dds");
+    REQUIRE(icon("left release b") == "left-release-y.dds");
+    REQUIRE(icon("right touch thumbstick") == "right-touch-thumbstick.dds");
+    REQUIRE(icon("right hold thumbstick") == "right-hold-thumbstick.dds");
+    REQUIRE(icon("left longpress thumbstick") == "left-longpress-thumbstick.dds");
 }
 
-TEST_CASE("BindingPrompt: every direction of the thumbstick is the one thumbstick icon of its hand")
+TEST_CASE("BindingPrompt: a push of the thumbstick lights its direction, and a pull of the trigger or the grip is the button")
 {
-    REQUIRE(icon("left thumbstick up") == "left-thumbstick.dds");
-    REQUIRE(icon("left thumbstick down") == "left-thumbstick.dds");
-    REQUIRE(icon("right thumbstick left") == "right-thumbstick.dds");
+    REQUIRE(icon("left thumbstick up") == "left-thumbstick-up.dds");
+    REQUIRE(icon("left thumbstick down") == "left-thumbstick-down.dds");
+    REQUIRE(icon("right thumbstick left") == "right-thumbstick-left.dds");
+    REQUIRE(icon("right thumbstick right") == "right-thumbstick-right.dds");
+
+    REQUIRE(icon("right axis trigger up") == "right-trigger.dds");
+    REQUIRE(icon("left axis grip up") == "left-grip.dds");
 }
 
-TEST_CASE("BindingPrompt: what the icons do not show has no icon")
+TEST_CASE("BindingPrompt: what no one icon shows has no icon")
 {
     for (const auto text : {
              "none",
              "right press system",
-             "right touch trigger",
-             "right release trigger",
-             "right double trigger",
-             "right hold thumbstick",
-             "right axis trigger up",
-             "right axis grip up",
              "right press trigger +grip",
          }) {
         CAPTURE(text);
         REQUIRE(icon(text).empty());
+    }
+}
+
+TEST_CASE("BindingPrompt: a chord shows its icon and the modifier's, pressed on its controller")
+{
+    const auto icons = [](const std::string_view text) {
+        std::vector<std::string> names;
+        for (const auto& path : vrui::bindingIconPaths(binding(text))) {
+            REQUIRE(path.starts_with(vrui::BINDING_ICONS_DIR));
+            names.push_back(path.substr(vrui::BINDING_ICONS_DIR.size()));
+        }
+        return names;
+    };
+
+    REQUIRE(icons("right press trigger") == std::vector<std::string>{ "right-trigger.dds" });
+    REQUIRE(icons("right press trigger +grip") == std::vector<std::string>{ "right-trigger.dds", "right-grip.dds" });
+    REQUIRE(icons("right longpress thumbstick 1.5 +left:thumbstick") == std::vector<std::string>{ "right-longpress-thumbstick.dds", "left-thumbstick.dds" });
+    // the modifier's letter is the one its own controller prints
+    REQUIRE(icons("right press trigger +left:a") == std::vector<std::string>{ "right-trigger.dds", "x.dds" });
+
+    SECTION("with no icon for either button, none for the chord")
+    {
+        REQUIRE(icons("right press trigger +system").empty());
+        REQUIRE(icons("right press system +grip").empty());
+        REQUIRE(icons("none").empty());
     }
 }
 
@@ -118,26 +146,31 @@ TEST_CASE("BindingPrompt: a binding in words is its hand, the button as the cont
     }
 }
 
-TEST_CASE("BindingPrompt: two bindings are one prompt when they show the same icon, or the same words with no icon")
+TEST_CASE("BindingPrompt: two bindings are one prompt when they show the same icons, or the same words with none")
 {
     // a press and a tap are one picture
     REQUIRE(vrui::samePrompt(binding("left press grip"), binding("left tap grip")));
     REQUIRE_FALSE(vrui::samePrompt(binding("left press grip"), binding("right press grip")));
-
-    // one with an icon and one without
     REQUIRE_FALSE(vrui::samePrompt(binding("left press grip"), binding("left double grip")));
 
-    // neither with an icon
+    // the duration is not in the picture
     REQUIRE(vrui::samePrompt(binding("left double grip"), binding("left double grip 0.4")));
-    REQUIRE_FALSE(vrui::samePrompt(binding("left double grip"), binding("left release grip")));
+
+    // a chord is not its button alone
+    REQUIRE_FALSE(vrui::samePrompt(binding("right press trigger"), binding("right press trigger +grip")));
+    REQUIRE(vrui::samePrompt(binding("right press trigger +grip"), binding("right tap trigger +grip")));
+
+    // with no icon, the words
+    REQUIRE(vrui::samePrompt(binding("right press system"), binding("right press system")));
+    REQUIRE_FALSE(vrui::samePrompt(binding("right press system"), binding("left press system")));
 }
 
-TEST_CASE("BindingPrompt: a prompt added to a text row is the icon, or the words when there is none")
+TEST_CASE("BindingPrompt: a prompt added to a text row is the icons, or the words when there are none")
 {
     std::vector<vrui::TextSpan> spans;
 
     vrui::appendBindingPrompt(spans, binding("right press trigger"), { .imageHeight = 2.0f, .tintWithText = true });
-    vrui::appendBindingPrompt(spans, binding("right double trigger"));
+    vrui::appendBindingPrompt(spans, binding("right press system"));
 
     REQUIRE(spans.size() == 2);
     REQUIRE(spans[0].image == std::string(vrui::BINDING_ICONS_DIR) + "right-trigger.dds");
@@ -145,5 +178,18 @@ TEST_CASE("BindingPrompt: a prompt added to a text row is the icon, or the words
     REQUIRE(spans[0].imageHeight == 2.0f);
     REQUIRE(spans[0].tintWithText);
     REQUIRE(spans[1].image.empty());
-    REQUIRE(spans[1].text == "RIGHT TRIGGER DOUBLE PRESS");
+    REQUIRE(spans[1].text == "RIGHT SYSTEM PRESS");
+
+    SECTION("a chord is its two icons with a + between them")
+    {
+        spans.clear();
+        vrui::appendBindingPrompt(spans, binding("right press trigger +grip"), { .tintWithText = true });
+
+        REQUIRE(spans.size() == 3);
+        REQUIRE(spans[0].image == std::string(vrui::BINDING_ICONS_DIR) + "right-trigger.dds");
+        REQUIRE(spans[1].image.empty());
+        REQUIRE(spans[1].text == " + ");
+        REQUIRE(spans[2].image == std::string(vrui::BINDING_ICONS_DIR) + "right-grip.dds");
+        REQUIRE(spans[2].tintWithText);
+    }
 }

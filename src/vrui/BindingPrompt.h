@@ -18,9 +18,16 @@ namespace f4cf::vrui
 
     /**
      * The icon showing a binding - the path of a texture under BINDING_ICONS_DIR - or an empty string when
-     * none of the shipped icons says it, which is a caller's cue to fall back to bindingLabel.
+     * no one icon says it: a chord, which takes two (bindingIconPaths), the system button, which has none,
+     * and a disabled binding. An empty string is a caller's cue to fall back to bindingLabel.
      */
     std::string bindingIconPath(const vrcf::InputBinding& binding);
+
+    /**
+     * The icons showing a binding: its own, and for a chord the modifier's after it, pressed on its
+     * controller. Empty when any of them has no icon, the system button's, and for a disabled binding.
+     */
+    std::vector<std::string> bindingIconPaths(const vrcf::InputBinding& binding);
 
     /**
      * A binding as words, for a prompt with no icon: "LEFT TRIGGER DOUBLE PRESS", "RIGHT THUMBSTICK UP",
@@ -49,7 +56,8 @@ namespace f4cf::vrui
     };
 
     /**
-     * Append a binding's prompt to a text row's spans: its icon when one exists, else its name in words.
+     * Append a binding's prompt to a text row's spans: its icons when they exist - a chord's two with " + "
+     * between them - else its name in words.
      *
      *     rows.push_back({ .spans = { { "TURN ON/OFF BY " } } });
      *     appendBindingPrompt(rows.back().spans, config.headActivation.primary);

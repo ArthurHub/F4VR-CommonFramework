@@ -119,7 +119,7 @@ key: an absent key falls back to the code default, while `none` is an explicit "
 To **show** a binding in your UI, do not spell the button out in a string literal — it goes stale as
 soon as someone edits the config. `vrui::appendBindingPrompt(spans, binding)`
 ([`BindingPrompt.h`](../vrui/BindingPrompt.h)) turns an `InputBinding` into a text-panel span with
-the controller icon it actually resolves to, falling back to words for a binding no icon covers.
+the controller icon it actually resolves to, falling back to words for the system button, which has none.
 
 ## Haptic feedback
 
