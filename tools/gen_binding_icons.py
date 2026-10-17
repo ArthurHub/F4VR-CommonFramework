@@ -2,14 +2,16 @@
 """Draw the controller icons the binding prompts show (vrui::bindingIconPath), one for every way a button is
 worked, into mod-template's Textures\\MyMod\\f4cf\\bindings\\.
 
-Every icon is three parts, drawn in white for a tint to colour, each knocking a 1 px gap into the part under it:
+Every icon is up to three parts, drawn in white for a tint to colour, each knocking a 1 px gap into the part under it:
 
   - the button, as the controller prints it: the trigger as a T in a box whose top slopes down, the grip as GRIP
-    in a rounded box, a face button as its letter in a circle, the thumbstick as a ring and its knob with a small
-    arrow on each side, grey;
+    in a rounded box, a face button as its letter in a circle, the thumbstick as a ring with a half-opaque line
+    around it and its knob, with a half-opaque shadow to its lower right;
   - the controller, an L or an R in a small circle, over the button's top left;
-  - how it is worked, a caption over the button's bottom left: LONG, HOLD, 2X (a double press), RLSE (a release)
-    or TCH (a touch). A press and a tap have none. A thumbstick push lights its direction's arrow instead.
+  - how it is worked, a solid disk with a symbol cut out of it, over the button's bottom left: a clock for a long
+    press, an arrow down onto a bar for a hold, 2x for a double press, an arrow up off a bar for a release, and
+    ripples for a touch. A press and a tap have none. A thumbstick push is a smaller disk with its direction's
+    arrow, over the stick's bottom right.
 
 The names are what bindingIconPath builds:
 
@@ -18,9 +20,9 @@ The names are what bindingIconPath builds:
   <side>-<how>-<button>                                how: longpress, hold, double, release, touch
   <side>-thumbstick-<direction>                        pushed: up, down, left, right
 
-<side> is left or right, and <button> trigger, grip, thumbstick or the letter. Each is 64 px tall with the button
-centred 4 px below the middle, so a prompt draws every button at one scale, and as wide as it needs, in whole
-multiples of 4. Uncompressed 32-bit BGRA with no mipmaps, as the framework's panel icons are.
+<side> is left or right, and <button> trigger, grip, thumbstick or the letter. Each is 80 px tall with the button
+centred in it, so a prompt draws every button at one scale, and as wide as it needs, in whole multiples of 4.
+Uncompressed 32-bit BGRA with no mipmaps, as the framework's panel icons are.
 
 Needs Pillow and NumPy: pip install pillow numpy
 Usage: python tools/gen_binding_icons.py [--sheet sheet.png]
@@ -39,24 +41,28 @@ FONT = ROOT / 'src' / 'render' / 'fonts' / 'Roboto-Black.ttf'
 
 SS = 8               # supersampling: every part is drawn 8 times larger and scaled down
 STROKE = 2.6         # an outline's width
-DIM = 0.25           # the opacity of the thumbstick's arrows that are not pushed
-HEIGHT = 64          # every icon's height
-CENTER = 36          # the button's middle, from the top: the controller's circle above it needs the room
+HALF = 0.5           # the opacity of the thumbstick's outer line
+SHADOW = 0.45        # the opacity of the shadow under its knob
+HEIGHT = 80          # every icon's height: the thumbstick with its circle above and a mark below needs it all
+CENTER = 40          # the button's middle, from the top
 CAP_RATIO = 0.711    # Roboto's capital height as a share of its font size
 
-# how a button is worked: the caption, and the word in an icon's name
-CAPTIONS = {'longpress': 'LONG', 'hold': 'HOLD', 'double': '2X', 'release': 'RLSE', 'touch': 'TCH'}
+# how a button is worked, as an icon's name has it
+HOWS = ('longpress', 'hold', 'double', 'release', 'touch')
 DIRECTIONS = ('up', 'down', 'left', 'right')
 SIDES = {'left': ('x', 'y'), 'right': ('a', 'b')}
 
-# where the controller's circle and the caption sit against each button: the circle's top left, the caption's
-# right edge and its bottom, from the button's top left and bottom left
+# where the controller's circle and the marks sit against each button: the circle's top left, and the middle of the
+# mark of how it is worked and of a push's arrow, from the button's top left
 LAYOUT = {
-    'trigger': {'circle': (-20, -12), 'caption_right': 8, 'caption_bottom': 2},
-    'grip': {'circle': (-20, -18), 'caption_right': 3, 'caption_bottom': 5},
-    'letter': {'circle': (-20, -16), 'caption_right': 4, 'caption_bottom': 0},
-    'thumbstick': {'circle': (-8, -8), 'caption_right': 12, 'caption_bottom': -4},
+    'trigger': {'circle': (-20, -12), 'mark': (-5, 36)},
+    'grip': {'circle': (-20, -18), 'mark': (-6, 29)},
+    'letter': {'circle': (-20, -16), 'mark': (-5, 33)},
+    'thumbstick': {'circle': (-12, -12), 'mark': (7, 47), 'arrow': (47, 47)},
 }
+MARK_RADIUS, MARK_SCALE = 16.5, 1.5     # the mark of how a button is worked, and its symbol's size
+ARROW_RADIUS, ARROW_SCALE = 13.4, 1.08  # a push's arrow, smaller
+GLYPH_WIDTH = 2.6                       # the symbol's lines, before its scale
 
 
 # ---------------- drawing ----------------
@@ -142,60 +148,89 @@ def letter(name):
     return badge(ring, shape, size, name.upper(), 19, dy=1 if name == 'y' else 0)
 
 
-def thumbstick(lit=None):
-    """The ring and its knob, with a small grey arrow on each side; the arrow of a push, `lit`, larger and full."""
-    size, c, radius, gap, arrow = (56, 56), 28, 16, 3, 5
-    ring, shape = outline_of(supersampled(size, lambda d, s: d.ellipse(((c - radius) * s, (c - radius) * s, (c + radius) * s, (c + radius) * s), fill=255)), size)
-    img = white(ring)
-    knob = supersampled(size, lambda d, s: d.ellipse(((c - 6.5) * s, (c - 6.5) * s, (c + 6.5) * s, (c + 6.5) * s), fill=255))
-    img.alpha_composite(white(knob.resize(size, Image.LANCZOS)))
-    cover = np.array(shape) > 40
-    for direction in DIRECTIONS:
-        n = arrow * (1.5 if direction == lit else 1.0)
-
-        def draw(d, s, direction=direction, n=n):
-            m, o, length, half = c * s, (radius + gap) * s, n * s, n * 1.15 * s
-            d.polygon({
-                'up': [(m, m - o - length), (m - half, m - o), (m + half, m - o)],
-                'down': [(m, m + o + length), (m - half, m + o), (m + half, m + o)],
-                'left': [(m - o - length, m), (m - o, m - half), (m - o, m + half)],
-                'right': [(m + o + length, m), (m + o, m - half), (m + o, m + half)],
-            }[direction], fill=255)
-
-        mask = supersampled(size, draw).resize(size, Image.LANCZOS)
-        alpha = np.array(mask).astype(float) * (1.0 if direction == lit else DIM)
-        img.alpha_composite(white(Image.fromarray(alpha.astype(np.uint8))))
-        cover |= np.array(mask) > 40
-    return Part(img, cover)
+def disk(size, cx, cy, r):
+    """A filled circle's alpha at `size`, as floats."""
+    return np.array(supersampled(size, lambda d, s: d.ellipse(((cx - r) * s, (cy - r) * s, (cx + r) * s, (cy + r) * s), fill=255)).resize(size, Image.LANCZOS)).astype(float)
 
 
-def caption(word, h=22, size=18.3, pad=4, stroke=2.0, radius=6, track=0.6):
-    """A caption: bold capitals 13 px tall, a little apart and narrowed, in a rounded outline 22 px tall."""
-    font = ImageFont.truetype(str(FONT), int(size * SS))
-    th = h * SS
-    t = Image.new('L', (int(font.getlength(word) + track * SS * len(word)) + 8 * SS, th), 0)
-    d = ImageDraw.Draw(t)
-    cap = font.getbbox('H')
-    x, y = 2 * SS, (th - (cap[3] - cap[1])) // 2 - cap[1]
-    for ch in word:
-        d.text((x, y), ch, font=font, fill=255)
-        x += font.getlength(ch) + track * SS
-    cols = np.nonzero(np.array(t).max(axis=0))[0]
-    t = t.crop((cols.min(), 0, cols.max() + 1, th))
-    # LONG is 47 px of text, as the framework's first icons had it; every caption is narrowed alike
-    t = t.resize((max(1, int(t.width * CAPTION_XSCALE)), th), Image.LANCZOS)
-    w = t.width + 2 * pad * SS
-    img = Image.new('L', (w, th), 0)
-    d = ImageDraw.Draw(img)
-    s = stroke * SS
-    d.rounded_rectangle((s / 2, s / 2, w - s / 2 - 1, th - s / 2 - 1), radius=radius * SS, outline=255, width=int(s))
-    img.paste(255, (pad * SS, 0), t)
-    small = img.resize((round(w / SS), h), Image.LANCZOS)
-    return Part(white(small), np.ones((small.height, small.width), bool))
+def ring(size, c, r, width):
+    """A circle's outline `width` px wide inside radius r, as floats."""
+    big = supersampled(size, lambda d, s: d.ellipse(((c - r) * s, (c - r) * s, (c + r) * s, (c + r) * s), fill=255))
+    eroded = big.filter(ImageFilter.MinFilter(int(width * SS) * 2 + 1))
+    out = Image.fromarray(np.clip(np.array(big).astype(int) - np.array(eroded), 0, 255).astype(np.uint8))
+    return np.array(out.resize(size, Image.LANCZOS)).astype(float)
 
 
-CAPTION_XSCALE = 1.0
-CAPTION_XSCALE = 47 / (caption('LONG').img.width - 2 * 4)
+def thumbstick():
+    """The ring and its knob, with depth: a half-opaque line around the ring as its raised rim, and a half-opaque
+    shadow to the knob's lower right, a pixel apart from it, as light from the upper left."""
+    size, c, radius, rim = (52, 52), 26, 20, 24.4
+    alpha = np.maximum(ring(size, c, rim, 2.0) * HALF, ring(size, c, radius, STROKE))
+    shadow = np.clip(disk(size, c + 2.4, c + 2.4, 6.8) - disk(size, c, c, 7.5), 0, 255) * SHADOW
+    alpha = np.maximum(alpha, shadow)
+    alpha = np.maximum(alpha, disk(size, c, c, 6.5))
+    return Part(white(Image.fromarray(alpha.astype(np.uint8))), disk(size, c, c, rim) > 40)
+
+
+def mark(how, radius, scale):
+    """A solid disk with a symbol cut out of it: how a button is worked, or a push's direction. The symbol is drawn
+    on a grid of about 16 units around the middle, `scale` px each."""
+    size = int(np.ceil(2 * radius)) + 2
+    c = size / 2
+    big = Image.new('L', (size * SS, size * SS), 0)
+    d = ImageDraw.Draw(big)
+    d.ellipse(((c - radius) * SS, (c - radius) * SS, (c + radius) * SS, (c + radius) * SS), fill=255)
+    w = GLYPH_WIDTH * scale * SS
+
+    def at(x, y):
+        return ((c + x * scale) * SS, (c + y * scale) * SS)
+
+    def dot(x, y, r):
+        px, py = at(x, y)
+        d.ellipse((px - r, py - r, px + r, py + r), fill=0)
+
+    def lines(*points):
+        d.line([at(x, y) for x, y in points], fill=0, width=round(w), joint='curve')
+        for x, y in (points[0], points[-1]):
+            dot(x, y, w / 2)
+
+    def arc(cx, cy, r, start, end):
+        px, py = at(cx, cy)
+        rr = r * scale * SS + w / 2
+        d.arc((px - rr, py - rr, px + rr, py + rr), start, end, fill=0, width=round(w))
+        for a in (start, end):
+            dot(cx + r * np.cos(np.radians(a)), cy + r * np.sin(np.radians(a)), w / 2)
+
+    if how == 'longpress':
+        arc(0, 0, 6.6, 0, 360)
+        lines((0, -3.6), (0, 0), (2.9, 1.7))
+    elif how in ('hold', 'release'):
+        if how == 'hold':
+            lines((0, -7.5), (0, 1.5))
+            lines((-4.2, -2.5), (0, 1.5), (4.2, -2.5))
+        else:
+            lines((0, 2.6), (0, -7))
+            lines((-4.2, -2.8), (0, -7), (4.2, -2.8))
+        lines((-6, 6.6), (6, 6.6))
+    elif how == 'double':
+        font = ImageFont.truetype(str(FONT), round(14 * scale * SS))
+        d.text(at(-0.3, 4.7), '2\u00d7', font=font, fill=0, anchor='ms')
+    elif how == 'touch':
+        dot(0, 4, 2.6 * scale * SS)
+        arc(0, 2.79, 5.6, 214.7, 325.3)
+        arc(0, 2.2, 9.4, 218.1, 321.9)
+    else:
+        tip, tail, head = 6.5, 7, 5
+        points = {'up': ((0, tail), (0, -tip), ((-head, -tip + head), (0, -tip), (head, -tip + head))),
+                  'down': ((0, -tail), (0, tip), ((-head, tip - head), (0, tip), (head, tip - head))),
+                  'left': ((tail, 0), (-tip, 0), ((-tip + head, -head), (-tip, 0), (-tip + head, head))),
+                  'right': ((-tail, 0), (tip, 0), ((tip - head, -head), (tip, 0), (tip - head, head)))}[how]
+        lines(points[0], points[1])
+        lines(*points[2])
+
+    alpha = big.resize((size, size), Image.LANCZOS)
+    yy, xx = np.mgrid[0:size, 0:size]
+    return Part(white(alpha), (xx - c + 0.5) ** 2 + (yy - c + 0.5) ** 2 <= radius ** 2)
 
 
 def compose(parts):
@@ -203,7 +238,7 @@ def compose(parts):
     is the second part - each knocking a 1 px gap into what is under it, in a canvas HEIGHT px tall with the
     button's middle at CENTER, as wide as they need in multiples of 4, centred."""
     button = parts[1][0]
-    top = CENTER - button.img.height // 2
+    top = CENTER - round(button.img.height / 2)
     left = min(x for _, x, _ in parts)
     width = max(x + p.img.width for p, x, _ in parts) - left
     canvas_width = -(-(width + 2) // 4) * 4
@@ -223,22 +258,28 @@ def compose(parts):
     return Image.fromarray(canvas)
 
 
+def centred(part, x, y):
+    """A part placed by its middle."""
+    return part, round(x - part.img.width / 2), round(y - part.img.height / 2)
+
+
 def icon(side, button, how=None, lit=None):
-    """The icon of a button on a controller, worked as `how` (a key of CAPTIONS, or None for a press), or the
-    thumbstick pushed to `lit`."""
+    """The icon of a button on a controller, worked as `how` (one of HOWS, or None for a press), or the thumbstick
+    pushed to `lit`."""
     if button == 'trigger':
         main, kind = trigger(), 'trigger'
     elif button == 'grip':
         main, kind = grip(), 'grip'
     elif button == 'thumbstick':
-        main, kind = thumbstick(lit), 'thumbstick'
+        main, kind = thumbstick(), 'thumbstick'
     else:
         main, kind = letter(button), 'letter'
     layout = LAYOUT[kind]
     parts = [(hand_circle(side), *layout['circle']), (main, 0, 0)]
     if how:
-        cap = caption(CAPTIONS[how])
-        parts.append((cap, layout['caption_right'] - cap.img.width, main.img.height + layout['caption_bottom'] - cap.img.height))
+        parts.append(centred(mark(how, MARK_RADIUS, MARK_SCALE), *layout['mark']))
+    if lit:
+        parts.append(centred(mark(lit, ARROW_RADIUS, ARROW_SCALE), *layout['arrow']))
     return compose(parts)
 
 
@@ -248,7 +289,7 @@ def all_icons():
     for side, letters in SIDES.items():
         for button in ('trigger', 'grip', 'thumbstick') + letters:
             icons[button if len(button) == 1 else f'{side}-{button}'] = icon(side, button)
-            for how in CAPTIONS:
+            for how in HOWS:
                 icons[f'{side}-{how}-{button}'] = icon(side, button, how)
         for direction in DIRECTIONS:
             icons[f'{side}-thumbstick-{direction}'] = icon(side, 'thumbstick', lit=direction)
@@ -272,7 +313,7 @@ def write_sheet(icons, path):
     rows = []
     for side, letters in SIDES.items():
         for button in ('trigger', 'grip', 'thumbstick') + letters:
-            rows.append([button if len(button) == 1 else f'{side}-{button}'] + [f'{side}-{how}-{button}' for how in CAPTIONS])
+            rows.append([button if len(button) == 1 else f'{side}-{button}'] + [f'{side}-{how}-{button}' for how in HOWS])
         rows.append([f'{side}-thumbstick-{d}' for d in DIRECTIONS])
     cell = max(i.width for i in icons.values()) + 16
     sheet = Image.new('RGBA', (cell * 6 + 16, (HEIGHT + 12) * len(rows) + 16), (24, 30, 27, 255))
