@@ -9,10 +9,12 @@ major version is `0`, a minor bump may break the API; the **Upgrading** notes sa
 
 ## 0.5.0 — unreleased
 
-- **Mods Config VR client**: `ModBase` registers every mod as a client of [Mods Config VR](https://github.com/ArthurHub/F4VR-Mods-Config)'s
+- **Mods Config VR client**: `ModBase` connects every mod as a client of [Mods Config VR](https://github.com/ArthurHub/F4VR-Mods-Config)'s
   native API at `kPostLoad`, under `Settings::name`, when the menu is installed, so the mod's config spec is
-  matched to it. `modsconfig::ModsConfigClient::get()` has the API and the mod's handle, and
-  `Settings::modsConfigClient = false` opts out. **Upgrading:** a mod that registers a client of its own
+  matched to it. A mod adds its functions, states, choice options, own config UIs and menu-event
+  handlers to `mods_config::api::ModsConfigVRClient::get()` of the vendored client header, in C++, at any
+  time, and opens the menu at its page; `Settings::modsConfigClient = false` opts out, and
+  `Settings::modsConfigMinVersion` refuses a Mods Config VR whose API is older than the mod needs. **Upgrading:** a mod that registers a client of its own
   under its name opts out, or uses the framework's handle.
 - **TOML config**: `ConfigBase` loads a TOML file in place of an INI, through toml++. A save changes only
   the values in the file and keeps its comments and layout (`common::TomlEditor`), and does not write a
