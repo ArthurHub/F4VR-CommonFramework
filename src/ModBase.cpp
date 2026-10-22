@@ -8,6 +8,7 @@
 #include "devbench/DevBench.h"
 #include "f4vr/DebugDump.h"
 #include "f4vr/DebugInventory.h"
+#include "modsconfig/ModsConfigClient.h"
 #include "perf/FrameSampler.h"
 #include "perf/Perf.h"
 #include "perf/Report.h"
@@ -297,13 +298,18 @@ namespace f4cf
     }
 
     /**
-     * F4VRSE messages listener to handle game loaded, new game, and save loaded events.
+     * F4VRSE messages listener to handle post load, game loaded, new game, and save loaded events.
      */
     // ReSharper disable once CppParameterMayBeConstPtrOrRef
     void ModBase::onF4VRSEMessage(F4SE::MessagingInterface::Message* msg)
     {
         if (!msg) {
             return;
+        }
+
+        if (msg->type == F4SE::MessagingInterface::kPostLoad && g_mod->_settings.modsConfigClient) {
+            // every plugin's DLL is loaded by now, Mods Config VR's too
+            modsconfig::ModsConfigClient::get().registerMod(g_mod->_settings.name);
         }
 
         if (msg->type == F4SE::MessagingInterface::kGameLoaded) {

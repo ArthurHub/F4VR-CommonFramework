@@ -49,6 +49,9 @@ namespace f4cf
             // costs two relaxed atomic loads per frame while devbench isn't installed; once it is, the tool is armed and
             // records perf and a state snapshot every frame
             bool devbenchTool = true;
+            // register this mod as a client of Mods Config VR's native API, under the mod's name, when Mods Config VR is
+            // installed (see modsconfig/README.md); its config spec is matched to it by that name
+            bool modsConfigClient = true;
 
             Settings(const std::string_view& name, const std::string_view& version, ConfigBase* config);
             Settings(const std::string_view& name, const std::string_view& version, ConfigBase* config, int trampolineAllocationSize, bool setupMainGameLoop);
