@@ -3,7 +3,7 @@ ci:
 
 # Vendored third-party sources are carried verbatim so they can be diffed against
 # upstream. Reformatting them would make every upstream sync a whole-file conflict.
-exclude: '^src/devbench/DevBenchAPI\.'
+exclude: '^src/(devbench/DevBenchAPI\.|modsconfig/ModsConfigVRApi\.h$)'
 
 repos:
   - repo: https://github.com/pre-commit/mirrors-clang-format
