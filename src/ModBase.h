@@ -52,6 +52,9 @@ namespace f4cf
             // register this mod as a client of Mods Config VR's native API, under the mod's name, when Mods Config VR is
             // installed (see modsconfig/README.md); its config spec is matched to it by that name
             bool modsConfigClient = true;
+            // the least version of Mods Config VR's API the mod works with: an older Mods Config VR is not connected to.
+            // With 1 it connects to any, and uses what a later version added after a check of the client's apiVersion()
+            std::uint32_t modsConfigMinVersion = 1;
 
             Settings(const std::string_view& name, const std::string_view& version, ConfigBase* config);
             Settings(const std::string_view& name, const std::string_view& version, ConfigBase* config, int trampolineAllocationSize, bool setupMainGameLoop);
@@ -75,6 +78,7 @@ namespace f4cf
     private:
         void logPluginGameStart() const;
         static void onF4VRSEMessage(F4SE::MessagingInterface::Message* msg);
+        static void connectToModsConfigVR(const std::string& name, std::uint32_t minVersion);
         void onGameLoadedInner();
         void onGameSessionLoadedInner();
 
