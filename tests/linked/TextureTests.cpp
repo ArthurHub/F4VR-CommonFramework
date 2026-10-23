@@ -7,6 +7,7 @@
 #include <d3d11.h>
 #include <wrl/client.h>
 
+#include "TestFiles.h"
 #include "render/Texture.h"
 
 using namespace f4cf;
@@ -150,4 +151,31 @@ TEST_CASE("Texture: one from pixels that are not an image of the size has no siz
     REQUIRE(texture->height() == 0);
     // nothing to create, so the game's device is not asked for
     REQUIRE_FALSE(texture->view());
+}
+
+TEST_CASE("Texture: invalid loose DDS dimensions never reach the game loader and are not retried")
+{
+    const test_files::TempFolder folder;
+    const auto path = folder.file("banner.dds");
+    std::string header(128, '\0');
+    header.replace(0, 4, "DDS ");
+    header[4] = 124;
+    header[12] = '\x6A'; // height 362, little endian
+    header[13] = '\x01';
+    header[16] = '\x3E'; // width 1086
+    header[17] = '\x04';
+    header[76] = 32;
+    header[80] = 4;
+    header.replace(84, 4, "DXT5");
+    test_files::writeFile(path, header);
+    render::Texture texture(path);
+
+    // There is no game in this process: reaching the loader would fail the test.
+    REQUIRE_FALSE(texture.view());
+    REQUIRE(texture.width() == 0);
+    REQUIRE(texture.height() == 0);
+    REQUIRE(texture.error() == "block-compressed DDS dimensions 1086x362 must both be multiples of 4");
+    std::filesystem::remove(path);
+    REQUIRE_FALSE(texture.view());
+    REQUIRE_FALSE(texture.error().empty());
 }

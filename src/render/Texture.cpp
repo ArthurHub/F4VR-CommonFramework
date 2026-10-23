@@ -1,13 +1,16 @@
 #include "Texture.h"
 
 #include <algorithm>
+#include <array>
 #include <cctype>
+#include <fstream>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
 
 #include "../f4vr/F4VROffsets.h"
 #include "../f4vr/F4VRUtils.h"
+#include "DdsHeader.h"
 #include "RE/Bethesda/BSGraphics.h"
 #include "RenderUtils.h"
 
@@ -15,6 +18,21 @@ namespace f4cf::render
 {
     namespace
     {
+        /**
+         * Why a loose file's DDS header would make the engine's loader crash, or empty when it would not.
+         * Files unavailable to the filesystem, including archive-only paths, stay with the engine.
+         */
+        std::string textureFileError(const std::string& path)
+        {
+            std::ifstream file(path, std::ios::binary);
+            if (!file.is_open()) {
+                return {};
+            }
+            std::array<std::uint8_t, 148> header{};
+            file.read(reinterpret_cast<char*>(header.data()), header.size());
+            return ddsHeaderError(std::span(header).first(static_cast<std::size_t>(file.gcount())));
+        }
+
         /**
          * True for the formats whose views decode sRGB into linear values when sampled.
          */
@@ -164,6 +182,12 @@ namespace f4cf::render
         }
         if (!_loadAttempted) {
             _loadAttempted = true;
+            // checked once, before the engine's loader can crash on it
+            _error = textureFileError(_path);
+            if (!_error.empty()) {
+                logger::warn("Texture '{}' is not loaded: {}; images using it draw nothing", _path, _error);
+                return {};
+            }
             RE::NiTexture* loaded = nullptr;
             f4vr::LoadTextureByPath(_path.c_str(), true, loaded, 0, 0, 0);
             // The loader's reference belongs to the caller - each call adds one - so it is adopted
@@ -172,6 +196,7 @@ namespace f4cf::render
             if (loaded) {
                 loaded->DecRefCount();
             } else {
+                _error = "the game did not load it";
                 logger::warn("Texture '{}' did not load; images using it draw nothing", _path);
             }
         }
@@ -211,6 +236,7 @@ namespace f4cf::render
         if (_pixelsView) {
             logger::info("Texture '{}' ready: {}x{}, from pixels in memory", _path, _width, _height);
         } else {
+            _error = "it could not be created on the GPU";
             logger::warn("Texture '{}' of {}x{} could not be created on the GPU; images using it draw nothing", _path, _width, _height);
         }
         return _pixelsView;
@@ -249,6 +275,7 @@ namespace f4cf::render
         // a deliberately 1x1 image would be caught too, but a single texel shows nothing a panel's
         // background colour cannot
         _placeholder = _width == 1 && _height == 1;
+        _error = _placeholder ? "the file is not found" : "";
 
         const bool first = isFirstDescription(_path);
         if (_placeholder) {
