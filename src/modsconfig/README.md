@@ -14,6 +14,10 @@ VR is installed. The menu matches it to the config spec whose `modName` is that 
 to case. A mod does nothing to get it; set `Settings::modsConfigClient = false` in the constructor to
 opt out. When Mods Config VR isn't installed the mod logs one line and carries on.
 
+The framework adds the `modVersion` client state from `Settings::version` before connecting. A config
+spec can show the mod's version with `{clientState:modVersion}` in its text, without registering a
+state of its own. The state can also be used in a `clientState` condition.
+
 `Settings::modsConfigMinVersion` is the least version of Mods Config VR's API the mod works with,
 1 by default, which connects to any. A mod that uses what a later version added asks the client
 first, and skips it with an older Mods Config VR:

@@ -328,6 +328,9 @@ namespace f4cf
         }
 
         if (msg->type == F4SE::MessagingInterface::kPostLoad && g_mod->_settings.modsConfigClient) {
+            mods_config::api::ModsConfigVRClient::get().addState("modVersion", [version = g_mod->_settings.version] {
+                return std::optional<mods_config::api::Value>(version);
+            });
             // every plugin's DLL is loaded by now, Mods Config VR's too
             connectToModsConfigVR(g_mod->_settings.name, g_mod->_settings.modsConfigMinVersion);
         }
