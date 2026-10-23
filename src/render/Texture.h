@@ -123,6 +123,15 @@ namespace f4cf::render
             return _srgb;
         }
 
+        /**
+         * Why view() has no view and never will, for the player to read: the file's DDS header is one the
+         * engine cannot load, the file is not found, or the game did not load it. Empty otherwise.
+         */
+        const std::string& error() const
+        {
+            return _error;
+        }
+
     private:
         void describe(ID3D11ShaderResourceView* view);
         TextureView pixelsView();
@@ -145,5 +154,6 @@ namespace f4cf::render
         std::uint32_t _height = 0;
         bool _srgb = false;
         bool _placeholder = false;
+        std::string _error;
     };
 }

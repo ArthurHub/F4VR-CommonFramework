@@ -133,6 +133,11 @@ frame.addImage(icon->view(), icon->isSRGB(), topLeft, topRight, bottomRight, bot
   boundary.
 - **A missing path is not an error to the engine** — it hands back a 1x1 placeholder, which is taken
   to mean "missing": logged once, drawn as nothing.
+- **Loose DDS headers are checked once before loading.** Zero or oversized dimensions, truncated
+  headers, and block-compressed dimensions that are not multiples of four are logged and skipped.
+  This reads at most 148 bytes; pixel data and archive-only textures are not checked.
+- **`error()` says why a texture has no view**, for a mod to show its player: the header's mistake,
+  a file that is not found, or one the game did not load.
 - **sRGB is the cache's decision**, not the caller's: whoever loaded a path first settles it.
   `isSRGB()` reports what actually came back and the renderer re-encodes, since the overlay writes
   into a target that is not sRGB-encoded. (`Color::rgba(r, g, b, a)` takes the 0-255 bytes a color

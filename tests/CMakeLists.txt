@@ -19,6 +19,7 @@ add_executable(${PROJECT_NAME}_tests
   ConfigReloadSubscribersTests.cpp
   ConfigValueParsersTests.cpp
   ConfigValueTests.cpp
+  DdsHeaderTests.cpp
   FrameContextTests.cpp
   HistogramTests.cpp
   ImGuiKeyboardLogicTests.cpp
@@ -39,6 +40,7 @@ add_executable(${PROJECT_NAME}_tests
   ${SOURCE_DIR}/perf/FrameContext.cpp
   ${SOURCE_DIR}/perf/Perf.cpp
   ${SOURCE_DIR}/perf/Report.cpp
+  ${SOURCE_DIR}/render/DdsHeader.cpp
   ${SOURCE_DIR}/vrcf/InputBindingParser.cpp
   ${SOURCE_DIR}/vrui/UIDevLayoutFile.cpp
 )
