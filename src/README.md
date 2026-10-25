@@ -97,7 +97,7 @@ many times a second, as a slider is dragged, and only a key that its owner did n
 is logged at the info level. A clear reads the file.
 
 An owner sets and clears only its own overrides. So the devbench tool (the owner `devbench`),
-another mod through the mod's API and the mod itself override the same config, and none removes
+Mods Config VR's live preview (the owner `ModsConfigVR`), another mod through the mod's API and the mod itself override the same config, and none removes
 another's. A mod's API passes its caller's name as the owner. When two owners override the same
 key, the one that was set last applies, and when that one is cleared the other applies again.
 
@@ -210,7 +210,7 @@ flags for runtime toggling, debug-dump triggers, and batch config saves).
 | [`f4vr/`](f4vr/README.md)            | `f4cf::f4vr`   | Fallout 4 VR game-state utilities: nodes, skeleton, player nodes, menus, Scaleform, thumbstick.                  |
 | [`f4sevr/`](f4sevr/README.md)        | `F4SEVR`       | Ported F4SE VR SDK: Papyrus VM interop, native-function registration, VM value/arg marshalling.                  |
 | [`imgui/`](imgui/README.md)          | `f4cf::imgui`  | Dear ImGui panels drawn as world-space quads: a raw `Canvas`, and `UIImGuiPanel` for a vrui layout.              |
-| [`modsconfig/`](modsconfig/README.md) | `mods_config::api` | The mod's client of Mods Config VR's native API, registered by `ModBase` under the mod's name: its functions, states and quick launch entries. |
+| [`modsconfig/`](modsconfig/README.md) | `mods_config::api` | The mod's client of Mods Config VR's native API, registered by `ModBase` under the mod's name: its functions, states and quick launch entries, and the live preview of its config through session overrides. |
 | [`perf/`](perf/README.md)            | `f4cf::perf`   | Hot-path timing: sites that nest into a tree, record from any thread, and are read on demand (devbench `perf`).  |
 | [`render/`](render/README.md)        | `f4cf::render` | Overlay rendering: world-space lines/fills/images/text over the VR view, the shared Submit hook, scene-depth occlusion. |
 | [`vrcf/`](vrcf/README.md)            | `f4cf::vrcf`   | VR Controller Framework. OpenVR button/trigger/thumbstick state, input suppression, haptic feedback.             |

@@ -28,6 +28,7 @@ namespace f4cf::config
 
         std::optional<std::vector<std::string>> path() const;
         ConfigKey canonical() const;
+        static ConfigKey ofPath(const std::vector<std::string>& keys);
     };
 
     /**

@@ -111,6 +111,16 @@ namespace f4cf::config
     }
 
     /**
+     * The key of the names from the file's root to a value, as a TOML editor has its path: the first as the section
+     * and the rest as a dotted key, each in quotes where it is no bare key, as ("Main", "my.key") is "Main" and
+     * "\"my.key\"". A path of one name is a key of the root. The path has a name at least.
+     */
+    ConfigKey ConfigKey::ofPath(const std::vector<std::string>& keys)
+    {
+        return keyOfPath(keys);
+    }
+
+    /**
      * The name of the one key of `table` that is `name` with another type prefix, the lowercase letter a key's name
      * starts with ("kOpenButton" for "sOpenButton"), the rest matched with no regard to case. No value when `name`
      * has no prefix, or no key or more than one matches.

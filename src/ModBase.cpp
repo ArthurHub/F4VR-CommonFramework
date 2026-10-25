@@ -328,9 +328,15 @@ namespace f4cf
         }
 
         if (msg->type == F4SE::MessagingInterface::kPostLoad && g_mod->_settings.modsConfigClient) {
-            mods_config::api::ModsConfigVRClient::get().addState("modVersion", [version = g_mod->_settings.version] {
+            auto& client = mods_config::api::ModsConfigVRClient::get();
+            client.addState("modVersion", [version = g_mod->_settings.version] {
                 return std::optional<mods_config::api::Value>(version);
             });
+            // a `live` setting of the mod's config is previewed through its overrides
+            if (g_mod->_settings.config) {
+                g_mod->_configPreviews.emplace(*g_mod->_settings.config);
+                g_mod->_configPreviews->subscribe(client);
+            }
             // every plugin's DLL is loaded by now, Mods Config VR's too
             connectToModsConfigVR(g_mod->_settings.name, g_mod->_settings.modsConfigMinVersion);
         }

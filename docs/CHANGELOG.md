@@ -16,6 +16,10 @@ major version is `0`, a minor bump may break the API; the **Upgrading** notes sa
   time, and opens the menu at its page; `Settings::modsConfigClient = false` opts out, and
   `Settings::modsConfigMinVersion` refuses a Mods Config VR whose API is older than the mod needs. **Upgrading:** a mod that registers a client of its own
   under its name opts out, or uses the framework's handle.
+- **Mods Config VR live preview**: a `live` setting of a mod's config spec that is kept in the mod's own
+  config file is previewed with no code of the mod's, as a session override under the owner `ModsConfigVR`,
+  which a discard and a Save clear. A mod's own handlers are told each change and each Save too
+  (`subscribeToChanges`, `subscribeToSaves`).
 - **TOML config**: `ConfigBase` loads a TOML file in place of an INI, through toml++. A save changes only
   the values in the file and keeps its comments and layout (`common::TomlEditor`), and does not write a
   file that already holds them. A value given as text, by a session override, devbench `set` or a save,

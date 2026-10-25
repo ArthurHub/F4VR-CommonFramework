@@ -348,6 +348,14 @@ TEST_CASE("ConfigKey: two spellings of one path are one key, its first key the s
     REQUIRE(ConfigKey{ "", "iVersion" }.canonical() == ConfigKey{ "", "iVersion" });
 }
 
+TEST_CASE("ConfigKey: the key of a path has its first name as the section, and a name that is no bare key in quotes")
+{
+    REQUIRE(ConfigKey::ofPath({ "Main", "fScale" }) == ConfigKey{ "Main", "fScale" });
+    REQUIRE(ConfigKey::ofPath({ "Main", "hand", "x" }) == ConfigKey{ "Main", "hand.x" });
+    REQUIRE(ConfigKey::ofPath({ "Main", "my.key" }) == ConfigKey{ "Main", "\"my.key\"" });
+    REQUIRE(ConfigKey::ofPath({ "iVersion" }) == ConfigKey{ "", "iVersion" });
+}
+
 TEST_CASE("ConfigOverrides: two spellings of one key's path are one override")
 {
     Overrides overrides;

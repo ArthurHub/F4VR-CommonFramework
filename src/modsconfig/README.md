@@ -93,10 +93,31 @@ modsConfig.openMenu("body");
 - `api()` gives the menu's interface, for what the class does not wrap. It is null until the client
   connects.
 
+- `subscribeToChanges` and `subscribeToSaves` tell a mod each change of a `live` setting and what
+  each Save wrote, for what the overrides do not do, see [Live preview of the config](#live-preview-of-the-config).
+
 The calls, the rules of what passes between the DLLs and the versions are in the client header,
 and in Mods Config VR's [Native API](https://github.com/ArthurHub/F4VR-Mods-Config/blob/main/docs/design/architecture.md#native-api).
 Everything runs on the game's main thread, and a callback the menu calls that throws or faults cuts
 the mod's client off until the game is restarted.
+
+## Live preview of the config
+
+A setting of the mod's config spec whose `applies` is `live`, and that is kept in the mod's own
+config file, is previewed with no code of the mod's. `ConfigPreviews`, which `ModBase` subscribes to
+the client, turns the menu's changes into session overrides of the config, under the owner
+`ModsConfigVR`:
+
+- A preview sets the override of the value's path, `Main` and `fScale` for `["Main", "fScale"]`, and
+  the config reloads the mod's values as a change of the file does.
+- A discard clears it, and the file's value applies again.
+- A Save clears the overrides of the settings it wrote, with one reload that reads the file, which
+  has their values by then.
+
+So a value the mod reads as its config loads is previewed as it is changed. One that the mod reads
+only once, as the game starts, is not, and its setting says `restart`. A setting of another file, or
+of the game, is left to the mod: its handlers of `subscribeToChanges` and `subscribeToSaves` see every
+change and every Save. The overrides of the devbench tool and of the mod's API callers stay.
 
 ## Vendored header
 
