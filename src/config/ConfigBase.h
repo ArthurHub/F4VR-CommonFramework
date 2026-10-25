@@ -94,6 +94,8 @@ namespace f4cf
         }
 
         void subscribeForConfigChangedEvent(const std::string& key, const std::function<void(const std::string&)>& callback);
+        void subscribeForConfigChangedEvent(const std::string& key, const std::vector<config::ConfigKey>& configKeys,
+            const std::function<void(const std::vector<config::ConfigKey>&)>& callback);
         void unsubscribeFromConfigChangedEvent(const std::string& key);
         void notifySubscribersOfReload();
 

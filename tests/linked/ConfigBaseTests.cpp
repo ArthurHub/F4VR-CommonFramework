@@ -457,6 +457,36 @@ TEST_CASE("ConfigBase: the subscribers are called once for all the loads since t
     REQUIRE(calls == 1);
 }
 
+TEST_CASE("ConfigBase: a subscriber of keys is told a change of one of them, by a session override as by the file")
+{
+    const TempFolder folder;
+    writeFile(configPath(folder), USER_FILE);
+    TestConfig config(configPath(folder));
+    std::vector<std::vector<f4cf::config::ConfigKey>> told;
+    config.subscribeForConfigChangedEvent("tests", { { MAIN, "fScale" } }, [&](const std::vector<f4cf::config::ConfigKey>& changed) {
+        told.push_back(changed);
+    });
+    REQUIRE(config.loadConfigValues());
+    config.notifySubscribersOfReload();
+    REQUIRE(told.empty());
+
+    // another key is no change of it
+    REQUIRE(config.setConfigOverride("tests", MAIN, "iMode", 1));
+    config.notifySubscribersOfReload();
+    REQUIRE(told.empty());
+
+    REQUIRE(config.setConfigOverride("tests", MAIN, "fScale", 2.5f));
+    config.notifySubscribersOfReload();
+    REQUIRE(told == std::vector<std::vector<f4cf::config::ConfigKey>>{ { { MAIN, "fScale" } } });
+
+    // a clear, and a reload of a file someone else changed
+    REQUIRE(config.clearConfigOverride("tests", MAIN, "fScale"));
+    writeBySomeoneElse(configPath(folder), "iMode", 4);
+    config.reload();
+    config.notifySubscribersOfReload();
+    REQUIRE(told.size() == 2);
+}
+
 TEST_CASE("ConfigBase: load brings the file up to date, and a change of it on disk is loaded after that")
 {
     using namespace std::chrono_literals;

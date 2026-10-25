@@ -74,6 +74,22 @@ frame before: a change on disk, a session override set or cleared, `reload()`, a
 own load when a game session starts. A mod with a frame update of its own calls
 `notifySubscribersOfReload()` there.
 
+A subscriber that does more work for some values names their keys, and is called only when a load
+changed one of them, with the ones that did:
+
+```cpp
+g_config.subscribeForConfigChangedEvent("MyMod.hand", { { "Main", "fScale" }, { "Main", "hand" } },
+    [](const std::vector<f4cf::config::ConfigKey>& changed) {
+        // rebuild what fScale or a value of the [Main.hand] table makes
+    });
+```
+
+Each load is compared with the one before, whatever made it, so a change of the file, devbench's
+`set` and Mods Config VR's live preview all tell it. A key with an empty key names a whole section,
+`{ "Main", "" }`, and a table covers the values in it. The first load changes nothing, as there is
+nothing to compare it with: set up from the values in `onGameLoaded()`. A value set and set back
+between two frames is a change, and an array is one value.
+
 The mod's own save (`saveConfigValue(s)`, in its `save()`) changes only the values in the file and
 keeps its comments and layout (`common::TomlEditor`), and is not loaded back. The file watcher loads the
 file only when it holds something else than the mod last loaded or saved, so a write by someone

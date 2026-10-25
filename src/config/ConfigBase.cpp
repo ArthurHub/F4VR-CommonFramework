@@ -56,7 +56,7 @@ namespace f4cf
         const auto config = loadEmbeddedDefault();
         loadDebugSection(config);
         loadConfigInternal(config);
-        _subscribers.markReloaded();
+        _subscribers.markReloaded(config);
     }
 
     /**
@@ -88,6 +88,21 @@ namespace f4cf
     void ConfigBase::subscribeForConfigChangedEvent(const std::string& key, const std::function<void(const std::string&)>& callback)
     {
         _subscribers.subscribe(key, callback);
+    }
+
+    /**
+     * Subscribe to be told when a load changed a value of one of `configKeys`, with the ones that changed, as they are
+     * named here: a value, or a whole section or table with an empty key, as {"Main", ""}, and a value in a nested
+     * table by its dotted key, see config::ConfigKey. A load changes a value the load before had another, from any
+     * source: the file on disk, a session override or reload(). The first load changes none. The callback runs on the
+     * game thread at the start of the next frame, once for all the loads since the frame before, so a mod does there
+     * what more a value needs to take effect. Call it on the game thread. A key that is already subscribed, and a
+     * config key that is no TOML key, throw.
+     */
+    void ConfigBase::subscribeForConfigChangedEvent(const std::string& key, const std::vector<config::ConfigKey>& configKeys,
+        const std::function<void(const std::vector<config::ConfigKey>&)>& callback)
+    {
+        _subscribers.subscribe(key, configKeys, callback);
     }
 
     /**
@@ -256,7 +271,7 @@ namespace f4cf
         loadConfigInternal(config);
 
         // for the subscribers, which are called on the game thread, see notifySubscribersOfReload
-        _subscribers.markReloaded();
+        _subscribers.markReloaded(config);
     }
 
     /**
