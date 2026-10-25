@@ -41,6 +41,7 @@
 //     });
 //     modsConfig.addState("calibrating", [] { return std::optional<Value>(isCalibrating()); });
 //     modsConfig.subscribeToChanges([](const Change& change) { previewOrRestore(change.path, change.value, change.discard); });
+//     modsConfig.subscribeToSaves([](const Saved&) { endPreviewsAndReload(); });
 //
 //     // from F4SE's kPostLoad on, when every plugin's DLL is loaded: 0 while Mods Config VR is there
 //     const int err = modsConfig.connect("MyMod");
@@ -144,7 +145,7 @@ namespace mods_config::api
      * game: the value it was sent last for the setting, or the setting's baseline, and the new one, in the setting's
      * valueType. A setting kept in the game is in it already: the menu writes it before it tells the client, which can
      * do what more it needs. A Discard comes as the player sets the value back, discards it, or leaves the mod with it.
-     * A Save sends none: the file or the game has the value then.
+     * A Save sends none: its SaveBatch has the setting, and the file or the game has the value then.
      */
     struct SettingChange
     {
@@ -152,6 +153,31 @@ namespace mods_config::api
         SettingValue previousValue;
         SettingValue value;
         ChangePhase phase;
+    };
+
+    /**
+     * A setting a Save wrote: its value before the Save, and the value written, in the setting's valueType.
+     */
+    struct SavedSetting
+    {
+        const SettingView* setting;
+        SettingValue baselineValue;
+        SettingValue value;
+    };
+
+    /**
+     * What a Save of the client's config spec wrote, which the client is told once, after the action of each setting
+     * ran: every setting it wrote, of any `applies`, in the order of the config spec, the files it wrote, and how many
+     * Saves of the config spec wrote something in this run of the game, this one with them. A `live` setting the client
+     * shows a preview of is in it, and its preview ends: the file or the game has the value.
+     */
+    struct SaveBatch
+    {
+        const SavedSetting* settings;
+        std::uint32_t settingCount;
+        const FileView* writtenFiles;
+        std::uint32_t fileCount;
+        std::uint64_t revision;
     };
 
     /**
@@ -252,6 +278,9 @@ namespace mods_config::api
         // a change of a `live` setting, which the client shows in the game until it is saved or
         // discarded
         virtual void onChange(const SettingChange* change) = 0;
+
+        // what a Save of its config spec wrote, once a Save
+        virtual void onSaved(const SaveBatch* batch) = 0;
 
     protected:
         ~IClient() = default;
@@ -478,8 +507,8 @@ namespace mods_config::api
      * is kept, the value the mod was sent last for the setting and the new one, and whether it is a Discard back to the
      * value the editing session started with. A setting kept in a file has its file's name, format and absolute path,
      * and the names that lead to the value in it. One kept in the game has no file, and its form, as `MyMod.esp|800`,
-     * with the script and the name of a property: the game has the value already. Its texts are valid during the
-     * handler: copy what you keep.
+     * with the script and the name of a property: the game has the value already. A setting a Save wrote is one too,
+     * with its value before the Save and the value written. Its texts are valid during the handler: copy what you keep.
      */
     struct Change
     {
@@ -496,11 +525,35 @@ namespace mods_config::api
         bool discard = false;
     };
 
+    /**
+     * A file a Save wrote: its name in the config spec's `files`, its format and its absolute path.
+     */
+    struct SavedFile
+    {
+        std::string_view name;
+        FileFormat format = FileFormat::Toml;
+        std::string_view path;
+    };
+
+    /**
+     * What a Save of the config spec wrote, as the C++ client hands it to the mod: each setting it wrote, of any
+     * `applies`, in the order of the config spec, the files it wrote, and how many Saves of the config spec wrote
+     * something in this run of the game, this one with them. A `live` setting the mod shows a preview of is in it, and
+     * its preview ends: the file or the game has the value. Its texts are valid during the handler: copy what you keep.
+     */
+    struct Saved
+    {
+        std::vector<Change> settings;
+        std::vector<SavedFile> files;
+        std::uint64_t revision = 0;
+    };
+
     using ClientFunction = std::function<FunctionResult(const Params& params)>;
     using ClientState = std::function<std::optional<Value>()>;
     using ClientOptions = std::function<std::vector<Option>()>;
     using MenuEventHandler = std::function<void(MenuEventType event, std::string_view pageId)>;
     using ChangeHandler = std::function<void(const Change& change)>;
+    using SaveHandler = std::function<void(const Saved& saved)>;
 
     /**
      * The client of the mod's DLL, one in the DLL: an IClient over the mod's lambdas. It connects under the mod's name,
@@ -675,6 +728,14 @@ namespace mods_config::api
             _changeHandlers.push_back(std::move(handler));
         }
 
+        /**
+         * Calls a handler with what each Save of the config spec wrote, once a Save, after the action of each setting ran.
+         */
+        void subscribeToSaves(SaveHandler handler)
+        {
+            _saveHandlers.push_back(std::move(handler));
+        }
+
         bool isMenuOpen() const
         {
             return _menuOpen;
@@ -816,14 +877,13 @@ namespace mods_config::api
         }
 
         /**
-         * Calls the handlers of the changes with a change, as the C++ client has it.
+         * A change of a setting as the C++ client has it, whose texts point into the setting's view.
          */
-        void onChange(const SettingChange* change) override
+        static Change toChange(const SettingView& setting, const SettingValue& previous, const SettingValue& value, const bool discard)
         {
-            const auto& setting = *change->setting;
             const auto& storage = setting.storage;
             const auto* file = storage.file;
-            Change mine{ .id = setting.id ? setting.id : "",
+            Change change{ .id = setting.id ? setting.id : "",
                 .fileName = file && file->name ? file->name : "",
                 .format = file ? file->format : FileFormat::Toml,
                 .filePath = file && file->path ? file->path : "",
@@ -831,14 +891,42 @@ namespace mods_config::api
                 .form = storage.form ? storage.form : "",
                 .scriptName = storage.scriptName ? storage.scriptName : "",
                 .propertyName = storage.propertyName ? storage.propertyName : "",
-                .previous = fromSettingValue(change->previousValue),
-                .value = fromSettingValue(change->value),
-                .discard = change->phase == ChangePhase::Discard };
-            for (std::uint32_t i = 0; i < setting.storage.pathCount; ++i) {
-                mine.path.emplace_back(setting.storage.path[i] ? setting.storage.path[i] : "");
+                .previous = fromSettingValue(previous),
+                .value = fromSettingValue(value),
+                .discard = discard };
+            for (std::uint32_t i = 0; i < storage.pathCount; ++i) {
+                change.path.emplace_back(storage.path[i] ? storage.path[i] : "");
             }
+            return change;
+        }
+
+        /**
+         * Calls the handlers of the changes with a change, as the C++ client has it.
+         */
+        void onChange(const SettingChange* change) override
+        {
+            const auto mine = toChange(*change->setting, change->previousValue, change->value, change->phase == ChangePhase::Discard);
             for (const auto& handler : _changeHandlers) {
                 handler(mine);
+            }
+        }
+
+        /**
+         * Calls the handlers of the Saves with what a Save wrote, as the C++ client has it.
+         */
+        void onSaved(const SaveBatch* batch) override
+        {
+            Saved saved{ .revision = batch->revision };
+            for (std::uint32_t i = 0; i < batch->settingCount; ++i) {
+                const auto& setting = batch->settings[i];
+                saved.settings.push_back(toChange(*setting.setting, setting.baselineValue, setting.value, false));
+            }
+            for (std::uint32_t i = 0; i < batch->fileCount; ++i) {
+                const auto& file = batch->writtenFiles[i];
+                saved.files.push_back({ .name = file.name ? file.name : "", .format = file.format, .path = file.path ? file.path : "" });
+            }
+            for (const auto& handler : _saveHandlers) {
+                handler(saved);
             }
         }
 
@@ -857,6 +945,7 @@ namespace mods_config::api
 
         std::vector<MenuEventHandler> _menuEventHandlers;
         std::vector<ChangeHandler> _changeHandlers;
+        std::vector<SaveHandler> _saveHandlers;
 
         // the text of a string state, which stays until a state is asked next: the menu copies it after the answer
         std::string _stateText;
