@@ -40,6 +40,7 @@
 //         return FunctionResult{ .done = true, .message = std::format("Done: {:.2f} m.", measure(params.getInt("samples", 10))) };
 //     });
 //     modsConfig.addState("calibrating", [] { return std::optional<Value>(isCalibrating()); });
+//     modsConfig.subscribeToChanges([](const Change& change) { previewOrRestore(change.path, change.value, change.discard); });
 //
 //     // from F4SE's kPostLoad on, when every plugin's DLL is loaded: 0 while Mods Config VR is there
 //     const int err = modsConfig.connect("MyMod");
@@ -81,12 +82,76 @@ namespace mods_config::api
     };
 
     /**
+     * The format of a file of the client's config spec.
+     */
+    enum class FileFormat : std::uint32_t
+    {
+        Ini,
+        Json,
+        Toml
+    };
+
+    /**
+     * A file of the client's config spec: its name in the config spec's `files`, its format, and its path, absolute.
+     */
+    struct FileView
+    {
+        const char* name;
+        FileFormat format;
+        const char* path;
+    };
+
+    /**
+     * Where a setting's value is kept. In a file of the config spec: the file, and the names that lead to the value, its
+     * section and its key in an INI file, and in a TOML or a JSON file the tables it is in and its key. In the game, with
+     * no file: a global's form, or a script property's form, its script, null for the form's first, and its name. A
+     * form is its plugin and its id in it, as `MyMod.esp|800`.
+     */
+    struct StorageView
+    {
+        const FileView* file;
+        const char* const* path;
+        std::uint32_t pathCount;
+        const char* form;
+        const char* scriptName;
+        const char* propertyName;
+    };
+
+    /**
      * A setting of the client's config spec.
      */
     struct SettingView
     {
         const char* id; // unique in the config spec
         ValueType valueType;
+
+        // where its value is kept, for a change of it, and no file as the options of a choice are asked
+        StorageView storage;
+    };
+
+    /**
+     * What a change of a setting is: a Preview of a valid pending value, or a Discard back to the value the editing
+     * session started with.
+     */
+    enum class ChangePhase : std::uint32_t
+    {
+        Preview,
+        Discard
+    };
+
+    /**
+     * A change of a `live` setting of the client's config spec, while it waits for a Save, which the client shows in the
+     * game: the value it was sent last for the setting, or the setting's baseline, and the new one, in the setting's
+     * valueType. A setting kept in the game is in it already: the menu writes it before it tells the client, which can
+     * do what more it needs. A Discard comes as the player sets the value back, discards it, or leaves the mod with it.
+     * A Save sends none: the file or the game has the value then.
+     */
+    struct SettingChange
+    {
+        const SettingView* setting;
+        SettingValue previousValue;
+        SettingValue value;
+        ChangePhase phase;
     };
 
     /**
@@ -183,6 +248,10 @@ namespace mods_config::api
 
         // what happens in the menu, as it happens
         virtual void onEvent(const MenuEvent* event) = 0;
+
+        // a change of a `live` setting, which the client shows in the game until it is saved or
+        // discarded
+        virtual void onChange(const SettingChange* change) = 0;
 
     protected:
         ~IClient() = default;
@@ -404,10 +473,34 @@ namespace mods_config::api
         std::string buttonText;
     };
 
+    /**
+     * A change of a `live` setting of the config spec, as the C++ client hands it to the mod: the setting's id, where it
+     * is kept, the value the mod was sent last for the setting and the new one, and whether it is a Discard back to the
+     * value the editing session started with. A setting kept in a file has its file's name, format and absolute path,
+     * and the names that lead to the value in it. One kept in the game has no file, and its form, as `MyMod.esp|800`,
+     * with the script and the name of a property: the game has the value already. Its texts are valid during the
+     * handler: copy what you keep.
+     */
+    struct Change
+    {
+        std::string_view id;
+        std::string_view fileName;
+        FileFormat format = FileFormat::Toml;
+        std::string_view filePath;
+        std::vector<std::string_view> path;
+        std::string_view form;
+        std::string_view scriptName;
+        std::string_view propertyName;
+        Value previous;
+        Value value;
+        bool discard = false;
+    };
+
     using ClientFunction = std::function<FunctionResult(const Params& params)>;
     using ClientState = std::function<std::optional<Value>()>;
     using ClientOptions = std::function<std::vector<Option>()>;
     using MenuEventHandler = std::function<void(MenuEventType event, std::string_view pageId)>;
+    using ChangeHandler = std::function<void(const Change& change)>;
 
     /**
      * The client of the mod's DLL, one in the DLL: an IClient over the mod's lambdas. It connects under the mod's name,
@@ -573,6 +666,15 @@ namespace mods_config::api
             _menuEventHandlers.push_back(std::move(handler));
         }
 
+        /**
+         * Calls a handler with each change of a `live` setting of the config spec: a preview of a pending value, and a
+         * discard back to the value the session started with.
+         */
+        void subscribeToChanges(ChangeHandler handler)
+        {
+            _changeHandlers.push_back(std::move(handler));
+        }
+
         bool isMenuOpen() const
         {
             return _menuOpen;
@@ -622,6 +724,24 @@ namespace mods_config::api
                 setting.text = text.c_str();
             }
             return setting;
+        }
+
+        /**
+         * A value the API passes as the C++ client's: a String is its text, which is copied.
+         */
+        static Value fromSettingValue(const SettingValue& value)
+        {
+            switch (value.type) {
+            case ValueType::Bool:
+                return value.boolValue;
+            case ValueType::Int:
+                return static_cast<int>(value.intValue);
+            case ValueType::Float:
+                return value.floatValue;
+            case ValueType::String:
+                break;
+            }
+            return std::string(value.text ? value.text : "");
         }
 
         bool hasFunction(const char* name) override
@@ -695,6 +815,33 @@ namespace mods_config::api
             }
         }
 
+        /**
+         * Calls the handlers of the changes with a change, as the C++ client has it.
+         */
+        void onChange(const SettingChange* change) override
+        {
+            const auto& setting = *change->setting;
+            const auto& storage = setting.storage;
+            const auto* file = storage.file;
+            Change mine{ .id = setting.id ? setting.id : "",
+                .fileName = file && file->name ? file->name : "",
+                .format = file ? file->format : FileFormat::Toml,
+                .filePath = file && file->path ? file->path : "",
+                .path = {},
+                .form = storage.form ? storage.form : "",
+                .scriptName = storage.scriptName ? storage.scriptName : "",
+                .propertyName = storage.propertyName ? storage.propertyName : "",
+                .previous = fromSettingValue(change->previousValue),
+                .value = fromSettingValue(change->value),
+                .discard = change->phase == ChangePhase::Discard };
+            for (std::uint32_t i = 0; i < setting.storage.pathCount; ++i) {
+                mine.path.emplace_back(setting.storage.path[i] ? setting.storage.path[i] : "");
+            }
+            for (const auto& handler : _changeHandlers) {
+                handler(mine);
+            }
+        }
+
         const ModsConfigVRApiV1* _api = nullptr;
 
         // the name it connected under, the mod's
@@ -709,6 +856,7 @@ namespace mods_config::api
         std::vector<std::pair<std::string, QuickLaunch>> _quickLaunch;
 
         std::vector<MenuEventHandler> _menuEventHandlers;
+        std::vector<ChangeHandler> _changeHandlers;
 
         // the text of a string state, which stays until a state is asked next: the menu copies it after the answer
         std::string _stateText;
