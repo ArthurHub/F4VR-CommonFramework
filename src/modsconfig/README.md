@@ -59,17 +59,22 @@ modsConfig.addState("calibrating", [] { return std::optional<Value>(isCalibratin
 // the options of a choice with "listFromClientCallback": true, by the setting's id
 modsConfig.addOptions("preset", [] { return std::vector<Option>{ { .value = std::string("default"), .text = "Default" } }; });
 
-// the mod's own config UI: a function of its name, which a button can run too, and an entry of the
-// quick launch section. The menu is minimized while it is open, and shown again as it closes
-modsConfig.addConfigUI("openPipboyConfig", { .text = "FRIK: Pip-Boy", .help = "Moves the Pip-Boy on your wrist.", .buttonText = "Place" },
-    [](std::string& message) {
+// an entry of the quick launch section and the function a press runs, by its name, which a button
+// can run too. A function that opens the mod's own UI minimizes the menu, and the mod shows it again
+// as the UI closes
+modsConfig.addQuickLaunch("openPipboyConfig", { .text = "FRIK: Pip-Boy", .help = "Moves the Pip-Boy on your wrist.", .buttonText = "Place" },
+    [&modsConfig](const Params&) {
         if (!isSkeletonReady()) {
-            message = "The body is not ready yet.";
-            return false;
+            return FunctionResult{ .done = false, .message = "The body is not ready yet." };
         }
-        openPipboyConfig([] { ModsConfigVRClient::get().configUIClosed(); });
-        return true;
+        openPipboyConfig([&modsConfig] { modsConfig.restoreMenu(); });
+        modsConfig.minimizeMenu();
+        return FunctionResult{ .done = true };
     });
+
+// a quick action: a function that does its work, whose message the help line tells
+modsConfig.addQuickLaunch("recalibrate", { .text = "Recalibrate", .help = "Measures your height again.", .buttonText = "Run" },
+    [](const Params&) { return FunctionResult{ .done = true, .message = "Calibrated." }; });
 
 // the menu's events, and the page of the config spec that is shown
 modsConfig.subscribeToMenuEvents([](const MenuEventType event, std::string_view pageId) { /* ... */ });
@@ -79,8 +84,10 @@ const bool spheresShown = modsConfig.shownPage() == "spheres";
 modsConfig.openMenu("body");
 ```
 
-- A name of a function, a state, a config UI and a setting's options is registered once: the first
-  stays. A config UI is a function, so its name is a function's.
+- A name of a function, a state and a setting's options is registered once: the first stays. A
+  quick launch entry adds its function, so its name is a function's.
+- `minimizeMenu` and `restoreMenu` move the menu out of the way and back, from any flow of the mod.
+  `restoreMenu` does nothing while the menu is not minimized, as the player showed or closed it.
 - A function returns at once: work that takes longer goes on after it, and a state tells the rows
   that it runs.
 - `api()` gives the menu's interface, for what the class does not wrap. It is null until the client

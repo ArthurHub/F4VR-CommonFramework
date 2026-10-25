@@ -393,7 +393,7 @@ namespace mods_config::api
     };
 
     /**
-     * The entry of a mod's own config UI in the quick launch section of the menu's front page.
+     * An entry of the quick launch section of the menu's front page, which runs a function of the mod.
      */
     struct QuickLaunch
     {
@@ -409,14 +409,11 @@ namespace mods_config::api
     using ClientOptions = std::function<std::vector<Option>()>;
     using MenuEventHandler = std::function<void(MenuEventType event, std::string_view pageId)>;
 
-    // opens the mod's own config UI: false when it does not open, with the message why
-    using OpenConfigUI = std::function<bool(std::string& message)>;
-
     /**
      * The client of the mod's DLL, one in the DLL: an IClient over the mod's lambdas. It connects under the mod's name,
      * which is matched to the config spec whose `modName` it is, and answers the menu with what the mod adds, at any
-     * time: its functions, states, options of choices, own config UIs and handlers of the menu's events. While Mods
-     * Config VR is not installed nothing is called.
+     * time: its functions, states, options of choices, quick launch entries and handlers of the menu's events. While
+     * Mods Config VR is not installed nothing is called.
      */
     class ModsConfigVRClient final : public IClient
     {
@@ -431,8 +428,8 @@ namespace mods_config::api
         ModsConfigVRClient& operator=(const ModsConfigVRClient&) = delete;
 
         /**
-         * Connects to the menu under the mod's name, once, from F4SE's kPostLoad on, with the quick launch entries of the
-         * config UIs added before. With the minVersion of 1 it connects to any menu of V1, so a client of a newer header
+         * Connects to the menu under the mod's name, once, from F4SE's kPostLoad on, with the quick launch entries added
+         * before. With the minVersion of 1 it connects to any menu of V1, so a client of a newer header
          * keeps working with an older menu: what a later version added is used after a check of `apiVersion()`, which
          * this class does too. A mod that does not work at all with an older menu passes the version it needs, and a
          * menu whose API is older is not connected to. Returns 0 when it is connected, initialize's code while the API is
@@ -452,7 +449,7 @@ namespace mods_config::api
             _api = ModsConfigVRApiV1::inst;
             _name = name;
             for (const auto& [function, entry] : _quickLaunch) {
-                addQuickLaunch(function, entry);
+                sendQuickLaunch(function, entry);
             }
             return 0;
         }
@@ -505,37 +502,39 @@ namespace mods_config::api
         }
 
         /**
-         * Adds a config UI of the mod's own: a function of its name, which a button of the config spec can run too, and
-         * an entry of the quick launch section. A press opens it, and the menu is minimized while it is open: call
-         * `configUIClosed` as it closes. One that does not open leaves the menu, which says why.
+         * Adds an entry of the quick launch section of the menu's front page and the function a press on it runs, by
+         * its name, which a `CallNativeFunction` of the config spec can run too. The function's message is told in the
+         * help line, in red when it failed. A function that opens a UI of the mod's own minimizes the menu, and the mod
+         * restores it as the UI closes. False for a name it has a function of already, with nothing added.
          */
-        bool addConfigUI(std::string name, QuickLaunch entry, OpenConfigUI open)
+        bool addQuickLaunch(std::string name, QuickLaunch entry, ClientFunction function)
         {
-            const bool added = addFunction(name, [this, open = std::move(open)](const Params&) {
-                std::string message;
-                if (!open(message)) {
-                    return FunctionResult{ .done = false, .message = std::move(message) };
-                }
-                if (_api) {
-                    _api->minimizeMenu();
-                }
-                return FunctionResult{ .done = true, .message = std::move(message) };
-            });
-            if (!added) {
+            if (!addFunction(name, std::move(function))) {
                 return false;
             }
             if (_api) {
-                return addQuickLaunch(name, entry);
+                return sendQuickLaunch(name, entry);
             }
             _quickLaunch.emplace_back(std::move(name), std::move(entry));
             return true;
         }
 
         /**
-         * Shows the menu again as the mod's own config UI closes, with the mod's values read again. Nothing while the
+         * Minimizes the menu, with its editing session kept, as the mod opens a UI of its own. Nothing while it is not
+         * connected.
+         */
+        void minimizeMenu() const
+        {
+            if (_api) {
+                _api->minimizeMenu();
+            }
+        }
+
+        /**
+         * Shows the menu again, with the shown mod's values read again. Nothing while it is not connected, or while the
          * menu is not minimized, as the player showed or closed it.
          */
-        void configUIClosed() const
+        void restoreMenu() const
         {
             if (_api) {
                 _api->restoreMenu();
@@ -591,7 +590,10 @@ namespace mods_config::api
         ModsConfigVRClient() = default;
         ~ModsConfigVRClient() = default;
 
-        bool addQuickLaunch(const std::string& function, const QuickLaunch& entry) const
+        /**
+         * Gives the connected menu a quick launch entry of a function.
+         */
+        bool sendQuickLaunch(const std::string& function, const QuickLaunch& entry) const
         {
             return _api->addQuickLaunch(const_cast<ModsConfigVRClient*>(this),
                 entry.text.c_str(),
@@ -703,7 +705,7 @@ namespace mods_config::api
         std::map<std::string, ClientState, std::less<>> _states;
         std::map<std::string, ClientOptions, std::less<>> _options;
 
-        // the quick launch entries of the config UIs added before it connected, by their functions
+        // the quick launch entries added before it connected, by their functions
         std::vector<std::pair<std::string, QuickLaunch>> _quickLaunch;
 
         std::vector<MenuEventHandler> _menuEventHandlers;
