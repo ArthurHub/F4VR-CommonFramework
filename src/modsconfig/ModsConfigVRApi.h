@@ -59,6 +59,15 @@ namespace mods_config::api
     inline constexpr auto MODS_CONFIG_VR_DLL = "ModsConfigVR.dll";
     inline constexpr auto MODS_CONFIG_VR_GET_API = "ModsConfigVRAPI_GetApiV1";
 
+    // Mods Config VR's F4SE plugin name, the sender of its F4SE messages, which a plugin registers a listener for from
+    // kPostLoad on, as F4SE takes a listener of a sender that is loaded
+    inline constexpr auto MODS_CONFIG_VR_F4SE_NAME = "ModsConfigVR";
+
+    // The type of the F4SE message Mods Config VR sends after a Save of a config spec wrote something, to each F4SE
+    // plugin of its `f4sePluginRequirements`. Its data is the config spec's `modName`, UTF-8 text that ends with a
+    // zero, and is valid during the listener's call. It does not say what changed: a client's `onSaved` does.
+    inline constexpr std::uint32_t MODS_CONFIG_VR_SAVED_MESSAGE = 1;
+
     /**
      * The type of a value, as a setting of a config spec has its `valueType`.
      */
