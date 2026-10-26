@@ -101,7 +101,7 @@ TEST_CASE("ConfigPreviews: a preview of a setting of the mod's config file overr
     {
         previews.onChange(scale);
         REQUIRE(config.setConfigOverride("devbench", "Main", "iMode", 3));
-        // Mods Config VR writes the file before it tells the Save
+        // Mods Config FO4 VR writes the file before it tells the Save
         f4cf::common::TomlEditor editor(readFile(path));
         REQUIRE(editor.set({ "Main", "fScale" }, 2.5f));
         writeFile(path, editor.text());

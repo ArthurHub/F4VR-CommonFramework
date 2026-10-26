@@ -8,7 +8,7 @@
 #include "devbench/DevBench.h"
 #include "f4vr/DebugDump.h"
 #include "f4vr/DebugInventory.h"
-#include "modsconfig/ModsConfigVRApi.h"
+#include "modsconfig/ModsConfigFO4Api.h"
 #include "perf/FrameSampler.h"
 #include "perf/Perf.h"
 #include "perf/Report.h"
@@ -298,33 +298,33 @@ namespace f4cf
     }
 
     /**
-     * Connects the mod's client of Mods Config VR under its name, which gives the menu what the mod added to it before,
-     * while its API is of the least version the mod works with or later. Mods Config VR that is not installed is not
+     * Connects the mod's client of Mods Config FO4 VR under its name, which gives the menu what the mod added to it before,
+     * while its API is of the least version the mod works with or later. Mods Config FO4 VR that is not installed is not
      * an error: the mod logs one line and works without it.
      */
-    void ModBase::connectToModsConfigVR(const std::string& name, const std::uint32_t minVersion)
+    void ModBase::connectToModsConfigFO4(const std::string& name, const std::uint32_t minVersion)
     {
-        using mods_config::api::ModsConfigVRApiV1;
-        const int err = mods_config::api::ModsConfigVRClient::get().connect(name, minVersion);
+        using mods_config::api::ModsConfigFO4ApiV1;
+        const int err = mods_config::api::ModsConfigFO4Client::get().connect(name, minVersion);
         if (err == 0) {
-            logger::info("Connected to Mods Config VR (v{}, API v{}) as client '{}'", ModsConfigVRApiV1::inst->getModVersion(), ModsConfigVRApiV1::inst->getVersion(), name);
+            logger::info("Connected to Mods Config FO4 VR (v{}, API v{}) as client '{}'", ModsConfigFO4ApiV1::inst->getModVersion(), ModsConfigFO4ApiV1::inst->getVersion(), name);
         } else if (err == 5) {
-            logger::warn("Mods Config VR did not take the client '{}': its log says why", name);
+            logger::warn("Mods Config FO4 VR did not take the client '{}': its log says why", name);
         } else if (err == 4) {
-            logger::warn("Mods Config VR is installed, but its API is older than version {}, which the mod needs: the mod has no client of its menu", minVersion);
+            logger::warn("Mods Config FO4 VR is installed, but its API is older than version {}, which the mod needs: the mod has no client of its menu", minVersion);
         } else {
-            logger::info("Mods Config VR is not available (error {}), so the mod has no client of its menu", err);
+            logger::info("Mods Config FO4 VR is not available (error {}), so the mod has no client of its menu", err);
         }
     }
 
     /**
-     * Gives the mod's client of Mods Config VR what the framework answers for every mod, and connects it: the states
+     * Gives the mod's client of Mods Config FO4 VR what the framework answers for every mod, and connects it: the states
      * `modVersion` and `configFile`, the config file the mod loaded, which a file of its config spec takes its path
      * from with `pathFromClientState`, and the preview of a `live` setting of that file through its overrides.
      */
     void ModBase::setupModsConfigClient()
     {
-        auto& client = mods_config::api::ModsConfigVRClient::get();
+        auto& client = mods_config::api::ModsConfigFO4Client::get();
         client.addState("modVersion", [version = _settings.version] {
             return std::optional<mods_config::api::Value>(version);
         });
@@ -337,7 +337,7 @@ namespace f4cf
             _configPreviews.emplace(*_settings.config);
             _configPreviews->subscribe(client);
         }
-        connectToModsConfigVR(_settings.name, _settings.modsConfigMinVersion);
+        connectToModsConfigFO4(_settings.name, _settings.modsConfigMinVersion);
     }
 
     /**
@@ -351,7 +351,7 @@ namespace f4cf
         }
 
         if (msg->type == F4SE::MessagingInterface::kPostLoad && g_mod->_settings.modsConfigClient) {
-            // every plugin's DLL is loaded by now, Mods Config VR's too
+            // every plugin's DLL is loaded by now, Mods Config FO4 VR's too
             g_mod->setupModsConfigClient();
         }
 

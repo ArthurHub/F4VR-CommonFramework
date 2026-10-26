@@ -78,7 +78,7 @@ namespace
     }
 
     /**
-     * Someone else sets one value in the file, past the config: a text editor, or Mods Config VR on Save.
+     * Someone else sets one value in the file, past the config: a text editor, or Mods Config FO4 VR on Save.
      */
     void writeBySomeoneElse(const std::string& path, const char* key, const int value)
     {

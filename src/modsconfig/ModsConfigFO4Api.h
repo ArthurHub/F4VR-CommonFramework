@@ -1,6 +1,6 @@
 // A guard of its own, not #pragma once: a mod can have two copies of this file, its own and its framework's
-#ifndef MODS_CONFIG_VR_API_V1_H
-#define MODS_CONFIG_VR_API_V1_H
+#ifndef MODS_CONFIG_FO4_API_V1_H
+#define MODS_CONFIG_FO4_API_V1_H
 
 #include <Windows.h>
 #include <cstdint>
@@ -14,16 +14,16 @@
 #include <vector>
 
 // ----------------------------------------------------------------------------------------
-// Mods Config VR's native API, for the DLL of a mod that has a config spec, or a config UI of its own.
+// Mods Config FO4 VR's native API, for the DLL of a mod that has a config spec, or a config UI of its own.
 // Copy this whole file into your project AS IS.
 //
-// Two layers. What passes between the DLLs is two interfaces of virtual functions: ModsConfigVRApiV1, which Mods
+// Two layers. What passes between the DLLs is two interfaces of virtual functions: ModsConfigFO4ApiV1, which Mods
 // Config VR implements, and IClient, which a client implements and registers once. The menu asks the client by name
 // for its functions, states and options. Their arguments are plain: whole numbers, float, bool, enums, UTF-8 texts
 // that end with a zero, and pointers. No std:: type crosses: each DLL has its own heap, and its own layout of them.
 // What the host passes is valid during the call, so copy what you keep. What you pass the host copies before the
 // call returns.
-// ModsConfigVRClient, at the end of this file, is an IClient over your lambdas, compiled into your DLL. Use it, and
+// ModsConfigFO4Client, at the end of this file, is an IClient over your lambdas, compiled into your DLL. Use it, and
 // the interfaces only for what it does not wrap. Every call, either way, is on the game's main thread.
 //
 // A client method that throws or faults cuts the client off until the game is restarted, and its mod works as one
@@ -33,7 +33,7 @@
 //
 // {
 //     using namespace mods_config::api;
-//     auto& modsConfig = ModsConfigVRClient::get();
+//     auto& modsConfig = ModsConfigFO4Client::get();
 //
 //     // at any time, also before it connects
 //     modsConfig.addFunction("calibrate", [](const Params& params) {
@@ -43,30 +43,30 @@
 //     modsConfig.subscribeToChanges([](const Change& change) { previewOrRestore(change.path, change.value, change.discard); });
 //     modsConfig.subscribeToSaves([](const Saved&) { endPreviewsAndReload(); });
 //
-//     // from F4SE's kPostLoad on, when every plugin's DLL is loaded: 0 while Mods Config VR is there
+//     // from F4SE's kPostLoad on, when every plugin's DLL is loaded: 0 while Mods Config FO4 VR is there
 //     const int err = modsConfig.connect("MyMod");
 // }
 
 namespace mods_config::api
 {
-#define MODS_CONFIG_VR_CALL __cdecl
+#define MODS_CONFIG_FO4_CALL __cdecl
 
     // The version of this header: what V1 has. A method is only added at the end of an interface, and a struct only
     // grows at its end, so a host of a later version takes a client of this one.
-    inline constexpr std::uint32_t MODS_CONFIG_VR_API_VERSION = 1;
+    inline constexpr std::uint32_t MODS_CONFIG_FO4_API_VERSION = 1;
 
     // the host's DLL, and the function it exports that gives the API
-    inline constexpr auto MODS_CONFIG_VR_DLL = "ModsConfigVR.dll";
-    inline constexpr auto MODS_CONFIG_VR_GET_API = "ModsConfigVRAPI_GetApiV1";
+    inline constexpr auto MODS_CONFIG_FO4_DLL = "ModsConfigFO4VR.dll";
+    inline constexpr auto MODS_CONFIG_FO4_GET_API = "ModsConfigFO4API_GetApiV1";
 
-    // Mods Config VR's F4SE plugin name, the sender of its F4SE messages, which a plugin registers a listener for from
+    // Mods Config FO4 VR's F4SE plugin name, the sender of its F4SE messages, which a plugin registers a listener for from
     // kPostLoad on, as F4SE takes a listener of a sender that is loaded
-    inline constexpr auto MODS_CONFIG_VR_F4SE_NAME = "ModsConfigVR";
+    inline constexpr auto MODS_CONFIG_FO4_F4SE_NAME = "ModsConfigFO4VR";
 
-    // The type of the F4SE message Mods Config VR sends after a Save of a config spec wrote something, to each F4SE
+    // The type of the F4SE message Mods Config FO4 VR sends after a Save of a config spec wrote something, to each F4SE
     // plugin of its `f4sePluginRequirements`. Its data is the config spec's `modName`, UTF-8 text that ends with a
     // zero, and is valid during the listener's call. It does not say what changed: a client's `onSaved` does.
-    inline constexpr std::uint32_t MODS_CONFIG_VR_SAVED_MESSAGE = 1;
+    inline constexpr std::uint32_t MODS_CONFIG_FO4_SAVED_MESSAGE = 1;
 
     /**
      * The type of a value, as a setting of a config spec has its `valueType`.
@@ -296,9 +296,9 @@ namespace mods_config::api
     };
 
     /**
-     * Mods Config VR's side of the API, which its DLL exports.
+     * Mods Config FO4 VR's side of the API, which its DLL exports.
      */
-    class ModsConfigVRApiV1
+    class ModsConfigFO4ApiV1
     {
     public:
         /**
@@ -307,7 +307,7 @@ namespace mods_config::api
         virtual std::uint32_t getVersion() const = 0;
 
         /**
-         * Mods Config VR's own version, as "1.0.0".
+         * Mods Config FO4 VR's own version, as "1.0.0".
          */
         virtual const char* getModVersion() const = 0;
 
@@ -357,20 +357,20 @@ namespace mods_config::api
         virtual void reloadValues(IClient* client) const = 0;
 
         /**
-         * Finds Mods Config VR's DLL and gets its API. Returns 0 when the API is there, and else:
-         * 1 for a game with no Mods Config VR, 2 for one that does not export the API, 3 for one that gives none,
+         * Finds Mods Config FO4 VR's DLL and gets its API. Returns 0 when the API is there, and else:
+         * 1 for a game with no Mods Config FO4 VR, 2 for one that does not export the API, 3 for one that gives none,
          * and 4 for an API older than minVersion.
          */
-        [[nodiscard]] static int initialize(const std::uint32_t minVersion = MODS_CONFIG_VR_API_VERSION)
+        [[nodiscard]] static int initialize(const std::uint32_t minVersion = MODS_CONFIG_FO4_API_VERSION)
         {
             if (inst) {
                 return 0;
             }
-            const auto dll = GetModuleHandleA(MODS_CONFIG_VR_DLL);
+            const auto dll = GetModuleHandleA(MODS_CONFIG_FO4_DLL);
             if (!dll) {
                 return 1;
             }
-            const auto getApi = reinterpret_cast<const ModsConfigVRApiV1*(MODS_CONFIG_VR_CALL*)()>(GetProcAddress(dll, MODS_CONFIG_VR_GET_API));
+            const auto getApi = reinterpret_cast<const ModsConfigFO4ApiV1*(MODS_CONFIG_FO4_CALL*)()>(GetProcAddress(dll, MODS_CONFIG_FO4_GET_API));
             if (!getApi) {
                 return 2;
             }
@@ -388,10 +388,10 @@ namespace mods_config::api
         /**
          * The API, after initialize returned 0.
          */
-        inline static const ModsConfigVRApiV1* inst = nullptr;
+        inline static const ModsConfigFO4ApiV1* inst = nullptr;
 
     protected:
-        ~ModsConfigVRApiV1() = default;
+        ~ModsConfigFO4ApiV1() = default;
     };
 
     // ----------------------------------------------------------------------------------------
@@ -568,19 +568,19 @@ namespace mods_config::api
      * The client of the mod's DLL, one in the DLL: an IClient over the mod's lambdas. It connects under the mod's name,
      * which is matched to the config spec whose `modName` it is, and answers the menu with what the mod adds, at any
      * time: its functions, states, options of choices, quick launch entries and handlers of the menu's events. While
-     * Mods Config VR is not installed nothing is called.
+     * Mods Config FO4 VR is not installed nothing is called.
      */
-    class ModsConfigVRClient final : public IClient
+    class ModsConfigFO4Client final : public IClient
     {
     public:
-        static ModsConfigVRClient& get()
+        static ModsConfigFO4Client& get()
         {
-            static ModsConfigVRClient client;
+            static ModsConfigFO4Client client;
             return client;
         }
 
-        ModsConfigVRClient(const ModsConfigVRClient&) = delete;
-        ModsConfigVRClient& operator=(const ModsConfigVRClient&) = delete;
+        ModsConfigFO4Client(const ModsConfigFO4Client&) = delete;
+        ModsConfigFO4Client& operator=(const ModsConfigFO4Client&) = delete;
 
         /**
          * Connects to the menu under the mod's name, once, from F4SE's kPostLoad on, with the quick launch entries added
@@ -595,13 +595,13 @@ namespace mods_config::api
             if (_api) {
                 return 0;
             }
-            if (const int err = ModsConfigVRApiV1::initialize(minVersion); err != 0) {
+            if (const int err = ModsConfigFO4ApiV1::initialize(minVersion); err != 0) {
                 return err;
             }
-            if (!ModsConfigVRApiV1::inst->registerClient(name.c_str(), MODS_CONFIG_VR_API_VERSION, this)) {
+            if (!ModsConfigFO4ApiV1::inst->registerClient(name.c_str(), MODS_CONFIG_FO4_API_VERSION, this)) {
                 return 5;
             }
-            _api = ModsConfigVRApiV1::inst;
+            _api = ModsConfigFO4ApiV1::inst;
             _name = name;
             for (const auto& [function, entry] : _quickLaunch) {
                 sendQuickLaunch(function, entry);
@@ -610,7 +610,7 @@ namespace mods_config::api
         }
 
         // the API, for what this class does not wrap: null until it is connected
-        const ModsConfigVRApiV1* api() const
+        const ModsConfigFO4ApiV1* api() const
         {
             return _api;
         }
@@ -759,15 +759,15 @@ namespace mods_config::api
         }
 
     private:
-        ModsConfigVRClient() = default;
-        ~ModsConfigVRClient() = default;
+        ModsConfigFO4Client() = default;
+        ~ModsConfigFO4Client() = default;
 
         /**
          * Gives the connected menu a quick launch entry of a function.
          */
         bool sendQuickLaunch(const std::string& function, const QuickLaunch& entry) const
         {
-            return _api->addQuickLaunch(const_cast<ModsConfigVRClient*>(this),
+            return _api->addQuickLaunch(const_cast<ModsConfigFO4Client*>(this),
                 entry.text.c_str(),
                 entry.help.c_str(),
                 entry.buttonText.empty() ? nullptr : entry.buttonText.c_str(),
@@ -939,7 +939,7 @@ namespace mods_config::api
             }
         }
 
-        const ModsConfigVRApiV1* _api = nullptr;
+        const ModsConfigFO4ApiV1* _api = nullptr;
 
         // the name it connected under, the mod's
         std::string _name;

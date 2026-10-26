@@ -84,7 +84,7 @@ namespace
     }
 
     /**
-     * Someone else sets one value in the file, past the mod: a text editor, or Mods Config VR on Save.
+     * Someone else sets one value in the file, past the mod: a text editor, or Mods Config FO4 VR on Save.
      */
     void writeBySomeoneElse(const TempFile& file, const char* key, const TomlEditor::Value& value)
     {

@@ -24,7 +24,7 @@ namespace f4cf::modsconfig
     /**
      * Has the client hand this the changes and the Saves of the mod's config spec.
      */
-    void ConfigPreviews::subscribe(mods_config::api::ModsConfigVRClient& client)
+    void ConfigPreviews::subscribe(mods_config::api::ModsConfigFO4Client& client)
     {
         client.subscribeToChanges([this](const mods_config::api::Change& change) {
             onChange(change);

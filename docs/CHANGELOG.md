@@ -12,22 +12,22 @@ major version is `0`, a minor bump may break the API; the **Upgrading** notes sa
 - **Boxed vrui containers**: `UIContainer::setBoxStyle` draws a panel's chrome (background, border,
   rounding) around the elements a container lays out, with the style's padding inside it, so several
   panels read as one box, such as a two-line label beside a binding's icon.
-- **Mods Config VR client**: `ModBase` connects every mod as a client of [Mods Config VR](https://github.com/ArthurHub/F4VR-Mods-Config)'s
+- **Mods Config FO4 VR client**: `ModBase` connects every mod as a client of [Mods Config FO4 VR](https://github.com/ArthurHub/F4VR-Mods-Config)'s
   native API at `kPostLoad`, under `Settings::name`, when the menu is installed, so the mod's config spec is
   matched to it. A mod adds its functions, states, choice options, quick launch entries and menu-event
-  handlers to `mods_config::api::ModsConfigVRClient::get()` of the vendored client header, in C++, at any
+  handlers to `mods_config::api::ModsConfigFO4Client::get()` of the vendored client header, in C++, at any
   time, and opens the menu at its page; `Settings::modsConfigClient = false` opts out, and
-  `Settings::modsConfigMinVersion` refuses a Mods Config VR whose API is older than the mod needs. **Upgrading:** a mod that registers a client of its own
+  `Settings::modsConfigMinVersion` refuses a Mods Config FO4 VR whose API is older than the mod needs. **Upgrading:** a mod that registers a client of its own
   under its name opts out, or uses the framework's handle.
-- **The config file's path for Mods Config VR**: the mod's client answers the `configFile` state with the
+- **The config file's path for Mods Config FO4 VR**: the mod's client answers the `configFile` state with the
   path of the config file the mod loaded, so a config spec's file that names it in `pathFromClientState`
   follows a mod that switches its file at runtime (`switchConfigFile`), as FRIK does for Fallout London VR.
 - **Config subscribers of keys**: `subscribeForConfigChangedEvent` takes a list of config keys, a value or a
   whole section or table, and calls its callback only for a load that changed one of them, with the ones
   that did, whatever made the load: the file, an override or `reload()`. A mod does there what more a value
   needs to take effect.
-- **Mods Config VR live preview**: a `live` setting of a mod's config spec that is kept in the mod's own
-  config file is previewed with no code of the mod's, as a session override under the owner `ModsConfigVR`,
+- **Mods Config FO4 VR live preview**: a `live` setting of a mod's config spec that is kept in the mod's own
+  config file is previewed with no code of the mod's, as a session override under the owner `ModsConfigFO4VR`,
   which a discard and a Save clear. A mod's own handlers are told each change and each Save too
   (`subscribeToChanges`, `subscribeToSaves`).
 - **TOML config**: `ConfigBase` loads a TOML file in place of an INI, through toml++. A save changes only
