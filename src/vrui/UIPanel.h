@@ -196,6 +196,13 @@ namespace f4cf::vrui
         // thread.
         void appendTo(render::PrimitiveDraw& frame) const;
 
+        // Internal: a panel drawn behind others rather than beside them, like a boxed UIContainer's box.
+        // Backdrops are drawn first, the outer before the inner, so their fills never cover a panel in them.
+        virtual bool isBackdrop() const
+        {
+            return false;
+        }
+
     protected:
         /**
          * @param name identifies the element in logs.

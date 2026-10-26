@@ -9,6 +9,9 @@ major version is `0`, a minor bump may break the API; the **Upgrading** notes sa
 
 ## 0.5.0 — unreleased
 
+- **Boxed vrui containers**: `UIContainer::setBoxStyle` draws a panel's chrome (background, border,
+  rounding) around the elements a container lays out, with the style's padding inside it, so several
+  panels read as one box, such as a two-line label beside a binding's icon.
 - **Mods Config VR client**: `ModBase` connects every mod as a client of [Mods Config VR](https://github.com/ArthurHub/F4VR-Mods-Config)'s
   native API at `kPostLoad`, under `Settings::name`, when the menu is installed, so the mod's config spec is
   matched to it. A mod adds its functions, states, choice options, quick launch entries and menu-event

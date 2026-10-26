@@ -23,7 +23,7 @@ An element is drawn one of two ways, and they mix freely in the same layout:
 | Class | Extends | Description |
 |-------|---------|-------------|
 | [`UIElement`](UIElement.h) | — | Base node: position/rotation/scale/visibility/size, parent/child transform, layout + frame-update hooks. Also [`UIPadding`](UIElement.h), the per-side spacing panels take. |
-| [`UIContainer`](UIContainer.h) | `UIElement` | Groups multiple elements under one transform and lays them out (row/column, centered or directional). |
+| [`UIContainer`](UIContainer.h) | `UIElement` | Groups multiple elements under one transform and lays them out (row/column, centered or directional). `setBoxStyle` draws a panel's chrome around them. |
 | [`UIToggleGroupContainer`](UIToggleGroupContainer.h) | `UIContainer` | Radio-button group (mutually exclusive). Works on [`UIToggleable`](UIToggleable.h), so NIF and panel toggles can share one group. |
 | [`UIManager`](UIManager.h) | — | Singleton scene graph: attach/detach, wand/wrist/HMD/world presets, input dispatch, render. |
 | [`UISkeletonHandler`](UISkeletonHandler.h) | — | What the UI reads from the player's skeleton, with bones found by name and again when the skeleton is replaced: the tip of the index finger that presses the UI, and the manager's wrist preset, which keeps a root on the inner wrist of the offhand arm every frame. |
@@ -281,6 +281,36 @@ The rows callback runs once per frame during layout; the text is only re-laid-ou
 spans or height, the width, the text height or the tab width changes (or an image's texture finishes
 loading).
 
+## One box around several panels
+
+A panel draws its own box, but some content is laid out from more than one: a label on two lines
+with a button's icon centred beside it is a text panel and another panel in a row. Give the row
+container a box style and it draws the box around them, the way a panel draws its own:
+
+```cpp
+auto label = std::make_shared<vrui::UITextPanel>("Label");      // bare: no box of its own
+label->setStyle(vrui::UIPanelStyle{ .color = vrui::F4VR_PANEL_STYLE.color, .padding = vrui::UIPadding::all(0) });
+label->setContent([](auto& rows) { rows.emplace_back("TOGGLE"); rows.emplace_back("SELFIE"); });
+
+auto button = std::make_shared<vrui::UITextPanel>("Button");    // one row: the binding's icon
+button->setStyle(vrui::UIPanelStyle{ .color = vrui::F4VR_PANEL_STYLE.color, .padding = vrui::UIPadding::all(0) });
+button->setContent([](auto& rows) { rows.push_back({}); vrui::appendBindingPrompt(rows.back().spans, binding); });
+
+auto box = std::make_shared<vrui::UIContainer>("Selfie", vrui::UIContainerLayout::HorizontalCenter, 0.3f);
+box->setBoxStyle(vrui::F4VR_PANEL_STYLE);
+box->addElement(label);
+box->addElement(button);
+```
+
+The box is the style's background, border and rounding; its content colour is not used. Its
+padding is the space between the elements and the box's edge, and the container's size grows by it
+and the border, so the container around it makes room for the whole box. A layout that places its
+elements every frame moves them by half the difference of opposite paddings, so the box stays where
+the layout anchors them; a manual layout's elements stay where they were put, and the box is drawn
+around them there. A box with nothing visible in it is not drawn. The box is drawn under every panel
+in it, whenever each was made, and an outer box under an inner one. The dev layout writes the box's
+padding on the container's line as `Pad`, as a panel's.
+
 ## Notes
 
 - `g_uiManager` is created by the framework before `onGameLoaded()`; mods never call `initUIManager()`.
@@ -403,7 +433,7 @@ loading).
     applied, and it is removed when the mode is turned off.
 
   Each element's line holds `Pos`, `Rot` (degrees around x, y and z), `Scale` and `Size`; a
-  container's holds `Padding` and `Layout` in place of `Size`, panels add `Pad:(t,r,b,l)` (and
+  container's holds `Padding` and `Layout` in place of `Size` (and a boxed one its box's `Pad`), panels add `Pad:(t,r,b,l)` (and
   `MaxW` while their width follows the content), text and button panels add their text sizes
   as `Text`, and an ImGui panel adds the radius it is curved at as `Curve`, 0 for a flat one.
   Delete a field from a line and it is simply no longer applied.

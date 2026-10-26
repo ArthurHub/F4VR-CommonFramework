@@ -38,8 +38,28 @@ namespace
     class Container : public UIContainer
     {
     public:
+        using UIContainer::box;
         using UIContainer::calculateTransform;
         using UIContainer::UIContainer;
+    };
+
+    /**
+     * A container like TwoBoxes', with a box of the given border and padding, laid out.
+     */
+    struct BoxedTwoBoxes
+    {
+        std::shared_ptr<Box> first = std::make_shared<Box>(2.0f, 1.0f);
+        std::shared_ptr<Box> second = std::make_shared<Box>(4.0f, 3.0f);
+        Container container;
+
+        BoxedTwoBoxes(const float border, const vrui::UIPadding& padding, const float scale = 1)
+            : container("container", UIContainerLayout::HorizontalCenter, 1.0f, scale)
+        {
+            container.addElement(first);
+            container.addElement(second);
+            container.setBoxStyle(vrui::UIPanelStyle{ .borderThicknessUnits = border, .padding = padding });
+            container.onLayoutUpdate(nullptr);
+        }
     };
 
     /**
@@ -281,6 +301,83 @@ TEST_CASE("UIContainer: an element is in the world at its position along the axe
         requireNear(child->calculateTransform().scale, 6.0f);
         requireNear(child->calculateTransform().translate, { 11, 20, 32 });
     }
+}
+
+TEST_CASE("UIContainer: a boxed container is as large as its elements and the box's border and padding")
+{
+    const BoxedTwoBoxes boxes(0.1f, vrui::UIPadding::all(0.4f));
+
+    requireSize(boxes.container.getSize(), 8, 4);
+    REQUIRE(boxes.container.box() != nullptr);
+    REQUIRE(boxes.container.box()->isVisible());
+    requireSize(boxes.container.box()->getSize(), 8, 4);
+    requireNear(boxes.container.box()->getPosition(), { 0, 0, 0 });
+
+    // the same padding on every side leaves the elements where the layout put them
+    requireNear(boxes.first->getPosition(), { -2.5f, 0, 0 });
+    requireNear(boxes.second->getPosition(), { 1.5f, 0, 0 });
+    REQUIRE(boxes.container.childElements().size() == 2);
+}
+
+TEST_CASE("UIContainer: the box stays where the layout anchors the elements, with more padding on one side")
+{
+    const BoxedTwoBoxes boxes(0.0f, vrui::UIPadding{ .top = 1.0f, .right = 2.0f, .bottom = 0.0f, .left = 0.0f });
+
+    requireSize(boxes.container.getSize(), 9, 4);
+    requireNear(boxes.container.box()->getPosition(), { 0, 0, 0 });
+    requireNear(boxes.first->getPosition(), { -3.5f, 0, -0.5f });
+    requireNear(boxes.second->getPosition(), { 0.5f, 0, -0.5f });
+}
+
+TEST_CASE("UIContainer: a container's scale scales its box's border and padding with its elements")
+{
+    const BoxedTwoBoxes boxes(0.0f, vrui::UIPadding::all(0.5f), 2.0f);
+
+    requireSize(boxes.container.getSize(), 8, 4);
+    requireSize(boxes.container.calcSize(), 16, 8);
+    requireSize(boxes.container.box()->calcSize(), 16, 8);
+}
+
+TEST_CASE("UIContainer: a box with nothing visible in it is not drawn, and a cleared one is gone")
+{
+    BoxedTwoBoxes boxes(0.0f, vrui::UIPadding::all(0.5f));
+
+    SECTION("nothing visible")
+    {
+        boxes.first->setVisibility(false);
+        boxes.second->setVisibility(false);
+        boxes.container.onLayoutUpdate(nullptr);
+
+        REQUIRE_FALSE(boxes.container.box()->isVisible());
+    }
+    SECTION("cleared")
+    {
+        boxes.container.clearBoxStyle();
+        boxes.container.onLayoutUpdate(nullptr);
+
+        REQUIRE(boxes.container.box() == nullptr);
+        requireSize(boxes.container.getSize(), 7, 3);
+        requireNear(boxes.first->getPosition(), { -2.5f, 0, 0 });
+    }
+}
+
+TEST_CASE("UIContainer: a manual container's box is around its elements where they are")
+{
+    const auto first = std::make_shared<Box>(2.0f, 1.0f);
+    const auto second = std::make_shared<Box>(4.0f, 3.0f);
+    Container container("container");
+    container.addElement(first);
+    container.addElement(second);
+    first->setPosition(-3, 0, 1);
+    second->setPosition(2, 0, -4);
+    container.setBoxStyle(vrui::UIPanelStyle{ .padding = vrui::UIPadding::all(1.0f) });
+
+    container.onLayoutUpdate(nullptr);
+
+    requireNear(first->getPosition(), { -3, 0, 1 });
+    requireNear(second->getPosition(), { 2, 0, -4 });
+    requireSize(container.getSize(), 10, 9);
+    requireNear(container.box()->getPosition(), { 0, 0, -2 });
 }
 
 TEST_CASE("UIContainer: an element is moved by an offset from where it is")

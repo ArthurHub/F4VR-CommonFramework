@@ -3,9 +3,12 @@
 #include <memory>
 
 #include "UIElement.h"
+#include "UIPanelStyle.h"
 
 namespace f4cf::vrui
 {
+    class UIContainerBox;
+
     /**
      * How the container will lay out the child elements.
      */
@@ -27,6 +30,14 @@ namespace f4cf::vrui
         VerticalDown,
     };
 
+    /**
+     * Groups elements under one transform and lays them out by its UIContainerLayout.
+     *
+     * A container draws nothing of its own until setBoxStyle gives it a box: the chrome a panel
+     * draws - background, border, rounding - around the elements it lays out, with the style's
+     * padding between them and the box's edge. That is how several panels read as one, like a
+     * label beside a button's icon.
+     */
     class UIContainer : public UIElement
     {
     public:
@@ -44,6 +55,9 @@ namespace f4cf::vrui
         float getPadding() const;
         void setPadding(const float padding);
 
+        void setBoxStyle(const UIPanelStyle& style);
+        void clearBoxStyle();
+
         std::vector<std::shared_ptr<UIElement>> childElements() const;
 
     protected:
@@ -57,6 +71,12 @@ namespace f4cf::vrui
         void layoutVerticalCenter() const;
         void layoutVerticalUp() const;
         void layoutVerticalDown() const;
+        void layoutBox();
+
+        /**
+         * The box drawn around the elements, or null while the container has none.
+         */
+        const UIElement* box() const;
 
         float calcPadding() const
         {
@@ -76,5 +96,10 @@ namespace f4cf::vrui
 
         // all the elements under this container
         std::vector<std::shared_ptr<UIElement>> _childElements;
+
+        // the box around the elements and its look, while setBoxStyle gave it one; not one of the
+        // elements, so the layout, the dev layout and the tree dumps never see it
+        std::shared_ptr<UIContainerBox> _box;
+        UIPanelStyle _boxStyle;
     };
 }
