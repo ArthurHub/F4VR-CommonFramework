@@ -144,8 +144,6 @@ namespace f4cf::common
 
         void slerp(const float interp, const Quaternion& target)
         {
-            const Quaternion save = this->get();
-
             float dotp = this->dot(target);
 
             if (dotp < 0.0f) {
@@ -156,11 +154,14 @@ namespace f4cf::common
                 dotp = -dotp;
             }
 
-            if (dotp > 0.999995) {
-                w = save.w;
-                x = save.x;
-                y = save.y;
-                z = save.z;
+            // Nearly equal rotations: blend linearly and renormalise, within 6e-5 degrees of slerp here and clear of the 0/0 at dot = 1.
+            // Keeping the current rotation here instead made anything smoothed through slerp hold within ~0.36 degrees of its target, then step.
+            if (dotp > 0.9995f) {
+                w += interp * (target.w - w);
+                x += interp * (target.x - x);
+                y += interp * (target.y - y);
+                z += interp * (target.z - z);
+                normalize();
                 return;
             }
             const float theta0 = acosf(dotp); // theta_0 = angle between input vectors
