@@ -82,6 +82,7 @@ namespace f4cf
         void logPluginGameStart() const;
         static void onF4VRSEMessage(F4SE::MessagingInterface::Message* msg);
         static void connectToModsConfigVR(const std::string& name, std::uint32_t minVersion);
+        void setupModsConfigClient();
         void onGameLoadedInner();
         void onGameSessionLoadedInner();
 

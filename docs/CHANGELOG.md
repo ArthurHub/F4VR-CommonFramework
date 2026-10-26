@@ -16,6 +16,9 @@ major version is `0`, a minor bump may break the API; the **Upgrading** notes sa
   time, and opens the menu at its page; `Settings::modsConfigClient = false` opts out, and
   `Settings::modsConfigMinVersion` refuses a Mods Config VR whose API is older than the mod needs. **Upgrading:** a mod that registers a client of its own
   under its name opts out, or uses the framework's handle.
+- **The config file's path for Mods Config VR**: the mod's client answers the `configFile` state with the
+  path of the config file the mod loaded, so a config spec's file that names it in `pathFromClientState`
+  follows a mod that switches its file at runtime (`switchConfigFile`), as FRIK does for Fallout London VR.
 - **Config subscribers of keys**: `subscribeForConfigChangedEvent` takes a list of config keys, a value or a
   whole section or table, and calls its callback only for a load that changed one of them, with the ones
   that did, whatever made the load: the file, an override or `reload()`. A mod does there what more a value

@@ -318,6 +318,29 @@ namespace f4cf
     }
 
     /**
+     * Gives the mod's client of Mods Config VR what the framework answers for every mod, and connects it: the states
+     * `modVersion` and `configFile`, the config file the mod loaded, which a file of its config spec takes its path
+     * from with `pathFromClientState`, and the preview of a `live` setting of that file through its overrides.
+     */
+    void ModBase::setupModsConfigClient()
+    {
+        auto& client = mods_config::api::ModsConfigVRClient::get();
+        client.addState("modVersion", [version = _settings.version] {
+            return std::optional<mods_config::api::Value>(version);
+        });
+        if (_settings.config) {
+            // the config's path is in the code page of Windows, and the API's texts are UTF-8
+            client.addState("configFile", [config = _settings.config] {
+                const auto path = std::filesystem::path(config->getConfigFilePath()).u8string();
+                return std::optional<mods_config::api::Value>(std::string(path.begin(), path.end()));
+            });
+            _configPreviews.emplace(*_settings.config);
+            _configPreviews->subscribe(client);
+        }
+        connectToModsConfigVR(_settings.name, _settings.modsConfigMinVersion);
+    }
+
+    /**
      * F4VRSE messages listener to handle post load, game loaded, new game, and save loaded events.
      */
     // ReSharper disable once CppParameterMayBeConstPtrOrRef
@@ -328,17 +351,8 @@ namespace f4cf
         }
 
         if (msg->type == F4SE::MessagingInterface::kPostLoad && g_mod->_settings.modsConfigClient) {
-            auto& client = mods_config::api::ModsConfigVRClient::get();
-            client.addState("modVersion", [version = g_mod->_settings.version] {
-                return std::optional<mods_config::api::Value>(version);
-            });
-            // a `live` setting of the mod's config is previewed through its overrides
-            if (g_mod->_settings.config) {
-                g_mod->_configPreviews.emplace(*g_mod->_settings.config);
-                g_mod->_configPreviews->subscribe(client);
-            }
             // every plugin's DLL is loaded by now, Mods Config VR's too
-            connectToModsConfigVR(g_mod->_settings.name, g_mod->_settings.modsConfigMinVersion);
+            g_mod->setupModsConfigClient();
         }
 
         if (msg->type == F4SE::MessagingInterface::kGameLoaded) {

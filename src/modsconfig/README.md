@@ -18,6 +18,15 @@ The framework adds the `modVersion` client state from `Settings::version` before
 spec can show the mod's version with `{clientState:modVersion}` in its text, without registering a
 state of its own. The state can also be used in a `clientState` condition.
 
+It adds the `configFile` client state too, the absolute path of the config file the mod loaded, as
+`ConfigBase::getConfigFilePath()` has it. A mod that loads another file at runtime, as FRIK loads
+`FRIK_FOLVR.toml` with Fallout London VR (`switchConfigFile`), has the file of its config spec take
+its path from it, so the menu edits the file the mod loaded, with no code of the mod's:
+
+```json
+"main": { "format": "toml", "root": "myGames", "path": "Mods_Config/FRIK/FRIK.toml", "pathFromClientState": "configFile" }
+```
+
 `Settings::modsConfigMinVersion` is the least version of Mods Config VR's API the mod works with,
 1 by default, which connects to any. A mod that uses what a later version added asks the client
 first, and skips it with an older Mods Config VR:
