@@ -154,6 +154,9 @@ Rules that cause bugs if missed:
   logs each thread it is called on once. The game → render handoff is what keeps a layer correct on both.
 - Draw order is **declared** (`DRAW_ORDER_HINTS` 50 / `PANELS` 100 / `POINTERS` 150 / `DEFAULT` 500 / `DEBUG` 900),
   not inherited from registration order — registration is lazy.
+- Every layer below `DEBUG` draws inside the game's player-space pass, from a hook of its first draw call, so the game's
+  menus (quads under `PlayerWorldNode`) draw over it; only `DEBUG` draws at Submit. No hook (another plugin, too little
+  trampoline: it takes 14 bytes) puts every layer back at Submit. See `src/render/README.md` → *Under the game's menus*.
 - Callbacks are **never unregistered** and the vtable patch is never removed, so a layer must outlive
   the process. Hold it as a static.
 - `Texture::load()` / `Texture::view()` are **game thread only**; the `TextureView` in a published

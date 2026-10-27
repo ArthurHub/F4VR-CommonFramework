@@ -82,6 +82,11 @@ sDebugDrawHudPlacement = "center-top-left"
 # an upscaler) | off (no occlusion at all - overlays draw on top). A support switch: leave on auto.
 sSceneDepthStrategy = "auto"
 
+# Where the overlays draw: auto (shipped) draws them under the game's menus, in the pass that draws
+# the menus, and falls back to submit where that pass cannot be hooked | submit (always on top of the
+# finished frame, over the game's menus). A support switch: leave on auto. Debug draw is always on top.
+sOverlayDrawPass = "auto"
+
 # Investigate the scene-depth capture that hides overlays behind the world: adds its rows to the debug
 # draw overlay, and re-runs the side-by-side comparison of the shipped policy against its alternative.
 # Off by default; the capture reports itself to the log either way.

@@ -22,6 +22,7 @@ in, and it's active.
 | [`sLogPattern`](#slogpattern)                          | Format of each log line                                            |
 | [`fFlowFlag1/2/3`, `sFlowText1/2`](#flow-values)       | Mod-defined scratch values read by mod code                        |
 | [`sSceneDepthStrategy`, `bSceneDepthDiagnostics`](#scene-depth-occlusion) | Overlay-occlusion support switches                |
+| [`sOverlayDrawPass`](#soverlaydrawpass)                | Draw the overlays under the game's menus, or on top as before      |
 | [`bVRUIShowFingerTip`](#bvruishowfingertip)            | Mark the fingertip that presses the VR UI with a small sphere      |
 | [`bVRUIDevLayout`](#bvruidevlayout)                    | Tune the placement of the VR UI in a file while the game runs      |
 | [`iVersion`](#iversion)                                | Internal schema version — don't touch                              |
@@ -342,6 +343,23 @@ the default log level — so a log is usually enough and neither key needs touch
 
 Design, measurements and the failure modes they address:
 [`docs/tech/scene-depth-occlusion.md`](tech/scene-depth-occlusion.md).
+
+## `sOverlayDrawPass`
+
+Where the overlay layers draw, other than debug draw, which is always on top of everything. Read live.
+
+| Value  | Where                                                                                           |
+| ------ | ----------------------------------------------------------------------------------------------- |
+| `auto` | Shipped. In the game's player-space pass, under the game's menus; at Submit where that pass cannot be hooked, which the log says |
+| `submit` | Always at Submit, over the finished frame and the game's menus, as before the pass was hooked |
+
+```toml
+[Debug]
+sOverlayDrawPass = "auto"
+```
+
+A support switch: `submit` tells whether a misdrawn overlay comes from drawing inside the game's pass.
+See [render/ → Under the game's menus](../src/render/README.md#under-the-games-menus).
 
 ## `bVRUIShowFingerTip`
 

@@ -76,6 +76,7 @@ namespace f4cf::config
         drawHudPlacement = debug["sDebugDrawHudPlacement"].value_or(std::string("center"));
         sceneDepthStrategy = debug["sSceneDepthStrategy"].value_or(std::string("auto"));
         sceneDepthDiagnostics = debug["bSceneDepthDiagnostics"].value_or(false);
+        overlayDrawPass = debug["sOverlayDrawPass"].value_or(std::string("auto"));
         vruiShowFingerTip = debug["bVRUIShowFingerTip"].value_or(false);
         vruiDevLayout = debug["bVRUIDevLayout"].value_or(false);
     }

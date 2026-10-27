@@ -4,8 +4,9 @@ Namespace: `f4cf::render`
 
 Everything the framework draws **over** the VR view rather than into the scene graph: colored
 world-space lines, filled triangles, textured quads and text, projected through the engine's own
-per-eye camera so world coordinates land exactly where the game drew the world. One shared
-`IVRCompositor::Submit` hook carries every layer, and the world's depth is captured so a layer can
+per-eye camera so world coordinates land exactly where the game drew the world. One host carries
+every layer: the game's player-space pass draws the layers under its menus, and a shared
+`IVRCompositor::Submit` hook the diagnostics on top. The world's depth is captured so a layer can
 ask to be hidden behind geometry.
 
 > Part of the [F4VR Common Framework](../README.md) source tree.
@@ -21,7 +22,7 @@ why something drew where it did.
 | ----------------------- | -------------------------------------------------------------------- |
 | [`PrimitiveDraw.h`](PrimitiveDraw.h) | The frame a producer fills: `lines` / `triangles` / `images` / `texts`, with `add*` helpers and the budgets. Plus `Color`, the `colors::` constants and the text placement/align/decoration enums. Header-only. |
 | [`PrimitiveDrawRenderer.h`](PrimitiveDrawRenderer.h) / [`.cpp`](PrimitiveDrawRenderer.cpp) | One overlay **layer**: takes published frames on the game thread and replays them on the render thread. Owns the game → render handoff and the layer's draw order; goes dormant when it has nothing to draw. |
-| [`SubmitHook.h`](SubmitHook.h) / [`.cpp`](SubmitHook.cpp) | The shared `IVRCompositor::Submit` vtable hook and the draw-callback table every layer registers on. Owns the RTV over the submitted eye texture, the per-eye camera constants, the pipeline save/restore and the painter order. |
+| [`SubmitHook.h`](SubmitHook.h) / [`.cpp`](SubmitHook.cpp) | The shared `IVRCompositor::Submit` vtable hook, the hook of the game's player-space pass ([Under the game's menus](#under-the-games-menus)), and the draw-callback table every layer registers on. Owns the RTV over the submitted eye texture, the per-eye camera constants, the pipeline save/restore and the painter order. |
 | [`RenderUtils.h`](RenderUtils.h) / [`.cpp`](RenderUtils.cpp) | The game's D3D11 device/context, the engine's per-eye view-projection + posAdjust (`StereoCameraConstants`), and `ScopedPipelineState` — the RAII snapshot taken around the whole callback list. |
 | [`TextFont.h`](TextFont.h) / [`.cpp`](TextFont.cpp) | The framework's font as a signed-distance-field atlas, and the measuring a producer lays text out with (`measureText`, `fitText`, `textDescent`, `measureTextRun`). |
 | [`Texture.h`](Texture.h) / [`.cpp`](Texture.cpp) | Images loaded through the **engine's own** texture loader, shared per path, so a path resolves the way a NIF's texture path does — loose files and BA2 archives alike. And images made from pixels in memory. |
@@ -174,9 +175,34 @@ overlay the player happened to trigger first in a session:
 | `DRAW_ORDER_PANELS` | 100 | `vrui::UIPanel` and the ImGui canvases |
 | `DRAW_ORDER_POINTERS` | 150 | what points at the panels (the ray and mark of the ImGui pointer) — over them |
 | `DRAW_ORDER_DEFAULT` | 500 | anything with no opinion |
-| `DRAW_ORDER_DEBUG` | 900 | deliberately last, i.e. on top: diagnostics must never end up hidden behind a mod's UI |
+| `DRAW_ORDER_DEBUG` | 900 | deliberately last, i.e. on top: diagnostics must never end up hidden behind a mod's UI, nor the game's menus |
 
 Lower draws first, i.e. ends up underneath.
+
+## Under the game's menus
+
+FO4VR draws its menus as quads in the world, under `PlayerWorldNode`: the pause menu, a message
+box, the dialogue, notifications, lockpicking, the workshop pallet, other mods' menus. The
+player-space pass draws them after the world, already tonemapped, with the Pip-Boy and the wands,
+and their quads test the world's depth but write none. So a layer drawn at Submit, over the
+finished frame, would cover every one of them.
+
+The layers below `DRAW_ORDER_DEBUG` therefore draw inside that pass, from a hook of the call that
+draws its first scene (`Main::DrawWorld_And_UI` → `0x14284e370`, the call at `0x14284e68c`), into
+the target it has bound, which is the eye texture's size, with the depth the capture took this
+frame. The game then draws its menus over them as over the world. Debug draw stays at Submit, on
+top of everything.
+
+- **Once a frame**, into a target of the eye texture's size. Any other target declines, logged once,
+  and Submit draws the layers that frame instead.
+- **A frame the pass does not run draws none of them**, which is what a loading screen is: it is drawn
+  from its own thread and submitted with no world.
+- **No hook, every layer at Submit**: where the call is not the expected one (another plugin hooked
+  it, a different build), or the mod's trampoline has no room for it, every layer draws at Submit as
+  before, over the menus, and the log says why. `sOverlayDrawPass = "submit"` in `[Debug]` does the
+  same with the hook installed, live ([debug-config](../../docs/debug-config.md#soverlaydrawpass)).
+- What the pass draws after the layers is over them whatever its depth, as the layers write none:
+  the Pip-Boy and the wand models.
 
 ## Occlusion by the world
 

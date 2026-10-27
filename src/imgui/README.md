@@ -10,8 +10,9 @@ layout like any other.
 
 > Part of the [F4VR Common Framework](../README.md) source tree.
 
-It draws through [`render/`](../render/README.md)'s shared Submit hook, so it shares the overlay's
-draw order, its occlusion and its threading rules. The font is the framework's own, so an ImGui panel
+It draws through [`render/`](../render/README.md)'s overlay host, so it shares the overlay's
+draw order, its occlusion and its threading rules, and is drawn under the game's menus
+([render/](../render/README.md#under-the-games-menus)). The font is the framework's own, so an ImGui panel
 and a `vrui::UITextPanel` standing side by side read as one UI.
 
 ## Files

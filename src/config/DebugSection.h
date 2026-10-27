@@ -69,6 +69,10 @@ namespace f4cf::config
         // and compare the shipped policies against their alternatives. Off by default: the comparison costs a
         // D3D query per committed graphics state.
         bool sceneDepthDiagnostics = false;
+        // f4cf::render: where the overlay layers below the debug draw draw - "auto", in the game's player-space pass
+        // under its menus where that pass is hooked, or "submit", always at Submit, over the menus. A support switch,
+        // read live.
+        std::string overlayDrawPass = "auto";
         // f4cf::vrui: mark the fingertip that presses the UI with a small sphere. Without it the sphere
         // is shown only while no hand is drawn at the controller, where the controller presses the UI.
         bool vruiShowFingerTip = false;
