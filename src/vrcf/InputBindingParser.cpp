@@ -64,7 +64,7 @@ namespace f4cf::vrcf
         }
 
         // The words of each part of a line, as an error lists them: the common ones, not every alias.
-        constexpr auto HANDS = "primary, offhand, left, right";
+        constexpr auto HANDS = "primary, offhand, left, right, any";
         constexpr auto TYPES = "tap, press, longpress, double, hold, release, touch, thumbstick, axis";
         constexpr auto BUTTONS = "trigger, grip, a, b, thumbstick, menu, system";
         constexpr auto AXES = "thumbstick, trigger, grip";
@@ -165,6 +165,9 @@ namespace f4cf::vrcf
         }
         if (t == "left") {
             return Hand::Left;
+        }
+        if (t == "any" || t == "either") {
+            return Hand::Any;
         }
         return std::nullopt;
     }
@@ -291,7 +294,7 @@ namespace f4cf::vrcf
     }
 
     /**
-     * The canonical word for a hand - primary, offhand, right, left - which parseHand reads back as the same hand.
+     * The canonical word for a hand - primary, offhand, right, left, any - which parseHand reads back as the same hand.
      */
     std::string handName(const Hand hand)
     {
@@ -302,6 +305,8 @@ namespace f4cf::vrcf
             return "right";
         case Hand::Left:
             return "left";
+        case Hand::Any:
+            return "any";
         default:
             return "primary";
         }

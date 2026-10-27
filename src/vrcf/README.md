@@ -21,7 +21,8 @@ All three are driven for you by `ModBase` each frame — you only call the read/
 ## Hands & buttons
 
 `Hand` is logical: `Primary` / `Offhand` map to the player's dominant / non-dominant hand and respect
-left-handed mode automatically. `Right` / `Left` are physical. Most methods also accept a raw
+left-handed mode automatically. `Right` / `Left` are physical. `Any` is either controller, for a binding
+alone (see below): the methods that read one hand need one of the other four. Most methods also accept a raw
 `vr::ETrackedControllerRole`. Buttons are OpenVR `vr::EVRButtonId` (see `VRButtonId` for the F4VR
 button map).
 
@@ -86,6 +87,16 @@ if (VRControllers.check(openMenu)) { /* binding triggered */ }
 `axis` + `direction` + `threshold` + `cooldown` fields instead of `button`. The optional `modifier`
 must be held down for the binding to fire — on the binding's own hand by default, or on the
 `InputModifier::hand` you specify.
+
+A binding of `Hand::Any` fires on either hand: `check(binding)` checks it on both, with a modifier of no hand
+on the hand that fires. For an input of the hand that does something, as the hand that points at a UI, ask
+`check(binding, hand)`: whether it fires on that hand, which a binding of the other controller never does.
+
+```cpp
+// Back: a tap of the grip of whichever hand points at the menu
+InputBinding back{ .hand = Hand::Any, .type = ActivationType::Tap, .button = vr::k_EButton_Grip };
+if (pointingHand && VRControllers.check(back, *pointingHand)) { /* back */ }
+```
 
 A config has a binding as an inline table, `{ hand = "offhand", type = "longpress", button = "grip" }`,
 which [`InputBindingParser.h`](InputBindingParser.h) reads into an `InputBinding` with

@@ -270,21 +270,30 @@ namespace f4cf::f4vr
             bool anyAvailable = false;
             bool anyInside = false;
             bool handled = false;
-            for (const auto& action : frame.bindings) {
-                anyAvailable = anyAvailable || action.binding.type != vrcf::ActivationType::Disabled;
-                if (!isInsideZone(frame, action.binding)) {
-                    continue;
+            const auto updateBinding = [&](const vrcf::InputBinding& binding, const std::optional<vrcf::HapticPattern> activateHaptic) {
+                if (!isInsideZone(frame, binding)) {
+                    return;
                 }
 
                 anyInside = true;
-                if (action.binding.suppress) {
-                    toSuppress.push_back(action.binding);
+                if (binding.suppress) {
+                    toSuppress.push_back(binding);
                 }
-                triggerHapticOnce(action.binding.hand, frame.entryHaptic);
+                triggerHapticOnce(binding.hand, frame.entryHaptic);
 
-                if (!isCoolingDown() && !handled && vrcf::VRControllers.check(action.binding) && onActivated(action.binding)) {
-                    triggerActivation(action.binding.hand, action.activateHaptic);
+                if (!isCoolingDown() && !handled && vrcf::VRControllers.check(binding) && onActivated(binding)) {
+                    triggerActivation(binding.hand, activateHaptic);
                     handled = true;
+                }
+            };
+            for (const auto& action : frame.bindings) {
+                anyAvailable = anyAvailable || action.binding.type != vrcf::ActivationType::Disabled;
+                // a binding of any hand is the binding of whichever hand is in the zone, which onActivated gets
+                if (action.binding.hand == vrcf::Hand::Any) {
+                    updateBinding(action.binding.on(vrcf::Hand::Primary), action.activateHaptic);
+                    updateBinding(action.binding.on(vrcf::Hand::Offhand), action.activateHaptic);
+                } else {
+                    updateBinding(action.binding, action.activateHaptic);
                 }
             }
 

@@ -29,7 +29,7 @@ namespace f4cf::vrcf
      *   { type = "none" }
      *
      * The words, with their aliases:
-     *   hand       : primary/main | offhand/off/secondary | right | left
+     *   hand       : primary/main | offhand/off/secondary | right | left | any/either
      *   type       : touch | press(ed)/click | tap | hold(down)/held | release(d) | longpress | double(press)
      *                | axis/thumbstick/stick (AxisDirection) | none/off/disabled
      *   button     : system | menu/applicationmenu/b | grip | a | trigger | thumbstick/touchpad/joystick

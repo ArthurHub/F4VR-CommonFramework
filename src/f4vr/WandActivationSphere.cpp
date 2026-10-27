@@ -331,11 +331,11 @@ namespace f4cf::f4vr
     /**
      * Whether two bindings address the same physical input — same hand and either the same backing axis
      * (for an AxisDirection binding) or the same button. The activation type otherwise doesn't matter;
-     * only the bit that gets suppressed does.
+     * only the bit that gets suppressed does. A binding of any hand is on the hand of the other.
      */
     bool WandActivationSphere::sameSuppressionInput(const vrcf::InputBinding& lhs, const vrcf::InputBinding& rhs)
     {
-        if (lhs.hand != rhs.hand) {
+        if (lhs.hand != rhs.hand && lhs.hand != vrcf::Hand::Any && rhs.hand != vrcf::Hand::Any) {
             return false;
         }
 

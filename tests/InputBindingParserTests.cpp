@@ -29,6 +29,8 @@ TEST_CASE("InputBindingParser: the words of a hand, a type, a button, an axis an
     REQUIRE(parseHand("offhand") == Hand::Offhand);
     REQUIRE(parseHand("right") == Hand::Right);
     REQUIRE(parseHand("left") == Hand::Left);
+    REQUIRE(parseHand("any") == Hand::Any);
+    REQUIRE(parseHand("Either") == Hand::Any);
     REQUIRE_FALSE(parseHand("both"));
 
     REQUIRE(parseActivationType("touch") == ActivationType::Touch);
@@ -348,8 +350,8 @@ TEST_CASE("InputBindingParser: a table that is not a binding says why, naming th
                  "it has the key 'buton', which is not one of hand, type, button, axis, direction, duration, threshold, suppress, modifier" },
              { R"({ hand = "offhand", button = "grip" })", "the type is missing, one of tap, press, longpress, double, hold, release, touch, axis, none" },
              { R"({ hand = "offhand", type = "squeeze", button = "grip" })", "'squeeze' is not a type, one of tap, press, longpress, double, hold, release, touch, axis, none" },
-             { R"({ type = "tap", button = "grip" })", "the hand is missing, one of primary, offhand, left, right" },
-             { R"({ hand = "middle", type = "tap", button = "grip" })", "'middle' is not a hand, one of primary, offhand, left, right" },
+             { R"({ type = "tap", button = "grip" })", "the hand is missing, one of primary, offhand, left, right, any" },
+             { R"({ hand = "middle", type = "tap", button = "grip" })", "'middle' is not a hand, one of primary, offhand, left, right, any" },
              { R"({ hand = "offhand", type = "tap" })", "the button is missing, one of trigger, grip, a, b, thumbstick, menu, system" },
              { R"({ hand = "offhand", type = "tap", button = 2 })", "button is not a string, one of trigger, grip, a, b, thumbstick, menu, system" },
              { R"({ hand = "offhand", type = "longpress", button = "grip", duration = "long" })", "duration is not a number" },
@@ -380,6 +382,7 @@ TEST_CASE("InputBindingParser: a binding's table text reads back as the binding,
              { "primary press b +grip", R"({ hand = "primary", type = "press", button = "menu", modifier = { button = "grip" } })" },
              { "primary thumbstick up", R"({ hand = "primary", type = "axis", axis = "thumbstick", direction = "up" })" },
              { "right axis trigger down 0.5", R"({ hand = "right", type = "axis", axis = "trigger", direction = "down", threshold = 0.5 })" },
+             { "any tap grip +any:a", R"({ hand = "any", type = "tap", button = "grip", modifier = { hand = "any", button = "a" } })" },
              { "none", R"({ type = "none" })" },
          }) {
         CAPTURE(line);

@@ -5,8 +5,8 @@
 
 using namespace f4cf;
 
-// The bindings here name the left or the right hand. The primary and the off hand are resolved by the game's
-// left-handed setting, which a test cannot read.
+// The bindings here name the left or the right hand. The primary and the off hand, and any hand, which is drawn
+// as the primary, are resolved by the game's left-handed setting, which a test cannot read.
 namespace
 {
     /**

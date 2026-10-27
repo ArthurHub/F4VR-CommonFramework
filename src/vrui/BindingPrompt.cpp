@@ -11,7 +11,8 @@ namespace f4cf::vrui
     {
         /**
          * Which physical controller a hand names: Left and Right as given, Primary and Offhand resolved by
-         * the player's handedness, which is what swaps a left-handed player's prompts over.
+         * the player's handedness, which is what swaps a left-handed player's prompts over. Any is drawn on
+         * the primary hand's controller, as no icon shows both.
          */
         bool isRightController(const vrcf::Hand hand)
         {
@@ -23,9 +24,21 @@ namespace f4cf::vrui
             case vrcf::Hand::Offhand:
                 return f4vr::isLeftHandedMode();
             case vrcf::Hand::Primary:
+            case vrcf::Hand::Any:
             default:
                 return !f4vr::isLeftHandedMode();
             }
+        }
+
+        /**
+         * A hand in words, as a prompt with no icon names it: the controller it is on, or ANY for either.
+         */
+        std::string_view handLabel(const vrcf::Hand hand)
+        {
+            if (hand == vrcf::Hand::Any) {
+                return "ANY";
+            }
+            return isRightController(hand) ? "RIGHT" : "LEFT";
         }
 
         /**
@@ -200,7 +213,8 @@ namespace f4cf::vrui
      * controllers, so both are resolved here:
      *
      * - Primary / Offhand become the left or right controller by the player's handedness, so a left-handed
-     *   player's prompts are mirrored with their controllers.
+     *   player's prompts are mirrored with their controllers. Any is drawn as Primary, and bindingLabel
+     *   says ANY.
      * - A button is drawn as the controller PRINTS it: the button the runtime calls A is marked A on the
      *   right controller and X on the left, and likewise B and Y. So "offhand press a" shows an X for a
      *   right-handed player.
@@ -267,7 +281,7 @@ namespace f4cf::vrui
         }
 
         const bool right = isRightController(binding.hand);
-        const std::string_view hand = right ? "RIGHT" : "LEFT";
+        const std::string_view hand = handLabel(binding.hand);
         std::string label = binding.type == vrcf::ActivationType::AxisDirection ? std::format("{} {} {}", hand, axisName(binding.axis), directionName(binding.direction))
                                                                                 : std::format("{} {} {}", hand, buttonLabel(binding.button, right), activationName(binding.type));
 
@@ -275,7 +289,7 @@ namespace f4cf::vrui
             // a modifier on the binding's own hand needs no hand of its own; one pinned elsewhere names it
             const bool modifierRight = isRightController(binding.modifier->hand.value_or(binding.hand));
             const std::string modifierButton = buttonLabel(binding.modifier->button, modifierRight);
-            label += binding.modifier->hand ? std::format(" + {} {}", modifierRight ? "RIGHT" : "LEFT", modifierButton) : std::format(" + {}", modifierButton);
+            label += binding.modifier->hand ? std::format(" + {} {}", handLabel(*binding.modifier->hand), modifierButton) : std::format(" + {}", modifierButton);
         }
         return label;
     }

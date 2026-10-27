@@ -38,7 +38,7 @@ kOpenMenu = { hand = "offhand", type = "longpress", button = "grip" }
 
 | Key      | Common values                                                                                                             |
 | -------- | ------------------------------------------------------------------------------------------------------------------------- |
-| `hand`   | `primary` (your weapon hand), `offhand` (the other hand)                                                                  |
+| `hand`   | `primary` (your weapon hand), `offhand` (the other hand), `any` (either hand)                                             |
 | `type`   | `tap` (a quick press and release), `press` (the moment it goes down), `longpress` (hold it 0.6 s), `double` (press twice) |
 | `button` | `trigger`, `grip`, `a` (A / X), `b` (B / Y), `thumbstick` (click the stick)                                               |
 
@@ -184,8 +184,14 @@ hand and `offhand` the other, so a binding keeps working when left-handed mode i
 | `offhand` | Non-weapon hand                   |
 | `right`   | Physical right controller (fixed) |
 | `left`    | Physical left controller (fixed)  |
+| `any`     | Either controller                 |
 
 > Prefer `primary` / `offhand` over `left` / `right` so the binding adapts to the player's handedness.
+
+With `any` the binding fires on whichever hand works it, and a modifier with no `hand` of its own is held on
+that same hand. A mod can still limit where it listens: a menu's Back of `any` hand is the hand that points at
+the menu. In a gesture, `any` is whichever hand is in the zone. A prompt shows it on your weapon hand's
+controller.
 
 ## Activation type
 

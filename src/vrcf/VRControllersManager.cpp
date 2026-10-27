@@ -79,12 +79,23 @@ namespace f4cf::vrcf
      * it must be held down (on its own hand, or the binding's hand if unspecified) for the binding to
      * trigger. A `duration` of 0 falls back to a sensible per-type default. A Disabled binding always
      * returns false. Returns true when the binding's activation condition is met.
+     * A binding of any hand is checked on both hands, each with a modifier of no hand on its own, and a
+     * modifier of any hand is held on either.
      */
     bool VRControllersManager::check(const InputBinding& binding)
     {
+        if (binding.hand == Hand::Any) {
+            // both, every frame: a long press clears itself, so the second hand is not skipped
+            const bool primary = check(binding.on(Hand::Primary));
+            const bool offhand = check(binding.on(Hand::Offhand));
+            return primary || offhand;
+        }
+
         if (binding.modifier) {
             const Hand modifierHand = binding.modifier->hand.value_or(binding.hand);
-            if (!isPressHeldDown(modifierHand, binding.modifier->button)) {
+            const bool held = modifierHand == Hand::Any ? isPressHeldDown(Hand::Primary, binding.modifier->button) || isPressHeldDown(Hand::Offhand, binding.modifier->button)
+                                                        : isPressHeldDown(modifierHand, binding.modifier->button);
+            if (!held) {
                 return false;
             }
         }
@@ -111,6 +122,19 @@ namespace f4cf::vrcf
         default:
             return false;
         }
+    }
+
+    /**
+     * Whether the binding fires on `hand`: a binding of any hand checked on it alone, and one of a hand that is
+     * the same controller checked as it is. For an input of the hand that does something, as the hand that
+     * points at a UI. False for a binding of the other controller.
+     */
+    bool VRControllersManager::check(const InputBinding& binding, const Hand hand)
+    {
+        if (binding.hand == Hand::Any) {
+            return check(binding.on(hand));
+        }
+        return getHand(binding.hand) == getHand(hand) && check(binding);
     }
 
     /**

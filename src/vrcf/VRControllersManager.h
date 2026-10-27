@@ -54,12 +54,18 @@ namespace f4cf::vrcf
         Vive
     };
 
+    /**
+     * A controller by the player's handedness (Primary, Offhand) or by its side (Right, Left). Any is either
+     * controller, for a binding alone: VRControllersManager::check resolves it to each hand, and every other
+     * call that takes a hand needs one controller.
+     */
     enum class Hand : std::uint8_t
     {
         Primary,
         Offhand,
         Right,
         Left,
+        Any,
     };
 
     /**
@@ -154,6 +160,17 @@ namespace f4cf::vrcf
         }
 
         /**
+         * The same binding on `hand`: what a binding of any hand is on each of its hands. A modifier with no
+         * hand of its own goes with it.
+         */
+        InputBinding on(const Hand onHand) const
+        {
+            InputBinding binding = *this;
+            binding.hand = onHand;
+            return binding;
+        }
+
+        /**
          * Value equality across all fields (hand, activation type, button/axis, modifier, and timing).
          */
         bool operator==(const InputBinding&) const = default;
@@ -186,6 +203,7 @@ namespace f4cf::vrcf
         vr::VRControllerState_t getControllerState_DEPRECATED(TrackerType a_tracker) const;
 
         bool check(const InputBinding& binding);
+        bool check(const InputBinding& binding, Hand hand);
 
         bool isTouching(Hand hand, vr::EVRButtonId button) const;
         bool isTouching(Hand hand, int button) const;
