@@ -376,12 +376,17 @@ padding on the container's line as `Pad`, as a panel's.
   was left behind comes back. It is measured from the HMD's node to the root's own position, and a
   hidden root is left where it is. The root stays attached to the HMD's node, and the manager gives
   it a base transform every frame that moves it back to where the node was.
-- The player can move a root in the world. `setWorldMoveButton(vr::k_EButton_Grip)` sets the button:
-  they point at the root, hold that button on the hand that points, and the root follows the hand
-  until the button is released. Nothing by default, and the roots are then not moved.
-  - It is one button for every root in the world. It is a button and not a binding: a binding names
-    a hand, and this is the button of the hand that points, whichever it is. `vrcf::parseButton`
-    reads one from a config value.
+- The player can move a root in the world. `setWorldMoveBinding(binding)` sets the binding: they
+  point at the root, work the binding on the hand that points, and the root follows the hand until
+  its button is released. Disabled by default, and the roots are then not moved.
+  - It is one binding for every root in the world, on the hands it names: `Hand::Any` is the hand
+    that points, whichever it is. A config value is read as any binding (`vrcf::parseInputBindingTable`).
+  - It takes hold when the binding fires: a press at once, and a long press when the button was held
+    for its duration. A press that is released before that moves nothing, so the mod has a short
+    press of the same button for something of its own, as a Back (`VRControllers.check(back, hand)`
+    with a tap of that button). The root is taken hold of where the ray is on it when the binding
+    fires. A binding that fires after the release (a tap, a double press, a release) and an axis
+    move nothing.
   - The root moves and turns with that hand's wand around the point the ray meets it, as a thing at
     the end of a stick. It stays level: it turns to the sides and tilts up and down with the hand,
     and does not roll with it.
@@ -391,11 +396,6 @@ padding on the container's line as `Pad`, as a panel's.
     0.05 seconds about a third of a fast shake gets through, and the root trails a moving hand by
     the way the hand goes in that time. A longer time is steadier and trails more: at 0.15 seconds
     about an eighth gets through. 0 follows the hand at once.
-  - `setWorldMoveHoldDelay(seconds)` is how long the button is held before it takes hold of the
-    root, 0 by default. With a time, a press that is released before it moves nothing, so the mod
-    has a short press of the same button for something of its own, as a Back
-    (`VRControllers.isReleased(hand, button, seconds)`). The root is taken hold of where the ray is
-    on it when the time has passed.
   - The whole wand of the hand that moves a root is hidden from the game from the press to the
     release (`VRControllersSuppress`, under the owner `UIWorldMove`), also while the ray is beside
     the root, which trails it. A button that is already down when the ray comes to the root moves
@@ -408,7 +408,7 @@ padding on the container's line as `Pad`, as a panel's.
     [`imgui::UIImGuiPanel`](../imgui/README.md#a-panel-the-player-moves) does, for the hand that
     owns its pointer.
   - The log says when a hand takes hold of a root, and when it lets go and why. At the debug level
-    it also says why a press of the button moved nothing.
+    it also says why a press of the binding's button moved nothing.
 - Detaching mid-frame can be unsafe; `UIManager::detachElement(element, releaseSafe=true)` defers the
   release to the next frame.
 - A dev layout mode tunes placement live through a file of its own, with nothing for the mod to

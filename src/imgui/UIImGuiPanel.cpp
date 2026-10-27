@@ -144,7 +144,7 @@ namespace f4cf::imgui
      * dedicated after it is created is then not reported at the atlas's size.
      *
      * The panel says when the pointer is on it, which vrui moves a panel in the world by
-     * (vrui::UIManager::setWorldMoveButton). The pointer is as the ImGui frame before this one had it.
+     * (vrui::UIManager::setWorldMoveBinding). The pointer is as the ImGui frame before this one had it.
      */
     void UIImGuiPanel::onFrameUpdate(vrui::UIFrameUpdateContext* context)
     {

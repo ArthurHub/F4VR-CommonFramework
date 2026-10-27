@@ -52,7 +52,7 @@ namespace f4cf::vrui
 
         /**
          * An element that is operated by a ray says that the ray of the given hand is on it, and where in the
-         * world. The manager moves a root that stays in the world by it, see UIManager::setWorldMoveButton.
+         * world. The manager moves a root that stays in the world by it, see UIManager::setWorldMoveBinding.
          */
         void markPointedAt(const bool primaryHand, const UIElement* element, const RE::NiPoint3& position)
         {

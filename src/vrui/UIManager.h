@@ -39,9 +39,8 @@ namespace f4cf::vrui
         void attachPresetToHMDBottom(const std::shared_ptr<UIElement>& element);
         void attachPresetToWorldAtHMD(const std::shared_ptr<UIElement>& element, float recenterDistance = 0.0f);
         void recenterWorldElement(const std::shared_ptr<UIElement>& element);
-        void setWorldMoveButton(std::optional<vr::EVRButtonId> button);
+        void setWorldMoveBinding(const vrcf::InputBinding& binding);
         void setWorldMoveSmoothing(float seconds);
-        void setWorldMoveHoldDelay(float seconds);
 
     private:
         /**
@@ -60,18 +59,18 @@ namespace f4cf::vrui
         };
 
         /**
-         * What is kept of a hand's move button from one frame to the next, see updateWorldMove.
+         * What is kept of a hand's move binding from one frame to the next, see updateWorldMove.
          */
         struct WorldMoveHand
         {
-            // the button was down in the frame before
+            // the binding's button was down in the frame before
             bool down = false;
 
             // the button is down from a press on a root in the world: the hand's wand is hidden from the game
             // until the button is released
             bool moving = false;
 
-            // that press took hold of a root, or found none to hold when it was held for the hold delay
+            // that press took hold of a root, or found none to hold when the binding fired
             bool tookHold = false;
         };
 
@@ -133,14 +132,11 @@ namespace f4cf::vrui
         // when the roots that stay in the world were last updated
         std::chrono::steady_clock::time_point _worldElementsUpdateTime;
 
-        // the button a hand moves the roots that stay in the world with, nothing for roots that are not moved
-        std::optional<vr::EVRButtonId> _worldMoveButton;
+        // the binding a hand moves the roots that stay in the world with, disabled for roots that are not moved
+        vrcf::InputBinding _worldMoveBinding = vrcf::VRControllersManager::DisabledBinding;
 
         // the time such a root takes to come about two thirds of the way to where the hand that moves it has it
         float _worldMoveSmoothSeconds = WORLD_MOVE_SMOOTH_SECONDS;
-
-        // how long the move button is held before it takes hold of such a root
-        float _worldMoveHoldDelaySeconds = 0.0f;
 
         WorldMoveHand _primaryMoveHand;
         WorldMoveHand _offhandMoveHand;

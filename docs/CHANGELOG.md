@@ -9,6 +9,9 @@ major version is `0`, a minor bump may break the API; the **Upgrading** notes sa
 
 ## 0.5.0 — unreleased
 
+- **A binding of any hand**: a binding's `hand` can be `any`, which fires on whichever controller works
+  it. `VRControllers.check(binding, hand)` asks whether a binding fires on one hand, for an input of the
+  hand that points at a UI, and an activation sphere takes `any` as the hand in its zone.
 - **Boxed vrui containers**: `UIContainer::setBoxStyle` draws a panel's chrome (background, border,
   rounding) around the elements a container lays out, with the style's padding inside it, so several
   panels read as one box, such as a two-line label beside a binding's icon.
@@ -210,14 +213,14 @@ major version is `0`, a minor bump may break the API; the **Upgrading** notes sa
   panel stands at, its sides are as far from the player as its middle and face them, so a wide panel
   reads the same all over. The pointer meets the panel where it is drawn, and the dev layout tunes
   the radius live as `Curve`.
-- **vrui in the world moved by the player**: `UIManager::setWorldMoveButton` lets the player move a
-  UI that stays in the world. They point at it and hold that button on the hand that points, and the
-  UI moves and turns with the hand, kept level, until the button is released. It follows the hand
-  smoothly, which steadies the hand's shake: `setWorldMoveSmoothing` is how smoothly. It stays there
-  until `recenterWorldElement` or the recenter distance puts it in front of the player again. A UI
-  is moved by a ray on it, which an interactive `UIImGuiPanel` tells vrui of by itself. With
-  `setWorldMoveHoldDelay` the button takes hold only when it is held that long, so a short press of
-  it is the mod's to use.
+- **vrui in the world moved by the player**: `UIManager::setWorldMoveBinding` lets the player move a
+  UI that stays in the world. They point at it and work that binding on the hand that points, and the
+  UI moves and turns with the hand, kept level, until the binding's button is released. It follows the
+  hand smoothly, which steadies the hand's shake: `setWorldMoveSmoothing` is how smoothly. It stays
+  there until `recenterWorldElement` or the recenter distance puts it in front of the player again. A
+  UI is moved by a ray on it, which an interactive `UIImGuiPanel` tells vrui of by itself. The move
+  takes hold when the binding fires, so with a long press a short press of the button is the mod's
+  to use.
 - **config color**: `ConfigBase::getColorValue` reads a color from the INI, written as `r,g,b` or
   `r,g,b,a` in 0 to 255, as `getTransformValue` reads a transform.
 - **config loads one at a time**: a change of the INI on disk is loaded on the file watcher's

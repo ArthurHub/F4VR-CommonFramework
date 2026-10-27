@@ -203,8 +203,9 @@ and composited as one quad, so N canvases cost one ImGui frame and one draw call
   to the window types too. The window's procedure is hooked only when its messages come on the game
   thread, which builds the frame. See `docs/tech/vr-keyboard.md`.
 - **A panel in the world is moved by the player**: vrui does it, for every root attached with
-  `attachPresetToWorldAtHMD`, once the mod sets `g_uiManager->setWorldMoveButton(...)`. While that
-  button is held on the hand that owns the pointer, from a press on the panel, the root follows the
+  `attachPresetToWorldAtHMD`, once the mod sets `g_uiManager->setWorldMoveBinding(...)`. While that
+  binding's button is held on the hand that owns the pointer, from a press on the panel and once the
+  binding fired, the root follows the
   hand, kept level and smoothed against the hand's shake (`setWorldMoveSmoothing`), and that wand
   stays hidden from the game. The panel only reports the ray on it
   (`UIFrameUpdateContext::markPointedAt`). Recentering the root puts it back.

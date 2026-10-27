@@ -308,17 +308,20 @@ namespace f4cf::vrui
     }
 
     /**
-     * The button the player moves the UIs that stay in the world with (attachPresetToWorldAtHMD): they point at
-     * such a UI and hold the button on the hand that points, and the UI follows that hand until the button is
-     * released. Nothing by default, and the UIs are then not moved. See updateWorldMove.
-     * - It is one button for every such UI. It is a button and not a binding: a binding names a hand, and
-     *   this is the button of the hand that points, whichever it is.
+     * The binding the player moves the UIs that stay in the world with (attachPresetToWorldAtHMD): they point at
+     * such a UI and work the binding on the hand that points, and the UI follows that hand until its button is
+     * released. Disabled by default, and the UIs are then not moved. See updateWorldMove.
+     * - It is one binding for every such UI, on the hands it names: `any` for the hand that points, whichever
+     *   it is.
+     * - It takes hold when it fires: a press at once, a long press when it is held that long, so a short press
+     *   of the same button is the mod's to use. A binding that fires after the release (a tap, a double press,
+     *   a release) and an axis move nothing.
      * - A UI is moved by a ray, which an element in it has to report (UIFrameUpdateContext::markPointedAt).
      *   An interactive imgui::UIImGuiPanel does, for the hand that owns its pointer.
      */
-    void UIManager::setWorldMoveButton(const std::optional<vr::EVRButtonId> button)
+    void UIManager::setWorldMoveBinding(const vrcf::InputBinding& binding)
     {
-        _worldMoveButton = button;
+        _worldMoveBinding = binding;
     }
 
     /**
@@ -334,22 +337,12 @@ namespace f4cf::vrui
     }
 
     /**
-     * How long the move button is held before it takes hold of a UI that stays in the world, in seconds. 0 by
-     * default: the press takes hold at once.
-     * - With a time, a press that is released before it moves nothing, so the mod has a short press of the same
-     *   button for something of its own.
-     */
-    void UIManager::setWorldMoveHoldDelay(const float seconds)
-    {
-        _worldMoveHoldDelaySeconds = (std::max)(0.0f, seconds);
-    }
-
-    /**
-     * Let each hand move the roots that stay in the world with the move button:
-     * - A press of the button while the hand's ray is on such a root, or on an element under it, takes hold of
-     *   the root at the point the ray meets it, see holdWorldElement. A root is held by one hand.
-     * - With a hold delay (setWorldMoveHoldDelay) it takes hold when the button was held that long, of the root
-     *   the ray is on then. A press that is released before that moves nothing.
+     * Let each hand the move binding is on move the roots that stay in the world with it:
+     * - A press of the binding's button, with its modifier, while the hand's ray is on such a root, or on an
+     *   element under it, starts a move. A root is held by one hand.
+     * - The move takes hold of the root the ray is on when the binding fires, at the point the ray meets it,
+     *   see holdWorldElement: at the press, or for a long press when the button was held that long. A press
+     *   that is released before that moves nothing.
      * - The hand lets go when it releases the button, and the root stays where it is then.
      * - A button that is already down when the ray comes to a root moves nothing until it is released.
      * - From that press to the release the hand's whole wand is hidden from the game. The root trails the
@@ -360,17 +353,24 @@ namespace f4cf::vrui
      */
     void UIManager::updateWorldMove(const UIFrameUpdateContext& context)
     {
+        // the binding's button held down, with its modifier, on a hand the binding is on: a move is from its press
+        // to its release
+        const bool movable = _worldMoveBinding.isEnabled() && _worldMoveBinding.type != vrcf::ActivationType::AxisDirection;
+        vrcf::InputBinding held = _worldMoveBinding;
+        held.type = vrcf::ActivationType::HoldDown;
+        held.duration = 0.0f;
+
         for (const bool primaryHand : { true, false }) {
             WorldMoveHand& moveHand = primaryHand ? _primaryMoveHand : _offhandMoveHand;
             const vrcf::Hand hand = primaryHand ? vrcf::Hand::Primary : vrcf::Hand::Offhand;
-            const bool down = _worldMoveButton && vrcf::VRControllers.isPressHeldDown(hand, *_worldMoveButton);
+            const bool down = movable && vrcf::VRControllers.check(held, hand);
             const bool pressed = down && !moveHand.down;
             moveHand.down = down;
 
             const auto& pointedAt = context.getPointedAt(primaryHand);
             const auto found = pointedAt ? findWorldElement(pointedAt->element) : _worldElements.end();
             const auto logNothing = [&] {
-                logger::debug("UI Manager move button of the {} moves nothing: {}",
+                logger::debug("UI Manager move binding of the {} moves nothing: {}",
                     handName(primaryHand),
                     !pointedAt                      ? "its ray is on no UI"
                     : found == _worldElements.end() ? "the UI its ray is on is not in the world"
@@ -398,8 +398,8 @@ namespace f4cf::vrui
                 // in every frame, which costs a lookup and brings it back after a session load has reset it
                 vrcf::VRControllersSuppress.setAllSuppressed(WORLD_MOVE_SUPPRESS_KEY, hand, true);
 
-                // once in a press: when it began, or when it was held for the hold delay
-                if (!moveHand.tookHold && vrcf::VRControllers.isPressHeldDown(hand, *_worldMoveButton, _worldMoveHoldDelaySeconds)) {
+                // once in a press, when the binding fires: as it began, or when a long press was held long enough
+                if (!moveHand.tookHold && vrcf::VRControllers.check(_worldMoveBinding, hand)) {
                     moveHand.tookHold = true;
                     if (found != _worldElements.end() && !found->hold) {
                         holdWorldElement(*found, primaryHand, pointedAt->position);
@@ -430,7 +430,7 @@ namespace f4cf::vrui
         logger::info("UI Manager root element '{}' is held by the {} with its {} button, {:.0f} from the wand, smoothed over {:.2f} seconds",
             worldElement.element->_name,
             handName(primaryHand),
-            vrcf::buttonName(*_worldMoveButton),
+            vrcf::buttonName(_worldMoveBinding.button),
             MatrixUtils::vec3Len(position - wand.translate),
             _worldMoveSmoothSeconds);
     }
