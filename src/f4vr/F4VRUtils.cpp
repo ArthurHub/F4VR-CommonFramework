@@ -77,6 +77,26 @@ namespace f4cf::f4vr
     }
 
     /**
+     * Whether an open game menu takes the controllers' input: one that pauses the game, uses the cursor or the menu
+     * context, or is modal - the pause menu, a message box, the Pip-Boy, lockpicking, a container, other mods' menus.
+     * The always-open HUD menus set none of these. Game thread.
+     * @param withInputContext also a menu with an input context of its own, as workshop build mode, which the player
+     * plays in: it pauses nothing and sets none of those flags
+     */
+    bool isGameMenuTakingInput(const bool withInputContext)
+    {
+        const auto ui = RE::UI::GetSingleton();
+        if (!ui) {
+            return false;
+        }
+        using enum RE::UI_MENU_FLAGS;
+        return std::ranges::any_of(ui->menuStack, [withInputContext](const RE::Scaleform::Ptr<RE::IMenu>& menu) {
+            return menu &&
+                   (menu->menuFlags.any(kPausesGame, kUsesCursor, kUsesMenuContext, kModal) || (withInputContext && menu->inputContext != RE::UserEvents::INPUT_CONTEXT_ID::kNone));
+        });
+    }
+
+    /**
      * Close the weapon favorites menu.
      */
     void closeFavoriteMenu()

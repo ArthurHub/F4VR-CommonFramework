@@ -6,6 +6,7 @@
 #include "ModBase.h"
 #include "UIHandPointing.h"
 #include "common/MatrixUtils.h"
+#include "f4vr/F4VRUtils.h"
 #include "perf/Perf.h"
 #include "vrcf/InputBindingParser.h"
 #include "vrcf/VRControllersSuppressor.h"
@@ -122,6 +123,9 @@ namespace f4cf::vrui
         F4CF_PERF_FUNCTION();
 
         _skeletonHandler.onFrameUpdate();
+
+        // once a frame, for every pressable's finger test
+        _gameMenuTakesInput = f4vr::isGameMenuTakingInput();
 
         updateWorldElements();
 

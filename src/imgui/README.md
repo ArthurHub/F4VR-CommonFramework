@@ -168,6 +168,12 @@ panel->setContent([this] {
   pointer is not its own. All of it is drawn over the panels (`DRAW_ORDER_POINTERS`) and is not
   hidden by the world. Nothing is drawn while the pointer is on no canvas, so a ray that is drawn
   says its wand is the UI's.
+- **A game menu takes over.** While a game menu takes the controllers' input
+  (`f4vr::isGameMenuTakingInput`: an open menu that pauses the game, uses the cursor or the menu
+  context, or is modal, as the pause menu, a message box, the Pip-Boy or lockpicking; not workshop
+  build mode, which the player plays in), the pointer is
+  on no canvas. The canvases stay shown, under the game's menu, and the ray, the trigger and the
+  thumbstick are the game's until it closes.
 - **What the pointer does.** `imgui::pointer().state()` has the canvas the pointer is on, where on it
   in the canvas's pixels, the hand, whether it presses the canvas, the ray in the world, and whether
   ImGui uses the pointer (`io.WantCaptureMouse`). `UIImGuiPanel::isPointedAt()` says whether it is on

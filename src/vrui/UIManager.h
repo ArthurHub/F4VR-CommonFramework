@@ -106,6 +106,11 @@ namespace f4cf::vrui
             return primaryHand ? _primaryHandFromBehind : _offhandFromBehind;
         }
 
+        bool isGameMenuTakingInput() const
+        {
+            return _gameMenuTakesInput;
+        }
+
         void updateHandPointing(bool primaryHand, const std::optional<UIFingerProximity>& fingerProximity);
         void setHandPointing(bool primaryHand, bool toPoint) const;
         void updateWorldElements();
@@ -154,6 +159,9 @@ namespace f4cf::vrui
 
         // the frame update ran in this frame, so another call in the same frame does nothing
         bool _frameUpdated = false;
+
+        // a game menu takes the controllers' input in this frame (f4vr::isGameMenuTakingInput): nothing is pressed
+        bool _gameMenuTakesInput = false;
 
         // points a hand and releases it in place of the framework's own way, which goes through FRIK's API
         HandPointingHandler _handPointingHandler;

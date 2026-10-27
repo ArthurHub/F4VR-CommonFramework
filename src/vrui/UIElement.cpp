@@ -271,6 +271,8 @@ namespace f4cf::vrui
      * Find the finger to test a pressable against in this frame and how it stands to it, see getFingerProximity,
      * and report it for the finger's hand, which decides whether the hand points.
      * A pressable stays with the finger that interacts with it, so a press does not jump to the other hand.
+     * While a game menu takes the controllers' input (f4vr::isGameMenuTakingInput) every finger is away, so
+     * nothing is pressed and no hand points for the UI.
      * @param state what the pressable keeps about the finger between frames
      * @param worldPosition the center of the pressable's face in the world
      * @param worldForward the direction the pressable is pushed in, away from its front
@@ -283,7 +285,9 @@ namespace f4cf::vrui
             // what the other finger was to the pressable says nothing about this one
             state = { .primaryHand = finger.primaryHand };
         }
-        const auto proximity = getFingerProximity(state, g_uiManager->isHandFromBehind(finger.primaryHand), finger.position, worldPosition, worldForward);
+        const auto proximity = g_uiManager->isGameMenuTakingInput()
+                                   ? UIFingerProximity::Away
+                                   : getFingerProximity(state, g_uiManager->isHandFromBehind(finger.primaryHand), finger.position, worldPosition, worldForward);
         state.interacting = proximity == UIFingerProximity::Interacting;
         context->markFingerProximity(finger.primaryHand, proximity);
         return finger.position;

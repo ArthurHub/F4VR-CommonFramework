@@ -14,6 +14,7 @@ namespace f4cf::f4vr
     // UI
     void showMessagebox(const std::string& text);
     void showNotification(const std::string& text);
+    bool isGameMenuTakingInput(bool withInputContext = false);
 
     // Controls
     void setControlsThumbstickEnableState(bool toEnable);

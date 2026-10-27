@@ -314,6 +314,9 @@ padding on the container's line as `Pad`, as a panel's.
 ## Notes
 
 - `g_uiManager` is created by the framework before `onGameLoaded()`; mods never call `initUIManager()`.
+- While a game menu takes the controllers' input (`f4vr::isGameMenuTakingInput`: the pause menu, a
+  message box, the Pip-Boy, lockpicking, other mods' menus; not workshop build mode), nothing is pressed and no hand points
+  for the UI: every finger is away from every pressable. The UI stays shown, under the game's menu.
 - Containers lay children out automatically by their `UIContainerLayout` (horizontal/vertical,
   centered or directional) — prefer that over positioning each element manually.
 - Coordinates on `UIElement::setPosition(x, y, z)` are **relative to the parent**: x = right(+)/left(−),

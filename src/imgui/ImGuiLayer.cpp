@@ -8,6 +8,7 @@
 #include <imgui_internal.h>
 
 #include "../common/MatrixUtils.h"
+#include "../f4vr/F4VRUtils.h"
 #include "../f4vr/PlayerNodes.h"
 #include "../render/RenderUtils.h"
 #include "ImGuiFonts.h"
@@ -413,10 +414,12 @@ namespace f4cf::imgui::internal
         }
 
         // The pointer can be on the interactive canvases that are shown. With none the vector stays empty,
-        // which allocates nothing, and nothing is read from the game for the pointer.
+        // which allocates nothing, and nothing is read from the game for the pointer. While a game menu takes the
+        // controllers' input it is on none: the canvases are shown, and the game's menu has the ray and the trigger.
         std::vector<PointerTarget> pointerTargets;
+        const bool gameMenuTakesInput = f4vr::isGameMenuTakingInput();
         for (const auto& entry : packed) {
-            if (entry.canvas->isInteractive() && entry.placement.show) {
+            if (entry.canvas->isInteractive() && entry.placement.show && !gameMenuTakesInput) {
                 pointerTargets.push_back(PointerTarget{ .canvas = entry.canvas,
                     .topLeft = entry.quad.topLeft,
                     .topRight = entry.quad.topRight,
