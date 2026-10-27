@@ -97,7 +97,6 @@ namespace mods_config::api
     enum class FileFormat : std::uint32_t
     {
         Ini,
-        Json,
         Toml
     };
 
