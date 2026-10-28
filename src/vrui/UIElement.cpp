@@ -29,8 +29,8 @@ namespace f4cf::vrui
         constexpr float FINGER_TURN_BACK_DISTANCE = 0.7f;
 
         // How far from where the head faces a pressable can be, as the cosine of the angle:
-        // 40 degrees for a finger to start on it, 55 degrees for the finger to stay near it
-        constexpr float VIEW_START_ANGLE_COS = 0.766f;
+        // 50 degrees for a finger to start on it, 55 degrees for the finger to stay near it
+        constexpr float VIEW_START_ANGLE_COS = 0.643f;
         constexpr float VIEW_NEAR_ANGLE_COS = 0.574f;
 
         /**
