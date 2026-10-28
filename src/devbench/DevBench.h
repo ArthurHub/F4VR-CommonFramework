@@ -53,7 +53,7 @@ namespace f4cf::devbench
         // one line in the tool's description, which is what an agent reads to choose an action
         std::string description;
         // JSON Schema "properties" of the arguments it reads, merged into the tool's input schema; an argument that
-        // several actions share is declared once, and the first declaration wins
+        // several actions declare has their descriptions joined, and any type where their types differ
         nlohmann::json arguments = nlohmann::json::object();
         ActionHandler handler;
         RunOn runOn = RunOn::GameThread;

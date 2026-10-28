@@ -134,8 +134,10 @@ void MyMod::onModLoaded(const F4SE::LoadInterface*)
   relaxed loads a frame. Arming does not wait for a devbench client: the plugin can't tell whether
   one is attached, so a trace sees the mod's state events from the start.
 - **Arguments.** All actions share one flat input schema, so start each argument's description
-  with the actions that read it (`"surface: ..."`). An argument several actions share is declared
-  once; the first declaration wins.
+  with the actions that read it (`"surface: ..."`). An argument several actions declare, as a mod's
+  own `value` beside the generic `set`'s, has their descriptions joined, and takes any type where
+  their types differ. Declarations that differ in anything else, as an `enum`, keep the first and
+  log a warning.
 - **Adding late.** Actions and the description added before `onGameLoaded` returns go out in
   the first registration; a later change re-registers the tool.
 

@@ -94,6 +94,35 @@ namespace f4cf::devbench
         }
 
         /**
+         * The schema of an argument two actions declare: both descriptions, each of which starts with the actions that
+         * read it, and any type where their types differ. None where they differ in another key, as an enum.
+         */
+        std::optional<json> mergedArgument(const json& earlier, const json& later)
+        {
+            auto rest = earlier;
+            auto laterRest = later;
+            for (const auto* key : { "type", "description" }) {
+                rest.erase(key);
+                laterRest.erase(key);
+            }
+            if (rest != laterRest) {
+                return std::nullopt;
+            }
+            auto merged = earlier;
+            if (later.value("type", json()) != earlier.value("type", json())) {
+                merged.erase("type");
+            }
+            const auto description = earlier.value("description", std::string());
+            const auto laterDescription = later.value("description", std::string());
+            if (description.empty() || laterDescription.empty()) {
+                merged["description"] = description + laterDescription;
+            } else if (description != laterDescription) {
+                merged["description"] = description + "; " + laterDescription;
+            }
+            return merged;
+        }
+
+        /**
          * A perf site's name in the flat view: its function, and its label for a block ("Skeleton::onFrameUpdate/arms").
          */
         std::string perfSiteKey(const perf::Site& site)
@@ -317,8 +346,12 @@ namespace f4cf::devbench
                     }
                     for (const auto& [argName, schema] : action.arguments.items()) {
                         const auto declared = declaredArgument(argName);
-                        if (declared && *declared != schema) {
-                            logger::warn("devbench: action '{}' declares argument '{}' differently from an earlier action; the schema keeps the earlier one", action.name, argName);
+                        if (declared && !mergedArgument(*declared, schema)) {
+                            logger::warn(
+                                "devbench: action '{}' declares argument '{}' differently from an earlier action, beyond its type and its "
+                                "description; the schema keeps the earlier one",
+                                action.name,
+                                argName);
                         }
                     }
                     _actions.push_back({ std::move(action), generic });
@@ -938,6 +971,8 @@ namespace f4cf::devbench
                     for (const auto& [argName, schema] : entry.action.arguments.items()) {
                         if (!properties.contains(argName)) {
                             properties[argName] = schema;
+                        } else if (auto merged = mergedArgument(properties[argName], schema)) {
+                            properties[argName] = std::move(*merged);
                         }
                     }
                 }
