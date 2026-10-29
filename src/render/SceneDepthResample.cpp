@@ -8,6 +8,8 @@
 #include <d3dcompiler.h>
 #include <wrl/client.h>
 
+#include "../perf/GpuTimer.h"
+#include "../perf/Perf.h"
 #include "RenderUtils.h"
 
 namespace f4cf::render::sceneDepth::internal
@@ -15,6 +17,16 @@ namespace f4cf::render::sceneDepth::internal
     namespace
     {
         using Microsoft::WRL::ComPtr;
+
+        // the function the copy is timed as
+        constexpr const char* RESAMPLE_PERF_FUNCTION = "f4cf::render::sceneDepth::resampleWorldDepth";
+
+        // The GPU time of the copy, a root of its own in the gpu tree: it runs inside the engine's frame, not under
+        // Submit. Every framework mod that draws an occluded layer under an upscaler makes its own, so this is what one
+        // more mod costs. Constructed with the DLL, so the first copy does not take the perf registry's lock.
+        perf::Site s_resampleGpuSite(RESAMPLE_PERF_FUNCTION, nullptr, __FILE__, __LINE__, perf::SiteKind::Gpu);
+        perf::Site s_resampleDrawGpuSite(RESAMPLE_PERF_FUNCTION, "draw", __FILE__, __LINE__, perf::SiteKind::Gpu);
+        perf::GpuTimer s_resampleGpuTimer(s_resampleGpuSite, "gpu.sceneDepthCopyMs");
 
         // One triangle that covers the whole target, from the vertex id alone, so the pass needs no
         // vertex buffer or input layout: (-1,1), (3,1), (-1,-3) in clip space.
@@ -322,6 +334,7 @@ float main(float4 position : SV_Position) : SV_Depth
             return false;
         }
 
+        const auto gpuFrame = s_resampleGpuTimer.begin(context);
         context->OMSetRenderTargets(0, nullptr, s_copyWriteView.Get());
         context->OMSetDepthStencilState(s_writeAlways.Get(), 0);
         context->OMSetBlendState(nullptr, nullptr, 0xFFFFFFFF);
@@ -342,6 +355,7 @@ float main(float4 position : SV_Position) : SV_Depth
         context->PSSetShaderResources(0, 1, &engineView);
 
         context->Draw(3, 0);
+        gpuFrame.mark(s_resampleDrawGpuSite);
         s_copyWritten = true;
         return true;
     }
