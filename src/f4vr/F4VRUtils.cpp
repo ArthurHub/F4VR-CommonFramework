@@ -545,14 +545,54 @@ namespace f4cf::f4vr
     }
 
     /**
+     * The game's two VR settings that place the Pip-Boy, in Fallout4Prefs.ini: "bAlwaysUseProjectedPipboy:VR" and
+     * "bAttachPipboyToHMD:VR" (in front), which wins over projected; neither is the wrist.
+     */
+    static std::pair<RE::Setting*, RE::Setting*> getPipboyPlacementSettings()
+    {
+        // not sure why RE::Relocation doesn't work here, so using raw address
+        static auto projected = reinterpret_cast<RE::Setting*>(REL::Offset(0x37B4278).address()); // NOLINT(performance-no-int-to-ptr)
+        static auto inFront = reinterpret_cast<RE::Setting*>(REL::Offset(0x37B4290).address()); // NOLINT(performance-no-int-to-ptr)
+        return { projected, inFront };
+    }
+
+    /**
      * Return true if the pipboy is on the wrist, false if it is "in-front" or projected.
      */
     bool isPipboyOnWrist()
     {
-        // not sure why RE::Relocation doesn't work here, so using raw address
-        static auto iniAlwaysUseProjectedPipboy = reinterpret_cast<bool*>(REL::Offset(0x37B4280).address()); // NOLINT(performance-no-int-to-ptr)
-        static auto iniAttachPipboyToHMD = reinterpret_cast<bool*>(REL::Offset(0x37B4298).address()); // NOLINT(performance-no-int-to-ptr)
-        return !(*iniAlwaysUseProjectedPipboy || *iniAttachPipboyToHMD);
+        return getPipboyPlacement() == PipboyPlacement::Wrist;
+    }
+
+    /**
+     * Where the game puts the Pip-Boy now, as the game's settings menu reads it.
+     */
+    PipboyPlacement getPipboyPlacement()
+    {
+        const auto [projected, inFront] = getPipboyPlacementSettings();
+        if (inFront->GetBinary()) {
+            return PipboyPlacement::InFront;
+        }
+        return projected->GetBinary() ? PipboyPlacement::Projected : PipboyPlacement::Wrist;
+    }
+
+    /**
+     * Set where the game puts the Pip-Boy, as the game's settings menu does: write both settings, run the handlers the game
+     * installed on each (SettingHandlerMap::SettingUpdated), and save Fallout4Prefs.ini. Game thread only.
+     */
+    void setPipboyPlacement(const PipboyPlacement placement)
+    {
+        const auto [projected, inFront] = getPipboyPlacementSettings();
+        logger::info("Set Pip-Boy placement to {}", static_cast<int>(placement));
+        projected->SetBinary(placement == PipboyPlacement::Projected);
+        SettingHandlerMap_SettingUpdated(*projected);
+        inFront->SetBinary(placement == PipboyPlacement::InFront);
+        SettingHandlerMap_SettingUpdated(*inFront);
+
+        if (const auto prefs = RE::INIPrefSettingCollection::GetSingleton(); prefs && prefs->Open(true)) {
+            prefs->WriteSettings();
+            prefs->Close();
+        }
     }
 
     /**

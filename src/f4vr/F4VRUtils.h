@@ -65,9 +65,21 @@ namespace f4cf::f4vr
     void startCombat(RE::Actor* actor, RE::Actor* target, StartCombatMethod method = StartCombatMethod::EnterCombat);
     RE::BGSProjectile* getAnyProjectile();
 
+    /**
+     * Where the game puts the Pip-Boy, by its VR settings. The values are the order of the game's own settings menu.
+     */
+    enum class PipboyPlacement : std::uint8_t
+    {
+        Wrist = 0,
+        InFront = 1,
+        Projected = 2,
+    };
+
     // settings
     bool isLeftHandedMode();
     bool isPipboyOnWrist();
+    PipboyPlacement getPipboyPlacement();
+    void setPipboyPlacement(PipboyPlacement placement);
     bool isComfortSneakMode();
     bool useWandDirectionalMovement();
     RE::Setting* getIniSetting(const char* name, bool addNew = false);
