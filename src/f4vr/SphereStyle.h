@@ -1,9 +1,10 @@
 #pragma once
 
-#include <array>
 #include <optional>
 #include <string>
 #include <string_view>
+
+#include "render/Color.h"
 
 namespace f4cf::f4vr
 {
@@ -24,7 +25,7 @@ namespace f4cf::f4vr
         // The base texture set on the mesh's effect shader. Empty = keep the texture the mesh itself names.
         std::string texture;
         // Base color as r, g, b, a (0..1 each); the texture is multiplied by it, and its alpha is the overall opacity.
-        std::array<float, 4> color = { 1.0f, 1.0f, 1.0f, 1.0f };
+        render::Color color;
         // Emissive brightness, 0..1: 1 is as bright as the debug sphere, the activation presets sit around 0.4-0.5.
         // Scaled onto the shader's base color scale, whose useful range the caller need not know.
         float glow = 1.0f;

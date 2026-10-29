@@ -172,7 +172,7 @@ namespace f4cf::f4vr
                 material.falloffStartOpacity,
                 material.falloffStopOpacity);
 
-            material.baseColor = RE::NiColorA{ style.color[0], style.color[1], style.color[2], style.color[3] };
+            material.baseColor = RE::NiColorA{ style.color.r, style.color.g, style.color.b, style.color.a };
             material.baseColorScale = style.glow * MAX_BASE_COLOR_SCALE;
             material.falloffStartOpacity = style.centerOpacity;
             material.falloffStopOpacity = style.rimOpacity;

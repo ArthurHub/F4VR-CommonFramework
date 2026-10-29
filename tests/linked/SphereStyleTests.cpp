@@ -1,7 +1,6 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <algorithm>
-#include <array>
 #include <string>
 #include <vector>
 
@@ -18,7 +17,7 @@ TEST_CASE("SphereStyle: a preset is a color and a strength, on the framework's s
     REQUIRE(style->texture == "f4cf\\activation-sphere.dds");
 
     // the color's three numbers, and the strength's opacity
-    REQUIRE(style->color == std::array{ 0.1f, 0.68f, 1.0f, 0.105f });
+    REQUIRE(style->color == render::Color{ 0.1f, 0.68f, 1.0f, 0.105f });
     REQUIRE(style->glow == 0.4f);
     REQUIRE(style->centerOpacity == 0.025f);
     REQUIRE(style->rimOpacity == 0.82f);

@@ -233,7 +233,7 @@ namespace f4cf::config
      * Returns why not, and leaves `color` as it was, when the node is not a table, or has a key other than the two,
      * as a misspelled one would be read as its default, or one of them is not a value of its form.
      */
-    std::expected<void, std::string> parseColor(const toml::node& node, std::array<float, 4>& color)
+    std::expected<void, std::string> parseColor(const toml::node& node, render::Color& color)
     {
         const auto* table = node.as_table();
         if (!table) {
@@ -241,6 +241,7 @@ namespace f4cf::config
         }
 
         auto parsed = color;
+        float* const rgb[] = { &parsed.r, &parsed.g, &parsed.b };
         for (const auto& [key, value] : *table) {
             if (key.str() == "rgb") {
                 const auto* array = value.as_array();
@@ -252,14 +253,14 @@ namespace f4cf::config
                     if (!channel) {
                         return std::unexpected(std::string("rgb has a number that is not a whole number in 0..255"));
                     }
-                    parsed[i] = *channel;
+                    *rgb[i] = *channel;
                 }
             } else if (key.str() == "alpha") {
                 const auto alpha = channel255(value);
                 if (!alpha) {
                     return std::unexpected(std::string("alpha is not a whole number in 0..255"));
                 }
-                parsed[3] = *alpha;
+                parsed.a = *alpha;
             } else {
                 return std::unexpected(std::format("it has the key '{}', which is not rgb or alpha", key.str()));
             }

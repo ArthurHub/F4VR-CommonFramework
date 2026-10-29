@@ -511,7 +511,7 @@ namespace f4cf::f4vr
         // the style's size is the longer side, so a non-square image keeps its proportions inside the same bounds
         const float halfWidth = 0.5f * style.size * static_cast<float>(_iconTexture->width()) / longestSide;
         const float halfHeight = 0.5f * style.size * static_cast<float>(_iconTexture->height()) / longestSide;
-        const render::Color tint{ style.color[0], style.color[1], style.color[2], style.color[3] * _iconOpacity };
+        const render::Color tint{ style.color.r, style.color.g, style.color.b, style.color.a * _iconOpacity };
         iconFrame().addImage(view,
             _iconTexture->isSRGB(),
             center - right * halfWidth + up * halfHeight,

@@ -44,7 +44,7 @@ namespace
     }
 
     // a color as a preset has it before its config value is read: white, at an opacity of its own
-    constexpr std::array<float, 4> PRESET{ 1.0f, 1.0f, 1.0f, 0.4f };
+    constexpr f4cf::render::Color PRESET{ 1.0f, 1.0f, 1.0f, 0.4f };
 
     /**
      * A channel of a color as the parser gives it for a number of 0 to 255.
@@ -57,7 +57,7 @@ namespace
     /**
      * Read the TOML text of a color's value over `color`. Returns why it is not a color, or "(read)" when it is one.
      */
-    std::string readColor(const std::string& value, std::array<float, 4>& color)
+    std::string readColor(const std::string& value, f4cf::render::Color& color)
     {
         const auto table = toml::parse("v = " + value);
         const auto parsed = parseColor(*table.get("v"), color);
@@ -222,19 +222,35 @@ TEST_CASE("ConfigValueParsers: a color is its rgb and its alpha, the opacity, ea
 {
     auto color = PRESET;
     REQUIRE(readColor("{ rgb = [0, 64, 255], alpha = 51 }", color) == "(read)");
-    REQUIRE(color == std::array{ 0.0f, channel(64), 1.0f, channel(51) });
+    REQUIRE(color == f4cf::render::Color{ 0.0f, channel(64), 1.0f, channel(51) });
 }
 
 TEST_CASE("ConfigValueParsers: a color without a key keeps the channels it had for it")
 {
     auto color = PRESET;
     REQUIRE(readColor("{ rgb = [255, 128, 0] }", color) == "(read)");
-    REQUIRE(color == std::array{ 1.0f, channel(128), 0.0f, 0.4f });
+    REQUIRE(color == f4cf::render::Color{ 1.0f, channel(128), 0.0f, 0.4f });
 
     // the opacity of a preset alone
     color = PRESET;
     REQUIRE(readColor("{ alpha = 0 }", color) == "(read)");
-    REQUIRE(color == std::array{ 1.0f, 1.0f, 1.0f, 0.0f });
+    REQUIRE(color == f4cf::render::Color{ 1.0f, 1.0f, 1.0f, 0.0f });
+}
+
+TEST_CASE("ConfigValueParsers: a color's bytes are the whole numbers it was read from")
+{
+    auto color = PRESET;
+    REQUIRE(readColor("{ rgb = [0, 64, 255], alpha = 51 }", color) == "(read)");
+    REQUIRE(color.bytes() == std::array{ 0, 64, 255, 51 });
+
+    // every byte comes back as it was
+    for (int value = 0; value <= 255; ++value) {
+        CAPTURE(value);
+        REQUIRE(f4cf::render::Color::rgba(value, value, value, value).bytes() == std::array{ value, value, value, value });
+    }
+
+    // a channel outside 0..1 is the nearest end
+    REQUIRE(f4cf::render::Color{ -0.5f, 1.5f, 0.5f, 1.0f }.bytes() == std::array{ 0, 255, 128, 255 });
 }
 
 TEST_CASE("ConfigValueParsers: a malformed color leaves the color as it was")

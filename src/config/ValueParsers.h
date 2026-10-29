@@ -7,6 +7,8 @@
 #include <string_view>
 #include <toml++/toml.hpp>
 
+#include "render/Color.h"
+
 // The forms of the config values that are more than one number or word, apart from the game: plain std and toml++
 // only, so it is unit tested.
 namespace f4cf::config
@@ -35,5 +37,5 @@ namespace f4cf::config
 
     std::optional<std::array<float, 22>> parseHandPoseText(const char* text);
 
-    std::expected<void, std::string> parseColor(const toml::node& node, std::array<float, 4>& color);
+    std::expected<void, std::string> parseColor(const toml::node& node, render::Color& color);
 }

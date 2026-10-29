@@ -20,7 +20,8 @@ why something drew where it did.
 
 | File | What it is |
 | ----------------------- | -------------------------------------------------------------------- |
-| [`PrimitiveDraw.h`](PrimitiveDraw.h) | The frame a producer fills: `lines` / `triangles` / `images` / `texts`, with `add*` helpers and the budgets. Plus `Color`, the `colors::` constants and the text placement/align/decoration enums. Header-only. |
+| [`Color.h`](Color.h) | `Color`, the framework's one color: 0..1 floats, made from 0..255 bytes with `rgba` and read back as them with `bytes`, and the `colors::` constants. Plain std, so the config's parsers use it too. Header-only. |
+| [`PrimitiveDraw.h`](PrimitiveDraw.h) | The frame a producer fills: `lines` / `triangles` / `images` / `texts`, with `add*` helpers and the budgets. Plus the text placement/align/decoration enums. Header-only. |
 | [`PrimitiveDrawRenderer.h`](PrimitiveDrawRenderer.h) / [`.cpp`](PrimitiveDrawRenderer.cpp) | One overlay **layer**: takes published frames on the game thread and replays them on the render thread. Owns the game → render handoff and the layer's draw order; goes dormant when it has nothing to draw. |
 | [`SubmitHook.h`](SubmitHook.h) / [`.cpp`](SubmitHook.cpp) | The shared `IVRCompositor::Submit` vtable hook, the hook of the game's player-space pass ([Under the game's menus](#under-the-games-menus)), and the draw-callback table every layer registers on. Owns the RTV over the submitted eye texture, the per-eye camera constants, the pipeline save/restore and the painter order. |
 | [`RenderUtils.h`](RenderUtils.h) / [`.cpp`](RenderUtils.cpp) | The game's D3D11 device/context, the engine's per-eye view-projection + posAdjust (`StereoCameraConstants`), and `ScopedPipelineState` — the RAII snapshot taken around the whole callback list. |

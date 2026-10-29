@@ -283,10 +283,10 @@ TEST_CASE("ConfigReaders: the look of an activation sphere is a preset with sing
 
         REQUIRE(style.nif == "my-sphere.nif");
         REQUIRE(style.texture == "my-sphere.dds");
-        requireNear(style.color[0], 1.0f);
-        requireNear(style.color[1], 0.0f);
-        requireNear(style.color[2], 0.2f);
-        requireNear(style.color[3], 0.4f);
+        requireNear(style.color.r, 1.0f);
+        requireNear(style.color.g, 0.0f);
+        requireNear(style.color.b, 0.2f);
+        requireNear(style.color.a, 0.4f);
         requireNear(style.glow, 0.25f);
         requireNear(style.centerOpacity, 0.1f);
         requireNear(style.rimOpacity, 0.9f);
@@ -323,9 +323,9 @@ TEST_CASE("ConfigReaders: the look of an activation sphere's icon is single valu
 
         REQUIRE(style.texture == "my-icon.dds");
         REQUIRE(style.textureOrDefault() == "my-icon.dds");
-        requireNear(style.color[0], 1.0f);
-        requireNear(style.color[2], 0.2f);
-        requireNear(style.color[3], 0.4f);
+        requireNear(style.color.r, 1.0f);
+        requireNear(style.color.b, 0.2f);
+        requireNear(style.color.a, 0.4f);
         requireNear(style.size, 2.5f);
     }
     SECTION("values out of their range are left out")

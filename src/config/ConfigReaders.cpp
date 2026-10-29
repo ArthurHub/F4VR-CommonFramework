@@ -60,7 +60,7 @@ namespace
      * config::parseColor. A key that is missing changes nothing, and one that is not a color is logged and leaves
      * `color` as it was.
      */
-    void readColor(const toml::table& config, const char* section, const char* key, std::array<float, 4>& color)
+    void readColor(const toml::table& config, const char* section, const char* key, render::Color& color)
     {
         const auto* node = nodeOf(config, section, key);
         if (!node) {
@@ -212,9 +212,9 @@ namespace f4cf::config
      */
     render::Color ConfigReaders::getColorValue(const toml::table& config, const char* section, const char* key, const render::Color& defaultValue)
     {
-        std::array<float, 4> channels{ defaultValue.r, defaultValue.g, defaultValue.b, defaultValue.a };
-        readColor(config, section, key, channels);
-        return { channels[0], channels[1], channels[2], channels[3] };
+        auto color = defaultValue;
+        readColor(config, section, key, color);
+        return color;
     }
 
     /**

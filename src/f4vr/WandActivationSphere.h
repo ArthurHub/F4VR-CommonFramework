@@ -1,6 +1,5 @@
 #pragma once
 
-#include <array>
 #include <memory>
 #include <optional>
 #include <span>
@@ -71,7 +70,7 @@ namespace f4cf::f4vr
         // The .dds drawn. Empty = the framework's hand icon.
         std::string texture;
         // Tint as r, g, b, a (0..1 each), multiplied into the image; its alpha is the overall opacity.
-        std::array<float, 4> color = { 1.0f, 1.0f, 1.0f, 0.9f };
+        render::Color color{ 1.0f, 1.0f, 1.0f, 0.9f };
         // The icon's longer side, in game units.
         float size = 1.0f;
 
