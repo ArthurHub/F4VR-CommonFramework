@@ -91,7 +91,8 @@ Every mod gets these sites without code of its own:
 | `render::drawToSubmittedTexture`, each draw callback under it by its registered name | a root on the game thread, after the frame | overlay drawing in the Submit hook, which FO4VR calls on the game thread about a millisecond after the mod's frame (on the loading screen's own thread during a load); CPU time only; absent while nothing draws |
 | `UIManager::onFrameUpdate` | where the mod calls it | vrui, while a UI is attached |
 | `render::drawToSubmittedTexture`, and under it `setup` and each draw callback by its registered name | the `gpu` tree | the GPU time of the overlay drawing, in the player-space pass and at Submit: the shared setup, then each layer (vrui panels, ImGui canvases, debug draw, activation-sphere icons); read back 1-3 frames late |
-| `render::sceneDepth::resampleWorldDepth`, and under it `draw` | the `gpu` tree | the GPU time of the scene depth copy under an upscaler, once a frame inside the engine's frame, while an occluded layer draws; each framework mod makes its own |
+| `render::sceneDepth::onGraphicsStateCommitted` | a root on the game thread, inside the engine's frame | the scene depth capture's scan of each committed graphics state while an occluded layer draws, dozens a frame; each framework mod that captures runs its own |
+| `render::sceneDepth::resampleWorldDepth`, and under it `draw` | the `gpu` tree | the GPU time of the scene depth copy under an upscaler, once a frame inside the engine's frame, while an occluded layer draws; the framework mods share one copy, so only the mod that drew it records it |
 
 ## GPU time
 

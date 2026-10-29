@@ -30,6 +30,7 @@ why something drew where it did.
 | [`CallSiteHook.h`](CallSiteHook.h) / [`.cpp`](CallSiteHook.cpp) | Whether a game call site the render hooks patch still calls its function, or another plugin's hook of it, which they chain onto, and the module that hook belongs to. |
 | [`SceneDepthCapture.h`](SceneDepthCapture.h) / [`.cpp`](SceneDepthCapture.cpp) | Takes hold of the engine's scene depth for the frame being submitted, read-only, so a layer can be occluded by the world. |
 | [`SceneDepthResample.h`](SceneDepthResample.h) / [`.cpp`](SceneDepthResample.cpp) | The copy made under an upscaler (DLSS/FSR), which draws the world into a sub-viewport of a full-size buffer and clears it before submit. |
+| [`SceneDepthShared.h`](SceneDepthShared.h) / [`.cpp`](SceneDepthShared.cpp) | The struct that holds the copy for every framework mod in the process, found by a process-wide name, and the frame the framework Submit hooks count for it. |
 | [`SceneDepthDiagnostics.h`](SceneDepthDiagnostics.h) / [`.cpp`](SceneDepthDiagnostics.cpp) | `sSceneDepthStrategy` / `bSceneDepthDiagnostics`, the watch rows, and the shadow A/B that elected the shipped policy. |
 | [`fonts/`](fonts/) | The embedded Roboto Medium (and its license), used when a mod ships no font of its own, and the bold and italic faces the ImGui canvases add ([`imgui/`](../imgui/README.md#font)): Roboto Black and Roboto Medium Italic. The bold face is Black, as the regular one is Medium: Bold is too close to it to tell apart. All three are Roboto 2.137 as Google Fonts ships it. |
 
@@ -239,6 +240,15 @@ an active layer is occluded: a frame of activation icons, pointers or debug line
 nothing. A `PrimitiveDrawRenderer` reads it when constructed `occluded`, the ImGui canvases while one
 on show is occluded, and a callback of a mod's own while it is active, unless it says otherwise
 (`setDrawCallbackActive`'s `readsSceneDepth`).
+
+**One copy for every framework mod.** Each mod carries its own copy of the framework, but the copy is
+made once a frame for all of them: it lives in a struct the mods of the process find by name
+([`SceneDepthShared.h`](SceneDepthShared.h)), and the first mod to reach its copy pass draws it, the
+others use it. Everything else stays each mod's own: its capture, its election of the world's viewport,
+and its `[Debug]` keys. The frame is counted by the framework Submit hooks, which each call the next
+mod's from inside them: the outermost leaving ends it. A copy no mod has written for 8 frames is freed
+there. A mod built before the struct existed, or one that cannot find it, copies for itself, as
+before. The struct is a frozen ABI (`SharedSceneDepthV1`): fields are only appended.
 
 Test with `SubmitFrame::sceneDepthComparison`, never a guess — it is the comparison the engine drew
 the world with, and the opposite sense hides exactly what should be visible.

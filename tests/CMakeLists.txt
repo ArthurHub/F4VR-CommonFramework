@@ -27,6 +27,7 @@ add_executable(${PROJECT_NAME}_tests
   InputBindingParserTests.cpp
   PerfReportTests.cpp
   PerfSiteTests.cpp
+  SceneDepthSharedTests.cpp
   TomlEditorTests.cpp
   UIDevLayoutFileTests.cpp
   # the plain-std sources under test
@@ -41,6 +42,7 @@ add_executable(${PROJECT_NAME}_tests
   ${SOURCE_DIR}/perf/Perf.cpp
   ${SOURCE_DIR}/perf/Report.cpp
   ${SOURCE_DIR}/render/DdsHeader.cpp
+  ${SOURCE_DIR}/render/SceneDepthShared.cpp
   ${SOURCE_DIR}/vrcf/InputBindingParser.cpp
   ${SOURCE_DIR}/vrui/UIDevLayoutFile.cpp
 )

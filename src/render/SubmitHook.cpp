@@ -21,6 +21,7 @@
 #include "CallSiteHook.h"
 #include "SceneDepthCapture.h"
 #include "SceneDepthDiagnostics.h"
+#include "SceneDepthShared.h"
 
 // The OpenVR IVRCompositor::Submit vtable hook every framework overlay draws through. Extracted
 // from the debug-draw overlay (a port of ROCK's DebugBodyOverlay, see
@@ -634,7 +635,8 @@ namespace f4cf::render
 
         /**
          * The Submit hook. Every path chains: a skipped original Submit black-screens the headset,
-         * so the chain call is the last statement and nothing between here and it may throw.
+         * so nothing between here and the chain call may throw, and after it only the frame count of
+         * the shared scene depth copy runs, which cannot.
          */
         vr::EVRCompositorError vrSubmitHook(vr::IVRCompositor* compositor, const vr::EVREye eye, const vr::Texture_t* texture, const vr::VRTextureBounds_t* bounds,
             const vr::EVRSubmitFlags flags)
@@ -654,6 +656,14 @@ namespace f4cf::render
 
             // counts calls rather than draws, so standing down does not read as being orphaned
             s_hookRuns.fetch_add(1, std::memory_order_relaxed);
+
+            // The left eye's Submit is the frame boundary of the scene depth copy the framework mods share: the hook
+            // of each calls the next one's from inside it, and the outermost leaving ends the frame for all of them.
+            auto& sharedDepth = sceneDepth::internal::sharedSceneDepth();
+            const bool countsFrame = eye == vr::Eye_Left;
+            if (countsFrame) {
+                sceneDepth::internal::enterSubmit(sharedDepth);
+            }
 
             // what the player-space pass did with this frame's layers, read once a frame and reset for the next
             const InFrameDraw inFrame = eye == vr::Eye_Left ? s_inFrameDraw.exchange(InFrameDraw::NotRun, std::memory_order_relaxed) : InFrameDraw::NotRun;
@@ -680,7 +690,11 @@ namespace f4cf::render
                 const sceneDepth::FrameScope depthFrame;
                 sceneDepth::setCaptureRequested(false);
             }
-            return s_originalVRSubmit(compositor, eye, texture, bounds, flags);
+            const auto result = s_originalVRSubmit(compositor, eye, texture, bounds, flags);
+            if (countsFrame) {
+                sceneDepth::internal::leaveSubmit(sharedDepth);
+            }
+            return result;
         }
 
         /**
@@ -918,6 +932,14 @@ namespace f4cf::render
             }
             s_drawCaptureMarkerName = widen(std::format("{} overlays", g_mod ? g_mod->getName() : std::string("F4CF")));
             s_d3dInitialized = true;
+
+            // found or created here, on the game thread, rather than by the hook's first Submit
+            const auto& sharedDepth = sceneDepth::internal::sharedSceneDepth();
+            if (sharedDepth.participants > 0) {
+                logger::info("The scene depth copy is shared with the framework mods of this process, {} of them so far", sharedDepth.participants);
+            } else {
+                logger::warn("The scene depth copy is this mod's own: the one the framework mods share could not be found or created");
+            }
         }
 
         if (!installSubmitHook()) {

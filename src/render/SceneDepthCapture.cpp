@@ -14,6 +14,7 @@
 #include <windows.h>
 #include <wrl/client.h>
 
+#include "../perf/Perf.h"
 #include "CallSiteHook.h"
 #include "RenderUtils.h"
 #include "SceneDepthDiagnostics.h"
@@ -306,6 +307,11 @@ namespace f4cf::render::sceneDepth
         WorldPassTally s_depthPassTally{ true };
         // the frame the world's depth was last copied in under an upscaler; 0 is never a frame
         std::uint64_t s_copiedEpoch = 0;
+
+        // The scan of each committed graphics state while the capture is on, dozens a frame, a root of its own inside
+        // the engine's frame. Every framework mod that captures runs its own; this is what one more mod costs on the
+        // CPU. Constructed with the DLL, so the first commit does not take the perf registry's lock.
+        perf::Site s_commitPerfSite("f4cf::render::sceneDepth::onGraphicsStateCommitted", nullptr, __FILE__, __LINE__);
 
         std::atomic<bool> s_installed = false;
         // a failed install is permanent: the addresses are not going to start matching later, and
@@ -725,6 +731,7 @@ namespace f4cf::render::sceneDepth
             if (!s_requested.load(std::memory_order_acquire) || internal::activeStrategy() == internal::Strategy::Off) {
                 return;
             }
+            const perf::Scope perfScope(s_commitPerfSite);
             auto* context = getContext();
             if (!context) {
                 internal::countStage(internal::CaptureStage::NoContext);
