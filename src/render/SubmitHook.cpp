@@ -112,6 +112,9 @@ namespace f4cf::render
         perf::Site s_drawGpuSite(DRAW_PERF_FUNCTION, nullptr, __FILE__, __LINE__, perf::SiteKind::Gpu);
         perf::Site s_setupGpuSite(DRAW_PERF_FUNCTION, "setup", __FILE__, __LINE__, perf::SiteKind::Gpu);
         perf::GpuTimer s_gpuTimer(s_drawGpuSite, "gpu.drawMs");
+        // The draw in the player-space pass, into the same sites: a timer of its own, since one timer times one frame at
+        // a time and the pass and Submit both draw in every frame.
+        perf::GpuTimer s_inFrameGpuTimer(s_drawGpuSite, "gpu.drawInFrameMs");
 
         /**
          * RTV over the submitted eye texture, cached keyed by texture pointer + size - the texture
@@ -427,8 +430,11 @@ namespace f4cf::render
             const ScopedPipelineState savedState(context);
             ID3DUserDefinedAnnotation* const captureAnnotation = s_captureAnnotation && s_captureAnnotation->GetStatus() ? s_captureAnnotation.Get() : nullptr;
             const ScopedCaptureMarker drawMarker(captureAnnotation, s_drawCaptureMarkerName);
+            const auto gpuFrame = s_inFrameGpuTimer.begin(context);
             bindFrame(frame);
-            runCallbacks(frame, captureAnnotation, drawsInFrame, [](const DrawCallbackEntry&) {
+            gpuFrame.mark(s_setupGpuSite, "gpu.draw.setupMs");
+            runCallbacks(frame, captureAnnotation, drawsInFrame, [&gpuFrame](const DrawCallbackEntry& entry) {
+                gpuFrame.mark(*entry.gpuSite, entry.gpuPlotName.c_str());
             });
             s_inFrameDraw.store(InFrameDraw::Drawn, std::memory_order_relaxed);
         }

@@ -90,7 +90,7 @@ Every mod gets these sites without code of its own:
 | `GetControllerState`, `GetControllerStateWithPose` | under the site that polls | the mod's own controller-state polls (`SelfControllerReadScope`) through the suppressor's vtable hooks; `/frame` is how often the mod reads. Everyone else's polls are not timed: every mod's hook sees the same ones, so each mod's table would show the whole game's |
 | `render::drawToSubmittedTexture`, each draw callback under it by its registered name | a root on the game thread, after the frame | overlay drawing in the Submit hook, which FO4VR calls on the game thread about a millisecond after the mod's frame (on the loading screen's own thread during a load); CPU time only; absent while nothing draws |
 | `UIManager::onFrameUpdate` | where the mod calls it | vrui, while a UI is attached |
-| `render::drawToSubmittedTexture`, and under it `setup` and each draw callback by its registered name | the `gpu` tree | the GPU time of the overlay drawing: the shared setup, then each layer (vrui panels, ImGui canvases, debug draw, activation-sphere icons); read back 1-3 frames late |
+| `render::drawToSubmittedTexture`, and under it `setup` and each draw callback by its registered name | the `gpu` tree | the GPU time of the overlay drawing, in the player-space pass and at Submit: the shared setup, then each layer (vrui panels, ImGui canvases, debug draw, activation-sphere icons); read back 1-3 frames late |
 
 ## GPU time
 
@@ -113,7 +113,9 @@ gpuFrame.mark(blurSite, "gpu.myLayer.blurMs");
 
 - **The Submit host times every layer**, with no code in the layers: the whole draw as
   `render::drawToSubmittedTexture`, and under it the shared `setup` and each draw callback by its
-  registered name, so every layer has a GPU time next to its CPU time.
+  registered name, so every layer has a GPU time next to its CPU time. The draw in the game's
+  player-space pass and the one at Submit are both recorded there, as their CPU time is, so the
+  whole draw counts up to two a frame (`gpu.drawInFrameMs` and `gpu.drawMs` in Tracy).
 - **Read 1-3 frames late**, without waiting or flushing. Four frames can be in flight; a frame is
   not timed while all four are, and one the GPU clock was disjoint over is dropped, as are the frames
   still in flight at a reset.
