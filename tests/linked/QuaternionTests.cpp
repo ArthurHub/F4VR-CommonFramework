@@ -147,12 +147,11 @@ TEST_CASE("Quaternion: a slerp goes part of the way to another rotation")
         quaternion.slerp(0.5f, target * -1.0f);
         requireNear(quaternion.getMatrix(), aboutAxis(PI / 4, Z).getMatrix());
     }
-    SECTION("and stays where it is next to the target")
+    SECTION("and still moves when it is next to the target")
     {
         auto quaternion = aboutAxis(PI / 2 + 0.001f, Z);
-        const auto before = quaternion;
         quaternion.slerp(0.5f, target);
-        requireNear(quaternion, before);
+        requireNear(quaternion, aboutAxis(PI / 2 + 0.0005f, Z));
     }
 }
 
