@@ -65,6 +65,11 @@ modsConfig.addFunction("calibrate", [](const Params& params) {
 // a state that a condition of the config spec asks: { "clientState": "calibrating", "equals": false }
 modsConfig.addState("calibrating", [] { return std::optional<Value>(isCalibrating()); });
 
+// a state that a setting of the config spec is kept in: "storage": { "clientState": "pipboyType" }. The
+// setter applies the value in the mod as the menu changes it
+modsConfig.addState("pipboyType", [] { return std::optional<Value>(pipboyType()); },
+    [](const Value& value) { setPipboyType(std::get<int>(value)); });
+
 // the options of a choice with "listFromClientCallback": true, by the setting's id
 modsConfig.addOptions("preset", [] { return std::vector<Option>{ { .value = std::string("default"), .text = "Default" } }; });
 
@@ -99,6 +104,9 @@ modsConfig.openMenu("body");
   `restoreMenu` does nothing while the menu is not minimized, as the player showed or closed it.
 - A function returns at once: work that takes longer goes on after it, and a state tells the rows
   that it runs.
+- A state's setter applies a value the menu gives it: each preview of a `live` setting, its Discard
+  back to the value before, and the value a Save wrote. It does not persist: a mod that keeps the
+  value writes it from `subscribeToSaves`. A state with no setter is a `readOnly` setting's.
 - `api()` gives the menu's interface, for what the class does not wrap. It is null until the client
   connects.
 

@@ -40,6 +40,7 @@
 //         return FunctionResult{ .done = true, .message = std::format("Done: {:.2f} m.", measure(params.getInt("samples", 10))) };
 //     });
 //     modsConfig.addState("calibrating", [] { return std::optional<Value>(isCalibrating()); });
+//     modsConfig.addState("pipboyType", [] { return std::optional<Value>(pipboyType()); }, [](const Value& value) { setPipboyType(std::get<int>(value)); });
 //     modsConfig.subscribeToChanges([](const Change& change) { previewOrRestore(change.path, change.value, change.discard); });
 //     modsConfig.subscribeToSaves([](const Saved&) { endPreviewsAndReload(); });
 //
@@ -114,7 +115,8 @@ namespace mods_config::api
      * Where a setting's value is kept. In a file of the config spec: the file, and the names that lead to the value, its
      * section and its key in an INI file, and in a TOML or a JSON file the tables it is in and its key. In the game, with
      * no file: a global's form, or a script property's form, its script, null for the form's first, and its name. A
-     * form is its plugin and its id in it, as `MyMod.esp|800`.
+     * form is its plugin and its id in it, as `MyMod.esp|800`. In a state of the client, with no file and no form: the
+     * state's name, and the client applies the value as it is told it.
      */
     struct StorageView
     {
@@ -124,6 +126,7 @@ namespace mods_config::api
         const char* form;
         const char* scriptName;
         const char* propertyName;
+        const char* clientState;
     };
 
     /**
@@ -152,8 +155,9 @@ namespace mods_config::api
      * A change of a `live` setting of the client's config spec, while it waits for a Save, which the client shows in the
      * game: the value it was sent last for the setting, or the setting's baseline, and the new one, in the setting's
      * valueType. A setting kept in the game is in it already: the menu writes it before it tells the client, which can
-     * do what more it needs. A Discard comes as the player sets the value back, discards it, or leaves the mod with it.
-     * A Save sends none: its SaveBatch has the setting, and the file or the game has the value then.
+     * do what more it needs. One kept in a state of the client is applied by the client. A Discard comes as the player
+     * sets the value back, discards it, or leaves the mod with it. A Save sends none: its SaveBatch has the setting, and
+     * the file or the game has the value then.
      */
     struct SettingChange
     {
@@ -177,7 +181,8 @@ namespace mods_config::api
      * What a Save of the client's config spec wrote, which the client is told once, after the action of each setting
      * ran: every setting it wrote, of any `applies`, in the order of the config spec, the files it wrote, and how many
      * Saves of the config spec wrote something in this run of the game, this one with them. A `live` setting the client
-     * shows a preview of is in it, and its preview ends: the file or the game has the value.
+     * shows a preview of is in it, and its preview ends: the file or the game has the value. A setting kept in a state of
+     * the client is written by this alone, and the client applies it.
      */
     struct SaveBatch
     {
@@ -273,8 +278,9 @@ namespace mods_config::api
         // runs a function, with the button's params: true when it did what it does. Work that takes longer goes on after
         virtual bool runFunction(const char* name, IFunctionCall* call) = 0;
 
-        // answers a state, which a `clientState` condition asks once a frame while the mod is shown, in value: false
-        // while it is not available. It changes nothing. A String's text stays valid until a state is asked next
+        // answers a state, which a `clientState` condition asks once a frame while the mod is shown, and a setting kept
+        // in it as the mod is selected, in value: false while it is not available. It changes nothing. A String's text
+        // stays valid until a state is asked next
         virtual bool answerState(const char* name, SettingValue* value) = 0;
 
         // gives the options of a choice with `listFromClientCallback`, as the mod is selected: false for one it has none of
@@ -515,8 +521,9 @@ namespace mods_config::api
      * is kept, the value the mod was sent last for the setting and the new one, and whether it is a Discard back to the
      * value the editing session started with. A setting kept in a file has its file's name, format and absolute path,
      * and the names that lead to the value in it. One kept in the game has no file, and its form, as `MyMod.esp|800`,
-     * with the script and the name of a property: the game has the value already. A setting a Save wrote is one too,
-     * with its value before the Save and the value written. Its texts are valid during the handler: copy what you keep.
+     * with the script and the name of a property: the game has the value already. One kept in a state of the mod has
+     * the state's name alone, and the state's setter has applied the value. A setting a Save wrote is one too, with its
+     * value before the Save and the value written. Its texts are valid during the handler: copy what you keep.
      */
     struct Change
     {
@@ -528,6 +535,7 @@ namespace mods_config::api
         std::string_view form;
         std::string_view scriptName;
         std::string_view propertyName;
+        std::string_view clientState;
         Value previous;
         Value value;
         bool discard = false;
@@ -558,6 +566,7 @@ namespace mods_config::api
 
     using ClientFunction = std::function<FunctionResult(const Params& params)>;
     using ClientState = std::function<std::optional<Value>()>;
+    using StateSetter = std::function<void(const Value& value)>;
     using ClientOptions = std::function<std::vector<Option>()>;
     using MenuEventHandler = std::function<void(MenuEventType event, std::string_view pageId)>;
     using ChangeHandler = std::function<void(const Change& change)>;
@@ -639,11 +648,18 @@ namespace mods_config::api
 
         /**
          * Adds a state, which a `clientState` condition of the config spec asks by its name, once a frame while the mod
-         * is shown: it answers at once and changes nothing. None while it is not available.
+         * is shown: it answers at once and changes nothing. None while it is not available. A setting of the config spec
+         * can be kept in it, which the menu reads as the mod is selected and gives the setter, which applies the value in
+         * the mod: each preview of a `live` one, its Discard back to the baseline, and the value a Save wrote. It cannot
+         * refuse a value, and is called again with one it has. A state with no setter is a `readOnly` setting's.
          */
-        bool addState(std::string name, ClientState state)
+        bool addState(std::string name, ClientState state, StateSetter setter = {})
         {
-            return _states.try_emplace(std::move(name), std::move(state)).second;
+            const auto added = _states.try_emplace(name, std::move(state)).second;
+            if (added && setter) {
+                _stateSetters.emplace(std::move(name), std::move(setter));
+            }
+            return added;
         }
 
         /**
@@ -899,6 +915,7 @@ namespace mods_config::api
                 .form = storage.form ? storage.form : "",
                 .scriptName = storage.scriptName ? storage.scriptName : "",
                 .propertyName = storage.propertyName ? storage.propertyName : "",
+                .clientState = storage.clientState ? storage.clientState : "",
                 .previous = fromSettingValue(previous),
                 .value = fromSettingValue(value),
                 .discard = discard };
@@ -909,18 +926,34 @@ namespace mods_config::api
         }
 
         /**
-         * Calls the handlers of the changes with a change, as the C++ client has it.
+         * Calls the setter of the state a setting is kept in with the value of its change, which a Discard has the
+         * baseline as. Nothing for a setting kept elsewhere, and for a state with no setter.
+         */
+        void applyState(const Change& change) const
+        {
+            if (change.clientState.empty()) {
+                return;
+            }
+            if (const auto setter = _stateSetters.find(change.clientState); setter != _stateSetters.end()) {
+                setter->second(change.value);
+            }
+        }
+
+        /**
+         * Calls the handlers of the changes with a change, as the C++ client has it, after the setter of a state.
          */
         void onChange(const SettingChange* change) override
         {
             const auto mine = toChange(*change->setting, change->previousValue, change->value, change->phase == ChangePhase::Discard);
+            applyState(mine);
             for (const auto& handler : _changeHandlers) {
                 handler(mine);
             }
         }
 
         /**
-         * Calls the handlers of the Saves with what a Save wrote, as the C++ client has it.
+         * Calls the handlers of the Saves with what a Save wrote, as the C++ client has it, after the setter of each
+         * state it wrote.
          */
         void onSaved(const SaveBatch* batch) override
         {
@@ -928,6 +961,7 @@ namespace mods_config::api
             for (std::uint32_t i = 0; i < batch->settingCount; ++i) {
                 const auto& setting = batch->settings[i];
                 saved.settings.push_back(toChange(*setting.setting, setting.baselineValue, setting.value, false));
+                applyState(saved.settings.back());
             }
             for (std::uint32_t i = 0; i < batch->fileCount; ++i) {
                 const auto& file = batch->writtenFiles[i];
@@ -946,6 +980,7 @@ namespace mods_config::api
         // what the mod added, by name
         std::map<std::string, ClientFunction, std::less<>> _functions;
         std::map<std::string, ClientState, std::less<>> _states;
+        std::map<std::string, StateSetter, std::less<>> _stateSetters;
         std::map<std::string, ClientOptions, std::less<>> _options;
 
         // the quick launch entries added before it connected, by their functions
