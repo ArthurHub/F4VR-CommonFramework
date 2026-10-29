@@ -27,6 +27,7 @@ why something drew where it did.
 | [`RenderUtils.h`](RenderUtils.h) / [`.cpp`](RenderUtils.cpp) | The game's D3D11 device/context, the engine's per-eye view-projection + posAdjust (`StereoCameraConstants`), and `ScopedPipelineState` — the RAII snapshot taken around the whole callback list. |
 | [`TextFont.h`](TextFont.h) / [`.cpp`](TextFont.cpp) | The framework's font as a signed-distance-field atlas, and the measuring a producer lays text out with (`measureText`, `fitText`, `textDescent`, `measureTextRun`). |
 | [`Texture.h`](Texture.h) / [`.cpp`](Texture.cpp) | Images loaded through the **engine's own** texture loader, shared per path, so a path resolves the way a NIF's texture path does — loose files and BA2 archives alike. And images made from pixels in memory. |
+| [`CallSiteHook.h`](CallSiteHook.h) / [`.cpp`](CallSiteHook.cpp) | Whether a game call site the render hooks patch still calls its function, or another plugin's hook of it, which they chain onto, and the module that hook belongs to. |
 | [`SceneDepthCapture.h`](SceneDepthCapture.h) / [`.cpp`](SceneDepthCapture.cpp) | Takes hold of the engine's scene depth for the frame being submitted, read-only, so a layer can be occluded by the world. |
 | [`SceneDepthResample.h`](SceneDepthResample.h) / [`.cpp`](SceneDepthResample.cpp) | The copy made under an upscaler (DLSS/FSR), which draws the world into a sub-viewport of a full-size buffer and clears it before submit. |
 | [`SceneDepthDiagnostics.h`](SceneDepthDiagnostics.h) / [`.cpp`](SceneDepthDiagnostics.cpp) | `sSceneDepthStrategy` / `bSceneDepthDiagnostics`, the watch rows, and the shadow A/B that elected the shipped policy. |
@@ -198,9 +199,13 @@ top of everything.
   and Submit draws the layers that frame instead.
 - **A frame the pass does not run draws none of them**, which is what a loading screen is: it is drawn
   from its own thread and submitted with no world.
-- **No hook, every layer at Submit**: where the call is not the expected one (another plugin hooked
-  it, a different build), or the mod's trampoline has no room for it, every layer draws at Submit as
-  before, over the menus, and the log says why. `sOverlayDrawPass = "submit"` in `[Debug]` does the
+- **Every framework mod draws in the pass.** Each carries its own copy of the framework and hooks the
+  same call: a call another plugin hooked first, which lands on executable code outside the game's
+  image, is chained onto, and the log names the module it chained after. The mod installed last draws
+  first, so where two mods' layers overlap the one installed first is on top, whatever their depth.
+- **No hook, every layer at Submit**: where the call is not the expected one (a different build), or
+  the mod's trampoline has no room for it, every layer draws at Submit as before, over the menus, and
+  the log says why. `sOverlayDrawPass = "submit"` in `[Debug]` does the
   same with the hook installed, live ([debug-config](../../docs/debug-config.md#soverlaydrawpass)).
 - What the pass draws after the layers is over them whatever its depth, as the layers write none:
   the Pip-Boy and the wand models.

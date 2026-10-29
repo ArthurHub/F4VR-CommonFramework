@@ -18,6 +18,7 @@
 #include "../ModBase.h"
 #include "../perf/GpuTimer.h"
 #include "../perf/Perf.h"
+#include "CallSiteHook.h"
 #include "SceneDepthCapture.h"
 #include "SceneDepthDiagnostics.h"
 
@@ -455,8 +456,8 @@ namespace f4cf::render
 
         /**
          * Patch the call of the player-space pass that draws its first scene, after proving the call site and the
-         * function it calls are the ones of 1.2.72. A call another plugin has hooked already is left alone: the layers
-         * then draw at Submit, as without the hook.
+         * function it calls are the ones of 1.2.72. A call another framework mod has hooked already is chained onto, so
+         * each mod's layers draw in the pass: the one installed last draws first, under the others.
          */
         bool installPlayerPassHook()
         {
@@ -466,11 +467,8 @@ namespace f4cf::render
                 logger::warn("Player-space pass hook not installed: the draw function does not start with the expected instructions");
                 return false;
             }
-            const auto* callBytes = reinterpret_cast<const std::uint8_t*>(callsite);
-            std::int32_t relative = 0;
-            std::memcpy(&relative, callBytes + 1, sizeof(relative));
-            if (callBytes[0] != 0xE8 || callsite + 5 + static_cast<std::intptr_t>(relative) != draw) {
-                logger::warn("Player-space pass hook not installed: the call site does not call the draw function");
+            const auto callSite = internal::inspectCallSite(callsite, draw, "Player-space pass hook");
+            if (callSite.state == internal::CallSiteState::Invalid) {
                 return false;
             }
             // the jump the call lands on: jmp qword ptr [rip+0] and the address. A mod that allocated too little
@@ -489,7 +487,14 @@ namespace f4cf::render
                 return false;
             }
             s_inFrameInstalled.store(true, std::memory_order_release);
-            logger::info("Player-space pass hook installed: the overlays draw under the game's menus");
+            if (callSite.state == internal::CallSiteState::AlreadyHooked) {
+                logger::info(
+                    "Player-space pass hook installed, chained after an existing hook of the same call in {}: the overlays draw under the "
+                    "game's menus",
+                    internal::describeHookOwner(callSite.target));
+            } else {
+                logger::info("Player-space pass hook installed: the overlays draw under the game's menus");
+            }
             return true;
         }
 

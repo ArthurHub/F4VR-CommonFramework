@@ -14,6 +14,7 @@
 #include <windows.h>
 #include <wrl/client.h>
 
+#include "CallSiteHook.h"
 #include "RenderUtils.h"
 #include "SceneDepthDiagnostics.h"
 #include "SceneDepthResample.h"
@@ -27,11 +28,10 @@ namespace f4cf::render::sceneDepth
         // call site is the seam where it can be read. Hooking the CALL rather than the function
         // leaves CommitGraphicsState's other callers alone. Other plugins read depth at the same seam
         // (ROCK's RPS UI Framework does), so the hook chains onto one already there rather than
-        // refusing it - see inspectCallSite.
+        // refusing it - see inspectCallSite in CallSiteHook.cpp.
         constexpr std::uintptr_t COMMIT_GRAPHICS_STATE_RVA = 0x1D9B5D0;
         constexpr std::uintptr_t CAPTURE_CALLSITE_RVA = 0x1D8E84A;
 
-        constexpr std::uint8_t CALL_REL32_OPCODE = 0xE8;
         constexpr std::size_t CALL_REL32_LENGTH = 5;
 
         // First instructions of CommitGraphicsState. Checked before patching so a shifted or wrong
@@ -766,108 +766,6 @@ namespace f4cf::render::sceneDepth
             }
             onGraphicsStateCommitted();
         }
-
-        /**
-         * What the call site holds before we patch it.
-         */
-        enum class CallSiteState : std::uint8_t
-        {
-            // not the call we expect; nothing may be written
-            Invalid,
-            // the engine's own call, straight to CommitGraphicsState
-            Untouched,
-            // already redirected by another plugin's hook of the same seam, which we chain onto
-            AlreadyHooked,
-        };
-
-        /**
-         * Whether the game executable's image contains the address. REL::Module exposes the base but
-         * not the size, so the size comes from the image's own PE headers.
-         */
-        bool isInsideGameImage(const std::uintptr_t address)
-        {
-            const std::uintptr_t base = REL::Module::get().base();
-            const auto* dosHeader = reinterpret_cast<const IMAGE_DOS_HEADER*>(base);
-            const auto* ntHeaders = reinterpret_cast<const IMAGE_NT_HEADERS64*>(base + dosHeader->e_lfanew);
-            return address >= base && address < base + ntHeaders->OptionalHeader.SizeOfImage;
-        }
-
-        /**
-         * Whether `length` bytes at the address are committed, executable memory - checked before
-         * reading another plugin's code, or trusting that a call into it is a hook.
-         */
-        bool isExecutableMemory(const std::uintptr_t address, const std::size_t length)
-        {
-            MEMORY_BASIC_INFORMATION info{};
-            if (VirtualQuery(reinterpret_cast<LPCVOID>(address), &info, sizeof(info)) != sizeof(info)) {
-                return false;
-            }
-            constexpr DWORD EXECUTABLE = PAGE_EXECUTE | PAGE_EXECUTE_READ | PAGE_EXECUTE_READWRITE | PAGE_EXECUTE_WRITECOPY;
-            const auto regionEnd = reinterpret_cast<std::uintptr_t>(info.BaseAddress) + info.RegionSize;
-            return info.State == MEM_COMMIT && (info.Protect & EXECUTABLE) != 0 && address + length <= regionEnd;
-        }
-
-        /**
-         * Name the module an existing hook's code belongs to, for the log. A hook written through a
-         * trampoline lands first on a stub - jmp qword ptr [rip+0] followed by the absolute address -
-         * in memory no module owns, so one such stub is followed to the detour behind it.
-         */
-        std::string describeHookOwner(std::uintptr_t target)
-        {
-            constexpr std::array<std::uint8_t, 6> ABSOLUTE_JMP{ 0xFF, 0x25, 0x00, 0x00, 0x00, 0x00 };
-            if (isExecutableMemory(target, ABSOLUTE_JMP.size() + sizeof(std::uintptr_t)) &&
-                std::memcmp(reinterpret_cast<const void*>(target), ABSOLUTE_JMP.data(), ABSOLUTE_JMP.size()) == 0) {
-                std::memcpy(&target, reinterpret_cast<const void*>(target + ABSOLUTE_JMP.size()), sizeof(target));
-            }
-
-            HMODULE module = nullptr;
-            if (!GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT, reinterpret_cast<LPCSTR>(target), &module)) {
-                return "memory owned by no module";
-            }
-            std::array<char, MAX_PATH> path{};
-            const DWORD length = GetModuleFileNameA(module, path.data(), static_cast<DWORD>(path.size()));
-            const std::string_view fullPath(path.data(), length);
-            const auto separator = fullPath.find_last_of("\\/");
-            return std::string(separator == std::string_view::npos ? fullPath : fullPath.substr(separator + 1));
-        }
-
-        /**
-         * Prove the addresses are what we think before writing anything, and say whether another
-         * plugin hooked the call first.
-         *
-         * CommitGraphicsState's own first instructions prove the build and the function address. The
-         * call site then has to be a CALL landing either on that function, untouched, or on executable
-         * code outside the game's image - which can only be another plugin's hook of this call, and is
-         * chained onto rather than refused, since several plugins reading depth here is expected. A call
-         * landing anywhere else inside the game means the address is not the call we expect, and the hook
-         * declines to install.
-         */
-        CallSiteState inspectCallSite(const std::uintptr_t callsite, const std::uintptr_t commitGraphicsState, std::uintptr_t& currentTarget)
-        {
-            if (std::memcmp(reinterpret_cast<const void*>(commitGraphicsState), COMMIT_PROLOGUE.data(), COMMIT_PROLOGUE.size()) != 0) {
-                logger::warn("scene depth hook not installed: the target function does not start with the expected instructions");
-                return CallSiteState::Invalid;
-            }
-
-            const auto* callBytes = reinterpret_cast<const std::uint8_t*>(callsite);
-            if (callBytes[0] != CALL_REL32_OPCODE) {
-                logger::warn("scene depth hook not installed: no call instruction at the expected call site");
-                return CallSiteState::Invalid;
-            }
-
-            std::int32_t relative = 0;
-            std::memcpy(&relative, callBytes + 1, sizeof(relative));
-            currentTarget = callsite + CALL_REL32_LENGTH + static_cast<std::intptr_t>(relative);
-            if (currentTarget == commitGraphicsState) {
-                return CallSiteState::Untouched;
-            }
-            if (!isInsideGameImage(currentTarget) && isExecutableMemory(currentTarget, 1)) {
-                return CallSiteState::AlreadyHooked;
-            }
-
-            logger::warn("scene depth hook not installed: the call site targets neither the expected function nor another plugin's hook");
-            return CallSiteState::Invalid;
-        }
     }
 
     bool ensureInstalled()
@@ -894,9 +792,13 @@ namespace f4cf::render::sceneDepth
 
         const auto callsite = REL::Offset(CAPTURE_CALLSITE_RVA).address();
         const auto commitGraphicsState = REL::Offset(COMMIT_GRAPHICS_STATE_RVA).address();
-        std::uintptr_t currentTarget = 0;
-        const CallSiteState state = inspectCallSite(callsite, commitGraphicsState, currentTarget);
-        if (state == CallSiteState::Invalid) {
+        // the function's own first instructions prove the build and the function address
+        if (std::memcmp(reinterpret_cast<const void*>(commitGraphicsState), COMMIT_PROLOGUE.data(), COMMIT_PROLOGUE.size()) != 0) {
+            logger::warn("scene depth hook not installed: the target function does not start with the expected instructions");
+            return false;
+        }
+        const auto callSite = render::internal::inspectCallSite(callsite, commitGraphicsState, "scene depth hook");
+        if (callSite.state == render::internal::CallSiteState::Invalid) {
             return false;
         }
 
@@ -911,8 +813,8 @@ namespace f4cf::render::sceneDepth
 
         s_installed.store(true, std::memory_order_release);
         s_installFailed.store(false, std::memory_order_release);
-        if (state == CallSiteState::AlreadyHooked) {
-            logger::info("scene depth capture hook installed, chained after an existing hook of the same call in {}", describeHookOwner(currentTarget));
+        if (callSite.state == render::internal::CallSiteState::AlreadyHooked) {
+            logger::info("scene depth capture hook installed, chained after an existing hook of the same call in {}", render::internal::describeHookOwner(callSite.target));
         } else {
             logger::info("scene depth capture hook installed");
         }
