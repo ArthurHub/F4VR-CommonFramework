@@ -5,7 +5,9 @@
 
 #include <imgui.h>
 
+#include "../render/Texture.h"
 #include "ImGuiCanvas.h"
+#include "ImGuiTextures.h"
 
 namespace f4cf::imgui::internal
 {
@@ -30,19 +32,19 @@ namespace f4cf::imgui::internal
          */
         void copyFrom(const ImDrawData& source);
 
-        /**
-         * Multiply every position in the copy by `factor` - vertices, clip rects and the display
-         * rect - so a frame laid out at 1x rasterizes at that multiple.
-         */
-        void scale(float factor);
-
         ImDrawData drawData{};
+
+        // The views of the textures in the draw data, which names each by its pointer alone: the images, and
+        // ImGui's font texture. Held here, a texture that is dropped is alive until the last frame that draws
+        // it is drawn and let go.
+        std::vector<render::TextureView> textures;
     };
 
     /**
      * One canvas's composited quad: four world-space corners (resolved game-side) and the sub-rect of
-     * the shared atlas that holds its pixels. Every placement mode reduces to this, which is why the
-     * renderer needs to know nothing about vrui, nodes or billboards.
+     * the frame's texture that holds its pixels. Every placement mode reduces to this, which is why
+     * the renderer needs to know nothing about vrui, nodes or billboards. A curved canvas reduces to
+     * several of them, side by side.
      */
     struct CanvasQuad
     {
@@ -61,8 +63,8 @@ namespace f4cf::imgui::internal
     };
 
     /**
-     * One published frame: the ImGui pixels to rasterize into the atlas, plus where each canvas's
-     * slice of that atlas goes in the world.
+     * One published frame: the ImGui pixels to rasterize into a texture, plus where each canvas's
+     * slice of that texture goes in the world.
      */
     struct RenderFrame
     {
@@ -71,6 +73,16 @@ namespace f4cf::imgui::internal
         // the last one instead of blinking
         std::shared_ptr<ClonedDrawData> drawData;
         std::vector<CanvasQuad> quads;
+
+        // The texture the frame is rasterized into, and its size in texture pixels: the atlas the canvases
+        // share, or the texture of a dedicated canvas, which has the size of that canvas.
+        bool dedicated = false;
+        int textureWidth = 0;
+        int textureHeight = 0;
+
+        // The parts of ImGui's textures to write before the frame is drawn, in order. A frame that replaces
+        // another before it is drawn takes the other's first.
+        std::vector<TextureWrite> textureWrites;
 
         bool empty() const
         {
@@ -84,8 +96,8 @@ namespace f4cf::imgui::internal
 
     /**
      * The per-frame pump, run after the mod's onFrameUpdate: build one ImGui frame containing every
-     * visible canvas, clone it, and publish it with the quads to the render thread. A no-op while no
-     * canvas is visible.
+     * visible canvas, or the dedicated canvas alone while one is shown, clone it, and publish it with
+     * the quads to the render thread. A no-op while no canvas is visible.
      */
     void onFrameEnd();
 }

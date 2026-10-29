@@ -2,19 +2,35 @@
 
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <cstring>
 #include <optional>
+#include <string>
+#include <string_view>
 
 #include <d3dcompiler.h>
 #include <wrl/client.h>
 
+#include "../perf/GpuTimer.h"
+#include "../perf/Perf.h"
 #include "RenderUtils.h"
+#include "SceneDepthShared.h"
 
 namespace f4cf::render::sceneDepth::internal
 {
     namespace
     {
         using Microsoft::WRL::ComPtr;
+
+        // the function the copy is timed as
+        constexpr const char* RESAMPLE_PERF_FUNCTION = "f4cf::render::sceneDepth::resampleWorldDepth";
+
+        // The GPU time of the copy, a root of its own in the gpu tree: it runs inside the engine's frame, not under
+        // Submit. The framework mods share one copy, so only the mod that drew a frame's copy records it. Constructed
+        // with the DLL, so the first copy does not take the perf registry's lock.
+        perf::Site s_resampleGpuSite(RESAMPLE_PERF_FUNCTION, nullptr, __FILE__, __LINE__, perf::SiteKind::Gpu);
+        perf::Site s_resampleDrawGpuSite(RESAMPLE_PERF_FUNCTION, "draw", __FILE__, __LINE__, perf::SiteKind::Gpu);
+        perf::GpuTimer s_resampleGpuTimer(s_resampleGpuSite, "gpu.sceneDepthCopyMs");
 
         // One triangle that covers the whole target, from the vertex id alone, so the pass needs no
         // vertex buffer or input layout: (-1,1), (3,1), (-1,-3) in clip space.
@@ -57,8 +73,8 @@ float main(float4 position : SV_Position) : SV_Depth
             bool operator==(const ResampleConstants&) const = default;
         };
 
-        // Render thread only. The pipeline is built once and kept - it is small; the copy and the view
-        // of the engine's texture follow that texture, and are released when nothing draws against them.
+        // Render thread only. The pipeline is built once and kept - it is small; the view of the engine's
+        // texture follows that texture, and is released when nothing of this mod draws against the copy.
         bool s_pipelineFailed = false;
         ComPtr<ID3D11VertexShader> s_vertexShader;
         ComPtr<ID3D11PixelShader> s_pixelShader;
@@ -69,16 +85,70 @@ float main(float4 position : SV_Position) : SV_Depth
         // what the constant buffer holds, so a frame whose viewport has not changed skips the upload
         std::optional<ResampleConstants> s_uploadedConstants;
 
-        ComPtr<ID3D11Texture2D> s_copy;
-        ComPtr<ID3D11DepthStencilView> s_copyWriteView;
-        ComPtr<ID3D11DepthStencilView> s_copyReadOnlyView;
-        UINT s_copyWidth = 0;
-        UINT s_copyHeight = 0;
-        // a new texture's contents are undefined, so it is not handed out before the first pass writes it
-        bool s_copyWritten = false;
-
+        // The copy itself is in the struct every framework mod shares (SharedSceneDepthV1); this mod's view of the
+        // engine's texture is its own.
         ID3D11Texture2D* s_engineTexture = nullptr;
         ComPtr<ID3D11ShaderResourceView> s_engineView;
+
+        // viewports within this many pixels are one, as in the capture's election, so two mods that round the same
+        // world differently still share one copy
+        constexpr float SHARED_VIEWPORT_PIXELS = 8.0f;
+
+        // logged once each: using another mod's copy, and two mods' worlds that differ
+        bool s_loggedSharedCopy = false;
+        bool s_loggedViewportConflict = false;
+
+        bool sameViewport(const D3D11_VIEWPORT& a, const D3D11_VIEWPORT& b)
+        {
+            return std::abs(a.TopLeftX - b.TopLeftX) <= SHARED_VIEWPORT_PIXELS && std::abs(a.TopLeftY - b.TopLeftY) <= SHARED_VIEWPORT_PIXELS &&
+                   std::abs(a.Width - b.Width) <= SHARED_VIEWPORT_PIXELS && std::abs(a.Height - b.Height) <= SHARED_VIEWPORT_PIXELS;
+        }
+
+        /**
+         * This mod's DLL, which a copy is marked with.
+         */
+        HMODULE ownModule()
+        {
+            static const HMODULE module = [] {
+                HMODULE found = nullptr;
+                GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT, reinterpret_cast<LPCSTR>(&ownModule), &found);
+                return found;
+            }();
+            return module;
+        }
+
+        std::string moduleName(const HMODULE module)
+        {
+            std::array<char, MAX_PATH> path{};
+            const DWORD length = module ? GetModuleFileNameA(module, path.data(), static_cast<DWORD>(path.size())) : 0;
+            const std::string_view fullPath(path.data(), length);
+            const auto separator = fullPath.find_last_of("\\/");
+            return std::string(separator == std::string_view::npos ? fullPath : fullPath.substr(separator + 1));
+        }
+
+        /**
+         * Whether this frame's copy of this world is in the shared struct already, made by a mod whose pass came
+         * first. The caller holds the lock.
+         */
+        bool copiedThisFrame(const SharedSceneDepthV1& shared, const D3D11_TEXTURE2D_DESC& engineDesc, const D3D11_VIEWPORT& worldViewport)
+        {
+            if (!shared.copy || shared.copiedFrame != currentFrame(shared) || shared.copyWidth != engineDesc.Width || shared.copyHeight != engineDesc.Height) {
+                return false;
+            }
+            if (!sameViewport(shared.copiedViewport, worldViewport)) {
+                if (!s_loggedViewportConflict) {
+                    s_loggedViewportConflict = true;
+                    logger::warn("scene depth resample: {} copied the world at {:.0f}x{:.0f} this frame, this mod elected {:.0f}x{:.0f}; the copy is drawn again",
+                        moduleName(shared.copiedBy),
+                        shared.copiedViewport.Width,
+                        shared.copiedViewport.Height,
+                        worldViewport.Width,
+                        worldViewport.Height);
+                }
+                return false;
+            }
+            return true;
+        }
 
         bool compileShader(const char* source, const char* name, const char* target, ComPtr<ID3DBlob>& blob)
         {
@@ -200,18 +270,16 @@ float main(float4 position : SV_Position) : SV_Depth
         }
 
         /**
-         * The copy's depth buffer, the size of the engine's. A float format holds whatever precision the
-         * engine's has, so the copy compares as the original would.
+         * The copy's depth buffer in the shared struct, the size of the engine's. A float format holds whatever
+         * precision the engine's has, so the copy compares as the original would. A new one has undefined contents,
+         * so it is not handed out before a pass writes it. The caller holds the lock.
          */
-        bool ensureCopy(ID3D11Device* device, const UINT width, const UINT height)
+        bool ensureCopy(SharedSceneDepthV1& shared, ID3D11Device* device, const UINT width, const UINT height)
         {
-            if (s_copy && s_copyWidth == width && s_copyHeight == height) {
+            if (shared.copy && shared.copyWidth == width && shared.copyHeight == height) {
                 return true;
             }
-            s_copyReadOnlyView.Reset();
-            s_copyWriteView.Reset();
-            s_copy.Reset();
-            s_copyWritten = false;
+            releaseSharedCopy(shared);
 
             D3D11_TEXTURE2D_DESC desc{};
             desc.Width = width;
@@ -228,17 +296,14 @@ float main(float4 position : SV_Position) : SV_Depth
             readOnlyDesc.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2D;
             readOnlyDesc.Flags = D3D11_DSV_READ_ONLY_DEPTH;
 
-            if (FAILED(device->CreateTexture2D(&desc, nullptr, s_copy.GetAddressOf())) ||
-                FAILED(device->CreateDepthStencilView(s_copy.Get(), nullptr, s_copyWriteView.GetAddressOf())) ||
-                FAILED(device->CreateDepthStencilView(s_copy.Get(), &readOnlyDesc, s_copyReadOnlyView.GetAddressOf()))) {
+            if (FAILED(device->CreateTexture2D(&desc, nullptr, &shared.copy)) || FAILED(device->CreateDepthStencilView(shared.copy, nullptr, &shared.copyWriteView)) ||
+                FAILED(device->CreateDepthStencilView(shared.copy, &readOnlyDesc, &shared.copyReadOnlyView))) {
                 logger::sample(10000, "scene depth resample: could not create the {}x{} depth copy", width, height);
-                s_copyReadOnlyView.Reset();
-                s_copyWriteView.Reset();
-                s_copy.Reset();
+                releaseSharedCopy(shared);
                 return false;
             }
-            s_copyWidth = width;
-            s_copyHeight = height;
+            shared.copyWidth = width;
+            shared.copyHeight = height;
             return true;
         }
 
@@ -294,15 +359,28 @@ float main(float4 position : SV_Position) : SV_Depth
     }
 
     /**
-     * Draw the resample pass inside a pipeline snapshot of its own. Our target is bound before the
-     * engine's depth, since D3D drops a shader view of a texture still bound as an output, and the
-     * engine's depth may be bound as one right now.
+     * Draw the resample pass inside a pipeline snapshot of its own, into the copy every framework mod shares, or
+     * use the one another mod drew this frame. Our target is bound before the engine's depth, since D3D drops a
+     * shader view of a texture still bound as an output, and the engine's depth may be bound as one right now.
      */
     bool resampleWorldDepth(ID3D11DeviceContext* context, ID3D11Texture2D* engineDepth, const D3D11_VIEWPORT& worldViewport)
     {
         if (!context || !engineDepth) {
             return false;
         }
+        D3D11_TEXTURE2D_DESC engineDesc{};
+        engineDepth->GetDesc(&engineDesc);
+
+        auto& shared = sharedSceneDepth();
+        const SharedSceneDepthLock lock(shared);
+        if (copiedThisFrame(shared, engineDesc, worldViewport)) {
+            if (!s_loggedSharedCopy && shared.copiedBy != ownModule()) {
+                s_loggedSharedCopy = true;
+                logger::info("scene depth resample: using the depth copy {} made this frame, which the framework mods share", moduleName(shared.copiedBy));
+            }
+            return true;
+        }
+
         if (outputMergerHasUnorderedAccessViews(context)) {
             logger::sample(10000, "scene depth resample: skipped a pass with unordered-access views bound, which restoring its render targets would unbind");
             return false;
@@ -310,10 +388,8 @@ float main(float4 position : SV_Position) : SV_Depth
 
         ComPtr<ID3D11Device> device;
         context->GetDevice(device.GetAddressOf());
-        D3D11_TEXTURE2D_DESC engineDesc{};
-        engineDepth->GetDesc(&engineDesc);
         if (!device || !ensurePipeline(device.Get()) || !ensureEngineView(device.Get(), engineDepth, engineDesc) ||
-            !ensureCopy(device.Get(), engineDesc.Width, engineDesc.Height)) {
+            !ensureCopy(shared, device.Get(), engineDesc.Width, engineDesc.Height)) {
             return false;
         }
 
@@ -322,7 +398,8 @@ float main(float4 position : SV_Position) : SV_Depth
             return false;
         }
 
-        context->OMSetRenderTargets(0, nullptr, s_copyWriteView.Get());
+        const auto gpuFrame = s_resampleGpuTimer.begin(context);
+        context->OMSetRenderTargets(0, nullptr, shared.copyWriteView);
         context->OMSetDepthStencilState(s_writeAlways.Get(), 0);
         context->OMSetBlendState(nullptr, nullptr, 0xFFFFFFFF);
 
@@ -342,26 +419,22 @@ float main(float4 position : SV_Position) : SV_Depth
         context->PSSetShaderResources(0, 1, &engineView);
 
         context->Draw(3, 0);
-        s_copyWritten = true;
+        gpuFrame.mark(s_resampleDrawGpuSite);
+        shared.copiedFrame = currentFrame(shared);
+        shared.copiedViewport = worldViewport;
+        shared.copiedBy = ownModule();
         return true;
     }
 
     ID3D11DepthStencilView* resampledWorldDepth(const UINT width, const UINT height)
     {
-        return s_copyWritten && s_copyWidth == width && s_copyHeight == height ? s_copyReadOnlyView.Get() : nullptr;
+        auto& shared = sharedSceneDepth();
+        const SharedSceneDepthLock lock(shared);
+        return shared.copiedFrame != 0 && shared.copyWidth == width && shared.copyHeight == height ? shared.copyReadOnlyView : nullptr;
     }
 
     void releaseResampledWorldDepth()
     {
-        if (!s_copy && !s_engineView) {
-            return;
-        }
-        s_copyReadOnlyView.Reset();
-        s_copyWriteView.Reset();
-        s_copy.Reset();
-        s_copyWidth = 0;
-        s_copyHeight = 0;
-        s_copyWritten = false;
         s_engineView.Reset();
         s_engineTexture = nullptr;
     }

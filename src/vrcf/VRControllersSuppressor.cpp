@@ -208,7 +208,7 @@ namespace f4cf::vrcf
     namespace
     {
         /**
-         * One hand's mask by the input binding grammar's names (InputBindingParser), so an event reads like an INI
+         * One hand's mask by the input binding grammar's names (InputBindingParser), so an event reads like a config
          * binding. Axis bits index rAxis, which is what Axis numbers.
          */
         nlohmann::json sideJson(const uint64_t buttons, const uint8_t axes)
@@ -262,11 +262,15 @@ namespace f4cf::vrcf
 
     /**
      * Suppresses the input a binding reads, on the binding's own hand: its backing axis for an
-     * AxisDirection binding, otherwise its button. Mirrors VRControllersManager::check(binding).
+     * AxisDirection binding, otherwise its button. Mirrors VRControllersManager::check(binding), so a binding of
+     * any hand suppresses its input on both.
      */
     void VRControllersSuppressor::suppress(const std::string_view key, const InputBinding& binding)
     {
-        if (binding.type == ActivationType::AxisDirection) {
+        if (binding.hand == Hand::Any) {
+            suppress(key, binding.on(Hand::Primary));
+            suppress(key, binding.on(Hand::Offhand));
+        } else if (binding.type == ActivationType::AxisDirection) {
             suppressAxis(key, binding.hand, binding.axis);
         } else {
             suppress(key, binding.hand, binding.button);
@@ -278,7 +282,10 @@ namespace f4cf::vrcf
      */
     void VRControllersSuppressor::release(const std::string_view key, const InputBinding& binding)
     {
-        if (binding.type == ActivationType::AxisDirection) {
+        if (binding.hand == Hand::Any) {
+            release(key, binding.on(Hand::Primary));
+            release(key, binding.on(Hand::Offhand));
+        } else if (binding.type == ActivationType::AxisDirection) {
             releaseAxis(key, binding.hand, binding.axis);
         } else {
             release(key, binding.hand, binding.button);

@@ -1,7 +1,10 @@
 #pragma once
 
-#include "ConfigBase.h"
+#include <optional>
+
 #include "DebugAdjuster.h"
+#include "config/ConfigBase.h"
+#include "modsconfig/ConfigPreviews.h"
 
 namespace f4cf
 {
@@ -49,6 +52,12 @@ namespace f4cf
             // costs two relaxed atomic loads per frame while devbench isn't installed; once it is, the tool is armed and
             // records perf and a state snapshot every frame
             bool devbenchTool = true;
+            // register this mod as a client of Mods Config FO4 VR's native API, under the mod's name, when Mods Config FO4 VR is
+            // installed (see modsconfig/README.md); its config spec is matched to it by that name
+            bool modsConfigClient = true;
+            // the least version of Mods Config FO4 VR's API the mod works with: an older Mods Config FO4 VR is not connected to.
+            // With 1 it connects to any, and uses what a later version added after a check of the client's apiVersion()
+            std::uint32_t modsConfigMinVersion = 1;
 
             Settings(const std::string_view& name, const std::string_view& version, ConfigBase* config);
             Settings(const std::string_view& name, const std::string_view& version, ConfigBase* config, int trampolineAllocationSize, bool setupMainGameLoop);
@@ -72,6 +81,8 @@ namespace f4cf
     private:
         void logPluginGameStart() const;
         static void onF4VRSEMessage(F4SE::MessagingInterface::Message* msg);
+        static void connectToModsConfigFO4(const std::string& name, std::uint32_t minVersion);
+        void setupModsConfigClient();
         void onGameLoadedInner();
         void onGameSessionLoadedInner();
 
@@ -88,15 +99,19 @@ namespace f4cf
         // Runs on every game frame, main logic goes here.
         virtual void onFrameUpdate() = 0;
 
-        // Dump game data if requested in "sDumpDataOnceNames" flag in INI config.
+        // Dump game data if requested in the "aDumpDataOnce" names of the config.
         virtual void checkDebugDump() const;
 
-        // Bulk-add game items to the player inventory if requested in "sAddItemsOnceNames" flag in INI config.
+        // Bulk-add game items to the player inventory if requested in the "aAddItemsOnce" requests of the config.
         virtual void checkDebugAddItems() const;
 
         Settings _settings;
         const F4SE::MessagingInterface* _messaging = nullptr;
         DebugAdjuster _debugAdjuster;
+
+    private:
+        // Mods Config FO4 VR's live preview of the mod's config, while the mod is its client and has a config
+        std::optional<modsconfig::ConfigPreviews> _configPreviews;
     };
 
     // The ONE global to rule them ALL

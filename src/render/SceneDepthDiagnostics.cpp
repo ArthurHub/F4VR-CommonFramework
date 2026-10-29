@@ -15,7 +15,7 @@ namespace f4cf::render::sceneDepth::internal
     namespace
     {
         // The channel the readout is tagged with, so a mod already using the overlay for its own
-        // thing can silence these rows through sDebugDrawDisabledChannels.
+        // thing can silence these rows through aDebugDrawDisabledChannels.
         constexpr std::string_view WATCH_CHANNEL = "SCENE-DEPTH";
 
         // Enough divergences to see the pattern and the values behind it; after that the count is

@@ -43,6 +43,13 @@ namespace f4cf::imgui
     inline constexpr int MAX_CANVAS_PIXEL_SIZE = 1024;
 
     /**
+     * Largest a dedicated canvas (Canvas::setDedicated) may be in either dimension, in layout pixels. It
+     * has a texture of its own, so the atlas does not limit it. At the largest supersample factor a
+     * canvas of this size has a texture of 16384 pixels a side, the largest a D3D11 texture can be.
+     */
+    inline constexpr int MAX_DEDICATED_CANVAS_PIXEL_SIZE = 4096;
+
+    /**
      * A width and height in layout pixels.
      */
     struct CanvasSize
@@ -64,6 +71,14 @@ namespace f4cf::imgui
         RE::NiTransform transform;
         float worldWidth = 30.0f;
         float worldHeight = 20.0f;
+
+        // The radius the canvas is curved at, in world units. 0, the default, is a flat canvas.
+        // A curved canvas is bent around a cylinder whose axis runs along its height, that far in front of
+        // its middle, on the side it is seen from. With the radius as the distance it is seen from, every
+        // part of it is as far from the viewer and faces them. Its middle stays at the transform's translate,
+        // its sides come toward the viewer, and its width is kept along the curve.
+        // A radius under the width over pi is taken as that: the canvas is at most half of a cylinder.
+        float curveRadius = 0.0f;
 
         // false still lays the content out and measures it, but shows nothing this frame - how a canvas
         // sized to its content stays out of sight until it knows that size
@@ -107,6 +122,12 @@ namespace f4cf::imgui
      * By default the world hides the parts of a canvas that geometry is in front of - see
      * setOccluded. Canvases never write depth, so they do not hide each other: overlapping ones are
      * drawn back to front by distance to the viewer.
+     *
+     * A canvas only shows its content until setInteractive is called. Then the ray of a wand is its
+     * pointer, and its widgets are hovered, pressed and dragged with it - see ImGuiPointer.h.
+     *
+     * One large canvas that is a mod's whole UI is made dedicated with setDedicated: it then has a
+     * texture of its own in place of a part of the atlas, and what its content opens stays inside it.
      */
     class Canvas
     {
@@ -130,9 +151,26 @@ namespace f4cf::imgui
         /**
          * Change the canvas's resolution. Cheap and safe at any time - the atlas is repacked every
          * frame - so a canvas that grows or shrinks in the world can keep its pixel density constant
-         * instead of being stretched. Clamped to 1..MAX_CANVAS_PIXEL_SIZE.
+         * instead of being stretched. Clamped to 1..maxPixelSize(). A dedicated canvas gets a new
+         * texture when its size changes.
          */
         void setPixelSize(int pixelWidth, int pixelHeight);
+
+        void setDedicated(bool dedicated);
+
+        bool isDedicated() const
+        {
+            return _dedicated;
+        }
+
+        /**
+         * Largest the canvas may be in either dimension, in layout pixels: what the atlas holds, or more for
+         * a dedicated canvas.
+         */
+        int maxPixelSize() const
+        {
+            return _dedicated ? MAX_DEDICATED_CANVAS_PIXEL_SIZE : MAX_CANVAS_PIXEL_SIZE;
+        }
 
         /**
          * Whether the world hides the canvas when something is in front of it. On by default, which is
@@ -148,6 +186,13 @@ namespace f4cf::imgui
         bool isOccluded() const
         {
             return _occluded;
+        }
+
+        void setInteractive(bool interactive);
+
+        bool isInteractive() const
+        {
+            return _interactive;
         }
 
         /**
@@ -234,7 +279,7 @@ namespace f4cf::imgui
          * Room the content is laid out in, in layout pixels, border and padding excluded - for a canvas
          * sized to its content, which has to lay the content out before it knows how big it is. A
          * dimension of 0, the default, is the room the canvas's own size leaves. Clamped to
-         * MAX_CANVAS_PIXEL_SIZE.
+         * maxPixelSize().
          *
          * Only the room grows, not what is shown: content past the canvas's own rectangle is clipped at
          * its padding. Content that fills the room it has - a full-width progress bar, right-aligned text,
@@ -279,6 +324,12 @@ namespace f4cf::imgui
         int _pixelHeight;
         bool _visible = true;
         bool _occluded = true;
+
+        // has a texture of its own, and is ImGui's display while it is shown
+        bool _dedicated = false;
+
+        // takes the pointer, so its widgets can be hovered, pressed and dragged
+        bool _interactive = false;
         render::Color _textColor = render::colors::White;
 
         // alpha 0 is what "no background" means; ImGui skips a fully transparent fill outright

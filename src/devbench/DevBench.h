@@ -53,7 +53,7 @@ namespace f4cf::devbench
         // one line in the tool's description, which is what an agent reads to choose an action
         std::string description;
         // JSON Schema "properties" of the arguments it reads, merged into the tool's input schema; an argument that
-        // several actions share is declared once, and the first declaration wins
+        // several actions declare has their descriptions joined, and any type where their types differ
         nlohmann::json arguments = nlohmann::json::object();
         ActionHandler handler;
         RunOn runOn = RunOn::GameThread;
@@ -75,14 +75,14 @@ namespace f4cf::devbench
     void setToolDescription(std::string description);
 
     /**
-     * The INI section the config, set and clear actions use when the call names none. Defaults to the mod's name,
+     * The config section the config, set and clear actions use when the call names none. Defaults to the mod's name,
      * which is the section the mod template uses.
      */
     void setDefaultConfigSection(std::string section);
 
     /**
      * Whether anything can read what the tool collects: devbench is installed (the tool registered), a Tracy viewer
-     * connected, or perf_reset in sDumpDataOnceNames asked for a perf window. Collection that costs per-frame work
+     * connected, or perf_reset in aDumpDataOnce asked for a perf window. Collection that costs per-frame work
      * waits for this, and it stays armed for the rest of the session, so a game with none of them pays nothing. Any
      * thread.
      */

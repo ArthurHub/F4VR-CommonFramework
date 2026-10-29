@@ -4,53 +4,11 @@
 #include <string>
 #include <vector>
 
+#include "Color.h"
 #include "Texture.h"
 
 namespace f4cf::render
 {
-    /**
-     * RGBA color, components in [0,1].
-     */
-    struct Color
-    {
-        float r = 1.0f;
-        float g = 1.0f;
-        float b = 1.0f;
-        float a = 1.0f;
-
-        /**
-         * A colour from the 0-255 bytes a colour picker reports, rather than the 0-1 floats stored
-         * here.
-         *
-         * Sampling a colour off a screenshot gives bytes, and putting those straight into the fields
-         * saturates every channel to white, since anything at or above 1.0 is full brightness. This
-         * is the conversion, so a sampled value can stay written the way it was read.
-         *
-         * The overlay draws into the eye texture after the engine has finished tonemapping it, and
-         * that target is not sRGB-encoded, so no gamma step comes between these bytes and the final
-         * image: a byte in is that byte out.
-         */
-        static constexpr Color rgba(const int red, const int green, const int blue, const int alpha = 255)
-        {
-            return { static_cast<float>(red) / 255.0f, static_cast<float>(green) / 255.0f, static_cast<float>(blue) / 255.0f, static_cast<float>(alpha) / 255.0f };
-        }
-
-        bool operator==(const Color&) const = default;
-    };
-
-    namespace colors
-    {
-        inline constexpr Color Red{ 1, 0, 0 };
-        inline constexpr Color Green{ 0, 1, 0 };
-        inline constexpr Color Blue{ 0, 0.6f, 1 };
-        inline constexpr Color Yellow{ 1, 1, 0 };
-        inline constexpr Color Cyan{ 0, 1, 1 };
-        inline constexpr Color Magenta{ 1, 0.25f, 0.95f };
-        inline constexpr Color Orange{ 1, 0.6f, 0.1f };
-        inline constexpr Color White{ 1, 1, 1 };
-        inline constexpr Color Grey{ 0.6f, 0.6f, 0.6f };
-    }
-
     // Screen and WorldAnchored text sizes go in steps of this many pixels of capital height, so the
     // default size 2 draws 14px capitals. Public so a producer laying text out can measure it
     // (render::measureText) in the same pixels the renderer draws it in.
@@ -118,6 +76,9 @@ namespace f4cf::render
      * One filled world-space triangle: panel borders, backgrounds, any solid shape the caller
      * tessellates.
      *
+     * Each corner has its own color and the fill blends between them, so a gradient or a fade is one
+     * shape. A flat fill has the same color at all three.
+     *
      * Solid geometry exists as its own list because a line CANNOT be thick - D3D11 rasterizes every
      * line one pixel wide, whatever the API asks for - so anything that needs width has to be built
      * from triangles. Culling is off and depth testing is disabled, so winding does not matter and
@@ -128,7 +89,9 @@ namespace f4cf::render
         RE::NiPoint3 a;
         RE::NiPoint3 b;
         RE::NiPoint3 c;
-        Color color;
+        Color colorA;
+        Color colorB;
+        Color colorC;
     };
 
     /**
@@ -192,9 +155,8 @@ namespace f4cf::render
      * drawn - lines, fills, images, glyph text, world labels - reduces to the lists here, so a
      * producer never touches D3D and never runs render-side.
      *
-     * The lists are public: producers with their own budget accounting or ordering rules (the debug
-     * overlay sorts by color to batch runs) manipulate them directly, while the add* helpers cover
-     * the common case and enforce the vertex budgets.
+     * The lists are public: producers with their own budget accounting or ordering rules manipulate
+     * them directly, while the add* helpers cover the common case and enforce the vertex budgets.
      */
     struct PrimitiveDraw
     {
@@ -239,10 +201,19 @@ namespace f4cf::render
          */
         bool addTriangle(const RE::NiPoint3& a, const RE::NiPoint3& b, const RE::NiPoint3& c, const Color& color)
         {
+            return addTriangle(a, b, c, color, color, color);
+        }
+
+        /**
+         * Append a filled world-space triangle with a color for each corner, blended across it. False
+         * when the budget is full.
+         */
+        bool addTriangle(const RE::NiPoint3& a, const RE::NiPoint3& b, const RE::NiPoint3& c, const Color& colorA, const Color& colorB, const Color& colorC)
+        {
             if (triangles.size() + 1 > MAX_FILL_TRIANGLES) {
                 return false;
             }
-            triangles.push_back(FillTriangle{ .a = a, .b = b, .c = c, .color = color });
+            triangles.push_back(FillTriangle{ .a = a, .b = b, .c = c, .colorA = colorA, .colorB = colorB, .colorC = colorC });
             return true;
         }
 
@@ -253,11 +224,25 @@ namespace f4cf::render
          */
         bool addQuad(const RE::NiPoint3& a, const RE::NiPoint3& b, const RE::NiPoint3& c, const RE::NiPoint3& d, const Color& color)
         {
+            return addQuad(a, b, c, d, color, color, color, color);
+        }
+
+        /**
+         * Append a filled quad with a color for each corner, blended across it: a gradient or a fade
+         * in one shape. False when the budget is full.
+         *
+         * The quad is the triangles a-b-c and a-c-d. Colors that change in one direction across it
+         * blend evenly, as when a and b have one color and c and d another. Four unrelated colors
+         * show a crease along a-c.
+         */
+        bool addQuad(const RE::NiPoint3& a, const RE::NiPoint3& b, const RE::NiPoint3& c, const RE::NiPoint3& d, const Color& colorA, const Color& colorB, const Color& colorC,
+            const Color& colorD)
+        {
             if (triangles.size() + 2 > MAX_FILL_TRIANGLES) {
                 return false;
             }
-            addTriangle(a, b, c, color);
-            addTriangle(a, c, d, color);
+            addTriangle(a, b, c, colorA, colorB, colorC);
+            addTriangle(a, c, d, colorA, colorC, colorD);
             return true;
         }
 

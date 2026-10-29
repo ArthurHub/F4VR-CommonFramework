@@ -9,10 +9,11 @@
 namespace f4cf::render
 {
     /**
-     * What a draw callback is handed for the frame the game is submitting to the compositor. The
-     * render target is the submitted eye texture itself: FO4VR renders both eyes into one
-     * double-wide target, so `width` spans both halves and world-space geometry reaches its eye
-     * through `camera` plus the shader's clip/cull split (see StereoCameraConstants).
+     * What a draw callback is handed for the frame being drawn. The render target is the size of the
+     * submitted eye texture: the target of the game's player-space pass for a layer under the game's
+     * menus, the submitted texture itself for a debug layer (see DRAW_ORDER_DEBUG). FO4VR renders both
+     * eyes into one double-wide target, so `width` spans both halves and world-space geometry reaches
+     * its eye through `camera` plus the shader's clip/cull split (see StereoCameraConstants).
      */
     struct SubmitFrame
     {
@@ -37,9 +38,12 @@ namespace f4cf::render
     };
 
     /**
-     * A draw callback, invoked from inside the Submit hook, on whatever thread the game submits from. In FO4VR that is
-     * the game thread during play, between the mod's frames, and the loading screen's own thread while one is up. The
-     * hook logs each thread it is called on once.
+     * A draw callback. One below DRAW_ORDER_DEBUG is invoked inside the game's player-space pass, before the game draws
+     * the Pip-Boy, the hands and its menus, so they are drawn over it; a frame that pass does not run, as under a
+     * loading screen, does not draw it. A debug one is invoked from inside the Submit hook, on top of everything, on
+     * whatever thread the game submits from. In FO4VR both are the game thread during play, and Submit is the loading
+     * screen's own thread while one is up. The hook logs each thread it is called on once. Where the pass cannot be
+     * hooked, every callback is invoked from Submit, over the game's menus.
      *
      * Contract, and it is not negotiable:
      * - Never touch game-thread-owned state (nodes, forms, config). Snapshot it game-side and hand
@@ -64,8 +68,11 @@ namespace f4cf::render
     // by a hint that sits behind it
     inline constexpr int DRAW_ORDER_HINTS = 50;
     inline constexpr int DRAW_ORDER_PANELS = 100;
+    // what points at the panels (the ray and mark of the ImGui pointer): over them
+    inline constexpr int DRAW_ORDER_POINTERS = 150;
     inline constexpr int DRAW_ORDER_DEFAULT = 500;
-    // deliberately last, i.e. on top: diagnostics must never end up hidden behind a mod's UI
+    // deliberately last, i.e. on top: diagnostics must never end up hidden behind a mod's UI, nor the game's menus. Only
+    // these draw at Submit; every order below draws in the game's player-space pass, under its menus
     inline constexpr int DRAW_ORDER_DEBUG = 900;
 
     /**
@@ -83,11 +90,7 @@ namespace f4cf::render
      */
     DrawCallbackId registerDrawCallback(std::string name, SubmitDrawCallback callback, int order);
 
-    /**
-     * Flip one callback between drawing and dormant. Dormant is genuinely free: when no callback is
-     * active the hook is one relaxed atomic read and a tail call to the original Submit.
-     */
-    void setDrawCallbackActive(DrawCallbackId id, bool active);
+    void setDrawCallbackActive(DrawCallbackId id, bool active, bool readsSceneDepth = true);
 
     /**
      * Install the D3D resources and the OpenVR IVRCompositor::Submit vtable hook if not already

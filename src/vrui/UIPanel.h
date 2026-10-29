@@ -79,9 +79,9 @@ namespace f4cf::vrui
      *
      * Every panel shares one overlay layer (two, when some are occluded and some are not), so a
      * panel costs almost nothing: no scene-graph node, no render-to-texture pass, and consecutive
-     * content of one colour and texture goes out in a single draw call. Within a layer, all the
-     * fills are painted first, then all the images, then all the text - so panels are not meant to
-     * overlap each other.
+     * content of one texture goes out in a single draw call, whatever its colours. Within a layer,
+     * all the fills are painted first, then all the images, then all the text - so panels are not
+     * meant to overlap each other.
      *
      * A panel is occluded by the world by default, so it sits in the scene like the widgets around
      * it rather than showing through walls; see setOccluded. It is not interactive.
@@ -195,6 +195,13 @@ namespace f4cf::vrui
         // Internal: append this panel's chrome and content to the frame being built for the render
         // thread.
         void appendTo(render::PrimitiveDraw& frame) const;
+
+        // Internal: a panel drawn behind others rather than beside them, like a boxed UIContainer's box.
+        // Backdrops are drawn first, the outer before the inner, so their fills never cover a panel in them.
+        virtual bool isBackdrop() const
+        {
+            return false;
+        }
 
     protected:
         /**

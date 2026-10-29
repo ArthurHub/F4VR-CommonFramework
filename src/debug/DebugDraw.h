@@ -12,6 +12,11 @@
 
 #include "../render/PrimitiveDrawRenderer.h"
 
+namespace f4cf::vrcf
+{
+    struct InputBinding;
+}
+
 namespace f4cf::debug
 {
     // The overlay's colors and its frame buffer are the framework's generic primitive-drawing types;
@@ -36,11 +41,11 @@ namespace f4cf::debug
      *
      * Zero cost until used: no hook is installed and the per-frame driver early-returns until the
      * first draw/watch call of the session; the OpenVR Submit hook + D3D resources are then
-     * installed lazily. When the overlay is disabled (INI bDebugDrawEnabled, setEnabled(false), or
-     * the sDebugDrawToggleBinding hotkey) appends are skipped at the call site.
+     * installed lazily. When the overlay is disabled (config bDebugDrawEnabled, setEnabled(false), or
+     * the kDebugDrawToggleBinding hotkey) appends are skipped at the call site.
      *
      * Channels: setChannel()/channelScope() tags subsequent draws with a name so independent systems
-     * can be toggled separately (INI sDebugDrawDisabledChannels or setChannelEnabled()).
+     * can be toggled separately (config aDebugDrawDisabledChannels or setChannelEnabled()).
      *
      * Design + provenance: reference library knowledge-base/debug_draw_overlay.md (a generalization
      * of ROCK's DebugBodyOverlay).
@@ -180,7 +185,7 @@ namespace f4cf::debug
         void addLine(const RE::NiPoint3& start, const RE::NiPoint3& end, const Color& color, float sec);
         void circle(const RE::NiPoint3& center, const RE::NiPoint3& axisU, const RE::NiPoint3& axisV, float radius, const Color& color, float sec, int segments = 24);
         float distanceScale(const RE::NiPoint3& p) const;
-        void handleToggleHotkey(const std::string& configToggleBinding);
+        void handleToggleHotkey(const vrcf::InputBinding& toggleBinding);
         void layoutWatchTable();
         bool isChannelEnabled(const std::string& channel) const;
         static HudPlacement parseHudPlacement(const std::string& text);
@@ -225,15 +230,15 @@ namespace f4cf::debug
         RE::NiPoint3 _cameraPos{}; // head position captured this frame; drives distance-scaled markers + billboard labels
         std::size_t _rejectedLines = 0;
 
-        // enable state: INI value overridable at runtime (setEnabled / hotkey)
+        // enable state: config value overridable at runtime (setEnabled / hotkey)
         bool _configEnabled = true;
         std::optional<bool> _enabledOverride;
 
-        // channel gating: current tag + runtime overrides layered over the INI-disabled set
+        // channel gating: current tag + runtime overrides layered over the config-disabled set
         std::string _channel;
         bool _appendActive = true;
         std::unordered_set<std::string> _configDisabledChannels;
-        std::string _configDisabledChannelsRaw;
+        std::vector<std::string> _configDisabledChannelsRaw;
         std::unordered_map<std::string, bool> _channelOverrides;
 
         // default-HUD placement, parsed from config on change

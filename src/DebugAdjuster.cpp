@@ -23,7 +23,7 @@ namespace f4cf
         constexpr float HAND_POSE_FINGER_PER_FRAME = 0.01f;
         constexpr float HAND_POSE_PALM_PER_FRAME = 0.25f;
 
-        // Saved debug values are rounded to this many decimals to keep the INI readable.
+        // Saved debug values are rounded to this many decimals to keep the file readable.
         constexpr int SAVE_PRECISION = 2;
 
         // Hand pose slot names — index matches the active-slot state used by adjustHandPose.
@@ -33,7 +33,7 @@ namespace f4cf
         std::size_t s_handPoseSlot = 0;
 
         // Active "Section::Key" field target state for DebugAdjustTarget::Field. (Re)loaded from the
-        // INI whenever the field string changes; mutated in place each frame. s_fieldType is the
+        // config file whenever the field string changes; mutated in place each frame. s_fieldType is the
         // value kind inferred from the key's first letter ('t' transform, 'h' hand pose, 'f' float),
         // or 0 when nothing valid is loaded. s_fieldRaw mirrors the last-seen debug.adjustField so the
         // (potentially failing) parse + seed read + logging happens once per change, not every frame.
@@ -66,7 +66,7 @@ namespace f4cf
         }
 
         /**
-         * Format a float with SAVE_PRECISION decimals for writing to the INI.
+         * Format a float with SAVE_PRECISION decimals for writing to the config file.
          */
         std::string toFixed(const float value)
         {
@@ -74,15 +74,16 @@ namespace f4cf
         }
 
         /**
-         * Format an NiTransform as a fixed-precision "x,y,z;heading,roll,attitude;scale" string
-         * (rotation in degrees). Mirrors the framework's transform format but at SAVE_PRECISION
-         * decimals so saved debug transforms stay readable.
+         * Format an NiTransform as the TOML text of the inline table the config has a transform in,
+         * { pos = [x, y, z], rot = [heading, roll, attitude], scale = s } with the rotation in degrees, at
+         * SAVE_PRECISION decimals so saved debug transforms stay readable. A save or an override reads the
+         * text as the table, see config::typedLike.
          */
         std::string transformToFixedString(const RE::NiTransform& transform)
         {
             float heading, roll, attitude;
             common::MatrixUtils::getEulerAnglesFromMatrixDegrees(transform.rotate, &heading, &roll, &attitude);
-            return fmt::format("{},{},{};{},{},{};{}",
+            return fmt::format("{{ pos = [{}, {}, {}], rot = [{}, {}, {}], scale = {} }}",
                 toFixed(transform.translate.x),
                 toFixed(transform.translate.y),
                 toFixed(transform.translate.z),
@@ -93,13 +94,16 @@ namespace f4cf
         }
 
         /**
-         * Format a 22-float hand pose in the canonical INI layout:
-         * 5 ';'-separated groups of 4 ','-separated floats (thumb...pinky each prox,mid,dist,splay),
-         * then 2 trailing ',' separated palm floats (palmPitch, palmYaw).
+         * Format a 22-float hand pose as the TOML text of the inline table the config has a hand pose in,
+         * { thumb = [prox, mid, dist, splay], index .. pinky, palm = [pitch, yaw] }, at SAVE_PRECISION
+         * decimals so saved debug poses stay readable. A save or an override reads the text as the table,
+         * with its keys in this order, see config::typedLike.
          */
         std::string handPoseToFixedString(const std::array<float, 22>& v)
         {
-            return fmt::format("{},{},{},{};{},{},{},{};{},{},{},{};{},{},{},{};{},{},{},{};{},{}",
+            return fmt::format(
+                "{{ thumb = [{}, {}, {}, {}], index = [{}, {}, {}, {}], middle = [{}, {}, {}, {}], ring = [{}, {}, {}, {}], "
+                "pinky = [{}, {}, {}, {}], palm = [{}, {}] }}",
                 toFixed(v[0]),
                 toFixed(v[1]),
                 toFixed(v[2]),
@@ -125,7 +129,7 @@ namespace f4cf
         }
 
         /**
-         * Serialize the active field's working value to its INI string form (empty when unloaded).
+         * Serialize the active field's working value to its config text form (empty when unloaded).
          */
         std::string fieldToString()
         {
@@ -248,7 +252,7 @@ namespace f4cf
             saveCurrent(config);
             vrcf::VRHaptics.trigger(vrcf::Hand::Primary, vrcf::HapticPattern::Success);
         } else if (vrcf::VRControllers.isLongPressed(vrcf::Hand::Primary, vr::k_EButton_A)) {
-            reloadFromIni(config);
+            reloadFromConfig(config);
             vrcf::VRHaptics.trigger(vrcf::Hand::Primary, vrcf::HapticPattern::Warning);
         }
     }
@@ -354,7 +358,7 @@ namespace f4cf
     /**
      * Dev-only haptic-pattern tester. On Primary-A tap, parses a HapticSegment sequence from the
      * config's debug.flowText1 (sFlowText1) and plays it on the primary controller. Combined
-     * with INI hot-reload this lets the user iterate on custom patterns: edit sFlowText1, let
+     * with config hot-reload this lets the user iterate on custom patterns: edit sFlowText1, let
      * it reload, tap A to feel the result, repeat. No-op (with a warning) when nothing parses.
      */
     void DebugAdjuster::adjustHapticTest(const ConfigBase& config)
@@ -373,7 +377,7 @@ namespace f4cf
 
     /**
      * Resolve config.debug.adjustField ("Section::Key") and, when it changes, seed the working value
-     * from the on-disk INI. The value kind is inferred from the key's first letter (t=transform,
+     * from the config file. The value kind is inferred from the key's first letter (t=transform,
      * h=hand pose, f=float). Returns true once a supported field is loaded. The parse/seed/log only
      * runs when the field string changes, so an invalid field doesn't spam the log every frame.
      */
@@ -396,13 +400,13 @@ namespace f4cf
         const char type = toLowerAscii(key[0]);
         switch (type) {
         case 't':
-            s_fieldTransform = config.readIniTransformValue(section.c_str(), key.c_str(), common::MatrixUtils::getTransform(0, 0, 0, 0, 0, 0));
+            s_fieldTransform = config.readTransformValue(section.c_str(), key.c_str(), common::MatrixUtils::getTransform(0, 0, 0, 0, 0, 0));
             break;
         case 'h':
-            s_fieldPose = config.readIniHandPoseValue(section.c_str(), key.c_str(), {});
+            s_fieldPose = config.readHandPoseValue(section.c_str(), key.c_str(), {});
             break;
         case 'f':
-            s_fieldFloat = config.readIniFloatValue(section.c_str(), key.c_str(), 0.0f);
+            s_fieldFloat = config.readFloatValue(section.c_str(), key.c_str(), 0.0f);
             break;
         default:
             logger::warn("DebugAdjuster: unsupported field '{}' (key must start with t/h/f for transform/hand pose/float)", s_fieldRaw);
@@ -418,7 +422,7 @@ namespace f4cf
     }
 
     /**
-     * Adjust an arbitrary INI field referenced by config.debug.adjustField using the same input map as
+     * Adjust an arbitrary config field referenced by config.debug.adjustField using the same input map as
      * the matching fixed target (transform/hand pose/float). The mutated working value is pushed into
      * the running config in-memory each frame it changes (no disk write) so the effect is live; the
      * explicit Primary-A save writes it to that key, and a reload re-seeds it from disk.
@@ -446,53 +450,53 @@ namespace f4cf
 
         const std::string after = fieldToString();
         if (after != before) {
-            config.applyIniConfigWithOverride(s_fieldSection.c_str(), s_fieldKey.c_str(), after.c_str());
+            config.applyConfigWithOverride(s_fieldSection.c_str(), s_fieldKey.c_str(), after.c_str());
         }
     }
 
     /**
-     * Writes the current in-memory value(s) for the active target back to the INI file.
+     * Writes the current in-memory value(s) for the active target back to the config file.
      * FlowFlag123 saves all three keys; the single-target cases save one key each.
      */
     void DebugAdjuster::saveCurrent(const ConfigBase& config)
     {
-        // const_cast is fine: ConfigBase exposes saveIniConfigValue as non-const because it touches
-        // file state and watcher flags, but the in-memory config values we're saving are not mutated.
+        // const_cast is fine: ConfigBase exposes saveConfigValue as non-const because it touches
+        // the state it keeps of the file, but the in-memory config values we're saving are not mutated.
         auto& mutableConfig = const_cast<ConfigBase&>(config);
         switch (config.debug.adjustTarget) {
         case DebugAdjustTarget::Transform:
-            mutableConfig.saveIniConfigValue(INI_SECTION_DEBUG, "tTransform", transformToFixedString(config.debug.transform).c_str());
-            logger::info("DebugAdjuster: saved tTransform to INI");
+            mutableConfig.saveConfigValue(CONFIG_SECTION_DEBUG, "tTransform", transformToFixedString(config.debug.transform).c_str());
+            logger::info("DebugAdjuster: saved tTransform to the config");
             break;
         case DebugAdjustTarget::HandPose:
-            mutableConfig.saveIniConfigValue(INI_SECTION_DEBUG, "hHandPose", handPoseToFixedString(config.debug.handPose).c_str());
-            logger::info("DebugAdjuster: saved hHandPose to INI");
+            mutableConfig.saveConfigValue(CONFIG_SECTION_DEBUG, "hHandPose", handPoseToFixedString(config.debug.handPose).c_str());
+            logger::info("DebugAdjuster: saved hHandPose to the config");
             break;
         case DebugAdjustTarget::FlowFlag1:
-            mutableConfig.saveIniConfigValue(INI_SECTION_DEBUG, "fFlowFlag1", toFixed(config.debug.flowFlag1).c_str());
-            logger::info("DebugAdjuster: saved fFlowFlag1 to INI");
+            mutableConfig.saveConfigValue(CONFIG_SECTION_DEBUG, "fFlowFlag1", toFixed(config.debug.flowFlag1).c_str());
+            logger::info("DebugAdjuster: saved fFlowFlag1 to the config");
             break;
         case DebugAdjustTarget::FlowFlag2:
-            mutableConfig.saveIniConfigValue(INI_SECTION_DEBUG, "fFlowFlag2", toFixed(config.debug.flowFlag2).c_str());
-            logger::info("DebugAdjuster: saved fFlowFlag2 to INI");
+            mutableConfig.saveConfigValue(CONFIG_SECTION_DEBUG, "fFlowFlag2", toFixed(config.debug.flowFlag2).c_str());
+            logger::info("DebugAdjuster: saved fFlowFlag2 to the config");
             break;
         case DebugAdjustTarget::FlowFlag3:
-            mutableConfig.saveIniConfigValue(INI_SECTION_DEBUG, "fFlowFlag3", toFixed(config.debug.flowFlag3).c_str());
-            logger::info("DebugAdjuster: saved fFlowFlag3 to INI");
+            mutableConfig.saveConfigValue(CONFIG_SECTION_DEBUG, "fFlowFlag3", toFixed(config.debug.flowFlag3).c_str());
+            logger::info("DebugAdjuster: saved fFlowFlag3 to the config");
             break;
         case DebugAdjustTarget::FlowFlag123:
-            mutableConfig.saveIniConfigValues(INI_SECTION_DEBUG,
+            mutableConfig.saveConfigValues(CONFIG_SECTION_DEBUG,
                 {
                     { "fFlowFlag1", toFixed(config.debug.flowFlag1) },
                     { "fFlowFlag2", toFixed(config.debug.flowFlag2) },
                     { "fFlowFlag3", toFixed(config.debug.flowFlag3) },
                 });
-            logger::info("DebugAdjuster: saved fFlowFlag1/2/3 to INI");
+            logger::info("DebugAdjuster: saved fFlowFlag1/2/3 to the config");
             break;
         case DebugAdjustTarget::Field:
             if (s_fieldType != 0) {
-                mutableConfig.saveIniConfigValue(s_fieldSection.c_str(), s_fieldKey.c_str(), fieldToString().c_str());
-                logger::info("DebugAdjuster: saved {}::{} to INI", s_fieldSection, s_fieldKey);
+                mutableConfig.saveConfigValue(s_fieldSection.c_str(), s_fieldKey.c_str(), fieldToString().c_str());
+                logger::info("DebugAdjuster: saved {}::{} to the config", s_fieldSection, s_fieldKey);
             }
             break;
         case DebugAdjustTarget::None:
@@ -501,14 +505,14 @@ namespace f4cf
     }
 
     /**
-     * Reverts unsaved changes by re-reading the on-disk INI.
+     * Reverts unsaved changes by re-reading the config file.
      */
-    void DebugAdjuster::reloadFromIni(ConfigBase& config)
+    void DebugAdjuster::reloadFromConfig(ConfigBase& config)
     {
         config.reload();
         // Drop the field working value so it re-seeds from disk next frame, discarding unsaved edits.
         s_fieldRaw.clear();
         s_fieldType = 0;
-        logger::info("DebugAdjuster: reloaded from INI");
+        logger::info("DebugAdjuster: reloaded from the config file");
     }
 }

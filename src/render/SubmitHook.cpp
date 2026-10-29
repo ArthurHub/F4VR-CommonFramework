@@ -3,8 +3,10 @@
 #include <algorithm>
 #include <array>
 #include <atomic>
+#include <cstring>
 #include <filesystem>
 #include <format>
+#include <optional>
 #include <string>
 #include <string_view>
 
@@ -16,8 +18,10 @@
 #include "../ModBase.h"
 #include "../perf/GpuTimer.h"
 #include "../perf/Perf.h"
+#include "CallSiteHook.h"
 #include "SceneDepthCapture.h"
 #include "SceneDepthDiagnostics.h"
+#include "SceneDepthShared.h"
 
 // The OpenVR IVRCompositor::Submit vtable hook every framework overlay draws through. Extracted
 // from the debug-draw overlay (a port of ROCK's DebugBodyOverlay, see
@@ -42,6 +46,44 @@ namespace f4cf::render
         constexpr std::uint32_t ORPHAN_FRAME_THRESHOLD = 120;
 
         constexpr std::size_t MAX_DRAW_CALLBACKS = 32;
+
+        // Fallout 4 VR 1.2.72. The player-space pass draws the Pip-Boy and then PlayerWorldNode - the hands, the wands
+        // and the quad of every menu - after the world, from Main::DrawWorld_And_UI. Hooking the call that draws its
+        // first scene puts the layers under all of it, so the game's menus are drawn over them as over the world.
+        constexpr std::uintptr_t PLAYER_PASS_DRAW_CALLSITE_RVA = 0x284E68C;
+        constexpr std::uintptr_t PLAYER_PASS_DRAW_RVA = 0x27FF820;
+        constexpr std::array<std::uint8_t, 15> PLAYER_PASS_DRAW_PROLOGUE{
+            0x48,
+            0x89,
+            0x5C,
+            0x24,
+            0x08, // mov [rsp+8], rbx
+            0x48,
+            0x89,
+            0x74,
+            0x24,
+            0x10, // mov [rsp+0x10], rsi
+            0x57, // push rdi
+            0x48,
+            0x83,
+            0xEC,
+            0x30 // sub rsp, 0x30
+        };
+
+        using PlayerPassDraw_t = std::uintptr_t (*)(void*, void*, void*, std::uint64_t);
+
+        /**
+         * What the player-space pass did with the layers in the frame being drawn, which the Submit of that frame reads
+         * and resets.
+         */
+        enum class InFrameDraw : std::uint8_t
+        {
+            // the pass did not run, as while a loading screen is up: nothing it would have drawn is drawn
+            NotRun,
+            Drawn,
+            // the pass ran but could not draw, as into a target of another size: Submit draws the layers instead
+            Declined,
+        };
 
         using VRSubmit_t = vr::EVRCompositorError(__thiscall*)(vr::IVRCompositor*, vr::EVREye, const vr::Texture_t*, const vr::VRTextureBounds_t*, vr::EVRSubmitFlags);
 
@@ -71,6 +113,9 @@ namespace f4cf::render
         perf::Site s_drawGpuSite(DRAW_PERF_FUNCTION, nullptr, __FILE__, __LINE__, perf::SiteKind::Gpu);
         perf::Site s_setupGpuSite(DRAW_PERF_FUNCTION, "setup", __FILE__, __LINE__, perf::SiteKind::Gpu);
         perf::GpuTimer s_gpuTimer(s_drawGpuSite, "gpu.drawMs");
+        // The draw in the player-space pass, into the same sites: a timer of its own, since one timer times one frame at
+        // a time and the pass and Submit both draw in every frame.
+        perf::GpuTimer s_inFrameGpuTimer(s_drawGpuSite, "gpu.drawInFrameMs");
 
         /**
          * RTV over the submitted eye texture, cached keyed by texture pointer + size - the texture
@@ -91,6 +136,8 @@ namespace f4cf::render
         // in FO4VR Submit is called on the game thread during play, and from the loading screen's own
         // thread while one is up (checkSubmitThread).
         std::atomic<std::uint32_t> s_activeMask{ 0 };
+        // the active callbacks that read the scene depth, which is captured only while one does
+        std::atomic<std::uint32_t> s_sceneDepthMask{ 0 };
         std::atomic<std::size_t> s_callbackCount{ 0 };
         std::atomic<std::uint64_t> s_hookRuns{ 0 };
         std::atomic<bool> s_fenced{ false };
@@ -101,6 +148,17 @@ namespace f4cf::render
         // the other threads Submit was called on, each logged once; a thread past these is not logged
         constexpr std::size_t MAX_LOGGED_SUBMIT_THREADS = 8;
         std::array<std::atomic<DWORD>, MAX_LOGGED_SUBMIT_THREADS> s_loggedSubmitThreads{};
+        // the layers below DRAW_ORDER_DEBUG draw in the player-space pass, see drawInFrame
+        std::atomic<bool> s_inFrameInstalled{ false };
+        // sOverlayDrawPass is "submit": every layer draws at Submit, though the pass is hooked
+        std::atomic<bool> s_forcedSubmit{ false };
+        std::atomic<InFrameDraw> s_inFrameDraw{ InFrameDraw::NotRun };
+        // the eye texture the last Submit drew on: the player-space pass draws only into a target of its size, with the
+        // depth captured for it
+        std::atomic<ID3D11Texture2D*> s_submittedTexture{ nullptr };
+        PlayerPassDraw_t s_originalPlayerPassDraw = nullptr;
+        bool s_loggedInFrameTarget = false;
+        bool s_loggedInFrameDeclined = false;
 
         // --- Submit's thread only ---------------------------------------------------------------
         thread_local int s_hookDepth = 0;
@@ -208,94 +266,37 @@ namespace f4cf::render
         }
 
         /**
-         * Run every active draw callback against the texture the game just handed to the compositor,
-         * with the whole pipeline snapshotted around them. Each callback is isolated: one that throws
-         * is dropped permanently rather than retried every frame, and its neighbours still draw.
+         * Whether a callback draws in the player-space pass rather than at Submit: every layer but the diagnostics,
+         * which stay on top of everything, the game's menus among it.
          */
-        void drawToSubmittedTexture(const vr::Texture_t* texture)
+        bool drawsInFrame(const DrawCallbackEntry& entry)
         {
-            const perf::Scope perfScope(s_drawPerfSite);
+            return entry.order < DRAW_ORDER_DEBUG;
+        }
 
-            auto* device = getDevice();
-            auto* context = getContext();
-            if (!device || !context || !texture || !texture->handle || texture->eType != vr::TextureType_DirectX) {
-                return;
-            }
+        /**
+         * Whether an active callback reads the scene depth this frame, which is what the capture is on for.
+         */
+        bool sceneDepthRead()
+        {
+            return (s_activeMask.load(std::memory_order_relaxed) & s_sceneDepthMask.load(std::memory_order_relaxed)) != 0;
+        }
 
-            auto* submittedTexture = static_cast<ID3D11Texture2D*>(texture->handle);
-            D3D11_TEXTURE2D_DESC textureDesc{};
-            submittedTexture->GetDesc(&textureDesc);
-
-            // Scene depth for world occlusion has to be taken during the engine's own render, where
-            // it is still bound, and matched back to this texture by size. Publishing that size here
-            // is what lets the capture tell the view we draw into from every other pass; the first
-            // frame therefore captures nothing, because the commit ran before this ever executed.
-            sceneDepth::ensureInstalled();
-            sceneDepth::setSubmittedTexture(submittedTexture);
-            sceneDepth::setCaptureRequested(true);
-
-            // Closes the capture frame however this function leaves - the early returns below among
-            // them. A frame that never closes is one whose commits are counted into the last one.
-            const sceneDepth::FrameScope depthFrame;
-
-            ID3D11RenderTargetView* rtv = getSubmittedTextureRtv(device, submittedTexture, textureDesc);
-            if (!rtv) {
-                return;
-            }
-
-            StereoCameraConstants camera{};
-            if (!getStereoCameraConstants(camera)) {
-                return;
-            }
-
-            const auto capturedDepth = sceneDepth::acquireForSubmittedTexture(submittedTexture);
-
-            SubmitFrame frame;
-            frame.device = device;
-            frame.context = context;
-            frame.renderTarget = rtv;
-            frame.sceneDepth = capturedDepth.readOnlyView;
-            frame.sceneDepthComparison = capturedDepth.comparison;
-            frame.width = static_cast<float>(textureDesc.Width);
-            frame.height = static_cast<float>(textureDesc.Height);
-            frame.camera = &camera;
-
-            // constructed before anything is bound, destroyed after the last callback returns
-            const ScopedPipelineState savedState(context);
-            // Our drawing, named for a frame capture tool while one is attached, and timed on the GPU while perf records
-            // or a Tracy viewer is connected; both end before the state is restored.
-            ID3DUserDefinedAnnotation* const captureAnnotation = s_captureAnnotation && s_captureAnnotation->GetStatus() ? s_captureAnnotation.Get() : nullptr;
-            const ScopedCaptureMarker drawMarker(captureAnnotation, s_drawCaptureMarkerName);
-            const auto gpuFrame = s_gpuTimer.begin(context);
-
-            // The depth view is read-only, so binding it for everyone is safe: a callback that does
-            // not enable depth testing is unaffected, and none of them can write to the engine's
-            // buffer even by accident.
-            context->OMSetRenderTargets(1, &rtv, capturedDepth.readOnlyView);
-            D3D11_VIEWPORT viewport{};
-            viewport.Width = frame.width;
-            viewport.Height = frame.height;
-            viewport.MinDepth = 0.0f;
-            viewport.MaxDepth = 1.0f;
-            context->RSSetViewports(1, &viewport);
-
-            D3D11_MAPPED_SUBRESOURCE mapped{};
-            if (SUCCEEDED(context->Map(s_cameraConstantBuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped))) {
-                *static_cast<StereoCameraConstants*>(mapped.pData) = camera;
-                context->Unmap(s_cameraConstantBuffer, 0);
-            }
-            context->VSSetConstantBuffers(0, 1, &s_cameraConstantBuffer);
-            gpuFrame.mark(s_setupGpuSite, "gpu.draw.setupMs");
-
-            // Collect the active callbacks in painter order. Sorted here, on a stack array of at
-            // most 32 entries, rather than keeping the table itself sorted: registration only ever
-            // appends, so the table is never reordered under the render thread's feet.
+        /**
+         * Run the active callbacks the filter takes, in painter order. Each is isolated: one that throws is dropped
+         * permanently rather than retried every frame, and its neighbours still draw. afterEach runs after each, with it.
+         */
+        template <class Filter, class AfterEach>
+        void runCallbacks(const SubmitFrame& frame, ID3DUserDefinedAnnotation* captureAnnotation, Filter filter, AfterEach afterEach)
+        {
+            // Sorted here, on a stack array of at most 32 entries, rather than keeping the table itself sorted:
+            // registration only ever appends, so the table is never reordered under the render thread's feet.
             const std::uint32_t activeMask = s_activeMask.load(std::memory_order_relaxed);
             const std::size_t count = s_callbackCount.load(std::memory_order_acquire);
             std::array<std::size_t, MAX_DRAW_CALLBACKS> ordered{};
             std::size_t orderedCount = 0;
             for (std::size_t i = 0; i < count; ++i) {
-                if ((activeMask & (1u << i)) == 0) {
+                if ((activeMask & (1u << i)) == 0 || !filter(s_callbacks[i])) {
                     continue;
                 }
                 std::size_t position = orderedCount++;
@@ -319,8 +320,285 @@ namespace f4cf::render
                         logger::error("Draw callback '{}' threw ({}); dropped for this session", entry.name, ex.what());
                     }
                 }
-                gpuFrame.mark(*entry.gpuSite, entry.gpuPlotName.c_str());
+                afterEach(entry);
             }
+        }
+
+        /**
+         * Bind the frame's target and depth, a viewport over the whole target and the camera constants, for the
+         * callbacks to draw with.
+         */
+        void bindFrame(const SubmitFrame& frame)
+        {
+            frame.context->OMSetRenderTargets(1, &frame.renderTarget, frame.sceneDepth);
+            D3D11_VIEWPORT viewport{};
+            viewport.Width = frame.width;
+            viewport.Height = frame.height;
+            viewport.MinDepth = 0.0f;
+            viewport.MaxDepth = 1.0f;
+            frame.context->RSSetViewports(1, &viewport);
+
+            D3D11_MAPPED_SUBRESOURCE mapped{};
+            if (SUCCEEDED(frame.context->Map(s_cameraConstantBuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped))) {
+                *static_cast<StereoCameraConstants*>(mapped.pData) = *frame.camera;
+                frame.context->Unmap(s_cameraConstantBuffer, 0);
+            }
+            frame.context->VSSetConstantBuffers(0, 1, &s_cameraConstantBuffer);
+        }
+
+        /**
+         * The size of the texture a view is of, or nothing for a view of no 2D texture.
+         */
+        std::optional<D3D11_TEXTURE2D_DESC> textureDescOf(ID3D11View* view)
+        {
+            Microsoft::WRL::ComPtr<ID3D11Resource> resource;
+            view->GetResource(resource.GetAddressOf());
+            Microsoft::WRL::ComPtr<ID3D11Texture2D> texture;
+            if (!resource || FAILED(resource.As(&texture))) {
+                return std::nullopt;
+            }
+            D3D11_TEXTURE2D_DESC desc{};
+            texture->GetDesc(&desc);
+            return desc;
+        }
+
+        /**
+         * Draw the layers below DRAW_ORDER_DEBUG into the target the player-space pass has bound, before it draws the
+         * Pip-Boy, the hands and the game's menus over them. Once a frame, into a target the size of the eye texture,
+         * with the world's depth the capture took this frame for the layers that are occluded, as at Submit: the engine
+         * binds its own depth only as it draws. Anything else declines, and Submit draws them.
+         */
+        void drawInFrame()
+        {
+            if (s_activeMask.load(std::memory_order_relaxed) == 0 || s_fenced.load(std::memory_order_relaxed) || s_forcedSubmit.load(std::memory_order_relaxed) ||
+                s_inFrameDraw.load(std::memory_order_relaxed) != InFrameDraw::NotRun) {
+                return;
+            }
+            auto* device = getDevice();
+            auto* context = getContext();
+            if (!device || !context) {
+                return;
+            }
+
+            const auto decline = [](const std::string& reason) {
+                s_inFrameDraw.store(InFrameDraw::Declined, std::memory_order_relaxed);
+                if (!s_loggedInFrameDeclined) {
+                    s_loggedInFrameDeclined = true;
+                    logger::warn("The player-space pass does not draw the overlays, Submit does: {}", reason);
+                }
+            };
+
+            Microsoft::WRL::ComPtr<ID3D11RenderTargetView> rtv;
+            context->OMGetRenderTargets(1, rtv.GetAddressOf(), nullptr);
+            const auto targetDesc = rtv ? textureDescOf(rtv.Get()) : std::nullopt;
+            if (!targetDesc) {
+                decline("it has no target bound");
+                return;
+            }
+            if (!s_loggedInFrameTarget) {
+                s_loggedInFrameTarget = true;
+                D3D11_RENDER_TARGET_VIEW_DESC viewDesc{};
+                rtv->GetDesc(&viewDesc);
+                logger::info("The player-space pass draws into {}x{} format {} (view {})",
+                    targetDesc->Width,
+                    targetDesc->Height,
+                    static_cast<int>(targetDesc->Format),
+                    static_cast<int>(viewDesc.Format));
+            }
+            // none before the first Submit, which the first frame declines for
+            auto* const submittedTexture = s_submittedTexture.load(std::memory_order_relaxed);
+            if (!submittedTexture) {
+                s_inFrameDraw.store(InFrameDraw::Declined, std::memory_order_relaxed);
+                return;
+            }
+            D3D11_TEXTURE2D_DESC submittedDesc{};
+            submittedTexture->GetDesc(&submittedDesc);
+            if (targetDesc->Width != submittedDesc.Width || targetDesc->Height != submittedDesc.Height) {
+                decline(std::format("its target is {}x{}, the eye texture {}x{}", targetDesc->Width, targetDesc->Height, submittedDesc.Width, submittedDesc.Height));
+                return;
+            }
+
+            StereoCameraConstants camera{};
+            if (!getStereoCameraConstants(camera)) {
+                decline("the camera is not available");
+                return;
+            }
+
+            SubmitFrame frame;
+            frame.device = device;
+            frame.context = context;
+            frame.renderTarget = rtv.Get();
+            const auto capturedDepth = sceneDepthRead() ? sceneDepth::acquireForSubmittedTexture(submittedTexture) : SceneDepth{};
+            frame.sceneDepth = capturedDepth.readOnlyView;
+            frame.sceneDepthComparison = capturedDepth.comparison;
+            frame.width = static_cast<float>(targetDesc->Width);
+            frame.height = static_cast<float>(targetDesc->Height);
+            frame.camera = &camera;
+
+            const perf::Scope perfScope(s_drawPerfSite);
+            // constructed before anything is bound, destroyed after the last callback returns: the engine's state
+            // cache still holds what it bound, so all of it is put back
+            const ScopedPipelineState savedState(context);
+            ID3DUserDefinedAnnotation* const captureAnnotation = s_captureAnnotation && s_captureAnnotation->GetStatus() ? s_captureAnnotation.Get() : nullptr;
+            const ScopedCaptureMarker drawMarker(captureAnnotation, s_drawCaptureMarkerName);
+            const auto gpuFrame = s_inFrameGpuTimer.begin(context);
+            bindFrame(frame);
+            gpuFrame.mark(s_setupGpuSite, "gpu.draw.setupMs");
+            runCallbacks(frame, captureAnnotation, drawsInFrame, [&gpuFrame](const DrawCallbackEntry& entry) {
+                gpuFrame.mark(*entry.gpuSite, entry.gpuPlotName.c_str());
+            });
+            s_inFrameDraw.store(InFrameDraw::Drawn, std::memory_order_relaxed);
+        }
+
+        /**
+         * The call of the player-space pass that draws its first scene: the layers first, then the pass.
+         */
+        std::uintptr_t hookedPlayerPassDraw(void* camera, void* accumulator, void* arg3, const std::uint64_t arg4)
+        {
+            if (s_hookDepth == 0) {
+                ++s_hookDepth;
+                try {
+                    drawInFrame();
+                } catch (const std::exception& ex) {
+                    s_fenced.store(true, std::memory_order_relaxed);
+                    if (!s_loggedDrawFailure) {
+                        s_loggedDrawFailure = true;
+                        logger::error("Overlay draw in the player-space pass threw ({}); overlay disabled for this session", ex.what());
+                    }
+                }
+                --s_hookDepth;
+            }
+            return s_originalPlayerPassDraw(camera, accumulator, arg3, arg4);
+        }
+
+        /**
+         * Patch the call of the player-space pass that draws its first scene, after proving the call site and the
+         * function it calls are the ones of 1.2.72. A call another framework mod has hooked already is chained onto, so
+         * each mod's layers draw in the pass: the one installed last draws first, under the others.
+         */
+        bool installPlayerPassHook()
+        {
+            const auto callsite = REL::Offset(PLAYER_PASS_DRAW_CALLSITE_RVA).address();
+            const auto draw = REL::Offset(PLAYER_PASS_DRAW_RVA).address();
+            if (std::memcmp(reinterpret_cast<const void*>(draw), PLAYER_PASS_DRAW_PROLOGUE.data(), PLAYER_PASS_DRAW_PROLOGUE.size()) != 0) {
+                logger::warn("Player-space pass hook not installed: the draw function does not start with the expected instructions");
+                return false;
+            }
+            const auto callSite = internal::inspectCallSite(callsite, draw, "Player-space pass hook");
+            if (callSite.state == internal::CallSiteState::Invalid) {
+                return false;
+            }
+            // the jump the call lands on: jmp qword ptr [rip+0] and the address. A mod that allocated too little
+            // trampoline would fail its write, so it draws at Submit instead.
+            constexpr std::size_t TRAMPOLINE_JUMP_SIZE = 14;
+            auto& trampoline = F4SE::GetTrampoline();
+            if (trampoline.free_size() < TRAMPOLINE_JUMP_SIZE) {
+                logger::warn("Player-space pass hook not installed: {} bytes of trampoline are free, it needs {}; allocate more in ModBase::Settings",
+                    trampoline.free_size(),
+                    TRAMPOLINE_JUMP_SIZE);
+                return false;
+            }
+            s_originalPlayerPassDraw = reinterpret_cast<PlayerPassDraw_t>(trampoline.write_call<5>(callsite, reinterpret_cast<std::uintptr_t>(&hookedPlayerPassDraw)));
+            if (!s_originalPlayerPassDraw) {
+                logger::warn("Player-space pass hook not installed: the trampoline write returned no original");
+                return false;
+            }
+            s_inFrameInstalled.store(true, std::memory_order_release);
+            if (callSite.state == internal::CallSiteState::AlreadyHooked) {
+                logger::info(
+                    "Player-space pass hook installed, chained after an existing hook of the same call in {}: the overlays draw under the "
+                    "game's menus",
+                    internal::describeHookOwner(callSite.target));
+            } else {
+                logger::info("Player-space pass hook installed: the overlays draw under the game's menus");
+            }
+            return true;
+        }
+
+        /**
+         * Run the active draw callbacks against the texture the game just handed to the compositor, with the whole
+         * pipeline snapshotted around them. While the player-space pass draws the layers below DRAW_ORDER_DEBUG, only
+         * the others draw here; a frame the pass did not run, as under a loading screen, draws none of them.
+         */
+        void drawToSubmittedTexture(const vr::Texture_t* texture, const InFrameDraw inFrame)
+        {
+            const perf::Scope perfScope(s_drawPerfSite);
+
+            auto* device = getDevice();
+            auto* context = getContext();
+            if (!device || !context || !texture || !texture->handle || texture->eType != vr::TextureType_DirectX) {
+                return;
+            }
+
+            auto* submittedTexture = static_cast<ID3D11Texture2D*>(texture->handle);
+            D3D11_TEXTURE2D_DESC textureDesc{};
+            submittedTexture->GetDesc(&textureDesc);
+            s_submittedTexture.store(submittedTexture, std::memory_order_relaxed);
+
+            // Scene depth for world occlusion has to be taken during the engine's own render, where
+            // it is still bound, and matched back to this texture by size. Publishing that size here
+            // is what lets the capture tell the view we draw into from every other pass; the first
+            // frame therefore captures nothing, because the commit ran before this ever executed.
+            // Only while an active layer reads it: a frame of icons, pointers or debug lines alone
+            // captures nothing.
+            const bool readsSceneDepth = sceneDepthRead();
+            if (readsSceneDepth) {
+                sceneDepth::ensureInstalled();
+                sceneDepth::setSubmittedTexture(submittedTexture);
+            }
+            sceneDepth::setCaptureRequested(readsSceneDepth);
+
+            // Closes the capture frame however this function leaves - the early returns below among
+            // them. A frame that never closes is one whose commits are counted into the last one.
+            const sceneDepth::FrameScope depthFrame;
+
+            ID3D11RenderTargetView* rtv = getSubmittedTextureRtv(device, submittedTexture, textureDesc);
+            if (!rtv) {
+                return;
+            }
+
+            StereoCameraConstants camera{};
+            if (!getStereoCameraConstants(camera)) {
+                return;
+            }
+
+            const auto capturedDepth = readsSceneDepth ? sceneDepth::acquireForSubmittedTexture(submittedTexture) : SceneDepth{};
+
+            SubmitFrame frame;
+            frame.device = device;
+            frame.context = context;
+            frame.renderTarget = rtv;
+            frame.sceneDepth = capturedDepth.readOnlyView;
+            frame.sceneDepthComparison = capturedDepth.comparison;
+            frame.width = static_cast<float>(textureDesc.Width);
+            frame.height = static_cast<float>(textureDesc.Height);
+            frame.camera = &camera;
+
+            // constructed before anything is bound, destroyed after the last callback returns
+            const ScopedPipelineState savedState(context);
+            // Our drawing, named for a frame capture tool while one is attached, and timed on the GPU while perf records
+            // or a Tracy viewer is connected; both end before the state is restored.
+            ID3DUserDefinedAnnotation* const captureAnnotation = s_captureAnnotation && s_captureAnnotation->GetStatus() ? s_captureAnnotation.Get() : nullptr;
+            const ScopedCaptureMarker drawMarker(captureAnnotation, s_drawCaptureMarkerName);
+            const auto gpuFrame = s_gpuTimer.begin(context);
+
+            // The depth view is read-only, so binding it for everyone is safe: a callback that does
+            // not enable depth testing is unaffected, and none of them can write to the engine's
+            // buffer even by accident.
+            bindFrame(frame);
+            gpuFrame.mark(s_setupGpuSite, "gpu.draw.setupMs");
+
+            // the layers the player-space pass draws are drawn here only where it declined to
+            const bool drawnInFrame = s_inFrameInstalled.load(std::memory_order_acquire) && !s_forcedSubmit.load(std::memory_order_relaxed) && inFrame != InFrameDraw::Declined;
+            runCallbacks(
+                frame,
+                captureAnnotation,
+                [drawnInFrame](const DrawCallbackEntry& entry) {
+                    return !drawnInFrame || !drawsInFrame(entry);
+                },
+                [&gpuFrame](const DrawCallbackEntry& entry) {
+                    gpuFrame.mark(*entry.gpuSite, entry.gpuPlotName.c_str());
+                });
         }
 
         /**
@@ -357,7 +635,8 @@ namespace f4cf::render
 
         /**
          * The Submit hook. Every path chains: a skipped original Submit black-screens the headset,
-         * so the chain call is the last statement and nothing between here and it may throw.
+         * so nothing between here and the chain call may throw, and after it only the frame count of
+         * the shared scene depth copy runs, which cannot.
          */
         vr::EVRCompositorError vrSubmitHook(vr::IVRCompositor* compositor, const vr::EVREye eye, const vr::Texture_t* texture, const vr::VRTextureBounds_t* bounds,
             const vr::EVRSubmitFlags flags)
@@ -378,11 +657,22 @@ namespace f4cf::render
             // counts calls rather than draws, so standing down does not read as being orphaned
             s_hookRuns.fetch_add(1, std::memory_order_relaxed);
 
+            // The left eye's Submit is the frame boundary of the scene depth copy the framework mods share: the hook
+            // of each calls the next one's from inside it, and the outermost leaving ends the frame for all of them.
+            auto& sharedDepth = sceneDepth::internal::sharedSceneDepth();
+            const bool countsFrame = eye == vr::Eye_Left;
+            if (countsFrame) {
+                sceneDepth::internal::enterSubmit(sharedDepth);
+            }
+
+            // what the player-space pass did with this frame's layers, read once a frame and reset for the next
+            const InFrameDraw inFrame = eye == vr::Eye_Left ? s_inFrameDraw.exchange(InFrameDraw::NotRun, std::memory_order_relaxed) : InFrameDraw::NotRun;
+
             // both eyes arrive as one double-wide texture, so only the first submit draws
             if (eye == vr::Eye_Left && s_activeMask.load(std::memory_order_relaxed) != 0 && !s_fenced.load(std::memory_order_relaxed)) {
                 ++s_hookDepth;
                 try {
-                    drawToSubmittedTexture(texture);
+                    drawToSubmittedTexture(texture, inFrame);
                 } catch (const std::exception& ex) {
                     // the shared setup failed rather than one callback; stand down permanently
                     // instead of retrying, and let every other overlay in the chain carry on
@@ -400,7 +690,35 @@ namespace f4cf::render
                 const sceneDepth::FrameScope depthFrame;
                 sceneDepth::setCaptureRequested(false);
             }
-            return s_originalVRSubmit(compositor, eye, texture, bounds, flags);
+            const auto result = s_originalVRSubmit(compositor, eye, texture, bounds, flags);
+            if (countsFrame) {
+                sceneDepth::internal::leaveSubmit(sharedDepth);
+            }
+            return result;
+        }
+
+        /**
+         * Publish where the layers draw, from sOverlayDrawPass: "auto" draws them in the player-space pass where it is
+         * hooked, "submit" always at Submit. Re-read only when the text changes, as the file watcher may rewrite it at
+         * any time. Game thread, every frame.
+         */
+        void publishDrawPassFromConfig()
+        {
+            const auto* config = g_mod ? g_mod->getConfig() : nullptr;
+            if (!config) {
+                return;
+            }
+            static std::optional<std::string> lastRaw;
+            if (lastRaw == config->debug.overlayDrawPass) {
+                return;
+            }
+            lastRaw = config->debug.overlayDrawPass;
+            const bool forced = *lastRaw == "submit";
+            if (!forced && !lastRaw->empty() && *lastRaw != "auto") {
+                logger::warn("Unknown sOverlayDrawPass {}, using auto (accepted: auto, submit)", *lastRaw);
+            }
+            s_forcedSubmit.store(forced, std::memory_order_relaxed);
+            logger::info("Overlay draw pass: {}", forced ? "submit, over the game's menus" : "auto");
         }
 
         /**
@@ -543,12 +861,25 @@ namespace f4cf::render
         return static_cast<DrawCallbackId>(index);
     }
 
-    void setDrawCallbackActive(const DrawCallbackId id, const bool active)
+    /**
+     * Flip one callback between drawing and dormant. Dormant is genuinely free: when no callback is
+     * active the hook is one relaxed atomic read and a tail call to the original Submit.
+     *
+     * readsSceneDepth says whether the callback tests against SubmitFrame::sceneDepth. The scene depth is
+     * captured only while an active callback reads it: under an upscaler that is a copy the size of the
+     * eye texture every frame, which a layer that is never occluded would otherwise pay for.
+     */
+    void setDrawCallbackActive(const DrawCallbackId id, const bool active, const bool readsSceneDepth)
     {
         if (id >= MAX_DRAW_CALLBACKS) {
             return;
         }
         const std::uint32_t bit = 1u << id;
+        if (active && readsSceneDepth) {
+            s_sceneDepthMask.fetch_or(bit, std::memory_order_release);
+        } else {
+            s_sceneDepthMask.fetch_and(~bit, std::memory_order_release);
+        }
         if (active) {
             s_activeMask.fetch_or(bit, std::memory_order_release);
         } else {
@@ -563,6 +894,7 @@ namespace f4cf::render
      */
     bool ensureInstalled()
     {
+        publishDrawPassFromConfig();
         if (s_installed) {
             checkOrphaned();
             return true;
@@ -600,11 +932,21 @@ namespace f4cf::render
             }
             s_drawCaptureMarkerName = widen(std::format("{} overlays", g_mod ? g_mod->getName() : std::string("F4CF")));
             s_d3dInitialized = true;
+
+            // found or created here, on the game thread, rather than by the hook's first Submit
+            const auto& sharedDepth = sceneDepth::internal::sharedSceneDepth();
+            if (sharedDepth.participants > 0) {
+                logger::info("The scene depth copy is shared with the framework mods of this process, {} of them so far", sharedDepth.participants);
+            } else {
+                logger::warn("The scene depth copy is this mod's own: the one the framework mods share could not be found or created");
+            }
         }
 
         if (!installSubmitHook()) {
             return false;
         }
+        // without it every layer draws at Submit, over the game's menus
+        installPlayerPassHook();
 
         // The scene-depth readout and its strategy key are read on the game thread, and this is the
         // game-thread call that brings the whole overlay up - so a mod that draws none never

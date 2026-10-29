@@ -1,4 +1,4 @@
 #pragma once
 
 // Resource IDs for embedded resources
-#define IDR_CONFIG_INI 101
+#define IDR_CONFIG 101

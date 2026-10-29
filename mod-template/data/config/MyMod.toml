@@ -1,0 +1,100 @@
+[MyMod]
+#
+# ---------------
+# Live Reload:
+# Any change to the file while the game is running will be detected and applied immediately.
+# Useful to modify advanced settings and seeing the effects without restarting the game.
+#
+# -------------------------------------
+# Input Binding and Activation Spheres:
+# A controller binding is a 'k' key: { hand = "offhand", type = "tap", button = "grip" }, with an optional
+# duration (seconds), suppress (true/false) and modifier = { hand = "offhand", button = "grip" }.
+# A thumbstick push is { hand = "primary", type = "axis", direction = "up" }; { type = "none" } turns it off.
+# Guide: https://github.com/ArthurHub/F4VR-CommonFramework/blob/main/docs/input-binding.md
+# A Windows path goes in single quotes, where a backslash is just a backslash: 'f4cf\icon.dds'.
+
+
+# This is my value, there are many like it but this one is mine
+fMyConfigValue = 3.0
+
+
+# A sphere for activating functionality when player hand/wand is inside it.
+# https://github.com/ArthurHub/F4VR-CommonFramework/blob/main/docs/input-binding.md#activation-spheres
+[MyMod_AnActivationSphere]
+tZone = { pos = [3.91, 7.11, 0.67], scale = 20.0 }
+tZonePA = { pos = [4.01, 10.21, -4.6], scale = 24.0 }
+kPrimaryBinding = { hand = "offhand", type = "tap", button = "trigger", suppress = true }
+kSecondaryBinding = { hand = "primary", type = "tap", button = "trigger", suppress = true }
+sEntryHaptic = "Tick"
+sPrimaryHaptic = "DoubleClick"
+sSecondaryHaptic = "DoubleClick"
+sShowIcon = "wheninside"
+sIcon = 'f4cf\activation-icon-hand.dds'
+fIconSize = 1.0
+sShowSphere = "wheninside"
+sSphereStyle = "white-subtle"
+fSphereScale = 0.9
+
+
+[Debug]
+
+# The level of log message to output; 2 - info (basic), 1 - debug (more logs), 0 - trace (A LOT of logs)
+iLogLevel = 2
+
+# Sets the spdlog output pattern for each normal log message.
+# Examples: "%H:%M:%S.%e %l: %v"; "%H:%M:%S %L [%s:%#]: %v"
+# Guide: https://github.com/ArthurHub/F4VR-CommonFramework/blob/main/docs/debug-config.md
+sLogPattern = "%H:%M:%S.%e %l [%-20!k] %v"
+
+# Mod-defined numeric scratch values for runtime experiments.
+fFlowFlag1 = 0.0
+fFlowFlag2 = 0.0
+fFlowFlag3 = 0.0
+# Mod-defined text scratch values; sFlowText1 also supplies haptictest sequences.
+sFlowText1 = ""
+sFlowText2 = ""
+
+# Mod-defined scratch transform, read as config->debug.transform; tune it in-game with sAdjustTarget = "transform".
+# Format: { pos = [x, y, z], rot = [heading, roll, attitude], scale = s }, rotation in degrees, each key optional.
+tTransform = { pos = [0.0, 0.0, 0.0], rot = [0.0, 0.0, 0.0], scale = 1.0 }
+
+# Selects an in-game live-tuning target; "none" or "" disables it and restores controller input.
+# Examples: "flag123"; "haptictest"; "MyMod::tSomeTransform"
+# Guide: https://github.com/ArthurHub/F4VR-CommonFramework/blob/main/docs/debug-config.md
+sAdjustTarget = "none"
+
+# Writes named game-state dumps to the mod log and removes each name after it runs.
+# Examples: ["ui_tree"]; ["skelly", "fp_skelly"]; ["geometry", "pipboy", "all_nodes"]
+# Timing: "perf_reset" starts a perf window, then "perf" logs what each part of the frame cost since
+# Guide: https://github.com/ArthurHub/F4VR-CommonFramework/blob/main/docs/debug-config.md
+aDumpDataOnce = []
+
+# In-world debug draw overlay: master switch, names of the channels to skip (e.g. ["npc-detection"]),
+# and a controller binding to enable/disable the overlay in-headset.
+# HUD placement: center, center-left, center-right, center-top, center-top-left, center-top-right.
+bDebugDrawEnabled = true
+kDebugDrawToggleBinding = { hand = "offhand", type = "longpress", button = "a" }
+aDebugDrawDisabledChannels = []
+sDebugDrawHudPlacement = "center-top-left"
+
+# Which implementation resolves the world depth that hides overlays behind the world.
+# auto (shipped) | depthpass (count only depth-testing passes) | direct (never resample; wrong under
+# an upscaler) | off (no occlusion at all - overlays draw on top). A support switch: leave on auto.
+sSceneDepthStrategy = "auto"
+
+# Where the overlays draw: auto (shipped) draws them under the game's menus, in the pass that draws
+# the menus, and falls back to submit where that pass cannot be hooked | submit (always on top of the
+# finished frame, over the game's menus). A support switch: leave on auto. Debug draw is always on top.
+sOverlayDrawPass = "auto"
+
+# Investigate the scene-depth capture that hides overlays behind the world: adds its rows to the debug
+# draw overlay, and re-runs the side-by-side comparison of the shipped policy against its alternative.
+# Off by default; the capture reports itself to the log either way.
+bSceneDepthDiagnostics = false
+
+# Mark the fingertip that presses the VR UI buttons with a small sphere.
+# Without it the sphere is shown only while no hand is drawn at the controller (no FRIK).
+bVRUIShowFingerTip = false
+
+# Internal use for versioning
+iVersion = 1

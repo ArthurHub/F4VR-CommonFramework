@@ -22,11 +22,12 @@ An element is drawn one of two ways, and they mix freely in the same layout:
 
 | Class | Extends | Description |
 |-------|---------|-------------|
-| [`UIElement`](UIElement.h) | — | Base node: position/scale/visibility/size, parent/child transform, layout + frame-update hooks. Also [`UIPadding`](UIElement.h), the per-side spacing panels take. |
-| [`UIContainer`](UIContainer.h) | `UIElement` | Groups multiple elements under one transform and lays them out (row/column, centered or directional). |
+| [`UIElement`](UIElement.h) | — | Base node: position/rotation/scale/visibility/size, parent/child transform, layout + frame-update hooks. Also [`UIPadding`](UIElement.h), the per-side spacing panels take. |
+| [`UIContainer`](UIContainer.h) | `UIElement` | Groups multiple elements under one transform and lays them out (row/column, centered or directional). `setBoxStyle` draws a panel's chrome around them. |
 | [`UIToggleGroupContainer`](UIToggleGroupContainer.h) | `UIContainer` | Radio-button group (mutually exclusive). Works on [`UIToggleable`](UIToggleable.h), so NIF and panel toggles can share one group. |
-| [`UIManager`](UIManager.h) | — | Singleton scene graph: attach/detach, wand/HMD presets, input dispatch, render. |
-| [`UIModAdapter`](UIModAdapter.h) | — | Interface the mod implements so the UI knows the interaction bone + how to point the hand. |
+| [`UIManager`](UIManager.h) | — | Singleton scene graph: attach/detach, wand/wrist/HMD/world presets, input dispatch, render. |
+| [`UISkeletonHandler`](UISkeletonHandler.h) | — | What the UI reads from the player's skeleton, with bones found by name and again when the skeleton is replaced: the tip of the index finger that presses the UI, and the manager's wrist preset, which keeps a root on the inner wrist of the offhand arm every frame. |
+| [`setFRIKHandPointing`](UIHandPointing.h) | — | Points the hand whose finger is near a button, and releases it, through FRIK's API. |
 
 **NIF widgets** - a mesh per element
 
@@ -56,56 +57,28 @@ An element is drawn one of two ways, and they mix freely in the same layout:
 | [`UIPressable`](UIPressable.h) | The disabled state both kinds of button share, so code can enable/disable any mix of them. |
 | [`UIToggleable`](UIToggleable.h) | The on/off state both kinds of toggle share - what `UIToggleGroupContainer` drives. |
 
-Supporting: [`BindingPrompt`](BindingPrompt.h) (a controller binding as a text span with its icon),
-[`UIElement` helpers in `UIUtils.h`](UIUtils.h), and the [`UIDebugWidget`](UIDebugWidget.h) for
-visualizing interaction points.
+Supporting: [`BindingPrompt`](BindingPrompt.h) (a controller binding as a text span with its icon)
+and the [`UIElement` helpers in `UIUtils.h`](UIUtils.h).
 
 ## How it works
 
-1. The mod provides a `UIModAdapter` — it answers *"where is the finger?"*
-   (`getInteractionBoneWorldPosition`) and *"point the hand for me"* (`setInteractionHandPointing`).
-2. Build elements (widgets/buttons) and attach them via the global `g_uiManager`, either to an
-   explicit `NiNode*` or with a preset (primary wand top/left, HMD bottom).
-3. Call `g_uiManager->onFrameUpdate(adapter)` every frame. The manager tests the interaction bone
-   against each pressable widget, fires press callbacks, and updates transforms.
+1. Build elements (widgets/buttons) and attach them via the global `g_uiManager`, either to an
+   explicit `NiNode*` or with a preset (primary wand top/left, offhand wand top/right, offhand wrist,
+   HMD bottom, the world at the HMD).
+2. The framework runs `g_uiManager->onFrameUpdate()` every frame, after the mod's own
+   `onFrameUpdate()`. The manager tests the interaction bone against each pressable widget, fires
+   press callbacks, and updates transforms. It finds the finger and points the hand itself.
 
 ## Quick start
 
 A small wand-mounted config panel — a toggle and two buttons in a row — modeled on the
-[Immersive Flashlight](https://github.com/ArthurHub/F4VR-ImmersiveFlashlight) config menu. Three
-parts: a `UIModAdapter`, building the panel, then driving and closing it.
+[Immersive Flashlight](https://github.com/ArthurHub/F4VR-ImmersiveFlashlight) config menu. Two
+parts: building the panel, then reacting to it and closing it.
 
 > `g_uiManager` is created **for you** by the framework before `onGameLoaded()` runs — never call
 > `initUIManager()` yourself. Build your UI in/after `onGameLoaded()`.
 
-### 1. Implement a `UIModAdapter`
-
-The adapter tells the UI where the "finger" is and how to make the hand point. The interaction bone
-typically comes from [FRIK](https://github.com/rollingrock/Fallout-4-VR-Body) (full-body IK), which
-exposes finger tracking and posing:
-
-```cpp
-class MyUIAdapter : public vrui::UIModAdapter
-{
-public:
-    RE::NiPoint3 getInteractionBoneWorldPosition() override
-    {
-        return FRIKApi::inst->getIndexFingerTipPosition(FRIKApi::Hand::Offhand);
-    }
-
-    void setInteractionHandPointing(bool primaryHand, bool toPoint) override
-    {
-        const auto hand = primaryHand ? FRIKApi::Hand::Primary : FRIKApi::Hand::Offhand;
-        if (toPoint) {
-            FRIKApi::inst->setHandPoseCustomFingerPositions("MyMod_UI", hand, 0, 1, 0, 0, 0);
-        } else {
-            FRIKApi::inst->clearHandPose("MyMod_UI", hand);
-        }
-    }
-};
-```
-
-### 2. Build a panel
+### 1. Build a panel
 
 Each button/toggle here is a `.nif` mesh; swap in the panel classes below to compose one from text
 and a DDS instead, with no mesh to build. A `UIContainer` lays its children out automatically (rows
@@ -155,14 +128,17 @@ panel counterpart of `UIMultiStateToggleButton`: instead of a NIF per state it t
 `std::map<State, UIButtonPanelContent>` - each state's text lines and image - and a press moves to the
 next state in key order.
 
-### 3. Drive it each frame, then tear it down
+### 2. React each frame, then tear it down
+
+The framework updates the UI by itself, with nothing for the mod to call: after the mod's
+`onFrameUpdate()` returns, while the player is loaded, it hit-tests, fires the handlers and renders.
+So a press handler runs after the mod's frame, and what `onFrameUpdate()` does about it happens in
+the next one. A mod that needs the UI updated at a certain point of its own frame calls
+`vrui::g_uiManager->onFrameUpdate()` there, and the framework leaves that frame to it.
 
 ```cpp
 void MyMod::onFrameUpdate()
 {
-    MyUIAdapter adapter;
-    vrui::g_uiManager->onFrameUpdate(&adapter);   // hit-tests, fires handlers, renders
-
     // per-frame UI logic, e.g. react to current state:
     if (_panel) {
         _statusMsg->setVisibility(_modeTgl->isToggleOn());
@@ -194,7 +170,8 @@ A **panel** needs no mesh - only a texture, if it shows an image at all, named b
 resolves like any other: `setImage("Data\\Textures\\MyMod\\icon.dds")`, or a partial path under the
 mod's own `Textures\<ModName>\`. `mod-template` ships a set of common icons at
 `Textures\<ModName>\f4cf\vrui\` (save, reset, exit, config, wiki, debug spheres), plus the
-controller icons the binding prompts draw under `f4cf\bindings\`. Text is drawn in the framework's
+controller icons the binding prompts draw under `f4cf\bindings\`, which
+[`tools/gen_binding_icons.py`](../../tools/gen_binding_icons.py) draws. Text is drawn in the framework's
 font, or the mod's own TTF at `Data\Interface\<ModName>\<ModName>.ttf` - see
 [`render/`](../render/README.md#text).
 
@@ -293,28 +270,173 @@ appendBindingPrompt(rows.back().spans, config.headActivation.primary);
 
 It resolves primary/offhand to the left or right controller by the player's handedness and names
 buttons as the controller prints them (the runtime's `A` is `X` on the left one), drawing the icons
-mod-template ships in `Textures\<ModName>\f4cf\bindings`. A binding no icon covers - a chord, a touch,
-the system button - falls back to words (`bindingLabel`), and `samePrompt` tells whether two bindings
-read the same, for a caller listing several at once.
+mod-template ships in `Textures\<ModName>\f4cf\bindings`. Every way of working a button has its icon:
+the button alone for a press or a tap, with a mark for the rest (a clock for a long press, an arrow
+down onto a bar for a hold, 2x, an arrow up off a bar for a release, ripples for a touch), and the
+thumbstick with its direction's arrow for a push. A chord is its two icons with " + " between them
+(`bindingIconPaths`). The system button, which has no icon, falls back to words (`bindingLabel`), and
+`samePrompt` tells whether two bindings read the same, for a caller listing several at once.
 
 The rows callback runs once per frame during layout; the text is only re-laid-out when a row's text,
 spans or height, the width, the text height or the tab width changes (or an image's texture finishes
 loading).
 
+## One box around several panels
+
+A panel draws its own box, but some content is laid out from more than one: a label on two lines
+with a button's icon centred beside it is a text panel and another panel in a row. Give the row
+container a box style and it draws the box around them, the way a panel draws its own:
+
+```cpp
+auto label = std::make_shared<vrui::UITextPanel>("Label");      // bare: no box of its own
+label->setStyle(vrui::UIPanelStyle{ .color = vrui::F4VR_PANEL_STYLE.color, .padding = vrui::UIPadding::all(0) });
+label->setContent([](auto& rows) { rows.emplace_back("TOGGLE"); rows.emplace_back("SELFIE"); });
+
+auto button = std::make_shared<vrui::UITextPanel>("Button");    // one row: the binding's icon
+button->setStyle(vrui::UIPanelStyle{ .color = vrui::F4VR_PANEL_STYLE.color, .padding = vrui::UIPadding::all(0) });
+button->setContent([](auto& rows) { rows.push_back({}); vrui::appendBindingPrompt(rows.back().spans, binding); });
+
+auto box = std::make_shared<vrui::UIContainer>("Selfie", vrui::UIContainerLayout::HorizontalCenter, 0.3f);
+box->setBoxStyle(vrui::F4VR_PANEL_STYLE);
+box->addElement(label);
+box->addElement(button);
+```
+
+The box is the style's background, border and rounding; its content colour is not used. Its
+padding is the space between the elements and the box's edge, and the container's size grows by it
+and the border, so the container around it makes room for the whole box. A layout that places its
+elements every frame moves them by half the difference of opposite paddings, so the box stays where
+the layout anchors them; a manual layout's elements stay where they were put, and the box is drawn
+around them there. A box with nothing visible in it is not drawn. The box is drawn under every panel
+in it, whenever each was made, and an outer box under an inner one. The dev layout writes the box's
+padding on the container's line as `Pad`, as a panel's.
+
 ## Notes
 
 - `g_uiManager` is created by the framework before `onGameLoaded()`; mods never call `initUIManager()`.
+- While a game menu takes the controllers' input (`f4vr::isGameMenuTakingInput`: the pause menu, a
+  message box, the Pip-Boy, lockpicking, other mods' menus; not workshop build mode), nothing is pressed and no hand points
+  for the UI: every finger is away from every pressable. The UI stays shown, under the game's menu.
 - Containers lay children out automatically by their `UIContainerLayout` (horizontal/vertical,
   centered or directional) — prefer that over positioning each element manually.
 - Coordinates on `UIElement::setPosition(x, y, z)` are **relative to the parent**: x = right(+)/left(−),
   y = forward(+)/back(−), z = up(+)/down(−).
+- A button is pressed by the tip of an index finger, which [`UISkeletonHandler`](UISkeletonHandler.h)
+  reads from the player's skeleton through `f4vr::Skelly`. Either hand can press: a button is tested
+  against the nearer of the two fingers, and that hand points and gets the haptic. While a finger is
+  close to a button the button stays with it, so a press does not jump to the other hand. A UI
+  attached to a hand is the exception: its own hand's finger is always near it and cannot reach it,
+  so only the other hand presses it. It needs a hand drawn at the controller, as FRIK does: while the
+  hand bone is not at the controller, the controller itself presses the button, and a small gold
+  sphere marks the point. `bVRUIShowFingerTip` in `[Debug]` shows the sphere on the fingertip too.
+- A finger starts to interact with a button only from in front of the button's face, within 15
+  units of it, and only while the player looks at the button: the head is in front of the face,
+  and the button is within 40 degrees of where the head faces. Only then does the hand point, and
+  only then can the finger push the button. A finger behind a UI, or near a UI the player does
+  not look at, does neither. The finger interacts until it is 20 units away or 12 units behind the
+  face, or the button is 55 degrees from where the head faces, so a press can take the finger
+  through the button and back out. The values are in [`UIElement.cpp`](UIElement.cpp).
+- A hand that comes to a UI from behind it does not point as its finger comes out in front of the
+  buttons. It points once the finger turns back toward a button, by 0.7 units, or after the finger
+  has moved 15 units away from the buttons and come back.
+- A button is pushed only by a finger that crossed its face from the front, on the button. After a
+  press, and after the finger went in beside the button, the finger has to come back out in front
+  of the button before it can push it. So a finger that comes up from behind a button does not
+  move it, also not the button next to the one it pressed.
+- The hand whose finger interacts with a button points, its index finger out, and keeps pointing
+  while the finger is near any button. So it does not let go between two presses, or when the
+  button it pressed is replaced by another. The pose is asked from
+  [FRIK](https://github.com/rollingrock/Fallout-4-VR-Body), the mod that draws and poses the hands,
+  through its API ([`UIHandPointing.cpp`](UIHandPointing.cpp)): under the tag `<mod name>_UI`, and
+  a little above FRIK's default priority, so it wins over a pose the mod itself holds on that hand.
+  The mod does nothing for it, and without FRIK nothing is posed. A mod that poses the hands itself
+  takes it over with `g_uiManager->setHandPointingHandler(...)`.
+- A UI faces the way its attach node faces. To turn it, give the root a rotation relative to that
+  node: `root->setRotation(MatrixUtils::getMatrixFromEulerAnglesDegrees(heading, roll, attitude))`,
+  angles around x, y and z. The whole tree turns around the root's position, NIF widgets and panels
+  alike, and a button is still pressed along its own depth. An element under the root can be turned
+  too: it turns around its own position, on top of its parent's rotation. Containers lay their
+  children out as if none of them is turned, so a turned child keeps the room of an unturned one.
+- `attachPresetToOffhandWandTop(root, offset)` and `attachPresetToOffhandWandRight(root, offset)` put
+  a UI on the offhand controller, for the primary hand to press: the twins of the primary wand's top
+  and left presets. Right is the side toward the other hand, and is mirrored in left-handed mode.
+- `attachPresetToOffhandWrist(root, offset)` lays a UI on the inner wrist of the offhand arm, along
+  the forearm, and keeps it there as the elbow moves, so the arm never covers it. Bending the wrist
+  does not move it. It needs an arm drawn at the offhand controller, as FRIK does: while the hand
+  bone is not at the controller, the UI sits at a fixed place by the controller. Power armor and
+  left-handed mode have their own placements. The root stays attached to the controller's node, and
+  [`UISkeletonHandler`](UISkeletonHandler.h) gives it a base transform every frame, so a replaced
+  skeleton (a save load, power armor) needs nothing from the mod. The offset is a transform: its
+  position and rotation are set on the root and apply from that base, as do the dev layout's `Pos`
+  and `Rot`.
+- `attachPresetToWorldAtHMD(root)` puts a UI where the HMD is and leaves it there: it stays in the
+  world while the player walks and turns, so it does not move under a ray as the head moves. The
+  root's own position and rotation apply from that place as they do on the HMD's node, level and
+  from the way the head faced: `root->setPosition(0, 120, -20)` is 120 units in front of where the
+  head was and 20 below it. `recenterWorldElement(root)` puts it where the HMD is now, which brings
+  it back in front of the player. With a distance, `attachPresetToWorldAtHMD(root, 350)`, the
+  manager does that by itself when the player walks further than that from the root, so a UI that
+  was left behind comes back. It is measured from the HMD's node to the root's own position, and a
+  hidden root is left where it is. The root stays attached to the HMD's node, and the manager gives
+  it a base transform every frame that moves it back to where the node was.
+- The player can move a root in the world. `setWorldMoveBinding(binding)` sets the binding: they
+  point at the root, work the binding on the hand that points, and the root follows the hand until
+  its button is released. Disabled by default, and the roots are then not moved.
+  - It is one binding for every root in the world, on the hands it names: `Hand::Any` is the hand
+    that points, whichever it is. A config value is read as any binding (`vrcf::parseInputBindingTable`).
+  - It takes hold when the binding fires: a press at once, and a long press when the button was held
+    for its duration. A press that is released before that moves nothing, so the mod has a short
+    press of the same button for something of its own, as a Back (`VRControllers.check(back, hand)`
+    with a tap of that button). The root is taken hold of where the ray is on it when the binding
+    fires. A binding that fires after the release (a tap, a double press, a release) and an axis
+    move nothing.
+  - The root moves and turns with that hand's wand around the point the ray meets it, as a thing at
+    the end of a stick. It stays level: it turns to the sides and tilts up and down with the hand,
+    and does not roll with it.
+  - It follows the hand smoothly. `setWorldMoveSmoothing(seconds)` is the time it takes to come
+    about two thirds of the way to where the hand has it, at any frame rate, 0.05 by default. A
+    root held from a distance needs that, as the shake of the hand is many times larger there: at
+    0.05 seconds about a third of a fast shake gets through, and the root trails a moving hand by
+    the way the hand goes in that time. A longer time is steadier and trails more: at 0.15 seconds
+    about an eighth gets through. 0 follows the hand at once.
+  - The whole wand of the hand that moves a root is hidden from the game from the press to the
+    release (`VRControllersSuppress`, under the owner `UIWorldMove`), also while the ray is beside
+    the root, which trails it. A button that is already down when the ray comes to the root moves
+    nothing until it is released.
+  - When the button is released the root stays where it is, and `recenterWorldElement` and the
+    recenter distance put it where the HMD is again as before. One hand moves a root at a time, and
+    a hidden root is let go.
+  - vrui has no ray of its own: an element says that a hand's ray is on it, and where
+    (`UIFrameUpdateContext::markPointedAt`). An interactive
+    [`imgui::UIImGuiPanel`](../imgui/README.md#a-panel-the-player-moves) does, for the hand that
+    owns its pointer.
+  - The log says when a hand takes hold of a root, and when it lets go and why. At the debug level
+    it also says why a press of the binding's button moved nothing.
 - Detaching mid-frame can be unsafe; `UIManager::detachElement(element, releaseSafe=true)` defers the
   release to the next frame.
-- A dev layout mode tunes placement live through the INI. Calling
-  `UIManager::enableDevLayoutViaConfig()` writes the attached tree out to the config's
-  `[VRUI_DevLayout]` section and saves it. While that section has anything in it, the manager
-  re-applies it to the tree every frame, so editing a line and saving the INI reaches the running
-  game on the next one; emptying the section turns the mode off. Each element's line holds
-  `Pos`, `Scale` and `Size`; containers add `Padding` and `Layout`, panels add `Pad:(t,r,b,l)` (and
-  `MaxW` while their width follows the content), and text and button panels add their text sizes as
-  `Text`. Delete a field from a line and it is simply no longer applied.
+- A dev layout mode tunes placement live through a file of its own, with nothing for the mod to
+  call. It is on while `bVRUIDevLayout` in the config's `[Debug]` section is true; the key is not in
+  the shipped config, so add the line. [`UIDevLayout`](UIDevLayout.h) then keeps
+  `<mod>_DevLayout.ini`, beside the mod's config file:
+  - Every attached root is a section named after it, with a line for the root, keyed by its name,
+    and one for each element under it, keyed by its path below the root (`Row1.SaveButton`). So the
+    roots of a mod need different names.
+  - The lines are applied to the attached elements on every frame, so editing a line and saving the
+    file reaches the running game in a fraction of a second, and a line wins over a value the code
+    sets every frame.
+  - The lines of a detached root stay, and apply again when a root of that name is attached. Going
+    from one screen to another and back keeps what was tuned on each, also when a screen is built
+    again from code.
+  - A line an attached element is missing is added with the element's current values: a new screen
+    gets its section at the end of the file, in the order of its tree, and a line added to a
+    section that is already there goes to the section's end. A removed line, section or file comes
+    back the same way. To get the code's values back, remove a section while its root is detached.
+  - Comments written by hand stay, each with the line or section below it.
+  - The file starts empty when the mode is turned on, so the lines of an earlier run are never
+    applied, and it is removed when the mode is turned off.
+
+  Each element's line holds `Pos`, `Rot` (degrees around x, y and z), `Scale` and `Size`; a
+  container's holds `Padding` and `Layout` in place of `Size` (and a boxed one its box's `Pad`), panels add `Pad:(t,r,b,l)` (and
+  `MaxW` while their width follows the content), text and button panels add their text sizes
+  as `Text`, and an ImGui panel adds the radius it is curved at as `Curve`, 0 for a flat one.
+  Delete a field from a line and it is simply no longer applied.

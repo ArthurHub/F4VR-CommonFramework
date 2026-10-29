@@ -177,19 +177,49 @@ namespace f4cf::vrui
         }
 
         /**
+         * How many elements the element is in, 0 for a root.
+         */
+        std::size_t treeDepth(const UIElement* element)
+        {
+            std::size_t depth = 0;
+            for (const UIElement* parent = element->getParent(); parent; parent = parent->getParent()) {
+                ++depth;
+            }
+            return depth;
+        }
+
+        /**
          * Collect every visible panel into one frame per layer and hand them across to the render
          * thread.
          *
          * Runs after the mod's onFrameUpdate, which is where vrui is pumped, so every panel's
          * transform is this frame's finished layout rather than the previous frame's. An empty frame
          * is still published: that is what puts the renderer dormant.
+         *
+         * A layer paints its fills in the order they were added, so the backdrops go in first, the
+         * outer before the inner: a box's background is then under the panels in it, whenever either
+         * was made.
          */
         void onFrameEnd()
         {
             render::PrimitiveDraw occluded;
             render::PrimitiveDraw alwaysOnTop;
+            std::vector<const UIPanel*> backdrops;
             for (const UIPanel* panel : panels()) {
+                if (panel->isBackdrop()) {
+                    backdrops.push_back(panel);
+                }
+            }
+            std::ranges::stable_sort(backdrops, {}, [](const UIPanel* panel) {
+                return treeDepth(panel);
+            });
+            for (const UIPanel* panel : backdrops) {
                 panel->appendTo(panel->isOccluded() ? occluded : alwaysOnTop);
+            }
+            for (const UIPanel* panel : panels()) {
+                if (!panel->isBackdrop()) {
+                    panel->appendTo(panel->isOccluded() ? occluded : alwaysOnTop);
+                }
             }
 
             if (!occluded.empty()) {

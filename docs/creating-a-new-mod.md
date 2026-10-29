@@ -2,7 +2,7 @@
 
 This walks you from an empty folder to a **working F4SE plugin** built on the F4VR Common
 Framework. By the end you'll have a DLL you can drop into Fallout 4 VR that pops an in-game
-notification when you pull the trigger — and a hot-reloadable INI setting to go with it.
+notification when you pull the trigger — and a hot-reloadable config setting to go with it.
 
 Everything here starts from the bundled [`mod-template/`](../mod-template/), a complete, buildable
 plugin skeleton. You copy it, rename it, and fill in the one hook that matters.
@@ -18,7 +18,7 @@ A minimal but real mod — call it **HelloVR** — that:
 
 - loads as an F4SE VR plugin (`HelloVR.dll`),
 - shows a *"Hello from HelloVR!"* notification each time you press the primary trigger,
-- reads one setting from an INI that **hot-reloads** while the game runs (no restart),
+- reads one setting from a TOML config file that **hot-reloads** while the game runs (no restart),
 - writes a rotating log you can tail to see it working.
 
 The finished layout of your mod repo:
@@ -30,14 +30,14 @@ HelloVR/
 │   └── F4VR-CommonFramework/     # the framework, as a git submodule
 ├── cmake/                        # version + resource templates (from the template)
 ├── data/
-│   ├── config/HelloVR.ini        # shipped INI (also embedded in the DLL as the default)
+│   ├── config/HelloVR.toml       # shipped config (also embedded in the DLL as the default)
 │   ├── resources/                # source PNGs for the UI atlases (not shipped)
 │   └── mod/                      # a ready-made game Data tree, shipped beside the DLL
 │       ├── Meshes/HelloVR/       #   f4cf/ (framework) + one .nif per UI sprite
 │       └── Textures/HelloVR/     #   f4cf/ (framework) + the packed UI atlases
 ├── src/
 │   ├── HelloVR.h / HelloVR.cpp   # your mod class + F4SE entry points
-│   ├── Config.h / Config.cpp     # your INI-backed settings
+│   ├── Config.h / Config.cpp     # your config-backed settings
 │   ├── PCH.h                     # precompiled header
 │   └── Resources.h               # embedded-resource IDs
 ├── .pre-commit-config.yaml       # clang-format + basic checks, run on every commit
@@ -157,7 +157,7 @@ Do the replacements, then rename the files whose names contain `MyMod`:
 ```sh
 mv src/MyMod.h          src/HelloVR.h
 mv src/MyMod.cpp        src/HelloVR.cpp
-mv data/config/MyMod.ini data/config/HelloVR.ini
+mv data/config/MyMod.toml data/config/HelloVR.toml
 ```
 
 Places the tokens actually appear (all handled by a find-and-replace across the tree, but worth
@@ -168,14 +168,14 @@ knowing):
 | `CMakeLists.txt` | `set(NAME "MyMod")`, `set(FRIENDLY_NAME "My Mod")`, and `set(VERSION 0.1.0)` at the very top |
 | `src/HelloVR.h` / `.cpp` | class `MyMod` → `HelloVR`, `namespace my_mod` → `hello_vr`, global `g_myMod` → `g_helloVR`, `#include "MyMod.h"` |
 | `src/Config.h` / `.cpp` | `namespace my_mod` → `hello_vr` |
-| `data/config/HelloVR.ini` | the `[MyMod]` section header and the `[MyMod_AnActivationSphere]` section |
+| `data/config/HelloVR.toml` | the `[MyMod]` section header and the `[MyMod_AnActivationSphere]` section |
 | `vcpkg.json` | `"name": "f4vr-my-mod"` (cosmetic) |
 | `README.md` | the template README's placeholders |
 | `CLAUDE.md` | the mod name, `namespace my_mod`, `g_myMod` and the paths to the renamed files |
 
-> **Why the INI section name matters.** `CMakeLists.txt`'s `NAME` becomes `Version::PROJECT`, which the
-> config reads back as *both* the INI file name (`HelloVR.ini`) **and** the default section header. So
-> the `[HelloVR]` section header in your INI must match the CMake `NAME` exactly, or your settings
+> **Why the config section name matters.** `CMakeLists.txt`'s `NAME` becomes `Version::PROJECT`, which the
+> config reads back as *both* the config file name (`HelloVR.toml`) **and** the default section header. So
+> the `[HelloVR]` section header in your config must match the CMake `NAME` exactly, or your settings
 > won't be found. The rename table above keeps them in sync.
 
 The version at the top of `CMakeLists.txt` flows automatically into the DLL metadata and the packaged
@@ -192,7 +192,7 @@ touch those. Two kinds of asset live there, and they are renamed differently.
 | ---- | ---------- |
 | `Meshes\MyMod\f4cf\activation-sphere.nif` | the one sphere mesh every activation zone draws on … |
 | `Textures\MyMod\f4cf\activation-sphere.dds`, `debug-sphere.dds` | … and the textures its styles pick from (`f4vr::SphereStyle`) |
-| `Textures\MyMod\f4cf\activation-icon-{hand,ring,circle}.dds` | the icons an activation zone can be marked with (`sIcon` in the INI) |
+| `Textures\MyMod\f4cf\activation-icon-{hand,ring,circle}.dds` | the icons an activation zone can be marked with (`sIcon` in the config) |
 | `Textures\MyMod\f4cf\bindings\` | the controller icons a binding prompt draws, so a prompt names the button actually bound |
 | `Textures\MyMod\f4cf\vrui\` | shared button icons — save, reset, exit, config, wiki, debug spheres |
 
@@ -376,7 +376,7 @@ Rebuild. Load a save, pull the trigger — you should see **"Hello from HelloVR!
 
 ## 7. Add a config value with hot-reload
 
-Hard-coding the trigger is fine, but the framework's real strength is INI settings that reload live.
+Hard-coding the trigger is fine, but the framework's real strength is config settings that reload live.
 Let's make the greeting text configurable.
 
 **1. Declare the setting** in `src/Config.h` (next to the existing `myConfigValue`):
@@ -386,12 +386,13 @@ Let's make the greeting text configurable.
 std::string greeting = "Hello from HelloVR!";
 ```
 
-**2. Read it** in `src/Config.cpp` → `loadIniConfigInternal()`:
+**2. Read it** in `src/Config.cpp` → `loadConfigInternal()`:
 
 ```cpp
-void Config::loadIniConfigInternal(const CSimpleIniA& ini)
+void Config::loadConfigInternal(const toml::table& config)
 {
-    greeting = ini.GetValue(DEFAULT_SECTION, "sGreeting", "Hello from HelloVR!");
+    // the default for a key that is missing, or that is not a string
+    greeting = config[DEFAULT_SECTION]["sGreeting"].value_or(std::string("Hello from HelloVR!"));
 }
 ```
 
@@ -401,30 +402,33 @@ void Config::loadIniConfigInternal(const CSimpleIniA& ini)
 f4vr::showNotification(g_config.greeting);
 ```
 
-**4. Add the key** to `data/config/HelloVR.ini` under the `[HelloVR]` section:
+**4. Add the key** to `data/config/HelloVR.toml` under the `[HelloVR]` section. The file is TOML, so
+a string goes in quotes, a float has its decimal point, and a Windows path goes in single quotes:
 
-```ini
+```toml
 [HelloVR]
-sGreeting = Hello from HelloVR!
+sGreeting = "Hello from HelloVR!"
 ```
 
-Rebuild once. Now the payoff: **launch the game, then edit the INI while it's running.**
+Rebuild once. Now the payoff: **launch the game, then edit the config while it's running.**
 
-The live INI lives at:
+The live config lives at:
 
 ```
-%USERPROFILE%\Documents\My Games\Fallout4VR\Mods_Config\HelloVR\HelloVR.ini
+%USERPROFILE%\Documents\My Games\Fallout4VR\Mods_Config\HelloVR\HelloVR.toml
 ```
 
 It's created from the DLL's embedded default on first run. Change `sGreeting` to something else, save
 the file, and pull the trigger again — the new text shows **without restarting**. `ConfigBase` watches
-the file and re-runs `loadIniConfigInternal()` on every save.
+the file and re-runs `loadConfigInternal()` on every save. A typo that breaks the file is logged with
+its line, and the values stay as they were until it is fixed.
 
 **Want the *button* itself configurable too?** Swap the hard-coded `isPressed` for a data-driven
 binding: declare an `f4cf::vrcf::InputBinding` in your config, load it with
-`getInputBindingValue(ini, "HelloVR", "sGreetButton", …)`, and evaluate it each frame with
-`vrcf::VRControllers.check(binding)`. Then players rebind it from the INI (`sGreetButton = offhand
-longpress b`) with no rebuild. Full grammar: the [input-binding guide](input-binding.md).
+`getInputBindingValue(config, "HelloVR", "kGreetButton", …)`, and evaluate it each frame with
+`vrcf::VRControllers.check(binding)`. Then players rebind it from the config (`kGreetButton = { hand =
+"offhand", type = "longpress", button = "b" }`) with no rebuild. Every key of a binding: the
+[input-binding guide](input-binding.md).
 
 ---
 
@@ -451,7 +455,7 @@ nothing (a missing file is logged, not fatal). See
 ```
 
 You should see your `HelloVR loaded — pull the trigger to say hi` line, then a `trigger pressed`
-line each time you fire. Bump `iLogLevel` in the `[Debug]` INI section for more detail (`1` = debug,
+line each time you fire. Bump `iLogLevel` in the `[Debug]` config section for more detail (`1` = debug,
 `0` = trace) — it hot-reloads like everything else.
 
 That's a complete mod: it builds, loads, responds to input, and reads live config. 🎉
@@ -464,10 +468,10 @@ That's a complete mod: it builds, loads, responds to input, and reads live confi
 | ------- | ------------------ |
 | CMake: `F4VR-CommonFramework path not found` | Submodules not fetched — run `git submodule update --init --recursive`. |
 | CMake: `VCPKG_ROOT is not set` | Set the `VCPKG_ROOT` env var to your vcpkg checkout, then re-open the terminal. |
-| vcpkg fails building CommonLibF4VR | Keep the `"builtin-baseline"` in `vcpkg.json` (`b4a3d89…`) — newer baselines break the build. |
+| vcpkg fails building CommonLibF4VR | Keep the `"builtin-baseline"` in `vcpkg.json` (`5cd4931…`), the one the framework is built and tested against. |
 | Build succeeds, DLL never loads in-game | You're launching the flatscreen `Fallout4.exe` or plain launcher — launch through **`f4sevr_loader.exe`**. Also check the DLL is under `Data/F4SE/Plugins/`. |
 | Loads (log appears) but no notification | Make sure a save is fully loaded (the `no player data` guard), and that you're pressing the *primary* (weapon-hand) trigger. |
-| INI edits don't apply | Edit the **live** copy under `Documents\My Games\Fallout4VR\Mods_Config\HelloVR\`, not `data/config/` in your repo. |
+| Config edits don't apply | Edit the **live** copy under `Documents\My Games\Fallout4VR\Mods_Config\HelloVR\`, not `data/config/` in your repo. |
 
 ---
 
@@ -477,7 +481,7 @@ You have the skeleton; the framework has a lot more to offer. Each subsystem has
 with examples:
 
 - **[Controller bindings & activation spheres](input-binding.md)** — make inputs rebindable from the
-  INI, and build reach-into-a-zone gestures.
+  config, and build reach-into-a-zone gestures.
 - **[`vrcf/`](../src/vrcf/README.md)** — the full controller API (long-press, double-tap, thumbstick,
   haptics) and input suppression.
 - **[`f4vr/`](../src/f4vr/README.md)** — game-state utilities: nodes, skeleton, weapon/menu state,
@@ -491,7 +495,7 @@ with examples:
 - **[`debug/`](../src/debug/README.md)** — wire primitives, world labels and a watch table for
   working out why something is where it is.
 - **[`f4sevr/`](../src/f4sevr/README.md)** — register Papyrus native functions to talk to scripts.
-- **[Debug & logging config](debug-config.md)** — the `[Debug]` INI keys: log patterns, flow flags,
+- **[Debug & logging config](debug-config.md)** — the `[Debug]` config keys: log patterns, flow flags,
   data dumps, live tuning.
 - **[`src/README.md`](../src/README.md)** — how the subsystems fit together, at a glance.
 

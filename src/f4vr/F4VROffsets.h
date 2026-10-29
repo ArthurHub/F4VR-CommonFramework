@@ -546,4 +546,11 @@ namespace f4cf::f4vr
     // the texture is cashed by the game so this can be used to load textures that are later used by the game by replacing the caching key (path)
     typedef void (*_LoadTextureByPath)(const char* filePath, bool unk1, RE::NiTexture*& texture, int32_t unk2, uint64_t unk3, uint64_t unk4);
     inline REL::Relocation<_LoadTextureByPath> LoadTextureByPath(REL::Offset(0x027F5520));
+
+    /**
+     * SettingHandlerMap::SettingUpdated (ID 1267051): runs the handlers the game installed on a setting, as the game's
+     * settings menu does after it changes one, so the game takes the new value at once.
+     */
+    using _SettingHandlerMap_SettingUpdated = void (*)(RE::Setting& setting);
+    inline REL::Relocation<_SettingHandlerMap_SettingUpdated> SettingHandlerMap_SettingUpdated(REL::Offset(0x1d11c30));
 }

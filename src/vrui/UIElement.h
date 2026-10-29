@@ -3,10 +3,12 @@
 #include <map>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include "../common/Quaternion.h"
-#include "UIModAdapter.h"
+#include "UIFrameUpdateContext.h"
+#include "UISkeletonHandler.h"
 
 namespace f4cf::vrui
 {
@@ -55,6 +57,21 @@ namespace f4cf::vrui
         }
     };
 
+    /**
+     * What a pressable keeps between frames about the finger it is tested against, see UIElement::updateFinger.
+     */
+    struct UIFingerState
+    {
+        // the hand the finger belongs to: true for the primary hand
+        bool primaryHand = false;
+
+        // the finger interacts with the pressable: its hand points, and it can push the pressable
+        bool interacting = false;
+
+        // the furthest in front of the pressable the finger got on its way out from behind it
+        float frontPeak = 0.0f;
+    };
+
     class UIElement
     {
     public:
@@ -71,6 +88,22 @@ namespace f4cf::vrui
         void setPosition(const float x, const float y, const float z);
         void updatePosition(const float x, const float y, const float z);
         const RE::NiPoint3& getPosition() const;
+
+        /**
+         * Turn the element relative to its parent; for a root, relative to the node it is attached to.
+         * Everything under the element turns with it, around the element's own position.
+         * Containers lay their children out as if none of them is turned.
+         * @param rotation as NiTransform holds it, e.g. from MatrixUtils::getMatrixFromEulerAnglesDegrees
+         */
+        void setRotation(const RE::NiMatrix3& rotation);
+        const RE::NiMatrix3& getRotation() const;
+
+        /**
+         * A transform a root starts from, before its own position and rotation: it moves the root from its
+         * attach node to somewhere else, such as the forearm, and the root is then placed and turned from there.
+         * Set by the framework for a preset that follows something other than the attach node.
+         */
+        void setBaseTransform(const RE::NiTransform& base);
 
         float getScale() const;
         void setScale(const float scale);
@@ -103,13 +136,22 @@ namespace f4cf::vrui
         {}
 
         void onPressEventFiredPropagate(UIElement* element, UIFrameUpdateContext* context);
+
+        UIInteractionFinger getInteractionFingerTip(const RE::NiPoint3& worldPosition, std::optional<bool> keepPrimaryHand) const;
+        RE::NiPoint3 updateFinger(UIFingerState& state, UIFrameUpdateContext* context, const RE::NiPoint3& worldPosition, const RE::NiPoint3& worldForward) const;
         virtual void onStateChanged(UIElement* element);
 
         // Attach the UI element to the given game node.
         virtual void attachToNode(RE::NiNode* attachNode);
         virtual void detachFromAttachedNode(bool releaseSafe);
 
-        virtual void writeDevLayoutProperties(const std::string& namePrefix, std::map<std::string, std::string>& propertiesMap) const;
+        /**
+         * The dev-layout lines of a tree, in the order of the tree: for each element its path, which is the
+         * names from the root down to it joined by dots, and its fields.
+         */
+        using DevLayoutLines = std::vector<std::pair<std::string, std::string>>;
+
+        virtual void writeDevLayoutProperties(const std::string& namePrefix, DevLayoutLines& lines) const;
         virtual void readDevLayoutProperties(const std::string& namePrefix, const std::map<std::string, std::string>& propertiesMap);
 
         /**
@@ -118,12 +160,12 @@ namespace f4cf::vrui
          */
         using DevLayoutFields = std::map<std::string, std::vector<float>, std::less<>>;
 
-        /**
-         * Append this element's dev-layout fields to its line, as ", Name:(values)" after whatever is already
-         * there. An override calls its base first, and adds only what is worth tuning live - layout, not
-         * looks - so the line stays short enough to edit.
-         */
         virtual void writeDevLayoutFields(std::string& line) const;
+
+        /**
+         * The fields every element starts its line with: Pos, Rot as degrees around x, y and z, and Scale.
+         */
+        void writeDevLayoutPlacementFields(std::string& line) const;
 
         /**
          * Apply the dev-layout fields this element knows. A field that is missing, or has the wrong number of
@@ -139,6 +181,9 @@ namespace f4cf::vrui
 
         UIElement* _parent = nullptr;
         RE::NiTransform _transform;
+
+        // where a root starts from, relative to its attach node; identity unless a preset sets it
+        RE::NiTransform _baseTransform;
         bool _visible = true;
 
         // the width (x) and height (y) of the widget
@@ -150,5 +195,8 @@ namespace f4cf::vrui
         // Used to allow hiding attachToNode, detachFromAttachedNode from public API
         friend class UIManager;
         friend class UIContainer;
+
+        // Writes the dev-layout lines of the attached trees and reads them back
+        friend class UIDevLayout;
     };
 }

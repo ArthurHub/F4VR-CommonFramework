@@ -3,9 +3,12 @@
 #include <memory>
 
 #include "UIElement.h"
+#include "UIPanelStyle.h"
 
 namespace f4cf::vrui
 {
+    class UIContainerBox;
+
     /**
      * How the container will lay out the child elements.
      */
@@ -27,14 +30,22 @@ namespace f4cf::vrui
         VerticalDown,
     };
 
+    /**
+     * Groups elements under one transform and lays them out by its UIContainerLayout.
+     *
+     * A container draws nothing of its own until setBoxStyle gives it a box: the chrome a panel
+     * draws - background, border, rounding - around the elements it lays out, with the style's
+     * padding between them and the box's edge. That is how several panels read as one, like a
+     * label beside a button's icon.
+     */
     class UIContainer : public UIElement
     {
     public:
         explicit UIContainer(const std::string& name, const UIContainerLayout layout = UIContainerLayout::Manual, const float padding = 0, const float scale = 1);
         virtual std::string toString() const override;
 
-        virtual void onFrameUpdate(UIFrameUpdateContext* adapter) override;
-        virtual void onLayoutUpdate(UIFrameUpdateContext* adapter) override;
+        virtual void onFrameUpdate(UIFrameUpdateContext* context) override;
+        virtual void onLayoutUpdate(UIFrameUpdateContext* context) override;
         void addElement(const std::shared_ptr<UIElement>& element);
 
         UIContainerLayout getLayout() const;
@@ -43,6 +54,9 @@ namespace f4cf::vrui
 
         float getPadding() const;
         void setPadding(const float padding);
+
+        void setBoxStyle(const UIPanelStyle& style);
+        void clearBoxStyle();
 
         std::vector<std::shared_ptr<UIElement>> childElements() const;
 
@@ -57,14 +71,22 @@ namespace f4cf::vrui
         void layoutVerticalCenter() const;
         void layoutVerticalUp() const;
         void layoutVerticalDown() const;
+        void layoutBox();
+
+        /**
+         * The box drawn around the elements, or null while the container has none.
+         */
+        const UIElement* box() const;
 
         float calcPadding() const
         {
             return _padding * calcScale();
         }
 
-        virtual void writeDevLayoutProperties(const std::string& namePrefix, std::map<std::string, std::string>& propertiesMap) const override;
+        virtual void writeDevLayoutProperties(const std::string& namePrefix, DevLayoutLines& lines) const override;
         virtual void readDevLayoutProperties(const std::string& namePrefix, const std::map<std::string, std::string>& propertiesMap) override;
+        virtual void writeDevLayoutFields(std::string& line) const override;
+        virtual void readDevLayoutFields(const DevLayoutFields& fields) override;
 
         // how to lay out the child elements
         UIContainerLayout _layout = UIContainerLayout::Manual;
@@ -74,5 +96,10 @@ namespace f4cf::vrui
 
         // all the elements under this container
         std::vector<std::shared_ptr<UIElement>> _childElements;
+
+        // the box around the elements and its look, while setBoxStyle gave it one; not one of the
+        // elements, so the layout, the dev layout and the tree dumps never see it
+        std::shared_ptr<UIContainerBox> _box;
+        UIPanelStyle _boxStyle;
     };
 }

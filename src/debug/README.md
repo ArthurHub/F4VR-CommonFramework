@@ -98,16 +98,16 @@ shapes still gets a bare header, and a muted one shows as a grey `physics (off)`
 can see at a glance what is drawing and what a config toggle is muting.
 
 Channels are not only a mod's own: the framework tags its scene-depth readout `SCENE-DEPTH`, so
-`sDebugDrawDisabledChannels` mutes it like any other. That readout is off unless asked for — see
+`aDebugDrawDisabledChannels` mutes it like any other. That readout is off unless asked for — see
 [`bSceneDepthDiagnostics`](../../docs/debug-config.md#scene-depth-occlusion).
 
-## `[Debug]` INI keys (all mods get these via `ConfigBase`, hot-reloadable)
+## `[Debug]` config keys (all mods get these via `ConfigBase`, hot-reloadable)
 
 | Key                          | Default | Meaning                                                                    |
 | ---------------------------- | ------- | -------------------------------------------------------------------------- |
 | `bDebugDrawEnabled`          | `true`  | Master switch (runtime `setEnabled()` / hotkey override it until changed). |
-| `sDebugDrawDisabledChannels` | empty   | Comma-separated channel names whose draws are skipped.                     |
-| `sDebugDrawToggleBinding`    | empty   | Controller binding to flip the overlay in-headset (`vrcf::parseInputBinding` grammar, e.g. `offhand longpress grip`). |
+| `aDebugDrawDisabledChannels` | `[]`    | Names of the channels whose draws are skipped, e.g. `["physics"]`.         |
+| `kDebugDrawToggleBinding`    | none    | Controller binding to flip the overlay in-headset (a [binding table](../../docs/input-binding.md#the-binding), e.g. `{ hand = "offhand", type = "longpress", button = "grip" }`). |
 | `sDebugDrawHudPlacement`     | `center`| Where the default watch-table HUD sits: `center` / `center-left` / `center-right` / `center-top` / `center-top-left` / `center-top-right` (bottom row a little below centre, top row higher above it; side variants are edge-aligned that way). |
 
 ## Files

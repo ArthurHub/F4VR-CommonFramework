@@ -22,6 +22,14 @@ namespace f4cf::render
     inline constexpr std::string_view CUSTOM_TEXT_FONT_PATH = "Data\\Interface\\{0}\\{0}.ttf";
 
     /**
+     * Where a mod can ship the bold and the italic face of its font, beside CUSTOM_TEXT_FONT_PATH. Only
+     * the ImGui canvases draw them (imgui::canvasFont). A face the mod does not ship is the embedded
+     * one: Roboto Black, and Roboto Medium Italic.
+     */
+    inline constexpr std::string_view CUSTOM_BOLD_FONT_PATH = "Data\\Interface\\{0}\\{0}-Bold.ttf";
+    inline constexpr std::string_view CUSTOM_ITALIC_FONT_PATH = "Data\\Interface\\{0}\\{0}-Italic.ttf";
+
+    /**
      * Width of a run of text in the framework's font, in the unit textHeight is given in: from the
      * left edge of the first letter's ink to the right edge of the last, the extent a reader sees
      * and the one the renderer aligns.
@@ -127,16 +135,28 @@ namespace f4cf::render::internal
     };
 
     /**
-     * The font file's bytes - the mod's own when CUSTOM_TEXT_FONT_PATH holds a usable one, the
-     * embedded Roboto Medium otherwise. Resolved once and kept for the life of the process, so the
-     * ImGui atlas builds from the same bytes without copying them. textFontSource names which one,
-     * for logs.
+     * A font file: the mod's own when it ships a usable one, the embedded font otherwise.
      */
-    std::span<const std::uint8_t> textFontBytes();
-    const std::string& textFontSource();
+    struct FontFile
+    {
+        // the mod's file, or empty for the embedded font
+        std::vector<std::uint8_t> custom;
+        std::span<const std::uint8_t> embedded;
+
+        // which of the two it is, for logs
+        std::string source;
+
+        std::span<const std::uint8_t> bytes() const
+        {
+            return custom.empty() ? embedded : std::span<const std::uint8_t>(custom);
+        }
+    };
+
+    FontFile resolveFontFile(std::string_view pathFormat, std::span<const std::uint8_t> embedded, std::string_view embeddedName);
+    const FontFile& textFontFile();
 
     /**
-     * The atlas, built from textFontBytes the first time anything uses it - about a tenth of a
+     * The atlas, built from textFontFile the first time anything uses it - about a tenth of a
      * second, once, on whichever thread gets there first. If the font cannot be loaded it holds
      * only the solid block, so lines and fills still draw and text draws nothing.
      */

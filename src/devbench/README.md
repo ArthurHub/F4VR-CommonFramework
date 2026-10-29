@@ -20,10 +20,10 @@ default, so a call that names none is an error. Every framework mod has the same
 |--------|-----------|--------------|
 | `health` | — | Which mod and framework version this is, the tool's `contract` number, the devbench build, whether the tool is armed, whether a state snapshot exists and its `liveness`, whether this is a [Tracy](../perf/README.md#tracy) build and a Tracy viewer is connected (`tracy`: `built`, `connected`), and the actions. Answered without the game thread, so it replies while the game is stalled. |
 | `state` | — | What the mod is doing as of its last frame: `liveness` plus the mod's own state (see below). Answered from a snapshot without the game thread; a call before the first one waits for it. |
-| `config` | `key`, `section` | One INI value as the mod sees it: the session override if one is set, otherwise the file's. |
-| `set` | `key`, `value`, `section` | Override one INI value for the session (`ConfigBase::setConfigOverride`); the file is not written. |
-| `clear` | `key`, `section`, or `all` | Drop one session override, or all of them. |
-| `overrides` | — | The session overrides in effect. |
+| `config` | `key`, `section` | One config value as the mod sees it: the session override if one is set, otherwise the file's. In `config`, `set` and `clear`, `key` is a TOML dotted key, so `hand.x` is a value in a nested table. |
+| `set` | `key`, `value`, `section` | Override one config value for the session, in the type the file has for the key (`ConfigBase::setConfigOverride`, as the owner `devbench`); the file is not written. A value that is not of the type is an error, and nothing is set. The reply has the value as it applies (`no` over a bool is `false`). |
+| `clear` | `key`, `section`, or `all` | Drop one session override that `set` made, or all of them. An override of another owner stays. |
+| `overrides` | — | The session overrides in effect, each with the owner that set it. |
 | `perf` | `reset`, `format` | Time spent in every [perf site](../perf/README.md) in the mod since the last reset, as a tree per thread (see below). `reset: true` clears every site after reading it. `format`: `tree` (the default), `flat` (one map keyed by function and label) or `text` (the tree as an indented table in `text`, the quickest to read). Answered without the game thread, so reading never stalls a frame. |
 
 `section` defaults to the mod's name, the section the mod template uses; a mod whose main section
@@ -70,7 +70,7 @@ the game thread (the one `ModBase::onFrameUpdateSafe` runs on) first:
   when the game loaded.
 
 `format: "text"` puts the same tree in `text` as a table, which is also what the `perf` debug dump
-(`sDumpDataOnceNames`) writes to the log. An excerpt from FRIK, sites under a caller in the order
+(`aDumpDataOnce`) writes to the log. An excerpt from FRIK, sites under a caller in the order
 they run:
 
 ```
@@ -130,12 +130,14 @@ void MyMod::onModLoaded(const F4SE::LoadInterface*)
   mod's state provider does with it, such as emitting an event when a value changes. It arms, for
   the rest of the session, as soon as something can read that: devbench is installed (the tool
   registers when the game loads), a [Tracy](../perf/README.md#tracy) viewer connects, or
-  `perf_reset` in `sDumpDataOnceNames` starts a perf window. A game with none of them pays two
+  `perf_reset` in `aDumpDataOnce` starts a perf window. A game with none of them pays two
   relaxed loads a frame. Arming does not wait for a devbench client: the plugin can't tell whether
   one is attached, so a trace sees the mod's state events from the start.
 - **Arguments.** All actions share one flat input schema, so start each argument's description
-  with the actions that read it (`"surface: ..."`). An argument several actions share is declared
-  once; the first declaration wins.
+  with the actions that read it (`"surface: ..."`). An argument several actions declare, as a mod's
+  own `value` beside the generic `set`'s, has their descriptions joined, and takes any type where
+  their types differ. Declarations that differ in anything else, as an `enum`, keep the first and
+  log a warning.
 - **Adding late.** Actions and the description added before `onGameLoaded` returns go out in
   the first registration; a later change re-registers the tool.
 
@@ -204,8 +206,8 @@ and before the game has loaded, an emit is one atomic load and builds nothing.
   | Event | When | Payload |
   |-------|------|---------|
   | `sessionLoaded` | After each save load and new game, once the mod's own `onGameSessionLoaded` has run | — |
-  | `config.reloaded` | The file watcher applied an INI change from disk, or `ConfigBase::reload()` ran | `file`, `trigger` (`file` or `reload`) |
-  | `config.override` | A session override was set or cleared, by anyone: a devbench call, the mod, or another mod through the mod's API | `section`, `key`, `value` (`null` when cleared), or `all: true` |
+  | `config.reloaded` | The file watcher applied a config change from disk, or `ConfigBase::reload()` ran | `file`, `trigger` (`file` or `reload`) |
+  | `config.override` | An owner set a session override of a key it did not override before, or cleared one, whoever the owner is: a devbench call, the mod, or another mod through the mod's API. A new value for a key the owner already overrides is not an event: a previewed value changes many times a second | `owner`, and `section`, `key`, `value` (the one it was first set with, `null` when cleared), or `all: true` |
   | `input.suppression` | An owner started or stopped suppressing controller input | `owner`, its `left`/`right` `buttons`/`axes` (empty once released), the `effective` union, `owners` |
 
   Names are the input binding grammar's (`grip`, `trigger`, `menu`, `a`, `thumbstick`), and

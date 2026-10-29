@@ -10,20 +10,27 @@ layout like any other.
 
 > Part of the [F4VR Common Framework](../README.md) source tree.
 
-It draws through [`render/`](../render/README.md)'s shared Submit hook, so it shares the overlay's
-draw order, its occlusion and its threading rules. The font is the framework's own, so an ImGui panel
+It draws through [`render/`](../render/README.md)'s overlay host, so it shares the overlay's
+draw order, its occlusion and its threading rules, and is drawn under the game's menus
+([render/](../render/README.md#under-the-games-menus)). The font is the framework's own, so an ImGui panel
 and a `vrui::UITextPanel` standing side by side read as one UI.
 
 ## Files
 
 | File | What it is |
 | ----------------------- | -------------------------------------------------------------------- |
-| [`ImGuiCanvas.h`](ImGuiCanvas.h) / [`.cpp`](ImGuiCanvas.cpp) | `Canvas` — one ImGui window placed in the world by a provider you write. Content, placement, chrome (background, border, rounding, padding), sizing and occlusion. |
+| [`ImGuiCanvas.h`](ImGuiCanvas.h) / [`.cpp`](ImGuiCanvas.cpp) | `Canvas` — one ImGui window placed in the world by a provider you write. Content, placement and curve, chrome (background, border, rounding, padding), sizing and occlusion, and whether it is dedicated. |
 | [`UIImGuiPanel.h`](UIImGuiPanel.h) / [`.cpp`](UIImGuiPanel.cpp) | The vrui adapter: a `UIElement` whose rectangle a `Canvas` fills. Takes `vrui::UIPanelStyle` and the vrui sizing modes, in vrui units. |
+| [`ImGuiPointer.h`](ImGuiPointer.h) / [`.cpp`](ImGuiPointer.cpp) | `Pointer`, reached as `imgui::pointer()` — the one pointer of the interactive canvases: a wand's ray as ImGui's mouse, its trigger as the mouse button, and that wand hidden from the game. Its state, which hands point, and its `PointerStyle`: where the ray is on the hand, and how the ray and its mark are drawn. |
+| [`ImGuiPointerLogic.h`](ImGuiPointerLogic.h) | The pointer's logic apart from the game, so it is unit tested: where a ray meets a quad and its plane, the quad of a curved canvas bent around its cylinder, whether a hand operates the UI and presses it, which hand owns the pointer, and how much a thumbstick scrolls. |
+| [`ImGuiKeyboard.h`](ImGuiKeyboard.h) / [`.cpp`](ImGuiKeyboard.cpp) | The keyboard of the canvases: SteamVR's keyboard, shown while ImGui edits a text field, with what is typed on it sent to the field, and the keyboard messages of the game's window handed to ImGui's Win32 backend, so a field is typed with a physical keyboard or an overlay that sends keys to the window too ([VR keyboard](../../docs/tech/vr-keyboard.md)). |
+| [`ImGuiKeyboardLogic.h`](ImGuiKeyboardLogic.h) | The keyboard's logic apart from the game, so it is unit tested: the one edit that turns a field's text into the keyboard's, where it changed, on whole UTF-8 characters. |
+| [`ImGuiImage.h`](ImGuiImage.h) / [`.cpp`](ImGuiImage.cpp) | `imgui::image` and `imgui::addImage` — a `render::Texture` in the content of a canvas, kept until the frame that draws it has been drawn. |
 | [`ImGuiSettings.h`](ImGuiSettings.h) / [`.cpp`](ImGuiSettings.cpp) | The two process-wide knobs: `setFontSizePixels` and `setSupersample`. |
-| [`ImGuiFonts.h`](ImGuiFonts.h) / [`.cpp`](ImGuiFonts.cpp) | Loads the framework's text font into the ImGui atlas, from the same bytes the primitive renderer draws with. |
-| [`ImGuiLayer.h`](ImGuiLayer.h) / [`.cpp`](ImGuiLayer.cpp) | Game-thread pump: one ImGui frame holding every visible canvas, cloned and published with each canvas's quad. |
-| [`ImGuiRenderer.h`](ImGuiRenderer.h) / [`.cpp`](ImGuiRenderer.cpp) | Render-thread half: rasterizes the frame into the shared atlas texture, then composites each canvas's slice as a world-space quad. |
+| [`ImGuiFonts.h`](ImGuiFonts.h) / [`.cpp`](ImGuiFonts.cpp) | Loads the framework's text font into the ImGui atlas, from the same bytes the primitive renderer draws with, with its bold and italic faces: `imgui::canvasFont`. |
+| [`ImGuiLayer.h`](ImGuiLayer.h) / [`.cpp`](ImGuiLayer.cpp) | Game-thread pump: one ImGui frame holding every visible canvas, or the dedicated canvas alone, cloned and published with each canvas's quad. |
+| [`ImGuiRenderer.h`](ImGuiRenderer.h) / [`.cpp`](ImGuiRenderer.cpp) | Render-thread half: rasterizes the frame into the shared atlas texture, or into the dedicated canvas's own, then composites each canvas's slice as a world-space quad. |
+| [`ImGuiTextures.h`](ImGuiTextures.h) / [`.cpp`](ImGuiTextures.cpp) | ImGui's own textures, its font atlas: created and destroyed on the game thread as ImGui asks, and the glyphs ImGui adds copied for the render thread to write. |
 
 ## A panel in a vrui layout
 
@@ -57,8 +64,9 @@ Three things set it apart from its neighbours:
 
 - It draws through the overlay path rather than the scene graph, so what hides it is the depth test
   (`setOccluded`), not the scene's own draw order.
-- **It is not interactive.** vrui's finger-collision press handling does not apply — the content is
-  pixels, not widgets. Put the buttons beside it, in vrui.
+- **It is not pressed by a finger.** vrui's finger-collision press handling does not apply — the
+  content is pixels, not widgets. It is operated from a distance instead, with a wand's ray: see
+  [Interactive canvases](#interactive-canvases). Buttons to press by touch go beside it, in vrui.
 - It is **not** a `vrui::UIPanel`, whatever the name suggests: it takes the same `vrui::UIPanelStyle`
   and sizing modes, but ImGui draws its chrome and lays out its content.
 
@@ -90,12 +98,230 @@ freely (that is the whole point — `node->world` must never be read render-side
 callback runs inside the framework's `NewFrame`/`Render` pair and inside a `Begin`/`End` for this
 canvas, so it calls ImGui widget functions only — no `Begin`/`End` of its own, no D3D.
 
+The canvas's padding and border are the canvas's alone. What the content opens, a combo's list, a
+popup, a dialog or a bordered child window, has ImGui's own window padding and border, as in any
+ImGui program.
+
 The canvas is a plain game-thread object: construct it, and the framework pumps it every frame;
 destroy it and it is gone. `setVisible(false)` costs nothing — a hidden canvas is not packed, not
 drawn, and does not run its content callback.
 
 `setPixelSize` is cheap and safe at any time (the atlas is repacked every frame), so a canvas that
 grows or shrinks in the world can hold its pixel density instead of being stretched.
+
+## Interactive canvases
+
+A canvas only shows its content until it is made interactive. Then a wand's ray is its pointer: where
+the ray meets the canvas is ImGui's mouse position, and the wand's trigger is the left mouse button.
+ImGui does the rest, so the content is written as for a screen.
+
+```cpp
+panel->setInteractive(true);            // Canvas::setInteractive for a canvas placed by hand
+panel->setContent([this] {
+    if (ImGui::Button("Reset")) {
+        reset();
+    }
+    ImGui::SliderFloat("FOV", &_fov, 10.0f, 120.0f);
+});
+```
+
+- **Which hand points.** ImGui has one pointer, so one hand owns it at a time. A hand whose ray is
+  alone on an interactive canvas owns it. With both rays on a canvas it is the hand that pressed its
+  trigger on a canvas last, and the primary hand before either has. The owner keeps the pointer while
+  it holds its trigger down, so a press of the other hand does not take a drag over.
+  `imgui::pointer().setHands` limits pointing to one hand.
+- **Where the ray is.** It is placed from the wand's UI node (`primaryUIAttachNode`,
+  `secondaryUIOffsetNode`), whose +Y is the way the hand aims a weapon: the node a weapon hangs on is
+  turned the same, and the wand's own node points 59 degrees above that. By default the ray starts a
+  little in front of the wand and points 18 degrees above that aim and 5 degrees inward, which is
+  where the hand points. The style's `rayOffset` is that placement: the ray starts at the offset's
+  position and runs along its +Y. It is given for the right hand and mirrored for the left.
+- **What it meets.** The ray meets a canvas only from its front, and the nearest interactive canvas
+  takes it. It passes through the canvases that are not interactive, and through the world.
+- **What the game gets.** A hand operates the UI while its ray is on an interactive canvas, and its
+  whole wand is then hidden from the game and from other mods: every button and axis
+  (`VRControllersSuppress`, under the owner `ImGuiPointer`). A pull of the trigger on a canvas fires
+  no weapon, and the game has the wand back when the ray leaves. This goes for each hand by its own
+  ray, whether or not it owns the pointer. The mod's own reads through `VRControllers` still see the
+  wand.
+- **A press is held.** A press that began on a canvas is the UI's until the trigger is released. It
+  stays on that canvas while the ray slides off it: the pointer follows the ray on the canvas's
+  plane, or on the cylinder of a [curved one](#a-curved-panel), up to a canvas's size past its
+  edges, so a slider is dragged to its end and a press is given up by releasing beside the canvas. The wand stays hidden from the game until the release,
+  also when the canvas is hidden in the middle of the press, so the game never gets a trigger that
+  is already down. The press ends when the trigger is back near its rest, a little after the end of
+  its click.
+- **A pull from outside is the game's.** A trigger that is already down when the ray comes to a
+  canvas presses nothing, and its wand is not hidden. The hand has no pointer until the trigger is
+  released.
+- **The thumbstick scrolls.** The thumbstick of the hand that owns the pointer is ImGui's mouse
+  wheel: pushed up or down it scrolls what the pointer is on, a list, a child window or an open
+  combo, as the wheel does on a screen. The speed follows how far it is pushed, from nothing near
+  its center up to the style's `scrollSpeed` at a full push, in lines of text a second. The player
+  does not move or turn, since the wand is hidden from the game.
+- **What is drawn.** While the pointer is on a canvas: the owner's ray, and a mark on the canvas
+  where the ray meets it. The ray is no longer than a set length, so it ends before a canvas that
+  is further away and at the mark of a nearer one, and it fades in and out at its two ends. The
+  mark is a disc with a border. Its size is set in the world, so it keeps its size on the canvas as
+  the player comes nearer or steps back. While the other hand's ray is on a canvas too, that ray is
+  drawn at 0.3 of the opacity and with no mark, so the player sees that the hand points and that the
+  pointer is not its own. All of it is drawn over the panels (`DRAW_ORDER_POINTERS`) and is not
+  hidden by the world. Nothing is drawn while the pointer is on no canvas, so a ray that is drawn
+  says its wand is the UI's.
+- **A game menu takes over.** While a game menu takes the controllers' input
+  (`f4vr::isGameMenuTakingInput`: an open menu that pauses the game, uses the cursor or the menu
+  context, or is modal, as the pause menu, a message box, the Pip-Boy or lockpicking; not workshop
+  build mode, which the player plays in), the pointer is
+  on no canvas. The canvases stay shown, under the game's menu, and the ray, the trigger and the
+  thumbstick are the game's until it closes.
+- **What the pointer does.** `imgui::pointer().state()` has the canvas the pointer is on, where on it
+  in the canvas's pixels, the hand, whether it presses the canvas, the ray in the world, and whether
+  ImGui uses the pointer (`io.WantCaptureMouse`). `UIImGuiPanel::isPointedAt()` says whether it is on
+  that panel. The state is updated when the ImGui frame is built, after the mod's frame update: a
+  content callback reads this frame's, and `onFrameUpdate` the one before.
+- **What it costs.** A canvas that is not interactive costs nothing more. While no interactive canvas
+  is shown and no press is held, nothing is read from the game for the pointer.
+
+### How the pointer looks
+
+[`PointerStyle`](ImGuiPointer.h) holds where the ray is on the hand, the whole look and the speed of
+scrolling, and its own defaults are the default pointer, so the values are in one place. Lengths are
+in world units.
+
+| Field | Default | What it is |
+| ----- | ------- | ---------- |
+| `rayOffset` | -2,3,-1; -18,0,-5 | where the ray is, from the wand's UI node: position, then degrees around x, y and z |
+| `drawn` | `true` | `false` draws nothing, for a mod that draws the pointer itself from `state()` |
+| `rayColor` | 190,255,190,200 | the ray's color, with its opacity as the alpha |
+| `rayWidth` | 0.2 | the ray's width |
+| `rayMaxLength` | 25 | the longest the ray is drawn: it ends there, or at the mark when the canvas is nearer |
+| `rayFade` | 1 | the length the ray fades in over at its start and out over at its end; 0 for no fade |
+| `markColor` | 215,255,215,180 | the mark's color, with its opacity as the alpha |
+| `markSize` | 0.45 | the mark's radius, its border included; the same at any distance |
+| `markBorderColor` | 215,255,215,100 | the color of the border around the mark |
+| `markBorderWidth` | 0.08 | the border's width, the outer part of the mark's radius; 0 for no border |
+| `scrollSpeed` | 30 | how fast the thumbstick scrolls, in lines of text a second at a full push; 0 for no scrolling |
+
+A mod changes a part by starting from the current style:
+
+```cpp
+auto style = imgui::pointer().style();
+style.rayColor = render::Color::rgba(10, 250, 120, 200);
+imgui::pointer().setStyle(style);
+```
+
+A mod that wants the player to set these reads the fields from its own config and calls `setStyle`
+with them: `ConfigBase::getColorValue` reads a color written as `{ rgb = [r, g, b], alpha = a }`, and
+`getTransformValue` the offset. The framework has no config keys for it.
+
+## Images
+
+The content of a canvas draws a [`render::Texture`](../render/README.md#images): one loaded from a
+file through the engine, or one made from pixels in memory.
+
+```cpp
+#include "imgui/ImGuiImage.h"
+
+_icon = render::Texture::load("Data\\Textures\\MyMod\\icon.dds");
+_picture = render::Texture::fromPixels("MyMod picture", width, height, rgba);
+
+panel->setContent([this] {
+    imgui::image(*_icon, ImVec2(64.0f, 64.0f));                    // an item at the cursor, as ImGui::Image
+    imgui::addImage(ImGui::GetWindowDrawList(), *_picture, min, max);  // in a rectangle, as ImDrawList::AddImage
+});
+```
+
+- **In place of ImGui's own.** `ImGui::Image` takes a bare pointer to a texture, which nothing keeps
+  alive for the render thread. These two take the texture, in layout pixels as ImGui's do, with an
+  optional tint that multiplies the image's colors and its alpha.
+- **The texture can be dropped at any time**, also while its panel is shown: the published frame
+  holds the views of its images until it has been drawn and let go.
+- **A texture that is not ready draws nothing.** One that has not loaded yet, and one whose file is
+  missing, keeps the room `imgui::image` was given.
+- **Colors are the file's.** A texture whose view decodes sRGB is encoded back, as the primitive
+  renderer does, and an image's edge takes no color from its opposite edge.
+- **What it costs.** A draw for each image. One whose view decodes sRGB adds two changes of the
+  pipeline's state around it, for the shader that encodes it back.
+
+## A dedicated panel
+
+The canvases share one atlas of 1024 by 1024 layout pixels, which is also ImGui's display. That suits
+several small panels. A mod whose UI is one large panel makes that panel dedicated:
+
+```cpp
+panel->setDedicated(true);              // Canvas::setDedicated for a canvas placed by hand
+```
+
+- **A texture of its own.** The panel is rasterized into a texture of the panel's size, not into the
+  atlas. It keeps 48 pixels per vrui unit up to `MAX_DEDICATED_CANVAS_PIXEL_SIZE` (4096) a side,
+  about 85 units, where a panel in the atlas is scaled down past 1024 pixels, about 21 units.
+- **It is ImGui's display.** ImGui keeps what the content opens inside its display, and while a
+  dedicated panel is shown the display is that panel. A combo near the panel's bottom edge opens
+  upward, and a dialog (`ImGui::BeginPopupModal`) is centered on the panel. The content calls
+  `ImGui::BeginCombo`, `ImGui::BeginPopup` and `ImGui::BeginPopupModal` as in any ImGui program. In
+  the atlas these are placed against the atlas, and the part beside the canvas's own rectangle is
+  not shown.
+- **It is the only ImGui panel.** ImGui has one display, so while a dedicated panel is shown the
+  mod's other canvases are not drawn and their content does not run. They are drawn again when it is
+  hidden. Of two dedicated panels that are shown, the one created first is drawn. vrui buttons and
+  vrui text panels are not ImGui and are not affected, and neither are other mods: each has its own
+  copy of the framework.
+- **What it costs.** The texture is the panel's pixels times the supersample factor on each side: a
+  panel of 38 by 30 units at 1.5 is 2736 by 2160 pixels, about 24MB. It is created when the panel is
+  first drawn, and again when the panel's size changes, so a panel sized to its content gets a new
+  one whenever its content changes size. The atlas is not created for a mod that draws only a
+  dedicated panel.
+
+## A curved panel
+
+A wide flat panel in front of the player has its sides further away than its middle and turned away
+from the player, so the text there reads smaller. A curved panel is bent toward the player:
+
+```cpp
+panel->setCurveRadius(20.0f);           // CanvasPlacement::curveRadius, in world units, for a canvas placed by hand
+```
+
+- **The curve.** The panel is bent around a cylinder of that radius, whose axis runs along the
+  panel's height in front of its middle. A panel that stands as far from the player as its radius
+  has every part at that distance, facing the player. The radius is in vrui units and is scaled with
+  the panel, as its size is: a panel put 120 units away at a scale of 6 takes a radius of 20.
+- **What stays.** The panel's middle stays where it is placed. Its width is kept along the curve, so
+  it has the same pixels for its size. Its sides come toward the player, and it is a little narrower
+  from side to side.
+- **How far.** 0, the default, is a flat panel. A radius under the panel's width over pi is taken as
+  that, so a panel is at most half of a cylinder.
+- **The pointer.** The ray meets the panel where it is drawn, and its mark lies on the panel there. A
+  press that slides off the panel follows the ray on the cylinder, as it follows it on the plane of
+  a flat one.
+- **How it is drawn.** As flat pieces side by side, one for each 2 degrees of the curve, each with
+  its part of the panel's texture: 29 pieces for a panel as wide as its radius. The content is laid
+  out and rasterized flat as before.
+- **The layout.** vrui lays a curved panel out as the flat rectangle of its size. So it is for a
+  panel that is a root by itself: in a container its sides leave the plane of the elements beside it.
+- **Tuning.** The [dev layout](../vrui/README.md) has the radius as `Curve`, so it is tuned in the
+  headset.
+
+## A panel the player moves
+
+A panel that stays in the world (`UIManager::attachPresetToWorldAtHMD`) can be moved by the player,
+with the ray that operates it. vrui does the moving, for every root in the world, and the mod sets
+the binding on the UI manager:
+
+```cpp
+panel->setInteractive(true);
+g_uiManager->setWorldMoveBinding({ .hand = vrcf::Hand::Any, .type = vrcf::ActivationType::Press, .button = vr::k_EButton_Grip });
+g_uiManager->attachPresetToWorldAtHMD(panel, 350.0f);
+```
+
+- **How.** The player points at the panel and works the binding on the hand that owns the pointer.
+  The panel then follows that hand smoothly, around the point the ray meets it, and stays level. It
+  stays where it is when the binding's button is released. The [vrui README](../vrui/README.md) has
+  the rest: the smoothing, what the game gets, and what puts the panel back.
+- **The panel's part.** An interactive panel tells vrui in every frame that the pointer is on it,
+  and where (`UIFrameUpdateContext::markPointedAt`), with nothing for the mod to call. It is the ray
+  of the hand that owns the pointer, so with both rays on the panel the other hand does not move it.
+- **What is moved.** The panel's root, so a panel in a container moves with everything beside it. A
+  panel whose root is attached in another way, to a hand or to the HMD, is not moved.
 
 ## Sizes, pixels and legibility
 
@@ -107,22 +333,39 @@ Three separate things, deliberately:
 | `setFontSizePixels` (default 24, clamped 16..128) | process-wide | how big the text *looks*, without touching layout |
 | `setSupersample` (default 1.5, clamped 1..4) | process-wide | how finely everything is rasterized — detail only; layout is always at 1x |
 
-Both process-wide settings are read when the **first canvas draws**, since the font raster and the
-atlas texture are built from them then — set them before that; later calls do nothing. A single
-canvas that wants larger text can push `ImGui::SetWindowFontScale` from inside its content callback,
-which resamples the raster rather than rebuilding it.
+Both process-wide settings are read when the **first canvas draws**, since the font is loaded and the
+atlas texture is built from them then — set them before that; later calls do nothing. Content that
+wants text of another size pushes it with `ImGui::PushFont(nullptr, size)`: ImGui rasterizes each size
+it draws, at the supersample factor, so text of any size is as sharp as the default.
 
 The atlas texture is `MAX_CANVAS_PIXEL_SIZE` (1024) times the supersample factor on each side, so
 memory grows with the square — about 9MB at 1.5, 16MB at 2 — and past the headset's own resolution a
-larger factor adds nothing visible. Nothing is allocated until the first canvas draws.
+larger factor adds nothing visible. Nothing is allocated until the first canvas draws. A
+[dedicated panel](#a-dedicated-panel) has a texture of its own size in place of the atlas, at the
+same factor.
 
 ## Font
 
 The canvases load the framework's text font — a mod's own TTF/OTF at
 `Data\Interface\<ModName>\<ModName>.ttf` when it ships a usable one, the embedded Roboto Medium
 otherwise — from the same bytes `render::TextFont` draws with, so a `UIImGuiPanel` and a
-`UITextPanel` always share a typeface. ImGui's own embedded bitmap font is the last resort, logged as
-a warning.
+`UITextPanel` always share a typeface. ImGui's own embedded font is the last resort, logged as a
+warning.
+
+It has a bold and an italic face too, for a run of text in the content: `imgui::canvasFont(FontStyle)`
+gives each, to push or to draw with, at the current size or at any other.
+
+```cpp
+ImGui::PushFont(imgui::canvasFont(imgui::FontStyle::Bold), 0.0f);  // 0 keeps the current size
+ImGui::TextUnformatted("Warning");
+ImGui::PopFont();
+```
+
+A mod's own font has its faces beside it, `<ModName>-Bold.ttf` and `<ModName>-Italic.ttf`
+(`render::CUSTOM_BOLD_FONT_PATH`, `render::CUSTOM_ITALIC_FONT_PATH`, beside `CUSTOM_TEXT_FONT_PATH`
+in [`TextFont.h`](../render/TextFont.h)). A face it does not ship is the embedded one: Roboto Black,
+and Roboto Medium Italic. Faces drawn at one size are as tall and on one baseline only when the
+files have the same vertical metrics, as the faces of one family do.
 
 ## How it is drawn
 
@@ -130,10 +373,17 @@ a warning.
 game thread (frame end)                         render thread (Submit hook)
 ──────────────────────────────────              ─────────────────────────────────
 imgui::internal::onFrameEnd()                   draw callback (DRAW_ORDER_PANELS)
-  ├─ one ImGui frame, every visible canvas        ├─ rasterize the frame into the atlas
-  │    as its own window packed into the atlas    ├─ group quads by occluded / on-top
-  ├─ measure each canvas's content                └─ composite each canvas's atlas slice
-  ├─ resolve placements → world quads                  as a world quad, back to front
+  ├─ resolve placements → world quads             ├─ write the glyphs ImGui added
+  ├─ the pointer: a wand's ray on the quads       ├─ rasterize the frame into the atlas
+  │    of the interactive canvases → ImGui's      ├─ group quads by occluded / on-top
+  │    mouse, its ray and mark → their own        └─ composite each canvas's atlas slice
+  │    layer over the panels, and the wand             as a world quad, back to front
+  │    hidden from the game
+  ├─ one ImGui frame, every visible canvas
+  │    as its own window packed into the atlas
+  ├─ measure each canvas's content
+  ├─ ImGui's texture requests: the font
+  │    texture created, new glyphs copied
   └─ clone the draw data + publish  ────────────►
 ```
 
@@ -141,6 +391,9 @@ imgui::internal::onFrameEnd()                   draw callback (DRAW_ORDER_PANELS
   own sub-rect and composited as one textured quad. The quads are sorted so each occlusion group is
   contiguous, so compositing is one draw for the occluded canvases and one for the rest — two at
   most, however many canvases there are.
+- **A dedicated canvas is a frame by itself.** While one is shown the frame holds that canvas alone,
+  ImGui's display is the canvas, and the frame is rasterized into the canvas's own texture in place
+  of the atlas. The rest of the path is the same.
 - **Why rasterize flat first?** ImGui emits per-command *scissor rectangles* in 2D screen space —
   that is how scrolling regions, child windows and tables clip — and there is no scissor for an
   arbitrarily oriented 3D quad. So the draw data is rasterized into a texture and only then placed in
@@ -148,6 +401,12 @@ imgui::internal::onFrameEnd()                   draw callback (DRAW_ORDER_PANELS
 - **The draw data is cloned** across the thread boundary (`ImDrawList::CloneOutput`): ImGui's own
   buffers are recycled by the next `NewFrame`, so a render thread still reading last frame's lists
   would be a use-after-free. A few KB of memcpy per frame for canvas-sized UI.
+- **ImGui's font texture is answered on the game thread** (`ImGuiTextures.cpp`). ImGui rasterizes a
+  size the first time it is drawn, into its font texture, and asks for the texture to be created or
+  written; its DX11 backend would do that while drawing, on the render thread, while ImGui writes the
+  same pixels for the next frame. So the texture is created on the game thread, through the device,
+  and the glyphs ImGui adds are copied there and written by the render thread before it draws. The
+  frame holds the texture's view, like an image's, and names it by that view alone.
 - **Canvases never write depth**, so they do not hide each other: overlapping ones are drawn back to
   front by distance to the viewer. Against the *world* they are occluded by default (`setOccluded`) —
   see [render/](../render/README.md#occlusion-by-the-world); where the engine's depth cannot be
@@ -164,11 +423,13 @@ imgui::internal::onFrameEnd()                   draw callback (DRAW_ORDER_PANELS
 ## Building without it
 
 `F4CF_WITH_IMGUI_UI` (default `ON`) compiles the layer into the archive; the vcpkg manifest pulls
-`imgui` with the `dx11-binding` feature. Configure with `-DF4CF_WITH_IMGUI_UI=OFF` to cut the compile
-time or drop the port entirely — then `src/imgui/` is not built and its headers are not exposed, so
-code using `f4cf::imgui` fails to **compile** rather than linking clean and mysteriously drawing
-nothing. Everything else, the text font included, still builds: `stb_truetype` is vendored rather
-than taken from the imgui port for exactly that reason.
+`imgui` with the `dx11-binding` and `win32-binding` features, at 1.92.9, the version of its `builtin-baseline`. A mod's
+own `vcpkg.json` needs both, as vcpkg reads the top-level
+project's manifest. Configure with `-DF4CF_WITH_IMGUI_UI=OFF` to cut the compile time or drop the
+port entirely — then `src/imgui/` is not built and its headers are not exposed, so code using
+`f4cf::imgui` fails to **compile** rather than linking clean and mysteriously drawing nothing.
+Everything else, the text font included, still builds: `stb_truetype` is vendored rather than taken
+from the imgui port for exactly that reason.
 
 ## Provenance
 

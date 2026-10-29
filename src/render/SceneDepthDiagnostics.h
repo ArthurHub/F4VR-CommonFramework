@@ -8,7 +8,7 @@
 namespace f4cf::render::sceneDepth::internal
 {
     /**
-     * Which implementation answers the capture's questions, selected by the [Debug] INI key
+     * Which implementation answers the capture's questions, selected by the [Debug] config key
      * sSceneDepthStrategy so a user with a broken setup can be asked to flip it without a build.
      *
      * Auto is the shipped answer. Direct and Off are escape hatches that each remove one layer:

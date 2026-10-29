@@ -1,8 +1,10 @@
 #pragma once
 
+#include <expected>
 #include <optional>
 #include <string>
 #include <string_view>
+#include <toml++/toml.hpp>
 #include <vector>
 
 #include "VRControllersManager.h"
@@ -10,37 +12,32 @@
 namespace f4cf::vrcf
 {
     /**
-     * String parsing helpers for building an InputBinding from config (INI) text.
+     * Parsing helpers for building an InputBinding from config values, apart from the game: plain std, toml++ and
+     * OpenVR's header only, so it is unit tested.
      *
      * These are intentionally separate from VRControllersManager so the manager stays free of any
      * config/string concerns. All parsing is case-insensitive and tolerant of leading/trailing
      * whitespace. Each token parser returns std::nullopt when the text is not recognized.
      *
-     * Full-line format (tokens separated by space, comma, or colon):
+     * A config has a binding as an inline table, see parseInputBindingTable:
      *
-     *   <hand> <type> <button> [duration] [suppress|nosuppress] [+modifier]            for button activation types
-     *   <hand> axis <axis> <direction> [threshold] [suppress|nosuppress] [+modifier]   for an explicit axis
-     *   <hand> thumbstick <direction> [threshold] [suppress|nosuppress] [+modifier]    shorthand: axis defaults to Thumbstick
-     *   none | off | disabled | (empty)                                               disables the binding (never triggers)
+     *   { hand = "offhand", type = "tap", button = "trigger" }
+     *   { hand = "primary", type = "longpress", button = "thumbstick", duration = 1.5,
+     *     modifier = { hand = "offhand", button = "thumbstick" } }
+     *   { hand = "left", type = "tap", button = "grip", suppress = true }
+     *   { hand = "primary", type = "axis", axis = "thumbstick", direction = "up", threshold = 0.5 }
+     *   { type = "none" }
      *
-     * Recognized tokens (with aliases):
-     *   hand       : primary | offhand | right | left
-     *   type       : touch | press(ed)/click | tap | hold(down)/held | release(d)
-     *                | longpress | double(press) | axis/thumbstick/stick (AxisDirection)
+     * The words, with their aliases:
+     *   hand       : primary/main | offhand/off/secondary | right | left | any/either
+     *   type       : touch | press(ed)/click | tap | hold(down)/held | release(d) | longpress | double(press)
+     *                | axis/thumbstick/stick (AxisDirection) | none/off/disabled
      *   button     : system | menu/applicationmenu/b | grip | a | trigger | thumbstick/touchpad/joystick
-     *   axis       : thumbstick/touchpad | trigger | grip
+     *   axis       : thumbstick/touchpad/joystick | trigger | grip
      *   direction  : up | down | left | right
-     *   suppress   : "suppress" | "nosuppress" - opt this binding in/out of consumer-applied input suppression
-     *   modifier   : "+button" (held on the binding's own hand) or "+hand:button" (held on a specific hand)
      *
-     * Examples:
-     *   "offhand longpress grip"           -> long-press grip on the off hand
-     *   "primary press trigger +grip"      -> press trigger while gripping the same hand (chord)
-     *   "primary press trigger +offhand:grip" -> press primary trigger while gripping the offhand
-     *   "left double a"                    -> double-press A on the left controller
-     *   "primary thumbstick up"            -> push the thumbstick up
-     *   "right axis trigger up 0.7"        -> trigger axis up past 0.7
-     *   "none"                             -> disabled binding (never triggers)
+     * parseInputBinding reads the one-line text form of a mod's INI config, which only the INI import reads, to
+     * move a player's binding to the table.
      */
     std::optional<Hand> parseHand(std::string_view text);
     std::optional<ActivationType> parseActivationType(std::string_view text);
@@ -48,12 +45,15 @@ namespace f4cf::vrcf
     std::optional<Axis> parseAxis(std::string_view text);
     std::optional<Direction> parseDirection(std::string_view text);
 
-    /**
-     * Parse a full binding line. A blank line or "none"/"off"/"disabled" yields a disabled binding
-     * (ActivationType::Disabled, which never triggers). Returns std::nullopt if the hand, type, or the
-     * required button/axis/direction tokens cannot be resolved.
-     */
-    std::optional<InputBinding> parseInputBinding(std::string_view text);
+    std::expected<InputBinding, std::string> parseInputBinding(std::string_view text);
+
+    std::expected<InputBinding, std::string> parseInputBindingTable(const toml::node& node);
+
+    std::string inputBindingTomlText(const InputBinding& binding);
+
+    std::string handName(Hand hand);
+    std::string activationTypeName(ActivationType type);
+    std::string directionName(Direction direction);
 
     /**
      * The grammar's word for a button - system, menu, grip, a, trigger, thumbstick - the inverse of parseButton, so

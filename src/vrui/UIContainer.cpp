@@ -1,12 +1,40 @@
 #include "UIContainer.h"
 
 #include <format>
+#include <limits>
 
 #include "UIManager.h"
+#include "UIPanel.h"
 #include "common/CommonUtils.h"
 
 namespace f4cf::vrui
 {
+    /**
+     * A boxed container's box: a panel with chrome and no content, sized and placed by the container
+     * around its elements, and drawn behind them.
+     */
+    class UIContainerBox final : public UIPanel
+    {
+    public:
+        explicit UIContainerBox(const std::string& name)
+            : UIPanel(name, 0.0f, 0.0f)
+        {}
+
+        bool isBackdrop() const override
+        {
+            return true;
+        }
+
+    protected:
+        void appendContent(render::PrimitiveDraw&, const UIPanelContentArea&) const override
+        {}
+
+        std::string_view typeName() const override
+        {
+            return "UIContainerBox";
+        }
+    };
+
     UIContainer::UIContainer(const std::string& name, const UIContainerLayout layout, const float padding, const float scale)
         : UIElement(name),
           _layout(layout),
@@ -35,10 +63,10 @@ namespace f4cf::vrui
     /**
      * Propagate frame update to all child elements.
      */
-    void UIContainer::onFrameUpdate(UIFrameUpdateContext* adapter)
+    void UIContainer::onFrameUpdate(UIFrameUpdateContext* context)
     {
         for (const auto& childElm : _childElements) {
-            childElm->onFrameUpdate(adapter);
+            childElm->onFrameUpdate(context);
         }
     }
 
@@ -60,6 +88,51 @@ namespace f4cf::vrui
         _padding = padding;
     }
 
+    /**
+     * Draw a box around the elements in the given style - background, border and rounding, as a panel
+     * draws them - with the style's padding between the elements and the box's edge. The style's content
+     * colour is not used, since the box has no content of its own. The container's size, and so the room
+     * its own container gives it, grows by the border and padding.
+     */
+    void UIContainer::setBoxStyle(const UIPanelStyle& style)
+    {
+        if (!_box) {
+            _box = std::make_shared<UIContainerBox>(_name + "Box");
+            _box->setParent(this);
+            if (_attachNode) {
+                g_uiManager->attachElement(_box, _attachNode.get());
+            }
+        }
+        _box->setStyle(style);
+
+        // kept as the box takes it, with nothing negative, since the layout insets the elements by it
+        _boxStyle = style;
+        _boxStyle.borderThicknessUnits = (std::max)(0.0f, style.borderThicknessUnits);
+        _boxStyle.padding = { (std::max)(0.0f, style.padding.top),
+            (std::max)(0.0f, style.padding.right),
+            (std::max)(0.0f, style.padding.bottom),
+            (std::max)(0.0f, style.padding.left) };
+    }
+
+    /**
+     * Draw no box, and lay the elements out as if there never was one.
+     */
+    void UIContainer::clearBoxStyle()
+    {
+        if (!_box) {
+            return;
+        }
+        if (_attachNode) {
+            g_uiManager->detachElement(_box, false);
+        }
+        _box.reset();
+    }
+
+    const UIElement* UIContainer::box() const
+    {
+        return _box.get();
+    }
+
     std::vector<std::shared_ptr<UIElement>> UIContainer::childElements() const
     {
         return _childElements;
@@ -71,11 +144,11 @@ namespace f4cf::vrui
      * 2. Calculate the size of the container by all the children and layout type.
      * 3. Arrange the child elements in the container by the layout type.
      */
-    void UIContainer::onLayoutUpdate(UIFrameUpdateContext* adapter)
+    void UIContainer::onLayoutUpdate(UIFrameUpdateContext* context)
     {
         // run layout on all children
         for (const auto& childElm : _childElements) {
-            childElm->onLayoutUpdate(adapter);
+            childElm->onLayoutUpdate(context);
         }
 
         // calculate the size of the container by all child elements
@@ -108,6 +181,70 @@ namespace f4cf::vrui
         case UIContainerLayout::Manual:
             break; // noop
         }
+
+        if (_box) {
+            layoutBox();
+        }
+    }
+
+    /**
+     * Put the box around the visible elements, inset by its border and padding, and make the container
+     * that size.
+     *
+     * Runs after the layout, which places the elements by their own size alone. A layout that places them
+     * every frame then moves them by half the difference of opposite insets, so the box sits where the
+     * layout anchors the elements: a centred row stays centred with more padding on one side. A manual
+     * layout's elements are left where they were put, since the move would add up frame after frame.
+     * Sizes and positions here are in the container's scaled units, as the layout's are.
+     */
+    void UIContainer::layoutBox()
+    {
+        constexpr float INF = std::numeric_limits<float>::infinity();
+        float left = INF, right = -INF, bottom = INF, top = -INF;
+        for (const auto& childElm : _childElements) {
+            if (!childElm->calcVisibility()) {
+                continue;
+            }
+            const auto& position = childElm->getPosition();
+            const auto size = childElm->calcSize();
+            left = (std::min)(left, position.x - size.width / 2);
+            right = (std::max)(right, position.x + size.width / 2);
+            bottom = (std::min)(bottom, position.z - size.height / 2);
+            top = (std::max)(top, position.z + size.height / 2);
+        }
+        if (left > right) {
+            // nothing visible to put a box around
+            _box->setVisibility(false);
+            return;
+        }
+        _box->setVisibility(true);
+
+        const float scale = calcScale();
+        const float border = _boxStyle.borderThicknessUnits;
+        const float insetLeft = (border + _boxStyle.padding.left) * scale;
+        const float insetRight = (border + _boxStyle.padding.right) * scale;
+        const float insetBottom = (border + _boxStyle.padding.bottom) * scale;
+        const float insetTop = (border + _boxStyle.padding.top) * scale;
+
+        if (_layout != UIContainerLayout::Manual) {
+            const float shiftX = (insetLeft - insetRight) / 2;
+            const float shiftZ = (insetBottom - insetTop) / 2;
+            for (const auto& childElm : _childElements) {
+                if (childElm->calcVisibility()) {
+                    childElm->updatePosition(shiftX, 0, shiftZ);
+                }
+            }
+            left += shiftX;
+            right += shiftX;
+            bottom += shiftZ;
+            top += shiftZ;
+        }
+
+        const float width = right - left + insetLeft + insetRight;
+        const float height = top - bottom + insetBottom + insetTop;
+        _box->setPosition((left - insetLeft + right + insetRight) / 2, 0, (bottom - insetBottom + top + insetTop) / 2);
+        _box->setSize(width / scale, height / scale);
+        _size = UISize(width / scale, height / scale);
     }
 
     /**
@@ -121,10 +258,10 @@ namespace f4cf::vrui
             if (!childElm->calcVisibility()) {
                 continue; // skip invisible elements
             }
-            leftMost = min(leftMost, childElm->getPosition().x);
-            bottomMost = min(bottomMost, childElm->getPosition().z);
-            rightMost = max(rightMost, childElm->getPosition().x + childElm->calcSize().width);
-            topMost = max(topMost, childElm->getPosition().z + childElm->calcSize().height);
+            leftMost = (std::min)(leftMost, childElm->getPosition().x);
+            bottomMost = (std::min)(bottomMost, childElm->getPosition().z);
+            rightMost = (std::max)(rightMost, childElm->getPosition().x + childElm->calcSize().width);
+            topMost = (std::max)(topMost, childElm->getPosition().z + childElm->calcSize().height);
         }
         _size = UISize((rightMost - leftMost) / calcScale(), (topMost - bottomMost) / calcScale());
     }
@@ -145,9 +282,9 @@ namespace f4cf::vrui
             visibleChildCount++;
             if (isHorizontalLayout()) {
                 size.width = size.width + childElm->calcSize().width;
-                size.height = max(size.height, childElm->calcSize().height);
+                size.height = (std::max)(size.height, childElm->calcSize().height);
             } else {
-                size.width = max(size.width, childElm->calcSize().width);
+                size.width = (std::max)(size.width, childElm->calcSize().width);
                 size.height = size.height + childElm->calcSize().height;
             }
         }
@@ -257,6 +394,9 @@ namespace f4cf::vrui
         }
 
         _attachNode.reset(attachNode);
+        if (_box) {
+            g_uiManager->attachElement(_box, attachNode);
+        }
         for (const auto& childElm : _childElements) {
             g_uiManager->attachElement(childElm, attachNode);
         }
@@ -268,6 +408,9 @@ namespace f4cf::vrui
     void UIContainer::detachFromAttachedNode(const bool releaseSafe)
     {
         UIElement::detachFromAttachedNode(releaseSafe);
+        if (_box) {
+            g_uiManager->detachElement(_box, releaseSafe);
+        }
         for (const auto& childElm : _childElements) {
             g_uiManager->detachElement(childElm, releaseSafe);
         }
@@ -296,27 +439,21 @@ namespace f4cf::vrui
     }
 
     /**
-     * Write the layout properties of the element to the given map.
+     * Add the layout properties of the container, then of every child under it, to the given lines.
      * Used for development layout setting to be able to adjust the properties via config files at runtime.
      */
-    void UIContainer::writeDevLayoutProperties(const std::string& namePrefix, std::map<std::string, std::string>& propertiesMap) const
+    void UIContainer::writeDevLayoutProperties(const std::string& namePrefix, DevLayoutLines& lines) const
     {
-        const auto key = namePrefix + _name;
-        propertiesMap[key] = std::format("Pos:({:.2f},{:.2f},{:.2f}), Scale:({:.2f}), Padding:({:.2f}), Layout:({})",
-            getPosition().x,
-            getPosition().y,
-            getPosition().z,
-            getScale(),
-            getPadding(),
-            static_cast<int>(getLayout()));
+        UIElement::writeDevLayoutProperties(namePrefix, lines);
 
+        const auto key = namePrefix + _name;
         for (const auto& childElm : _childElements) {
-            childElm->writeDevLayoutProperties(key + ".", propertiesMap);
+            childElm->writeDevLayoutProperties(key + ".", lines);
         }
     }
 
     /**
-     * Read the layout properties of the element to the given map.
+     * Read the layout properties of the container, then of every child under it, from the given map.
      * Used for development layout setting to be able to adjust the properties via config files at runtime.
      */
     void UIContainer::readDevLayoutProperties(const std::string& namePrefix, const std::map<std::string, std::string>& propertiesMap)
@@ -325,23 +462,42 @@ namespace f4cf::vrui
         if (!propertiesMap.contains(key)) {
             return;
         }
-
-        try {
-            float x, y, z, scale, padding;
-            int layout;
-            if (std::sscanf(propertiesMap.at(key).c_str(), "Pos:(%f,%f,%f), Scale:(%f), Padding:(%f), Layout:(%d)", &x, &y, &z, &scale, &padding, &layout) ==
-                6) { // NOLINT(cert-err34-c)
-                setPosition(x, y, z);
-                setScale(scale);
-                setPadding(padding);
-                setLayout(static_cast<UIContainerLayout>(layout));
-            }
-        } catch (std::exception& e) {
-            logger::warn("Failed to read VRUI properties in element '{}': {}", _name, e.what());
-        }
+        UIElement::readDevLayoutProperties(namePrefix, propertiesMap);
 
         for (const auto& childElm : _childElements) {
             childElm->readDevLayoutProperties(key + ".", propertiesMap);
+        }
+    }
+
+    /**
+     * The placement, then the padding between children as Padding:(units) and the layout as Layout:(number),
+     * a UIContainerLayout value, and for a boxed container the box's padding as Pad:(top,right,bottom,left),
+     * as a panel writes its own. No Size: a container's size comes from its children.
+     */
+    void UIContainer::writeDevLayoutFields(std::string& line) const
+    {
+        writeDevLayoutPlacementFields(line);
+        line += std::format(", Padding:({:.2f}), Layout:({})", getPadding(), static_cast<int>(getLayout()));
+        if (_box) {
+            const UIPadding& padding = _boxStyle.padding;
+            line += std::format(", Pad:({:.2f},{:.2f},{:.2f},{:.2f})", padding.top, padding.right, padding.bottom, padding.left);
+        }
+    }
+
+    void UIContainer::readDevLayoutFields(const DevLayoutFields& fields)
+    {
+        UIElement::readDevLayoutFields(fields);
+        if (const auto padding = fields.find("Padding"); padding != fields.end() && padding->second.size() == 1) {
+            setPadding(padding->second[0]);
+        }
+        if (const auto layout = fields.find("Layout"); layout != fields.end() && layout->second.size() == 1) {
+            setLayout(static_cast<UIContainerLayout>(static_cast<int>(layout->second[0])));
+        }
+        if (const auto padding = fields.find("Pad"); _box && padding != fields.end() && padding->second.size() == 4) {
+            const std::vector<float>& sides = padding->second;
+            auto style = _boxStyle;
+            style.padding = UIPadding{ .top = sides[0], .right = sides[1], .bottom = sides[2], .left = sides[3] };
+            setBoxStyle(style);
         }
     }
 }

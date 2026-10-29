@@ -1,13 +1,14 @@
 #include "ModBase.h"
 
 #include <cpptrace/from_current.hpp>
-#include <fmt/chrono.h>
 
 #include "MainLoopHook.h"
+#include "common/CommonUtils.h"
 #include "debug/DebugDraw.h"
 #include "devbench/DevBench.h"
 #include "f4vr/DebugDump.h"
 #include "f4vr/DebugInventory.h"
+#include "modsconfig/ModsConfigFO4Api.h"
 #include "perf/FrameSampler.h"
 #include "perf/Perf.h"
 #include "perf/Report.h"
@@ -235,7 +236,24 @@ namespace f4cf
             // consumes it; a single relaxed load when nothing is queued
             devbench::internal::onFrameStart();
 
+            // the config was loaded again since the last frame, by the file watcher or with a session override, also one
+            // a devbench action has just set: the config's subscribers are called here, on the game thread and before
+            // the mod's update; one atomic exchange when it was not
+            _settings.config->notifySubscribersOfReload();
+
+            // the VR UI's frame update runs once in a frame, and from here it can run again
+            if (vrui::g_uiManager) {
+                vrui::g_uiManager->onFrameStart();
+            }
+
             onFrameUpdate();
+
+            // the VR UI's frame update, which does nothing if the mod ran it at a point of its own in its update; after
+            // the mod's update so a UI it attached is laid out and drawn in this frame, and before the panels are
+            // published below
+            if (vrui::g_uiManager) {
+                vrui::g_uiManager->onFrameUpdate();
+            }
 
             // this frame's devbench state snapshot, after every exit path of the mod's update; a single relaxed load
             // (two in a Tracy build) until the mod's devbench tool is armed
@@ -270,24 +288,71 @@ namespace f4cf
     {
         const auto game = REL::Module::IsVR() ? "Fallout4VR" : "Fallout4";
         const auto runtimeVer = REL::Module::get().version();
-        const auto dateTime = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
-        logger::info("Starting '{}' v{} ; {} v{} ; {:%Y-%m-%d %H:%M:%S%Ez} ; BaseAddress: 0x{:X}",
+        logger::info("Starting '{}' v{} ; {} v{} ; {} ; BaseAddress: 0x{:X}",
             _settings.name,
             _settings.version,
             game,
             runtimeVer.string(),
-            fmt::localtime(dateTime),
+            common::toDateTimeString(std::chrono::system_clock::now(), "%Y-%m-%d %H:%M:%S%z"),
             REL::Module::get().base());
     }
 
     /**
-     * F4VRSE messages listener to handle game loaded, new game, and save loaded events.
+     * Connects the mod's client of Mods Config FO4 VR under its name, which gives the menu what the mod added to it before,
+     * while its API is of the least version the mod works with or later. Mods Config FO4 VR that is not installed is not
+     * an error: the mod logs one line and works without it.
+     */
+    void ModBase::connectToModsConfigFO4(const std::string& name, const std::uint32_t minVersion)
+    {
+        using mods_config::api::ModsConfigFO4ApiV1;
+        const int err = mods_config::api::ModsConfigFO4Client::get().connect(name, minVersion);
+        if (err == 0) {
+            logger::info("Connected to Mods Config FO4 VR (v{}, API v{}) as client '{}'", ModsConfigFO4ApiV1::inst->getModVersion(), ModsConfigFO4ApiV1::inst->getVersion(), name);
+        } else if (err == 5) {
+            logger::warn("Mods Config FO4 VR did not take the client '{}': its log says why", name);
+        } else if (err == 4) {
+            logger::warn("Mods Config FO4 VR is installed, but its API is older than version {}, which the mod needs: the mod has no client of its menu", minVersion);
+        } else {
+            logger::info("Mods Config FO4 VR is not available (error {}), so the mod has no client of its menu", err);
+        }
+    }
+
+    /**
+     * Gives the mod's client of Mods Config FO4 VR what the framework answers for every mod, and connects it: the states
+     * `modVersion` and `configFile`, the config file the mod loaded, which a file of its config spec takes its path
+     * from with `pathFromClientState`, and the preview of a `live` setting of that file through its overrides.
+     */
+    void ModBase::setupModsConfigClient()
+    {
+        auto& client = mods_config::api::ModsConfigFO4Client::get();
+        client.addState("modVersion", [version = _settings.version] {
+            return std::optional<mods_config::api::Value>(version);
+        });
+        if (_settings.config) {
+            // the config's path is in the code page of Windows, and the API's texts are UTF-8
+            client.addState("configFile", [config = _settings.config] {
+                const auto path = std::filesystem::path(config->getConfigFilePath()).u8string();
+                return std::optional<mods_config::api::Value>(std::string(path.begin(), path.end()));
+            });
+            _configPreviews.emplace(*_settings.config);
+            _configPreviews->subscribe(client);
+        }
+        connectToModsConfigFO4(_settings.name, _settings.modsConfigMinVersion);
+    }
+
+    /**
+     * F4VRSE messages listener to handle post load, game loaded, new game, and save loaded events.
      */
     // ReSharper disable once CppParameterMayBeConstPtrOrRef
     void ModBase::onF4VRSEMessage(F4SE::MessagingInterface::Message* msg)
     {
         if (!msg) {
             return;
+        }
+
+        if (msg->type == F4SE::MessagingInterface::kPostLoad && g_mod->_settings.modsConfigClient) {
+            // every plugin's DLL is loaded by now, Mods Config FO4 VR's too
+            g_mod->setupModsConfigClient();
         }
 
         if (msg->type == F4SE::MessagingInterface::kGameLoaded) {
@@ -376,7 +441,7 @@ namespace f4cf
         void logPerfReport()
         {
             if (!perf::isEnabled()) {
-                logger::info("perf: recording is off; add 'perf_reset' to sDumpDataOnceNames to start a window, then 'perf' to log it");
+                logger::info("perf: recording is off; add 'perf_reset' to aDumpDataOnce to start a window, then 'perf' to log it");
                 return;
             }
             const auto text = perf::formatReport(perf::readReport());
@@ -390,7 +455,7 @@ namespace f4cf
     }
 
     /**
-     * Dump game data if requested in "sDumpDataOnceNames" flag in INI config.
+     * Dump game data if requested in the "aDumpDataOnce" names of the config.
      */
     void ModBase::checkDebugDump() const
     {
@@ -400,7 +465,7 @@ namespace f4cf
         if (perfReset && !devbench::isArmed()) {
             // recording is off until the devbench tool is armed, and arming it starts the window
             devbench::internal::arm();
-            logger::info("perf: recording from a new window; add 'perf' to sDumpDataOnceNames to log it");
+            logger::info("perf: recording from a new window; add 'perf' to aDumpDataOnce to log it");
         } else if (perfDump || perfReset) {
             // perf_reset logs the window it ends, so listing both logs it once
             logPerfReport();
@@ -430,14 +495,14 @@ namespace f4cf
     }
 
     /**
-     * Bulk-add game items to the player inventory if requested in "sAddItemsOnceNames" flag in INI config.
-     * The flag is consumed (cleared in memory + INI) when read, so the add runs exactly once per request.
+     * Bulk-add game items to the player inventory if requested in the "aAddItemsOnce" requests of the config.
+     * The requests are consumed (cleared in memory + file) when read, so each runs exactly once.
      */
     void ModBase::checkDebugAddItems() const
     {
-        const auto spec = _settings.config->consumeDebugAddItemsOnce();
-        if (!spec.empty()) {
-            f4vr::DebugInventory::iterateObjects(spec);
+        const auto requests = _settings.config->consumeDebugAddItemsOnce();
+        if (!requests.empty()) {
+            f4vr::DebugInventory::iterateObjects(requests);
         }
     }
 }

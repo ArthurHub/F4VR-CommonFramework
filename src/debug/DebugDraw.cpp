@@ -11,7 +11,6 @@
 #include "../f4vr/PlayerNodes.h"
 #include "../perf/Perf.h"
 #include "../render/TextFont.h"
-#include "../vrcf/InputBindingParser.h"
 #include "../vrcf/VRControllersManager.h"
 
 using namespace common;
@@ -64,10 +63,6 @@ namespace f4cf::debug
         constexpr float MARKER_REFERENCE_DIST = 250.0f;
         constexpr float MARKER_MIN_DIST = 60.0f;
 
-        // hotkey toggle state lives here (not in the header) to keep vrcf types out of DebugDraw.h
-        std::string s_toggleBindingRaw;
-        std::optional<vrcf::InputBinding> s_toggleBinding;
-
         /**
          * The codebase's local->world direction convention (rotation stored transposed — same as
          * MatrixUtils::localToWorldPoint, minus the translate/scale a direction doesn't need).
@@ -90,14 +85,6 @@ namespace f4cf::debug
             outU = MatrixUtils::vec3Norm(MatrixUtils::vec3Cross(dir, reference));
             outV = MatrixUtils::vec3Norm(MatrixUtils::vec3Cross(outU, dir));
         }
-
-        /**
-         * Strict ordering on colors so the publish sort groups equal-color lines into single draws.
-         */
-        bool colorLess(const Color& lhs, const Color& rhs)
-        {
-            return std::tie(lhs.r, lhs.g, lhs.b, lhs.a) < std::tie(rhs.r, rhs.g, rhs.b, rhs.a);
-        }
     }
 
     DebugDraw& DebugDraw::get()
@@ -107,7 +94,7 @@ namespace f4cf::debug
     }
 
     /**
-     * Runtime master switch layered over the INI value (bDebugDrawEnabled); wins until the next
+     * Runtime master switch layered over the config value (bDebugDrawEnabled); wins until the next
      * setEnabled call. The in-headset hotkey routes through here too.
      */
     void DebugDraw::setEnabled(const bool enabled)
@@ -136,7 +123,7 @@ namespace f4cf::debug
     }
 
     /**
-     * Runtime per-channel override, layered over the INI-disabled set (sDebugDrawDisabledChannels).
+     * Runtime per-channel override, layered over the config-disabled set (aDebugDrawDisabledChannels).
      */
     void DebugDraw::setChannelEnabled(const std::string_view channel, const bool enabled)
     {
@@ -460,7 +447,7 @@ namespace f4cf::debug
 
     /**
      * Recompute the per-append fast-path flag from the master switch and the current channel's
-     * state (runtime override first, then the INI-disabled set) — so every draw call is a single
+     * state (runtime override first, then the config-disabled set) — so every draw call is a single
      * bool test instead of set lookups.
      */
     void DebugDraw::refreshAppendActive()
@@ -469,8 +456,8 @@ namespace f4cf::debug
     }
 
     /**
-     * A channel's own gate: its runtime override when one is set, else whether the INI-disabled set
-     * (sDebugDrawDisabledChannels) leaves it on.
+     * A channel's own gate: its runtime override when one is set, else whether the config-disabled set
+     * (aDebugDrawDisabledChannels) leaves it on.
      */
     bool DebugDraw::isChannelEnabled(const std::string& channel) const
     {
@@ -529,18 +516,12 @@ namespace f4cf::debug
     }
 
     /**
-     * Parse (on change) and poll the in-headset master toggle hotkey (sDebugDrawToggleBinding).
+     * Poll the in-headset master toggle hotkey (kDebugDrawToggleBinding), which the config reads, warning of one
+     * that is not valid.
      */
-    void DebugDraw::handleToggleHotkey(const std::string& configToggleBinding)
+    void DebugDraw::handleToggleHotkey(const vrcf::InputBinding& toggleBinding)
     {
-        if (configToggleBinding != s_toggleBindingRaw) {
-            s_toggleBindingRaw = configToggleBinding;
-            s_toggleBinding = vrcf::parseInputBinding(configToggleBinding);
-            if (!s_toggleBinding) {
-                logger::warn("DebugDraw: invalid sDebugDrawToggleBinding '{}'", configToggleBinding);
-            }
-        }
-        if (s_toggleBinding && s_toggleBinding->isEnabled() && vrcf::VRControllers.check(*s_toggleBinding)) {
+        if (toggleBinding.isEnabled() && vrcf::VRControllers.check(toggleBinding)) {
             _enabledOverride = !effectiveEnabled();
             refreshAppendActive();
             logger::info("DebugDraw: hotkey toggled overlay {}", effectiveEnabled() ? "ON" : "OFF");
@@ -722,8 +703,7 @@ namespace f4cf::debug
             return;
         }
         const bool configEnabled = config->debug.drawEnabled;
-        const std::string& configDisabledChannels = config->debug.drawDisabledChannels;
-        const std::string& configToggleBinding = config->debug.drawToggleBinding;
+        const std::vector<std::string>& configDisabledChannels = config->debug.drawDisabledChannels;
         const std::string& configHudPlacement = config->debug.drawHudPlacement;
 
         auto& self = get();
@@ -741,12 +721,9 @@ namespace f4cf::debug
         }
         if (configDisabledChannels != self._configDisabledChannelsRaw) {
             self._configDisabledChannelsRaw = configDisabledChannels;
-            self._configDisabledChannels.clear();
-            for (const auto& name : splitTrimmed(configDisabledChannels, ',')) {
-                self._configDisabledChannels.insert(name);
-            }
+            self._configDisabledChannels = { configDisabledChannels.begin(), configDisabledChannels.end() };
         }
-        self.handleToggleHotkey(configToggleBinding);
+        self.handleToggleHotkey(config->debug.drawToggleBinding);
         self.refreshAppendActive();
 
         self._building.clear();
@@ -794,10 +771,6 @@ namespace f4cf::debug
         // hand this frame's head position to the render thread for orienting billboard labels
         self._building.viewerPosition = self._cameraPos;
 
-        // group same-color lines into contiguous runs so the renderer draws each run in one call
-        std::ranges::stable_sort(self._building.lines, [](const render::LineSegment& lhs, const render::LineSegment& rhs) {
-            return colorLess(lhs.color, rhs.color);
-        });
         s_renderer.publish(std::move(self._building));
         self._building = {};
     }

@@ -7,7 +7,7 @@
 
 F4VR Common Framework gives Fallout 4 VR mod authors a ready-made foundation so they can focus on
 their mod instead of the plumbing: plugin lifecycle management, VR controller input, an in-world VR
-UI widget system with its own overlay renderer, INI config with hot-reload, and a large set of
+UI widget system with its own overlay renderer, TOML config with hot-reload, and a large set of
 game-state utilities. Mods link it as a static library and start from the included `mod-template/`.
 
 ## Table of Contents
@@ -26,12 +26,12 @@ game-state utilities. Mods link it as a static library and start from the includ
 Writing a Fallout 4 VR F4SE plugin means re-solving the same problems every time: hooking the game
 main loop, registering Papyrus functions, reading OpenVR controllers, drawing UI in 3D space, and
 loading config that can change at runtime. This framework packages those into one reusable library
-(v0.4.1, see the [changelog](docs/CHANGELOG.md)) that wraps [CommonLibF4VR](https://github.com/ArthurHub/CommonLibF4VR).
+(v0.5.0, see the [changelog](docs/CHANGELOG.md)) that wraps [CommonLibF4VR](https://github.com/ArthurHub/CommonLibF4VR).
 
 What it provides:
 
 - **Plugin lifecycle** — a `ModBase` class with `onModLoaded` / `onGameLoaded` / `onGameSessionLoaded` / `onFrameUpdate` hooks.
-- **Config** — `ConfigBase`: INI loading, embedded defaults, version migration, and file-watch hot-reload.
+- **Config** — `ConfigBase`: TOML loading, saves that keep the file's comments and layout, embedded defaults, version migration, and file-watch hot-reload.
 - **VR controller input** — debounced button/trigger/thumbstick reads, plus owner-keyed input suppression.
 - **VR UI** — a widget/button/container hierarchy with finger-collision interaction, rendered as in-world meshes or drawn from text and images at runtime.
 - **Overlay rendering** — world-space lines, panels, images and text drawn over the VR view through one shared compositor hook, hidden behind the world where you want them to be.

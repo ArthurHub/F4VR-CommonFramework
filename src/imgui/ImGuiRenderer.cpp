@@ -1,6 +1,9 @@
 #include "ImGuiRenderer.h"
 
+#include <algorithm>
+#include <iterator>
 #include <mutex>
+#include <utility>
 #include <vector>
 
 #include <d3d11.h>
@@ -29,7 +32,9 @@ namespace f4cf::imgui::internal::renderer
         };
 
         constexpr UINT VERTICES_PER_QUAD = 6;
-        constexpr UINT MAX_QUADS = 64;
+
+        // a flat canvas is one quad, and a curved one is up to 90, for half of a cylinder
+        constexpr UINT MAX_QUADS = 256;
         constexpr UINT MAX_QUAD_VERTICES = MAX_QUADS * VERTICES_PER_QUAD;
 
         // Same stereo split the rest of the framework's overlays use: FO4VR renders both eyes into
@@ -87,6 +92,30 @@ float4 main(PS_INPUT input) : SV_Target {
 }
 )";
 
+        // An image of the content whose view decodes sRGB, drawn by ImGui's backend with this in place of
+        // its own pixel shader, which it matches but for the encoding. The canvas texture is not
+        // sRGB-encoded, so the sample is encoded back, or the image would come out darker than its file.
+        const char* K_SRGB_IMAGE_PIXEL_SHADER = R"(
+Texture2D image : register(t0);
+SamplerState imageSampler : register(s0);
+
+struct PS_INPUT {
+    float4 pos : SV_POSITION;
+    float4 col : COLOR0;
+    float2 uv : TEXCOORD0;
+};
+
+float3 linearToSrgb(float3 value) {
+    value = saturate(value);
+    return value <= 0.0031308 ? value * 12.92 : 1.055 * pow(max(value, 1.0e-6), 1.0 / 2.4) - 0.055;
+}
+
+float4 main(PS_INPUT input) : SV_Target {
+    float4 texel = image.Sample(imageSampler, input.uv);
+    return input.col * float4(linearToSrgb(texel.rgb), texel.a);
+}
+)";
+
         // --- shared by both threads ------------------------------------------------------------
         RenderFrame s_frame;
         std::mutex s_frameMutex;
@@ -96,12 +125,33 @@ float4 main(PS_INPUT input) : SV_Target {
         bool s_loggedInitFailed = false;
         render::DrawCallbackId s_drawCallback = render::INVALID_DRAW_CALLBACK;
 
+        // --- render thread only -----------------------------------------------------------------
+        /**
+         * A texture an ImGui frame is rasterized into, which the quads then sample.
+         */
+        struct RenderTarget
+        {
+            ID3D11Texture2D* texture = nullptr;
+            ID3D11RenderTargetView* rtv = nullptr;
+            ID3D11ShaderResourceView* srv = nullptr;
+
+            // the size asked for last, also when the texture could not be created at it
+            int width = 0;
+            int height = 0;
+        };
+
+        // The atlas the canvases share, and the texture of the dedicated canvas. Each is created by the first
+        // frame that draws into it, so a mod has only the one it uses.
+        RenderTarget s_atlasTarget;
+        RenderTarget s_dedicatedTarget;
+
+        // the context of the frame being drawn, for the callbacks of its draw data
+        ID3D11DeviceContext* s_drawContext = nullptr;
+
         // --- D3D objects, created once ----------------------------------------------------------
-        ID3D11Texture2D* s_atlasTexture = nullptr;
-        ID3D11RenderTargetView* s_atlasRtv = nullptr;
-        ID3D11ShaderResourceView* s_atlasSrv = nullptr;
         ID3D11VertexShader* s_quadVertexShader = nullptr;
         ID3D11PixelShader* s_quadPixelShader = nullptr;
+        ID3D11PixelShader* s_srgbImagePixelShader = nullptr;
         ID3D11InputLayout* s_quadInputLayout = nullptr;
         ID3D11Buffer* s_quadVertexBuffer = nullptr;
         ID3D11SamplerState* s_atlasSampler = nullptr;
@@ -138,31 +188,62 @@ float4 main(PS_INPUT input) : SV_Target {
             return true;
         }
 
-        /**
-         * The offscreen atlas every canvas rasterizes into, plus the pipeline that composites slices
-         * of it into the world.
-         */
-        bool createDeviceObjects(ID3D11Device* device, const int atlasWidth, const int atlasHeight)
+        void releaseTarget(RenderTarget& target)
         {
-            D3D11_TEXTURE2D_DESC atlasDesc{};
-            atlasDesc.Width = static_cast<UINT>(atlasWidth);
-            atlasDesc.Height = static_cast<UINT>(atlasHeight);
-            atlasDesc.MipLevels = 1;
-            atlasDesc.ArraySize = 1;
-            atlasDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-            atlasDesc.SampleDesc.Count = 1;
-            atlasDesc.Usage = D3D11_USAGE_DEFAULT;
-            atlasDesc.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
-            if (FAILED(device->CreateTexture2D(&atlasDesc, nullptr, &s_atlasTexture))) {
-                return false;
+            if (target.srv) {
+                target.srv->Release();
             }
-            if (FAILED(device->CreateRenderTargetView(s_atlasTexture, nullptr, &s_atlasRtv))) {
-                return false;
+            if (target.rtv) {
+                target.rtv->Release();
             }
-            if (FAILED(device->CreateShaderResourceView(s_atlasTexture, nullptr, &s_atlasSrv))) {
-                return false;
+            if (target.texture) {
+                target.texture->Release();
             }
+            target = {};
+        }
 
+        /**
+         * Have the target at the given size, in texture pixels: created the first time, and created again
+         * when the size changes, which it does for the dedicated canvas when the canvas changes its size.
+         * False when it cannot be created at that size, which is logged and not tried again until the size
+         * changes.
+         */
+        bool ensureTarget(ID3D11Device* device, RenderTarget& target, const int width, const int height)
+        {
+            if (target.width == width && target.height == height) {
+                return target.srv != nullptr;
+            }
+            releaseTarget(target);
+            target.width = width;
+            target.height = height;
+
+            D3D11_TEXTURE2D_DESC desc{};
+            desc.Width = static_cast<UINT>(width);
+            desc.Height = static_cast<UINT>(height);
+            desc.MipLevels = 1;
+            desc.ArraySize = 1;
+            desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+            desc.SampleDesc.Count = 1;
+            desc.Usage = D3D11_USAGE_DEFAULT;
+            desc.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
+            if (FAILED(device->CreateTexture2D(&desc, nullptr, &target.texture)) || FAILED(device->CreateRenderTargetView(target.texture, nullptr, &target.rtv)) ||
+                FAILED(device->CreateShaderResourceView(target.texture, nullptr, &target.srv))) {
+                logger::error("ImGui canvas texture of {}x{} could not be created; its canvases are not drawn", width, height);
+                releaseTarget(target);
+                target.width = width;
+                target.height = height;
+                return false;
+            }
+            logger::info("ImGui canvas texture created ({}x{})", width, height);
+            return true;
+        }
+
+        /**
+         * The pipeline that composites the canvases into the world. The textures they are rasterized into
+         * are created by the frames that draw into them, see ensureTarget.
+         */
+        bool createDeviceObjects(ID3D11Device* device)
+        {
             ID3DBlob* vsBlob = nullptr;
             if (!compileShader(K_QUAD_VERTEX_SHADER, "F4CFImGuiQuadVS", "vs_5_0", &vsBlob)) {
                 return false;
@@ -187,6 +268,16 @@ float4 main(PS_INPUT input) : SV_Target {
                 return false;
             }
             hr = device->CreatePixelShader(psBlob->GetBufferPointer(), psBlob->GetBufferSize(), nullptr, &s_quadPixelShader);
+            psBlob->Release();
+            if (FAILED(hr)) {
+                return false;
+            }
+
+            psBlob = nullptr;
+            if (!compileShader(K_SRGB_IMAGE_PIXEL_SHADER, "F4CFImGuiSrgbImagePS", "ps_5_0", &psBlob)) {
+                return false;
+            }
+            hr = device->CreatePixelShader(psBlob->GetBufferPointer(), psBlob->GetBufferSize(), nullptr, &s_srgbImagePixelShader);
             psBlob->Release();
             if (FAILED(hr)) {
                 return false;
@@ -293,12 +384,12 @@ float4 main(PS_INPUT input) : SV_Target {
         }
 
         /**
-         * Composite the canvases: every quad samples the same atlas with the same shaders, so the only
+         * Composite the canvases: every quad samples the same texture with the same shaders, so the only
          * thing that splits a draw is whether the world may hide it. The quads arrive sorted with the
          * occluded ones first, so that is at most two draws (x2 each for the eye split) - and exactly
          * one whenever every canvas agrees, which is the usual case.
          */
-        void drawQuads(const render::SubmitFrame& submitFrame, const std::vector<CanvasQuad>& quads)
+        void drawQuads(const render::SubmitFrame& submitFrame, const std::vector<CanvasQuad>& quads, ID3D11ShaderResourceView* texture)
         {
             std::vector<QuadVertex> vertices;
             vertices.reserve(quads.size() * VERTICES_PER_QUAD);
@@ -333,7 +424,7 @@ float4 main(PS_INPUT input) : SV_Target {
             context->IASetIndexBuffer(nullptr, DXGI_FORMAT_UNKNOWN, 0);
             context->VSSetShader(s_quadVertexShader, nullptr, 0);
             context->PSSetShader(s_quadPixelShader, nullptr, 0);
-            context->PSSetShaderResources(0, 1, &s_atlasSrv);
+            context->PSSetShaderResources(0, 1, &texture);
             context->PSSetSamplers(0, 1, &s_atlasSampler);
             context->RSSetState(s_quadRasterizer);
             FLOAT blendFactor[4] = {};
@@ -353,8 +444,8 @@ float4 main(PS_INPUT input) : SV_Target {
         }
 
         /**
-         * The registered draw callback. Two passes: rasterize the ImGui frame flat into the atlas,
-         * then place slices of the atlas in the world.
+         * The registered draw callback. Two passes: rasterize the ImGui frame flat into its texture, the
+         * atlas or the dedicated canvas's own, then place slices of that texture in the world.
          */
         void drawFrame(const render::SubmitFrame& submitFrame)
         {
@@ -363,26 +454,42 @@ float4 main(PS_INPUT input) : SV_Target {
             // game thread sets once at init and never changes - a stable read from here.
             std::shared_ptr<ClonedDrawData> drawData;
             std::vector<CanvasQuad> quads;
+            std::vector<TextureWrite> textureWrites;
+            bool dedicated = false;
+            int textureWidth = 0;
+            int textureHeight = 0;
             {
                 std::scoped_lock lock(s_frameMutex);
                 drawData = s_frame.drawData;
                 quads = s_frame.quads;
+                // written once, also when the frame is drawn again
+                textureWrites = std::exchange(s_frame.textureWrites, {});
+                dedicated = s_frame.dedicated;
+                textureWidth = s_frame.textureWidth;
+                textureHeight = s_frame.textureHeight;
             }
+            auto* context = submitFrame.context;
+            writeTextures(context, textureWrites);
             if (!drawData || quads.empty()) {
                 return;
             }
 
-            auto* context = submitFrame.context;
+            RenderTarget& target = dedicated ? s_dedicatedTarget : s_atlasTarget;
+            if (!ensureTarget(submitFrame.device, target, textureWidth, textureHeight)) {
+                return;
+            }
 
-            // pass 1: ImGui into the atlas. ImGui_ImplDX11_RenderDrawData sets its own viewport
+            // pass 1: ImGui into the texture. ImGui_ImplDX11_RenderDrawData sets its own viewport
             // and projection from the draw data's display size, and backs up / restores the
             // pipeline around itself - including vertex-shader constant buffer b0, which is where
             // the hook host put the camera matrices pass 2 needs. It does NOT touch render targets,
             // hence the rebind below.
             constexpr FLOAT transparent[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
-            context->OMSetRenderTargets(1, &s_atlasRtv, nullptr);
-            context->ClearRenderTargetView(s_atlasRtv, transparent);
+            context->OMSetRenderTargets(1, &target.rtv, nullptr);
+            context->ClearRenderTargetView(target.rtv, transparent);
+            s_drawContext = context;
             ImGui_ImplDX11_RenderDrawData(&drawData->drawData);
+            s_drawContext = nullptr;
 
             // pass 2: back onto the eye texture the hook host bound for us. Rebinding it is this
             // callback's responsibility - the host binds it once for the whole callback list, so a
@@ -400,18 +507,30 @@ float4 main(PS_INPUT input) : SV_Target {
             viewport.MaxDepth = 1.0f;
             context->RSSetViewports(1, &viewport);
 
-            drawQuads(submitFrame, quads);
+            drawQuads(submitFrame, quads, target.srv);
         }
     }
 
-    bool ensureInstalled(const int atlasWidth, const int atlasHeight)
+    /**
+     * The shader an image whose view decodes sRGB is drawn with, set by a callback of the draw data before
+     * the image (render thread): it encodes the sample back, as the canvas texture is not sRGB-encoded.
+     * ImDrawCallback_ResetRenderState puts the backend's own back.
+     */
+    void setSrgbImageShader(const ImDrawList*, const ImDrawCmd*)
+    {
+        if (s_drawContext) {
+            s_drawContext->PSSetShader(s_srgbImagePixelShader, nullptr, 0);
+        }
+    }
+
+    bool ensureInstalled()
     {
         if (!s_installed) {
             auto* device = render::getDevice();
             if (!device) {
                 return false;
             }
-            if (!createDeviceObjects(device, atlasWidth, atlasHeight)) {
+            if (!createDeviceObjects(device)) {
                 if (!s_loggedInitFailed) {
                     s_loggedInitFailed = true;
                     logger::error("D3D initialization failed; ImGui canvases disabled");
@@ -428,10 +547,14 @@ float4 main(PS_INPUT input) : SV_Target {
     void publish(RenderFrame&& frame)
     {
         const bool hasContent = !frame.empty();
+        // a frame of canvases that are all drawn on top needs no scene depth
+        const bool readsSceneDepth = std::ranges::any_of(frame.quads, &CanvasQuad::occluded);
         {
             std::scoped_lock lock(s_frameMutex);
+            // the texture writes of a frame that was not drawn come before this frame's
+            frame.textureWrites.insert(frame.textureWrites.begin(), std::make_move_iterator(s_frame.textureWrites.begin()), std::make_move_iterator(s_frame.textureWrites.end()));
             s_frame = std::move(frame);
         }
-        render::setDrawCallbackActive(s_drawCallback, hasContent);
+        render::setDrawCallbackActive(s_drawCallback, hasContent, readsSceneDepth);
     }
 }

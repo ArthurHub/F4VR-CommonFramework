@@ -50,14 +50,16 @@ namespace f4cf::imgui
      * The price is density: in a container scaled 1.6 the panel has 1.6x fewer atlas pixels per world
      * unit and reads correspondingly softer, which setSupersample buys back at a memory cost.
      * A panel too large to fit the shared atlas is scaled down to fit, keeping its aspect, and says
-     * so in the log - it never silently distorts.
+     * so in the log - it never silently distorts. The one large panel that is a mod's whole UI is
+     * made dedicated instead (setDedicated): it has a texture of its own, which the atlas does not limit.
      *
      * Three things set it apart from its neighbours. It draws through the framework's overlay path
      * rather than the scene graph, so what hides it is the depth test described at setOccluded, not
-     * the scene's own draw order. It is not interactive: vrui's finger-collision press handling
-     * does not apply, since the content is pixels rather than widgets (see the interactivity work in
-     * the design docs). And it is not a vrui::UIPanel, whatever the name suggests: it takes the same
-     * vrui::UIPanelStyle and sizing modes, but ImGui draws its chrome and lays out its content.
+     * the scene's own draw order. It is not pressed by a finger: vrui's finger-collision press handling
+     * does not apply, since the content is pixels rather than widgets. With setInteractive it is
+     * operated from a distance instead, with the ray of a wand and its trigger. And it is not a
+     * vrui::UIPanel, whatever the name suggests: it takes the same vrui::UIPanelStyle and sizing modes,
+     * but ImGui draws its chrome and lays out its content.
      *
      * Lives under imgui/ rather than vrui/ because it is the adapter BETWEEN the two: building it
      * with vrui would make every vrui consumer depend on Dear ImGui, and it has to disappear along
@@ -129,6 +131,19 @@ namespace f4cf::imgui
          * readable whatever is in front of it. See imgui::Canvas::setOccluded.
          */
         void setOccluded(bool occluded);
+
+        void setDedicated(bool dedicated);
+
+        void setCurveRadius(float units);
+
+        float getCurveRadius() const
+        {
+            return _curveRadiusUnits;
+        }
+
+        void setInteractive(bool interactive);
+
+        bool isPointedAt() const;
 
         /**
          * The whole look in one go - content colour, background, border, rounding and padding; see
@@ -205,5 +220,8 @@ namespace f4cf::imgui
 
         vrui::UIPanelSizing _sizing = vrui::UIPanelSizing::Fixed;
         float _maxWidthUnits = 0.0f;
+
+        // 0 for a flat panel
+        float _curveRadiusUnits = 0.0f;
     };
 }

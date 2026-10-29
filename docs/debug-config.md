@@ -1,10 +1,10 @@
 # Debug configuration
 
-Every mod built on F4VR-CommonFramework ships a `[Debug]` section in its INI. The fields are the
+Every mod built on F4VR-CommonFramework ships a `[Debug]` section in its config file. The fields are the
 same across mods: log control, a few runtime scratch values, an in-game live-tuning tool, and
 one-shot diagnostic actions. This page explains each one with examples.
 
-**Edits apply live.** The INI is watched while the game runs, so almost everything here takes effect
+**Edits apply live.** The config file is watched while the game runs, so almost everything here takes effect
 the moment you save the file — no restart, usually no reload of the save. Set a value, alt-tab back
 in, and it's active.
 
@@ -17,11 +17,14 @@ in, and it's active.
 | ------------------------------------------------------ | ------------------------------------------------------------------ |
 | [`iLogLevel`](#iloglevel)                              | Minimum severity written to the log                                |
 | [`sAdjustTarget`](#sadjusttarget--in-game-live-tuning) | Tune transforms / hand poses / floats in-game with the controllers |
-| [`sDumpDataOnceNames`](#sdumpdataoncenames)            | Write named game-state dumps to the log, once                      |
-| [`sAddItemsOnceNames`](#sadditemsoncenames)            | Bulk-add or preview game items, once                               |
+| [`aDumpDataOnce`](#adumpdataonce)                      | Write named game-state dumps to the log, once                      |
+| [`aAddItemsOnce`](#aadditemsonce)                      | Bulk-add or preview game items, once                               |
 | [`sLogPattern`](#slogpattern)                          | Format of each log line                                            |
 | [`fFlowFlag1/2/3`, `sFlowText1/2`](#flow-values)       | Mod-defined scratch values read by mod code                        |
 | [`sSceneDepthStrategy`, `bSceneDepthDiagnostics`](#scene-depth-occlusion) | Overlay-occlusion support switches                |
+| [`sOverlayDrawPass`](#soverlaydrawpass)                | Draw the overlays under the game's menus, or on top as before      |
+| [`bVRUIShowFingerTip`](#bvruishowfingertip)            | Mark the fingertip that presses the VR UI with a small sphere      |
+| [`bVRUIDevLayout`](#bvruidevlayout)                    | Tune the placement of the VR UI in a file while the game runs      |
 | [`iVersion`](#iversion)                                | Internal schema version — don't touch                              |
 
 ---
@@ -36,10 +39,14 @@ Minimum severity written to the mod's log. Lower numbers log more.
 | `1`   | Debug    | Development diagnostics                       |
 | `2`   | Info     | **Recommended default** — normal use          |
 
-```ini
+```toml
 [Debug]
 iLogLevel = 1
 ```
+
+The file is TOML: a text value goes in quotes (`sLogPattern = "%H:%M:%S.%e %l: %v"`), a float has its
+decimal point, and a key appears once. A file broken by a typo is logged with the line and what is
+wrong at it, and the values stay as they were until it is fixed.
 
 > **Trace (`0`) and large dumps fill the log fast.** Return `iLogLevel` to `2` once you've collected
 > what you need.
@@ -47,7 +54,7 @@ iLogLevel = 1
 ## `sAdjustTarget` — in-game live-tuning
 
 The adjuster lets you dial in a transform, a hand pose, or a floating-point value **with the VR
-controllers, in-game**, then save the result straight back to the INI. It's the fast way to author
+controllers, in-game**, then save the result straight back to the config file. It's the fast way to author
 node offsets and poses without guessing numbers by hand.
 
 While a target is active the framework **suppresses all normal controller input** — you can't move
@@ -56,12 +63,12 @@ or interact, so the sticks are free to drive the adjustment. Controller names ar
 
 ### How to use
 
-1. Set `sAdjustTarget` to a [target](#targets) (a fixed keyword or `Section::Key`) and save the INI.
+1. Set `sAdjustTarget` to a [target](#targets) (a fixed keyword or `Section::Key`) and save the file.
 2. Wait for the config-reload notification, then adjust the value in-game with the sticks (see the
    control maps below).
-3. **Tap primary-hand A** to save the current value to the INI.
+3. **Tap primary-hand A** to save the current value to the config file.
 4. **Long-press primary-hand A** to discard unsaved changes and reload from disk.
-5. Set `sAdjustTarget = none` when you're done to restore normal controller input.
+5. Set `sAdjustTarget = "none"` when you're done to restore normal controller input.
 
 > `haptictest` is the exception — there, primary-hand A _plays_ the pattern instead of saving. See
 > [Haptic test](#haptic-test).
@@ -76,7 +83,7 @@ or interact, so the sticks are free to drive the adjustment. Controller names ar
 | `flag1` / `flag2` / `flag3` | One flow flag                             |
 | `flag123`                   | All three flow flags at once              |
 | `haptictest`                | Plays the haptic sequence in `sFlowText1` |
-| `Section::Key`              | Any supported field in any INI section    |
+| `Section::Key`              | Any supported field in any config section |
 
 `transform` and `handpose` are reusable scratch targets — they default to an identity transform and
 an all-zero pose if the field is missing, and saving creates/updates it under `[Debug]`.
@@ -84,20 +91,21 @@ an all-zero pose if the field is missing, and saving creates/updates it under `[
 **`Section::Key`** edits a real field in place. The value type is inferred from the first letter of
 the key:
 
-- **`t…`** — a transform, `x,y,z;heading,roll,attitude;scale` (translation in game units, rotation
-  in degrees).
-- **`h…`** — a 22-float hand pose.
+- **`t…`** — a transform, `{ pos = [x, y, z], rot = [heading, roll, attitude], scale = s }`
+  (translation in game units, rotation in degrees).
+- **`h…`** — a hand pose, `{ thumb = [prox, mid, dist, splay], index = [..], middle = [..], ring = [..],
+  pinky = [..], palm = [pitch, yaw] }`, a finger or the palm left out being zeros.
 - **`f…`** — a float.
 
 Integer, boolean, and string fields aren't supported by `Section::Key`.
 
-```ini
+```toml
 [Debug]
-# Pick ONE of these — they're separate examples:
-sAdjustTarget = MyMod::tWeaponOffset      # a transform field in the mod section
-sAdjustTarget = MyMod::fBeamRadius        # a float field
-sAdjustTarget = transform                 # the [Debug] scratch transform
-sAdjustTarget = flag123                   # all three flow flags
+# Pick ONE of these, a key appears once in the file:
+sAdjustTarget = "MyMod::tWeaponOffset"      # a transform field in the mod section
+# sAdjustTarget = "MyMod::fBeamRadius"      # a float field
+# sAdjustTarget = "transform"               # the [Debug] scratch transform
+# sAdjustTarget = "flag123"                 # all three flow flags
 ```
 
 ### Transform controls
@@ -116,8 +124,8 @@ The sticks drive translation by default; hold an offhand modifier to switch to r
 
 ### Hand-pose controls
 
-A hand pose is 22 floats: five finger groups (`proximal,middle,distal,splay`) followed by
-`palmPitch,palmYaw`. You edit **one slot at a time**, starting at the thumb. **Tap offhand A** to
+A hand pose is 22 floats: five fingers of `[proximal, middle, distal, splay]` followed by the palm's
+`[pitch, yaw]`. You edit **one slot at a time**, starting at the thumb. **Tap offhand A** to
 advance `thumb → index → middle → ring → pinky → palm → thumb` (wraps around); a notification names
 the new slot.
 
@@ -145,23 +153,24 @@ For `flag1` / `flag2` / `flag3`, primary stick Y changes the selected value. For
 
 ### Haptic test
 
-Set `sAdjustTarget = haptictest` and put a semicolon-separated sequence in `sFlowText1`. Each segment
+Set `sAdjustTarget = "haptictest"` and put a semicolon-separated sequence in `sFlowText1`. Each segment
 is `durationSeconds,startIntensity,endIntensity` (intensities normally `0 … 1`). Whitespace is fine;
 malformed segments are skipped and logged.
 
-```ini
+```toml
 [Debug]
-sFlowText1 = 0.4,0.1,1.0; 0.1,0,0; 0.05,1,1
-sAdjustTarget = haptictest
+sFlowText1 = "0.4,0.1,1.0; 0.1,0,0; 0.05,1,1"
+sAdjustTarget = "haptictest"
 ```
 
 **Tap primary-hand A** to play the sequence on the primary controller. Combined with live-reload,
 this lets you edit `sFlowText1`, feel the result, and iterate.
 
-## `sDumpDataOnceNames`
+## `aDumpDataOnce`
 
-Writes one or more diagnostic node/state dumps to the mod log, then **clears each name after it
-runs** so a later file reload doesn't repeat it. Names are comma-separated.
+Writes one or more diagnostic node/state dumps to the mod log, then **removes each name from the
+array after it runs**, in memory and in the file, so a later file reload doesn't repeat it. The value
+is an array of names, matched whole and in their case.
 
 | Name        | Dumps                                                     |
 | ----------- | --------------------------------------------------------- |
@@ -175,27 +184,52 @@ runs** so a later file reload doesn't repeat it. Names are comma-separated.
 | `perf`      | The [perf sites](../src/perf/README.md) since the last reset, as an indented table (the devbench `perf` action's `text` format) |
 | `perf_reset` | Like `perf`, then starts a new window. When recording is off, it only switches it on |
 
+A mod adds names of its own (FRIK has `weapon_pos`, `weapon_muzzle` and `menus`). A name no code
+asks for stays in the array.
+
 Recording is off until the mod's devbench tool arms, which it does as soon as devbench is
 installed or a Tracy viewer connects. Without either, start with `perf_reset`, hold
 the condition being measured, then use `perf`, or `perf_reset` again to log that window and start
 the next one.
 
-```ini
+```toml
 [Debug]
-sDumpDataOnceNames = skelly, fp_skelly, geometry
+aDumpDataOnce = ["skelly", "fp_skelly", "geometry"]
 ```
 
-## `sAddItemsOnceNames`
+## `aAddItemsOnce`
 
-Runs **one** inventory operation against one or more item categories. Like the dumps, the value is
-cleared (from memory and the INI) before it's parsed — so even an invalid request has to be entered
-again, and a valid one never runs twice.
+Runs inventory requests, each an operation on one or more item categories with an optional filter.
+Like the dumps, the array is cleared (from memory and the file) before it's read, so even an
+invalid request has to be entered again, and a valid one never runs twice. All the requests are read
+before any runs: when one is not valid, the log says which and why, by its key, and **none of them
+runs**. The array is written back as `[]`, so a comment inside it goes too: keep notes above the key.
 
-**Syntax:** `operation, category[:filter], category[:filter], …` — operation and category names are
-case-insensitive.
+```toml
+[Debug]
+aAddItemsOnce = [
+  { op = "print", category = "weapons", class = "gun", keyword = "laser" },
+  { op = "get", category = ["weapons", "throwables"] },
+]
+```
 
 > **Start with a `print`.** `get`/`get-all` can add a lot of items to your character. Preview with a
 > print operation and keep a save before committing.
+
+### Request keys
+
+| Key        | Required | Value                                                                 |
+| ---------- | -------- | --------------------------------------------------------------------- |
+| `op`       | yes      | The [operation](#operations)                                          |
+| `category` | yes      | One [category](#categories), or an array of them                      |
+| `name`     |          | Case-insensitive display-name substring                               |
+| `keyword`  |          | Case-insensitive keyword editor-ID substring                          |
+| `slot`     |          | Armor only: one [slot](#armor-slots), or an array of them, OR-matched |
+| `class`    |          | Armor: `light`, `heavy` or `none`. Weapons: `melee`, `gun` or `unarmed` |
+
+An item has to match every filter key of its request. Values are case-insensitive, keys are not, and
+a key not in the table is an error. `slot` and `class` are skipped, with a warning, for a category
+they don't apply to, so one request can cover weapons and armor.
 
 ### Operations
 
@@ -220,23 +254,11 @@ relevant armor/weapon details.
 | `aid`        | Aid / alchemy items                        | 1                  |
 | `misc`       | Miscellaneous items                        | 1                  |
 
-### Filters
+### Armor slots
 
-Add `:` after a category, then join clauses with `|`. Multiple clauses on one category are **AND-ed**.
+A slot is a Creation Kit number `30 … 61`, written as a number, or one of these names, in quotes:
 
-| Filter           | Applies to | Meaning                                      |
-| ---------------- | ---------- | -------------------------------------------- |
-| `name=<text>`    | Any        | Case-insensitive display-name substring      |
-| `keyword=<text>` | Any        | Case-insensitive keyword editor-ID substring |
-| `slot=<list>`    | Armor      | One or more `+`-separated slots, OR-matched  |
-| `class=<value>`  | Armor      | `light`, `heavy`, or `none`                  |
-| `class=<value>`  | Weapons    | `melee`, `gun`, or `unarmed`                 |
-
-A bare clause is shorthand for `name=`, so `weapons:laser` means `weapons:name=laser`.
-
-Armor slots accept Creation Kit numbers `30 … 61` or these aliases:
-
-| Alias                                                          | Slot(s)               |
+| Name                                                           | Slot(s)               |
 | -------------------------------------------------------------- | --------------------- |
 | `head`, `helmet`, `hair`                                       | 30                    |
 | `body`, `outfit`, `underarmor`                                 | 33                    |
@@ -246,19 +268,20 @@ Armor slots accept Creation Kit numbers `30 … 61` or these aliases:
 | `legs`, `lleg`, `leftleg`, `rleg`, `rightleg`                  | 44 and/or 45          |
 | `headband`, `eyes`, `glasses`, `mouth`, `mask`, `neck`, `ring` | 46, 47, 49, 50, or 51 |
 
-```ini
+### Examples
+
+```toml
 [Debug]
-# Preview obtainable laser guns
-sAddItemsOnceNames = print, weapons:class=gun|keyword=laser
-
-# Add obtainable weapons and five of each obtainable throwable
-sAddItemsOnceNames = get, weapons, throwables
-
-# Preview every heavy torso armor, including unobtainable
-sAddItemsOnceNames = print-all, armor:slot=torso|class=heavy
-
-# Add all named aid items containing "stimpak"
-sAddItemsOnceNames = get-all, aid:stimpak
+aAddItemsOnce = [
+  # Preview obtainable laser guns
+  { op = "print", category = "weapons", class = "gun", keyword = "laser" },
+  # Add obtainable weapons and five of each obtainable throwable
+  { op = "get", category = ["weapons", "throwables"] },
+  # Preview every heavy torso or body armor, including unobtainable
+  { op = "print-all", category = "armor", slot = ["torso", 33], class = "heavy" },
+  # Add all named aid items containing "stimpak"
+  { op = "get-all", category = "aid", name = "stimpak" },
+]
 ```
 
 ## Flow values
@@ -271,27 +294,27 @@ mod without rebuilding.
 Mod code reads them as `config->debug.flowFlag1` … `flowFlag3`, `flowText1`, `flowText2`. Blank
 numeric values load as `0`; blank text loads as an empty string.
 
-```ini
+```toml
 [Debug]
-fFlowFlag1 = 1
+fFlowFlag1 = 1.0
 fFlowFlag2 = 0.25
-sFlowText1 = experimental-beam
+sFlowText1 = "experimental-beam"
 ```
 
 > The one built-in use is `sFlowText1`, which supplies the haptic sequence for
-> [`sAdjustTarget = haptictest`](#haptic-test).
+> [`sAdjustTarget = "haptictest"`](#haptic-test).
 
 ## `sLogPattern`
 
 The prefix and layout of each log line, in [spdlog pattern syntax](https://github.com/gabime/spdlog/wiki/Custom-formatting).
 
-```ini
+```toml
 [Debug]
 # Compact default
-sLogPattern = %H:%M:%S.%e %l: %v
+sLogPattern = "%H:%M:%S.%e %l: %v"
 
-# Source file + line, fixed-width columns
-sLogPattern = %H:%M:%S.%e %L [%-25s:%-4#]: %v
+# or: source file + line, fixed-width columns
+# sLogPattern = "%H:%M:%S.%e %L [%-25s:%-4#]: %v"
 ```
 
 ## Scene-depth occlusion
@@ -299,10 +322,10 @@ sLogPattern = %H:%M:%S.%e %L [%-25s:%-4#]: %v
 Two support switches for the capture that hides overlay panels behind the world. Both default to the
 right thing, so you only touch them when an overlay draws where it should not.
 
-```ini
+```toml
 [Debug]
 # auto (shipped) | depthpass | direct | off
-sSceneDepthStrategy = auto
+sSceneDepthStrategy = "auto"
 
 # adds the capture's rows to the debug-draw overlay and re-runs its internal A/B comparison
 bSceneDepthDiagnostics = false
@@ -321,7 +344,62 @@ the default log level — so a log is usually enough and neither key needs touch
 Design, measurements and the failure modes they address:
 [`docs/tech/scene-depth-occlusion.md`](tech/scene-depth-occlusion.md).
 
+## `sOverlayDrawPass`
+
+Where the overlay layers draw, other than debug draw, which is always on top of everything. Read live.
+
+| Value  | Where                                                                                           |
+| ------ | ----------------------------------------------------------------------------------------------- |
+| `auto` | Shipped. In the game's player-space pass, under the game's menus; at Submit where that pass cannot be hooked, which the log says |
+| `submit` | Always at Submit, over the finished frame and the game's menus, as before the pass was hooked |
+
+```toml
+[Debug]
+sOverlayDrawPass = "auto"
+```
+
+A support switch: `submit` tells whether a misdrawn overlay comes from drawing inside the game's pass.
+See [render/ → Under the game's menus](../src/render/README.md#under-the-games-menus).
+
+## `bVRUIShowFingerTip`
+
+While a VR UI is shown, a small gold sphere marks the point that presses its buttons. It is off by default,
+and the sphere then appears only while no hand is drawn at the controller (no FRIK, or the hand is
+away from the controller), where the controller presses the buttons and there is no finger to see.
+Set it to see where the framework finds the fingertip:
+
+```toml
+[Debug]
+bVRUIShowFingerTip = true
+```
+
+## `bVRUIDevLayout`
+
+A development tool for a mod's author: it tunes where the mod's VR UI stands, and how big it is, while
+the game runs. It is off by default and is not in the shipped config, so add the line:
+
+```toml
+[Debug]
+bVRUIDevLayout = true
+```
+
+While it is on, the mod keeps `<mod>_DevLayout.ini` beside its config file, with a section for each UI that is
+shown and a line for each of its elements:
+
+```ini
+[MainConfig]
+MainConfig = Pos:(0.00,0.00,0.00), Rot:(0.00,0.00,0.00), Scale:(1.60), Padding:(0.35), Layout:(5)
+Row1 = Pos:(0.00,0.00,0.00), Rot:(0.00,0.00,0.00), Scale:(1.00), Padding:(0.30), Layout:(1)
+```
+
+Edit a line and save the file, and the UI in the game follows in a fraction of a second. A UI that is
+closed keeps its lines, so going to another screen and back keeps what you tuned. The file is removed
+when the key is turned off, and starts empty on the next run: copy the values you want into the code.
+
+The fields of a line, and what happens to lines you remove:
+[VR UI README](../src/vrui/README.md#notes).
+
 ## `iVersion`
 
-The mod's internal INI schema version, used by the framework to apply config migrations. **Don't
+The mod's internal config schema version, used by the framework to apply config migrations. **Don't
 change it by hand or copy it between mods.**

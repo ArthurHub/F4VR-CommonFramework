@@ -4,8 +4,9 @@ Namespace: `f4cf::render`
 
 Everything the framework draws **over** the VR view rather than into the scene graph: colored
 world-space lines, filled triangles, textured quads and text, projected through the engine's own
-per-eye camera so world coordinates land exactly where the game drew the world. One shared
-`IVRCompositor::Submit` hook carries every layer, and the world's depth is captured so a layer can
+per-eye camera so world coordinates land exactly where the game drew the world. One host carries
+every layer: the game's player-space pass draws the layers under its menus, and a shared
+`IVRCompositor::Submit` hook the diagnostics on top. The world's depth is captured so a layer can
 ask to be hidden behind geometry.
 
 > Part of the [F4VR Common Framework](../README.md) source tree.
@@ -19,16 +20,19 @@ why something drew where it did.
 
 | File | What it is |
 | ----------------------- | -------------------------------------------------------------------- |
-| [`PrimitiveDraw.h`](PrimitiveDraw.h) | The frame a producer fills: `lines` / `triangles` / `images` / `texts`, with `add*` helpers and the budgets. Plus `Color`, the `colors::` constants and the text placement/align/decoration enums. Header-only. |
+| [`Color.h`](Color.h) | `Color`, the framework's one color: 0..1 floats, made from 0..255 bytes with `rgba` and read back as them with `bytes`, and the `colors::` constants. Plain std, so the config's parsers use it too. Header-only. |
+| [`PrimitiveDraw.h`](PrimitiveDraw.h) | The frame a producer fills: `lines` / `triangles` / `images` / `texts`, with `add*` helpers and the budgets. Plus the text placement/align/decoration enums. Header-only. |
 | [`PrimitiveDrawRenderer.h`](PrimitiveDrawRenderer.h) / [`.cpp`](PrimitiveDrawRenderer.cpp) | One overlay **layer**: takes published frames on the game thread and replays them on the render thread. Owns the game → render handoff and the layer's draw order; goes dormant when it has nothing to draw. |
-| [`SubmitHook.h`](SubmitHook.h) / [`.cpp`](SubmitHook.cpp) | The shared `IVRCompositor::Submit` vtable hook and the draw-callback table every layer registers on. Owns the RTV over the submitted eye texture, the per-eye camera constants, the pipeline save/restore and the painter order. |
+| [`SubmitHook.h`](SubmitHook.h) / [`.cpp`](SubmitHook.cpp) | The shared `IVRCompositor::Submit` vtable hook, the hook of the game's player-space pass ([Under the game's menus](#under-the-games-menus)), and the draw-callback table every layer registers on. Owns the RTV over the submitted eye texture, the per-eye camera constants, the pipeline save/restore and the painter order. |
 | [`RenderUtils.h`](RenderUtils.h) / [`.cpp`](RenderUtils.cpp) | The game's D3D11 device/context, the engine's per-eye view-projection + posAdjust (`StereoCameraConstants`), and `ScopedPipelineState` — the RAII snapshot taken around the whole callback list. |
 | [`TextFont.h`](TextFont.h) / [`.cpp`](TextFont.cpp) | The framework's font as a signed-distance-field atlas, and the measuring a producer lays text out with (`measureText`, `fitText`, `textDescent`, `measureTextRun`). |
-| [`Texture.h`](Texture.h) / [`.cpp`](Texture.cpp) | Images loaded through the **engine's own** texture loader, shared per path, so a path resolves the way a NIF's texture path does — loose files and BA2 archives alike. |
+| [`Texture.h`](Texture.h) / [`.cpp`](Texture.cpp) | Images loaded through the **engine's own** texture loader, shared per path, so a path resolves the way a NIF's texture path does — loose files and BA2 archives alike. And images made from pixels in memory. |
+| [`CallSiteHook.h`](CallSiteHook.h) / [`.cpp`](CallSiteHook.cpp) | Whether a game call site the render hooks patch still calls its function, or another plugin's hook of it, which they chain onto, and the module that hook belongs to. |
 | [`SceneDepthCapture.h`](SceneDepthCapture.h) / [`.cpp`](SceneDepthCapture.cpp) | Takes hold of the engine's scene depth for the frame being submitted, read-only, so a layer can be occluded by the world. |
 | [`SceneDepthResample.h`](SceneDepthResample.h) / [`.cpp`](SceneDepthResample.cpp) | The copy made under an upscaler (DLSS/FSR), which draws the world into a sub-viewport of a full-size buffer and clears it before submit. |
+| [`SceneDepthShared.h`](SceneDepthShared.h) / [`.cpp`](SceneDepthShared.cpp) | The struct that holds the copy for every framework mod in the process, found by a process-wide name, and the frame the framework Submit hooks count for it. |
 | [`SceneDepthDiagnostics.h`](SceneDepthDiagnostics.h) / [`.cpp`](SceneDepthDiagnostics.cpp) | `sSceneDepthStrategy` / `bSceneDepthDiagnostics`, the watch rows, and the shadow A/B that elected the shipped policy. |
-| [`fonts/`](fonts/) | The embedded Roboto Medium (and its license), used when a mod ships no font of its own. |
+| [`fonts/`](fonts/) | The embedded Roboto Medium (and its license), used when a mod ships no font of its own, and the bold and italic faces the ImGui canvases add ([`imgui/`](../imgui/README.md#font)): Roboto Black and Roboto Medium Italic. The bold face is Black, as the regular one is Medium: Bold is too close to it to tell apart. All three are Roboto 2.137 as Google Fonts ships it. |
 
 ## Drawing a frame
 
@@ -61,15 +65,23 @@ void MyMod::onFrameUpdate()
 Depth testing is off within a layer, so the lists are painted in a fixed order and whatever draws
 last wins the pixel: **lines, then all fills, then all images, then all text**. That is what puts a
 panel's background under its image and its image under its labels — but it also means a layer's own
-content is not meant to overlap itself. Consecutive content of one color and texture goes out in a
-single draw call; each distinct texture costs a draw.
+content is not meant to overlap itself. The color is on each vertex, so consecutive content of one
+texture goes out in a single draw call whatever its colors; each distinct texture costs a draw.
+
+A fill takes a color for each corner and blends between them, so a gradient or a fade is one shape:
+
+```cpp
+// a strip that fades out from a-b to c-d
+const render::Color clear{ color.r, color.g, color.b, 0.0f };
+frame.addQuad(a, b, c, d, color, color, clear, clear);
+```
 
 ### Budgets
 
 `MAX_LINE_VERTICES` (64k), `TEXT_VERTEX_CAPACITY` (128k), `MAX_FILL_TRIANGLES` (8k) and
 `MAX_IMAGE_QUADS` (4k) per frame. The `add*` helpers return `false` when full, so a runaway producer
 degrades instead of ballooning GPU buffers. The lists are public, for a producer with its own
-ordering or accounting rules (the debug overlay sorts by color to batch runs).
+ordering or accounting rules.
 
 ## Text
 
@@ -77,7 +89,9 @@ Text is the framework's font — the embedded **Roboto Medium**, or a mod's own 
 `Data\Interface\<ModName>\<ModName>.ttf` (`CUSTOM_TEXT_FONT_PATH`) — drawn from a distance-field
 atlas, so it stays sharp at any size, distance or angle. The file is read once, the first time any
 text needs the font, so replacing it takes a restart. The same bytes feed the ImGui canvases, so a
-`vrui::UITextPanel` and an `imgui::UIImGuiPanel` always share a typeface.
+`vrui::UITextPanel` and an `imgui::UIImGuiPanel` always share a typeface. The canvases also draw
+its bold and italic faces, a mod's own beside it at `<ModName>-Bold.ttf` and `<ModName>-Italic.ttf`
+(`CUSTOM_BOLD_FONT_PATH`, `CUSTOM_ITALIC_FONT_PATH`).
 
 Building the atlas takes about a tenth of a second, and it happens on the first draw of anything
 (lines and fills sample it too), stalling that frame. A mod that draws sets
@@ -123,10 +137,33 @@ frame.addImage(icon->view(), icon->isSRGB(), topLeft, topRight, bottomRight, bot
   boundary.
 - **A missing path is not an error to the engine** — it hands back a 1x1 placeholder, which is taken
   to mean "missing": logged once, drawn as nothing.
+- **Loose DDS headers are checked once before loading.** Zero or oversized dimensions, truncated
+  headers, and block-compressed dimensions that are not multiples of four are logged and skipped.
+  This reads at most 148 bytes; pixel data and archive-only textures are not checked.
+- **`error()` says why a texture has no view**, for a mod to show its player: the header's mistake,
+  a file that is not found, or one the game did not load.
 - **sRGB is the cache's decision**, not the caller's: whoever loaded a path first settles it.
   `isSRGB()` reports what actually came back and the renderer re-encodes, since the overlay writes
   into a target that is not sRGB-encoded. (`Color::rgba(r, g, b, a)` takes the 0-255 bytes a color
   picker reports; a byte in is that byte out.)
+
+An image that is no file the engine can load, one a mod reads or draws itself, is a texture made
+from its pixels:
+
+```cpp
+// rows from the top, 4 bytes a pixel: red, green, blue, alpha
+auto picture = render::Texture::fromPixels("MyMod picture", width, height, rgba);
+frame.addImage(picture->view(), picture->isSRGB(), topLeft, topRight, bottomRight, bottomLeft, tint);
+```
+
+- **The pixels are copied**, and drawn as given: a byte in is that byte out, and the alpha is not
+  multiplied into the colors. The name is for the log.
+- **It is created on the GPU by its first `view()`**, so `fromPixels` runs on any thread and before
+  the renderer is up, and `width()` and `height()` are known from the start. `view()` stays game
+  thread only.
+- **It is shared with no one** and has one mip level. It lives as long as its holders: dropping it
+  while an image of it is shown is safe, as a published frame keeps the GPU texture.
+- **Pixels that do not fill the size** are logged, and the texture draws nothing.
 
 ## Layers and draw order
 
@@ -139,10 +176,40 @@ overlay the player happened to trigger first in a session:
 | -------- | ----- | ----------- |
 | `DRAW_ORDER_HINTS` | 50 | world-anchored hints (the activation-sphere icons) — under the panels, so an open panel is never painted over by a hint behind it |
 | `DRAW_ORDER_PANELS` | 100 | `vrui::UIPanel` and the ImGui canvases |
+| `DRAW_ORDER_POINTERS` | 150 | what points at the panels (the ray and mark of the ImGui pointer) — over them |
 | `DRAW_ORDER_DEFAULT` | 500 | anything with no opinion |
-| `DRAW_ORDER_DEBUG` | 900 | deliberately last, i.e. on top: diagnostics must never end up hidden behind a mod's UI |
+| `DRAW_ORDER_DEBUG` | 900 | deliberately last, i.e. on top: diagnostics must never end up hidden behind a mod's UI, nor the game's menus |
 
 Lower draws first, i.e. ends up underneath.
+
+## Under the game's menus
+
+FO4VR draws its menus as quads in the world, under `PlayerWorldNode`: the pause menu, a message
+box, the dialogue, notifications, lockpicking, the workshop pallet, other mods' menus. The
+player-space pass draws them after the world, already tonemapped, with the Pip-Boy and the wands,
+and their quads test the world's depth but write none. So a layer drawn at Submit, over the
+finished frame, would cover every one of them.
+
+The layers below `DRAW_ORDER_DEBUG` therefore draw inside that pass, from a hook of the call that
+draws its first scene (`Main::DrawWorld_And_UI` → `0x14284e370`, the call at `0x14284e68c`), into
+the target it has bound, which is the eye texture's size, with the depth the capture took this
+frame. The game then draws its menus over them as over the world. Debug draw stays at Submit, on
+top of everything.
+
+- **Once a frame**, into a target of the eye texture's size. Any other target declines, logged once,
+  and Submit draws the layers that frame instead.
+- **A frame the pass does not run draws none of them**, which is what a loading screen is: it is drawn
+  from its own thread and submitted with no world.
+- **Every framework mod draws in the pass.** Each carries its own copy of the framework and hooks the
+  same call: a call another plugin hooked first, which lands on executable code outside the game's
+  image, is chained onto, and the log names the module it chained after. The mod installed last draws
+  first, so where two mods' layers overlap the one installed first is on top, whatever their depth.
+- **No hook, every layer at Submit**: where the call is not the expected one (a different build), or
+  the mod's trampoline has no room for it, every layer draws at Submit as before, over the menus, and
+  the log says why. `sOverlayDrawPass = "submit"` in `[Debug]` does the
+  same with the hook installed, live ([debug-config](../../docs/debug-config.md#soverlaydrawpass)).
+- What the pass draws after the layers is over them whatever its depth, as the layers write none:
+  the Pip-Boy and the wand models.
 
 ## Occlusion by the world
 
@@ -166,6 +233,22 @@ Two things decide whether that depth lines up with the overlay:
   the buffer before the frame is submitted. The capture counts the viewports the frame's passes draw
   with, and when the elected one does not cover the buffer, the world's depth is copied during the
   frame and resampled to the submitted size ([`SceneDepthResample.h`](SceneDepthResample.h)).
+
+**Captured only while a layer reads it.** Under an upscaler the copy is a full-screen draw every frame
+and a depth buffer the size of the eye texture (80 MB at 6144x3264), so the capture is on only while
+an active layer is occluded: a frame of activation icons, pointers or debug lines alone captures
+nothing. A `PrimitiveDrawRenderer` reads it when constructed `occluded`, the ImGui canvases while one
+on show is occluded, and a callback of a mod's own while it is active, unless it says otherwise
+(`setDrawCallbackActive`'s `readsSceneDepth`).
+
+**One copy for every framework mod.** Each mod carries its own copy of the framework, but the copy is
+made once a frame for all of them: it lives in a struct the mods of the process find by name
+([`SceneDepthShared.h`](SceneDepthShared.h)), and the first mod to reach its copy pass draws it, the
+others use it. Everything else stays each mod's own: its capture, its election of the world's viewport,
+and its `[Debug]` keys. The frame is counted by the framework Submit hooks, which each call the next
+mod's from inside them: the outermost leaving ends it. A copy no mod has written for 8 frames is freed
+there. A mod built before the struct existed, or one that cannot find it, copies for itself, as
+before. The struct is a frozen ABI (`SharedSceneDepthV1`): fields are only appended.
 
 Test with `SubmitFrame::sceneDepthComparison`, never a guess — it is the comparison the engine drew
 the world with, and the opposite sense hides exactly what should be visible.

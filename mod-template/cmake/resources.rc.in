@@ -1,6 +1,6 @@
 #include <windows.h>
 
-// Embed the INI file as RCDATA resource
-#define IDR_CONFIG_INI 101
+// Embed the default config file as RCDATA resource
+#define IDR_CONFIG 101
 
-IDR_CONFIG_INI RCDATA "@ROOT_DIR@/data/config/MyMod.ini"
+IDR_CONFIG RCDATA "@ROOT_DIR@/data/config/MyMod.toml"

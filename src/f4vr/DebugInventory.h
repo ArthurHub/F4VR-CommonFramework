@@ -1,16 +1,18 @@
 #pragma once
 
 #include <cstdint>
+#include <expected>
 #include <functional>
 #include <optional>
 #include <string>
-#include <string_view>
+#include <toml++/toml.hpp>
+#include <vector>
 
 namespace f4cf::f4vr
 {
     /**
      * Debug helper to bulk-add game items to the player's inventory by category, for testing.
-     * Wired to the "sAddItemsOnceNames" INI flag the same way DebugDump uses "sDumpDataOnceNames".
+     * Wired to the "aAddItemsOnce" config requests the same way DebugDump uses "aDumpDataOnce".
      */
     struct DebugInventory
     {
@@ -25,7 +27,7 @@ namespace f4cf::f4vr
         };
 
         /**
-         * What to do with the matched items. Selected by the required first token of an iterateObjects string.
+         * What to do with the matched items. Selected by the required "op" of a config request, see parseRequest.
          */
         enum class Operation : std::uint8_t
         {
@@ -64,11 +66,23 @@ namespace f4cf::f4vr
             std::optional<ItemClass> itemClass; // armor weight or weapon type; nullopt = any
             // Arbitrary extra constraint run against each candidate form (already restricted to the chosen
             // category, so a caller may static_cast to that category's concrete type); null = no constraint.
-            // Code-only: parseFilter / the string spec never set it, so sAddItemsOnceNames keeps working unchanged.
+            // Code-only: a config request never sets it.
             std::function<bool(const RE::TESForm*)> predicate;
         };
 
-        static void iterateObjects(std::string_view spec);
+        /**
+         * One request of the aAddItemsOnce config: the operation, run for each of its categories with its filter.
+         */
+        struct Request
+        {
+            Operation operation = Operation::Print;
+            std::vector<ItemCategory> categories;
+            ItemFilter filter;
+        };
+
+        static std::expected<Request, std::string> parseRequest(const toml::node& request);
+
+        static void iterateObjects(const toml::array& requests);
 
         static void iterateObjects(Operation operation, ItemCategory category, const ItemFilter& filter);
     };

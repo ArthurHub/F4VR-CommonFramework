@@ -52,6 +52,14 @@ namespace f4cf::vrui
     }
 
     /**
+     * Get node of the offhand wand to attach UI to.
+     */
+    RE::NiNode* UIUtils::getOffhandWandAttachNode()
+    {
+        return f4vr::getVRPlayerNodes()->secondaryUIOffsetNode;
+    }
+
+    /**
      * Get node of the HMD to attach UI to.
      */
     RE::NiNode* UIUtils::getHMDAttachNode()
@@ -68,11 +76,11 @@ namespace f4cf::vrui
     }
 
     /**
-     * Trigger haptic on the offhand to indicate interaction with the VR UI.
+     * Trigger haptic on the hand that pressed, to indicate interaction with the VR UI.
      */
-    void UIUtils::triggerInteractionHeptic()
+    void UIUtils::triggerInteractionHeptic(const bool primaryHand)
     {
-        vrcf::VRHaptics.trigger(vrcf::Hand::Offhand, vrcf::HapticPattern::Click);
+        vrcf::VRHaptics.trigger(primaryHand ? vrcf::Hand::Primary : vrcf::Hand::Offhand, vrcf::HapticPattern::Click);
     }
 
     /**
