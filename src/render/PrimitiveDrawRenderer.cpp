@@ -1150,7 +1150,7 @@ float4 main(PS_INPUT input) : SV_Target {
             std::scoped_lock lock(_frameMutex);
             _frame = std::move(frame);
         }
-        setDrawCallbackActive(_callbackId, hasContent);
+        setDrawCallbackActive(_callbackId, hasContent, _occluded);
     }
 
     /**

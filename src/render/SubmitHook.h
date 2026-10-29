@@ -90,11 +90,7 @@ namespace f4cf::render
      */
     DrawCallbackId registerDrawCallback(std::string name, SubmitDrawCallback callback, int order);
 
-    /**
-     * Flip one callback between drawing and dormant. Dormant is genuinely free: when no callback is
-     * active the hook is one relaxed atomic read and a tail call to the original Submit.
-     */
-    void setDrawCallbackActive(DrawCallbackId id, bool active);
+    void setDrawCallbackActive(DrawCallbackId id, bool active, bool readsSceneDepth = true);
 
     /**
      * Install the D3D resources and the OpenVR IVRCompositor::Submit vtable hook if not already

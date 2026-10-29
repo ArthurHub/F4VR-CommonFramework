@@ -233,6 +233,13 @@ Two things decide whether that depth lines up with the overlay:
   with, and when the elected one does not cover the buffer, the world's depth is copied during the
   frame and resampled to the submitted size ([`SceneDepthResample.h`](SceneDepthResample.h)).
 
+**Captured only while a layer reads it.** Under an upscaler the copy is a full-screen draw every frame
+and a depth buffer the size of the eye texture (80 MB at 6144x3264), so the capture is on only while
+an active layer is occluded: a frame of activation icons, pointers or debug lines alone captures
+nothing. A `PrimitiveDrawRenderer` reads it when constructed `occluded`, the ImGui canvases while one
+on show is occluded, and a callback of a mod's own while it is active, unless it says otherwise
+(`setDrawCallbackActive`'s `readsSceneDepth`).
+
 Test with `SubmitFrame::sceneDepthComparison`, never a guess — it is the comparison the engine drew
 the world with, and the opposite sense hides exactly what should be visible.
 

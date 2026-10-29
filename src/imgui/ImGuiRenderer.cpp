@@ -1,5 +1,6 @@
 #include "ImGuiRenderer.h"
 
+#include <algorithm>
 #include <iterator>
 #include <mutex>
 #include <utility>
@@ -546,12 +547,14 @@ float4 main(PS_INPUT input) : SV_Target {
     void publish(RenderFrame&& frame)
     {
         const bool hasContent = !frame.empty();
+        // a frame of canvases that are all drawn on top needs no scene depth
+        const bool readsSceneDepth = std::ranges::any_of(frame.quads, &CanvasQuad::occluded);
         {
             std::scoped_lock lock(s_frameMutex);
             // the texture writes of a frame that was not drawn come before this frame's
             frame.textureWrites.insert(frame.textureWrites.begin(), std::make_move_iterator(s_frame.textureWrites.begin()), std::make_move_iterator(s_frame.textureWrites.end()));
             s_frame = std::move(frame);
         }
-        render::setDrawCallbackActive(s_drawCallback, hasContent);
+        render::setDrawCallbackActive(s_drawCallback, hasContent, readsSceneDepth);
     }
 }

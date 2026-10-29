@@ -135,6 +135,8 @@ namespace f4cf::render
         // in FO4VR Submit is called on the game thread during play, and from the loading screen's own
         // thread while one is up (checkSubmitThread).
         std::atomic<std::uint32_t> s_activeMask{ 0 };
+        // the active callbacks that read the scene depth, which is captured only while one does
+        std::atomic<std::uint32_t> s_sceneDepthMask{ 0 };
         std::atomic<std::size_t> s_callbackCount{ 0 };
         std::atomic<std::uint64_t> s_hookRuns{ 0 };
         std::atomic<bool> s_fenced{ false };
@@ -269,6 +271,14 @@ namespace f4cf::render
         bool drawsInFrame(const DrawCallbackEntry& entry)
         {
             return entry.order < DRAW_ORDER_DEBUG;
+        }
+
+        /**
+         * Whether an active callback reads the scene depth this frame, which is what the capture is on for.
+         */
+        bool sceneDepthRead()
+        {
+            return (s_activeMask.load(std::memory_order_relaxed) & s_sceneDepthMask.load(std::memory_order_relaxed)) != 0;
         }
 
         /**
@@ -417,7 +427,7 @@ namespace f4cf::render
             frame.device = device;
             frame.context = context;
             frame.renderTarget = rtv.Get();
-            const auto capturedDepth = sceneDepth::acquireForSubmittedTexture(submittedTexture);
+            const auto capturedDepth = sceneDepthRead() ? sceneDepth::acquireForSubmittedTexture(submittedTexture) : SceneDepth{};
             frame.sceneDepth = capturedDepth.readOnlyView;
             frame.sceneDepthComparison = capturedDepth.comparison;
             frame.width = static_cast<float>(targetDesc->Width);
@@ -528,9 +538,14 @@ namespace f4cf::render
             // it is still bound, and matched back to this texture by size. Publishing that size here
             // is what lets the capture tell the view we draw into from every other pass; the first
             // frame therefore captures nothing, because the commit ran before this ever executed.
-            sceneDepth::ensureInstalled();
-            sceneDepth::setSubmittedTexture(submittedTexture);
-            sceneDepth::setCaptureRequested(true);
+            // Only while an active layer reads it: a frame of icons, pointers or debug lines alone
+            // captures nothing.
+            const bool readsSceneDepth = sceneDepthRead();
+            if (readsSceneDepth) {
+                sceneDepth::ensureInstalled();
+                sceneDepth::setSubmittedTexture(submittedTexture);
+            }
+            sceneDepth::setCaptureRequested(readsSceneDepth);
 
             // Closes the capture frame however this function leaves - the early returns below among
             // them. A frame that never closes is one whose commits are counted into the last one.
@@ -546,7 +561,7 @@ namespace f4cf::render
                 return;
             }
 
-            const auto capturedDepth = sceneDepth::acquireForSubmittedTexture(submittedTexture);
+            const auto capturedDepth = readsSceneDepth ? sceneDepth::acquireForSubmittedTexture(submittedTexture) : SceneDepth{};
 
             SubmitFrame frame;
             frame.device = device;
@@ -832,12 +847,25 @@ namespace f4cf::render
         return static_cast<DrawCallbackId>(index);
     }
 
-    void setDrawCallbackActive(const DrawCallbackId id, const bool active)
+    /**
+     * Flip one callback between drawing and dormant. Dormant is genuinely free: when no callback is
+     * active the hook is one relaxed atomic read and a tail call to the original Submit.
+     *
+     * readsSceneDepth says whether the callback tests against SubmitFrame::sceneDepth. The scene depth is
+     * captured only while an active callback reads it: under an upscaler that is a copy the size of the
+     * eye texture every frame, which a layer that is never occluded would otherwise pay for.
+     */
+    void setDrawCallbackActive(const DrawCallbackId id, const bool active, const bool readsSceneDepth)
     {
         if (id >= MAX_DRAW_CALLBACKS) {
             return;
         }
         const std::uint32_t bit = 1u << id;
+        if (active && readsSceneDepth) {
+            s_sceneDepthMask.fetch_or(bit, std::memory_order_release);
+        } else {
+            s_sceneDepthMask.fetch_and(~bit, std::memory_order_release);
+        }
         if (active) {
             s_activeMask.fetch_or(bit, std::memory_order_release);
         } else {
