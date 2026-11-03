@@ -8,8 +8,9 @@ namespace my_mod
     class MyMod : public ModBase
     {
     public:
+        // 64 bytes of trampoline: the main loop, the overlays' player-space pass and the scene depth capture take 14 each
         MyMod()
-            : ModBase(Settings(Version::PROJECT, Version::NAME, &g_config, 32, true))
+            : ModBase(Settings(Version::PROJECT, Version::NAME, &g_config, 64, true))
         {}
 
     protected:

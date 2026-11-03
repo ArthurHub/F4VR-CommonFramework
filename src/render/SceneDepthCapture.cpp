@@ -809,10 +809,20 @@ namespace f4cf::render::sceneDepth
             return false;
         }
 
+        // the jump the call lands on: jmp qword ptr [rip+0] and the address. A write to a trampoline without room for it
+        // is fatal in F4SE, so a mod that allocated too little has no depth, and its occluded layers draw on top
+        constexpr std::size_t TRAMPOLINE_JUMP_SIZE = 14;
+        auto& trampoline = F4SE::GetTrampoline();
+        if (trampoline.free_size() < TRAMPOLINE_JUMP_SIZE) {
+            logger::error("scene depth hook not installed: {} bytes of trampoline are free, it needs {}; allocate more in ModBase::Settings",
+                trampoline.free_size(),
+                TRAMPOLINE_JUMP_SIZE);
+            return false;
+        }
+
         // write_call hands back whatever the call pointed at: CommitGraphicsState itself, or the hook
         // already there, which calls through to it in turn - so calling it as the original keeps both
-        s_original =
-            reinterpret_cast<CommitGraphicsStateFn>(F4SE::GetTrampoline().write_call<CALL_REL32_LENGTH>(callsite, reinterpret_cast<std::uintptr_t>(&hookedCommitGraphicsState)));
+        s_original = reinterpret_cast<CommitGraphicsStateFn>(trampoline.write_call<CALL_REL32_LENGTH>(callsite, reinterpret_cast<std::uintptr_t>(&hookedCommitGraphicsState)));
         if (!s_original) {
             logger::warn("scene depth hook not installed: the trampoline write returned no original");
             return false;
