@@ -13,9 +13,10 @@ namespace
 {
     /**
      * Resolve a UI nif path by probing several locations in order and returning the first that
-     * exists on disk: the path as given, then under "Data/Meshes/", then under this mod's own
-     * "Data/Meshes/<ModName>/" folder. The "Data/"-rooted candidates are returned verbatim so the
-     * loader does not re-prefix them. When none exist the path is returned unchanged so the
+     * exists on disk: the path as given, then under "Data/" (a path of the Data folder, as
+     * "Meshes/MyMod/f4cf/activation-sphere.nif"), then under "Data/Meshes/", then under this mod's
+     * own "Data/Meshes/<ModName>/" folder. The "Data/"-rooted candidates are returned verbatim so
+     * the loader does not re-prefix them. When none exist the path is returned unchanged so the
      * subsequent load surfaces a clear not-found error.
      */
     std::string resolveNifPath(const std::string& path)
@@ -26,6 +27,7 @@ namespace
 
         for (const auto& candidate : {
                  path,
+                 "Data\\" + relPath,
                  "Data\\Meshes\\" + relPath,
                  "Data\\Meshes\\" + g_mod->getName() + "\\" + relPath,
              }) {
@@ -960,9 +962,10 @@ namespace f4cf::f4vr
     }
 
     /**
-     * Resolve a texture path the way a vrui NIF path is resolved: as given, then under Data\Textures\, then under
-     * the mod's own Data\Textures\<ModName>\, taking the first loose file that exists. The path comes back unchanged
-     * when none does - a texture packed in a BA2 archive, or one that is simply missing, which the load then reports.
+     * Resolve a texture path the way a vrui NIF path is resolved: as given, then under Data\ (a path of the Data
+     * folder, as "Textures\MyMod\icon.dds"), then under Data\Textures\, then under the mod's own
+     * Data\Textures\<ModName>\, taking the first loose file that exists. The path comes back unchanged when none
+     * does - a texture packed in a BA2 archive, or one that is simply missing, which the load then reports.
      */
     std::string resolveTexturePath(const std::string_view path)
     {
@@ -971,7 +974,7 @@ namespace f4cf::f4vr
         const auto firstReal = given.find_first_not_of("/\\");
         const std::string relative = firstReal == std::string::npos ? given : given.substr(firstReal);
 
-        for (const auto& candidate : { given, "Data\\Textures\\" + relative, "Data\\Textures\\" + g_mod->getName() + "\\" + relative }) {
+        for (const auto& candidate : { given, "Data\\" + relative, "Data\\Textures\\" + relative, "Data\\Textures\\" + g_mod->getName() + "\\" + relative }) {
             std::error_code error;
             if (std::filesystem::exists(candidate, error)) {
                 return candidate;

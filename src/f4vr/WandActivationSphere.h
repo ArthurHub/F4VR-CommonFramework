@@ -62,8 +62,9 @@ namespace f4cf::f4vr
      * How an activation sphere's icon looks: a small image at the zone's center, turned to face the player and drawn
      * on top of the world. The image is best a white glyph on a transparent background, so the tint colors it.
      *
-     * The texture resolves like any framework resource: as given, then under Data\Textures\, then under this mod's own
-     * folder there — so "f4cf\activation-icon-hand.dds" finds Data\Textures\<ModName>\f4cf\activation-icon-hand.dds.
+     * The texture resolves like any framework resource: as given, then under Data\, then under Data\Textures\, then
+     * under this mod's own folder there — so "Textures\<ModName>\f4cf\activation-icon-hand.dds" and
+     * "f4cf\activation-icon-hand.dds" both find Data\Textures\<ModName>\f4cf\activation-icon-hand.dds.
      */
     struct ActivationIconStyle
     {

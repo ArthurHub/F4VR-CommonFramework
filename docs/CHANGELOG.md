@@ -7,6 +7,15 @@ and tooling tweaks are left to the git history.
 Versions follow `set(VERSION ...)` in the root [`CMakeLists.txt`](../CMakeLists.txt). While the
 major version is `0`, a minor bump may break the API; the **Upgrading** notes say what to change.
 
+## 0.5.1 — unreleased
+
+- **Asset paths of the Data folder**: a texture or nif path can be written from the Data folder, as
+  `Textures\MyMod\f4cf\activation-icon-hand.dds`, which `resolveTexturePath` and `resolveNifPath` try after the
+  path as given. `mod-template`'s config and the docs write `sIcon`, `sSphereNif` and `sSphereTexture` so, as
+  Mods Config FO4 VR's choices of the framework's files write them; the short `f4cf\...` form still resolves.
+  **Upgrading:** a mod whose config sets `sIcon` writes it in this form, or its row in Mods Config FO4 VR is
+  invalid until the player picks an icon.
+
 ## 0.5.0 — unreleased
 
 - **A binding of any hand**: a binding's `hand` can be `any`, which fires on whichever controller works

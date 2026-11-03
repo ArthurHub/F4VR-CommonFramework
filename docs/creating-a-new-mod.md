@@ -168,7 +168,7 @@ knowing):
 | `CMakeLists.txt` | `set(NAME "MyMod")`, `set(FRIENDLY_NAME "My Mod")`, and `set(VERSION 0.1.0)` at the very top |
 | `src/HelloVR.h` / `.cpp` | class `MyMod` → `HelloVR`, `namespace my_mod` → `hello_vr`, global `g_myMod` → `g_helloVR`, `#include "MyMod.h"` |
 | `src/Config.h` / `.cpp` | `namespace my_mod` → `hello_vr` |
-| `data/config/HelloVR.toml` | the `[MyMod]` section header and the `[MyMod_AnActivationSphere]` section |
+| `data/config/HelloVR.toml` | the `[MyMod]` section header, the `[MyMod_AnActivationSphere]` section, and the `Textures\MyMod\` of its `sIcon` |
 | `vcpkg.json` | `"name": "f4vr-my-mod"` (cosmetic) |
 | `README.md` | the template README's placeholders |
 | `CLAUDE.md` | the mod name, `namespace my_mod`, `g_myMod` and the paths to the renamed files |

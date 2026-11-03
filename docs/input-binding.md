@@ -9,7 +9,7 @@ and their defaults, is up to each mod. The formats on this page are the same in 
 
 The file is TOML: a binding is a small table in braces, `{ hand = "offhand", type = "tap", button = "grip" }`,
 any text value goes in double quotes, a number is written as it is, and a Windows path goes in single quotes,
-where a backslash is just a backslash (`sIcon = 'f4cf\icon.dds'`).
+where a backslash is just a backslash (`sIcon = 'Textures\MyMod\icon.dds'`).
 
 > **Edits apply live.** Save the file while the game runs and the change takes effect right away, with no
 > restart. A value that can't be read is logged as a warning, and the setting uses the mod's default. A
@@ -105,8 +105,9 @@ zone.
 To change how they look:
 
 - `fIconSize`: the icon's size in game units (one unit is about 1.4 cm).
-- `sIcon`: which icon. `f4cf\activation-icon-hand.dds` (an open hand), `f4cf\activation-icon-ring.dds` (a
-  ring), `f4cf\activation-icon-circle.dds` (a dot), or an icon the mod ships.
+- `sIcon`: which icon, as a path in the Data folder. The mod's `Textures\<ModName>\f4cf\` has
+  `activation-icon-hand.dds` (an open hand), `activation-icon-ring.dds` (a ring) and `activation-icon-circle.dds`
+  (a dot), or the mod may ship an icon of its own.
 - `sSphereStyle`: the sphere's color and strength, e.g. `cyan-subtle` (see [the presets](#the-sphere)).
 
 ### Change the button, or turn the gesture off
@@ -344,7 +345,7 @@ than popping.
 | Key          | What it sets                                                                                                                                                                                                                                                                                                                                                                              |
 | ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `sShowIcon`  | When it's drawn (see above).                                                                                                                                                                                                                                                                                                                                                              |
-| `sIcon`      | The image: a `.dds` path, resolved like the mod's other textures. The framework ships `f4cf\activation-icon-hand.dds` (an open hand, "reach here", the framework's default), `f4cf\activation-icon-ring.dds` (a plain ring) and `f4cf\activation-icon-circle.dds` (a filled dot); a mod may ship its own. A white glyph on a transparent background works best, since the tint colors it. |
+| `sIcon`      | The image: a `.dds` path in the Data folder, resolved like the mod's other textures. The framework ships `Textures\<ModName>\f4cf\activation-icon-hand.dds` (an open hand, "reach here", the framework's default), `activation-icon-ring.dds` (a plain ring) and `activation-icon-circle.dds` (a filled dot) beside it; a mod may ship its own. A white glyph on a transparent background works best, since the tint colors it. |
 | `cIconColor` | The tint, multiplied into the image: `{ rgb = [r, g, b], alpha = a }`, each a whole number in `0..255`; `alpha` is its opacity. A key left out keeps the default's.                                                                                                                                                                                                                       |
 | `fIconSize`  | The size of its longer side, in game units.                                                                                                                                                                                                                                                                                                                                               |
 
@@ -357,8 +358,8 @@ than popping.
 | `cSphereColor`       | The color as `{ rgb = [r, g, b], alpha = a }`, each a whole number in `0..255` (e.g. `{ rgb = [255, 51, 51] }`). `alpha` is the overall opacity (the activation presets draw at `27`-`40`). A key left out keeps the preset's.                                                                        |
 | `fSphereGlow`        | Brightness, `0..1`. `1` is as bright as the `debug` sphere; the activation presets sit at `0.4`-`0.5`.                                                                                                                                                                                                |
 | `aSphereFalloff`     | How the opacity fades from the middle of the sphere to its edge, as `[center, rim]` (e.g. `[0.045, 1.0]`). The activation mesh keeps its middle faint so it reads as a glowing rim; equal values draw it evenly.                                                                                      |
-| `sSphereTexture`     | The texture set on the mesh (a `.dds` path, resolved like the mod's other textures). `none` keeps the texture the mesh itself names.                                                                                                                                                                  |
-| `sSphereNif`         | The `.nif` mesh drawn (resolved like any prop nif).                                                                                                                                                                                                                                                   |
+| `sSphereTexture`     | The texture set on the mesh (a `.dds` path in the Data folder, resolved like the mod's other textures). Left out or empty, the preset's; `none` keeps the texture the mesh itself names.                                                                                                                                                                  |
+| `sSphereNif`         | The `.nif` mesh drawn (a path in the Data folder, resolved like any prop nif). Left out or empty, the framework's `Meshes\<ModName>\f4cf\activation-sphere.nif`.                                                                                                                                                                                                                                                   |
 | `fSphereScale`       | The drawn size relative to the zone: `1` matches it, `< 1` draws a smaller marker inside the real zone so the hint doesn't fill your whole reach. The hit test always uses the full `tZone`.                                                                                                          |
 | `sSphereOrientation` | Which way it faces: `body` (default — turns with the direction your body faces, kept upright, so a sphere on your body looks still as you turn), `hmd` (turns with the direction your head faces), or `world` (holds still in the world). Only a patterned look such as `debug` shows the difference. |
 
@@ -389,7 +390,7 @@ sEntryHaptic = "Tick"
 sPrimaryHaptic = "DoubleClick"
 sSecondaryHaptic = "Click"
 sShowIcon = "whenavailable"
-sIcon = 'f4cf\activation-icon-ring.dds'
+sIcon = 'Textures\MyMod\f4cf\activation-icon-ring.dds'
 sShowSphere = "wheninside"
 sSphereStyle = "cyan-subtle"
 ```

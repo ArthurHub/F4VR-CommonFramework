@@ -14,9 +14,9 @@ namespace f4cf::f4vr
      * the mesh nor the texture path inside it names a mod, so any mod ships the same files. Start from a named preset
      * (findSphereStylePreset) and override single values on top.
      *
-     * The mesh and texture paths resolve like any other framework resource: as given, then under Data\Meshes\ /
-     * Data\Textures\, then under this mod's own folder there — so "f4cf\activation-sphere.nif" finds
-     * Data\Meshes\<ModName>\f4cf\activation-sphere.nif.
+     * The mesh and texture paths resolve like any other framework resource: as given, then under Data\, then under
+     * Data\Meshes\ / Data\Textures\, then under this mod's own folder there — so "Meshes\<ModName>\f4cf\activation-sphere.nif"
+     * and "f4cf\activation-sphere.nif" both find Data\Meshes\<ModName>\f4cf\activation-sphere.nif.
      */
     struct SphereStyle
     {

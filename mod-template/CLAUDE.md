@@ -79,7 +79,7 @@ TODO: add a row for each component as the mod grows.
 
 - The main section is `[MyMod]`; it must match `NAME` in `CMakeLists.txt`, which the config reads back as both the file name and the default section.
 - `[Debug]` holds the framework's keys (log level and pattern, flow flags, data dumps, debug draw).
-- To add a value: a member in `Config.h`, a read in `Config::loadConfigInternal()` (`config[SECTION]["key"].value_or(default)`, which gives the default for a key that is missing or of another type), and the key in the shipped file. Write a float with a decimal point (`1.0`) and a string in quotes; a Windows path in single quotes (`'f4cf\icon.dds'`), where a backslash is not an escape.
+- To add a value: a member in `Config.h`, a read in `Config::loadConfigInternal()` (`config[SECTION]["key"].value_or(default)`, which gives the default for a key that is missing or of another type), and the key in the shipped file. Write a float with a decimal point (`1.0`) and a string in quotes; a Windows path in single quotes (`'Textures\MyMod\icon.dds'`), where a backslash is not an escape.
 - `ConfigBase` watches the file and reloads it on change, so edits apply while the game runs. The reload runs on the watcher's thread: apply anything that calls into the engine in a `subscribeForConfigChangedEvent` callback, which the framework calls on the game thread at the start of the next frame, or from `onFrameUpdate()`.
 - Bump `iVersion` in `[Debug]` when the shipped file changes, so existing users' files are migrated. A value whose type changes is left to `updateConfigToLatestVersionCustom`. Saves (`saveConfigValue(s)`) change only the values in the file and keep its comments and layout.
 
