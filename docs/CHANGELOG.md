@@ -9,6 +9,14 @@ major version is `0`, a minor bump may break the API; the **Upgrading** notes sa
 
 ## 0.5.1 — unreleased
 
+- **A held thumbstick scrolls faster**: an axis push (`check()` of an axis binding, `isAxisPressed`,
+  `isThumbstickPressed`, `getAxisPressedDirection`, `getThumbstickPressedDirection`) steps at once on a fresh
+  push, repeats first after `max(cooldown, 0.35s)`, then every `cooldown`, halved after 1s and quartered after
+  2.5s of holding. A binding's `accelerate = false` (the `accelerate` parameter of the calls) keeps the repeat
+  at `cooldown`. **Upgrading:** the feel changes with no code change: a quick second flick within the cooldown
+  now steps, a flick shorter than 0.35s is one step where it could be two, and a long hold speeds up; a push
+  past the threshold on both components reads as the larger one, which only a threshold under 0.71 allows.
+
 - **Asset paths of the Data folder**: a texture or nif path can be written from the Data folder, as
   `Textures\MyMod\f4cf\activation-icon-hand.dds`, which `resolveTexturePath` and `resolveNifPath` try after the
   path as given. `mod-template`'s config and the docs write `sIcon`, `sSphereNif` and `sSphereTexture` so, as

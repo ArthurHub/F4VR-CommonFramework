@@ -147,6 +147,7 @@ A binding is a table of these keys, of which [Change a button](#change-a-button)
 | `axis`      | Optional, for `axis`        | Which analog axis, the thumbstick when left out, see [Thumbstick & axis](#thumbstick--axis-bindings)               |
 | `direction` | For `axis`                  | Which way it is pushed: `up`, `down`, `left`, `right`, or `any` / `updown` / `rightleft` for the stick moved       |
 | `threshold` | Optional, for `axis`        | How far it is pushed, 0–1, `0.85` when left out                                                                    |
+| `accelerate` | Optional, for `axis`       | `false` keeps a held push repeating at one pace, see [Thumbstick & axis](#thumbstick--axis-bindings)               |
 | `suppress`  | Optional                    | `true` hides the button from the game while the binding is in use, see [Suppressing](#suppressing-the-game-input) |
 | `modifier`  | Optional                    | A button held down at the same time, see [Modifiers](#modifiers-chords)                                            |
 
@@ -244,6 +245,11 @@ kSqueeze = { hand = "right", type = "axis", axis = "trigger", direction = "up", 
 - `axis` is `thumbstick` (also `touchpad` / `joystick`), `trigger`, or `grip`. Leave it out for the
   thumbstick.
 - `threshold` is how far the axis must travel (0–1) before it counts. Default `0.85`.
+- **Held, it repeats.** A push fires at once; kept pushed, it fires again after about a third of a second,
+  then steadily, and faster the longer it is held: twice as fast after a second, four times after two and
+  a half. A long list scrolls quickly, and a short flick is still one step. `accelerate = false` keeps the
+  repeat at one pace, for an action that must not run away, such as switching tabs. Let go (below about
+  70% of the threshold) or push another way, and the next push starts over.
 
 | Example                                                                                  | Meaning                                                  |
 | ---------------------------------------------------------------------------------------- | -------------------------------------------------------- |

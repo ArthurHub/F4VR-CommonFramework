@@ -26,6 +26,7 @@ namespace f4cf::vrcf
      *     modifier = { hand = "offhand", button = "thumbstick" } }
      *   { hand = "left", type = "tap", button = "grip", suppress = true }
      *   { hand = "primary", type = "axis", axis = "thumbstick", direction = "up", threshold = 0.5 }
+     *   { hand = "offhand", type = "axis", direction = "updown", accelerate = false }
      *   { type = "none" }
      *
      * The words, with their aliases:

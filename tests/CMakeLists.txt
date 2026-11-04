@@ -12,6 +12,7 @@ if(NOT TARGET Catch2::Catch2WithMain)
 endif()
 
 add_executable(${PROJECT_NAME}_tests
+  AxisRepeatTests.cpp
   ConfigFileTests.cpp
   ConfigMigrationTests.cpp
   ConfigOffsetsJsonTests.cpp
@@ -43,6 +44,7 @@ add_executable(${PROJECT_NAME}_tests
   ${SOURCE_DIR}/perf/Report.cpp
   ${SOURCE_DIR}/render/DdsHeader.cpp
   ${SOURCE_DIR}/render/SceneDepthShared.cpp
+  ${SOURCE_DIR}/vrcf/AxisRepeat.cpp
   ${SOURCE_DIR}/vrcf/InputBindingParser.cpp
   ${SOURCE_DIR}/vrui/UIDevLayoutFile.cpp
 )
