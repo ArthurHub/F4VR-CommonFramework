@@ -362,6 +362,17 @@ namespace mods_config::api
         virtual void reloadValues(IClient* client) const = 0;
 
         /**
+         * Sets the pending value of a setting of the client's config spec by its id, in its valueType, as the player's
+         * edit in the menu: a mod's own UI hands its edits back with it, and the menu's Save writes them. A color, a
+         * transform and a binding are the text of their TOML table. A value that is the baseline makes the setting clean,
+         * and a `live` one is told back with `onChange`, as a player's edit is. False, with nothing changed and why in the
+         * menu's log, unless the menu, shown or minimized, shows the client's mod, from inside the client's `onChange` or
+         * `onSaved`, and for a value it refuses: of an id it has no setting of, of a read-only setting, of another type, or
+         * no value of the setting, as one outside its limits.
+         */
+        virtual bool setPendingValue(IClient* client, const char* settingId, const SettingValue* value) const = 0;
+
+        /**
          * Finds Mods Config FO4 VR's DLL and gets its API. Returns 0 when the API is there, and else:
          * 1 for a game with no Mods Config FO4 VR, 2 for one that does not export the API, 3 for one that gives none,
          * and 4 for an API older than minVersion.
@@ -719,6 +730,24 @@ namespace mods_config::api
             if (_api) {
                 _api->reloadValues(this);
             }
+        }
+
+        /**
+         * Sets the pending value of a setting of the config spec by its id, as the player's edit in the menu: a UI of
+         * the mod's own hands its edits back with it, and saves nothing itself. A `live` one comes back to the change
+         * handlers. One whose handler reloads the config, as the framework's live preview does, drops the values not
+         * handed over yet: hand over each as it changes, or all at once. False while it is not connected, from inside a
+         * handler of the changes or the Saves, and for a value the menu refuses, whose log says why.
+         */
+        bool setPendingValue(const std::string_view id, const Value& value)
+        {
+            if (!_api) {
+                return false;
+            }
+            const std::string settingId(id);
+            std::string text;
+            const auto setting = toSettingValue(value, text);
+            return _api->setPendingValue(this, settingId.c_str(), &setting);
         }
 
         /**

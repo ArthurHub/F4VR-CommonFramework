@@ -96,12 +96,21 @@ const bool spheresShown = modsConfig.shownPage() == "spheres";
 
 // the mod's wrist button opens its settings in the menu, on a page by its id
 modsConfig.openMenu("body");
+
+// the mod's own UI hands an edit back to the menu as a pending value, by the setting's id, which
+// the menu's Save writes
+modsConfig.setPendingValue("fScale:Main", 1.5f);
 ```
 
 - A name of a function, a state and a setting's options is registered once: the first stays. A
   quick launch entry adds its function, so its name is a function's.
 - `minimizeMenu` and `restoreMenu` move the menu out of the way and back, from any flow of the mod.
   `restoreMenu` does nothing while the menu is not minimized, as the player showed or closed it.
+- `setPendingValue` hands an edit of the mod's own UI back to the menu as a setting's pending value,
+  in its valueType, so the menu's Save writes it and the UI saves nothing itself. The menu takes it
+  while it shows the mod, shown or minimized, and not from a handler of `subscribeToChanges` or
+  `subscribeToSaves`. A `live` one comes back as a preview, whose override reloads the config, which
+  drops a value the UI has not handed over yet: hand over each as it changes, or all of them at once.
 - A function returns at once: work that takes longer goes on after it, and a state tells the rows
   that it runs.
 - A state's setter applies a value the menu gives it: each preview of a `live` setting, its Discard
