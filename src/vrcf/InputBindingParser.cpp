@@ -68,7 +68,7 @@ namespace f4cf::vrcf
         constexpr auto TYPES = "tap, press, longpress, double, hold, release, touch, thumbstick, axis";
         constexpr auto BUTTONS = "trigger, grip, a, b, thumbstick, menu, system";
         constexpr auto AXES = "thumbstick, trigger, grip";
-        constexpr auto DIRECTIONS = "up, down, left, right";
+        constexpr auto DIRECTIONS = "up, down, left, right, any, updown, rightleft";
         // the types of a binding's table, where an axis is one type and none is the disabled binding
         constexpr auto TABLE_TYPES = "tap, press, longpress, double, hold, release, touch, axis, none";
         constexpr auto TABLE_KEYS = "hand, type, button, axis, direction, duration, threshold, suppress, modifier";
@@ -256,6 +256,15 @@ namespace f4cf::vrcf
         if (t == "right") {
             return Direction::Right;
         }
+        if (t == "any" || t == "move") {
+            return Direction::Any;
+        }
+        if (t == "updown" || t == "vertical") {
+            return Direction::UpDown;
+        }
+        if (t == "rightleft" || t == "leftright" || t == "horizontal") {
+            return Direction::RightLeft;
+        }
         return std::nullopt;
     }
 
@@ -341,7 +350,8 @@ namespace f4cf::vrcf
     }
 
     /**
-     * The canonical word for a direction - up, down, left, right - which parseDirection reads back as the same one.
+     * The canonical word for a direction - up, down, left, right, any, updown, rightleft - which parseDirection
+     * reads back as the same one.
      */
     std::string directionName(const Direction direction)
     {
@@ -352,6 +362,12 @@ namespace f4cf::vrcf
             return "left";
         case Direction::Right:
             return "right";
+        case Direction::Any:
+            return "any";
+        case Direction::UpDown:
+            return "updown";
+        case Direction::RightLeft:
+            return "rightleft";
         default:
             return "up";
         }

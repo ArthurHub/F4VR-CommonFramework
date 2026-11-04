@@ -84,7 +84,10 @@ if (VRControllers.check(openMenu)) { /* binding triggered */ }
 ```
 
 `check()` dispatches by `type` to the matching read method above; for `AxisDirection` it uses the
-`axis` + `direction` + `threshold` + `cooldown` fields instead of `button`. The optional `modifier`
+`axis` + `direction` + `threshold` + `cooldown` fields instead of `button`. A `direction` of
+`Direction::Any`, `UpDown` or `RightLeft` accepts a push either way it names (and draws its prompt as the
+stick moved, not pushed); the getters that report a pushed direction only ever return the four single ones.
+The optional `modifier`
 must be held down for the binding to fire — on the binding's own hand by default, or on the
 `InputModifier::hand` you specify.
 

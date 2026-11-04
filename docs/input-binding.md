@@ -145,7 +145,7 @@ A binding is a table of these keys, of which [Change a button](#change-a-button)
 | `button`    | For a button type           | Which button, see [Button](#button)                                                                                |
 | `duration`  | Optional, for a button type | Seconds, whose meaning depends on the type, see [Activation type](#activation-type)                                |
 | `axis`      | Optional, for `axis`        | Which analog axis, the thumbstick when left out, see [Thumbstick & axis](#thumbstick--axis-bindings)               |
-| `direction` | For `axis`                  | Which way it is pushed: `up`, `down`, `left` or `right`                                                            |
+| `direction` | For `axis`                  | Which way it is pushed: `up`, `down`, `left`, `right`, or `any` / `updown` / `rightleft` for the stick moved       |
 | `threshold` | Optional, for `axis`        | How far it is pushed, 0–1, `0.85` when left out                                                                    |
 | `suppress`  | Optional                    | `true` hides the button from the game while the binding is in use, see [Suppressing](#suppressing-the-game-input) |
 | `modifier`  | Optional                    | A button held down at the same time, see [Modifiers](#modifiers-chords)                                            |
@@ -235,7 +235,12 @@ kScrollUp = { hand = "primary", type = "axis", direction = "up" }
 kSqueeze = { hand = "right", type = "axis", axis = "trigger", direction = "up", threshold = 0.7 }
 ```
 
-- `direction` is `up`, `down`, `left`, or `right`.
+- `direction` is `up`, `down`, `left`, or `right`, or for the stick **moved** rather than pushed one way:
+  `any` (also `move`) for every direction, `updown` (`vertical`) or `rightleft` (`leftright` / `horizontal`)
+  for the two of one axis. Such a binding fires on a push past the threshold in any direction it accepts,
+  and its prompt shows the stick with arrowheads around it, so a player reads "move the stick", not "push it
+  up" or "click it". It suits a binding that names the stick to walk, aim or adjust with: the mod reads the
+  analog value itself, from the binding's hand.
 - `axis` is `thumbstick` (also `touchpad` / `joystick`), `trigger`, or `grip`. Leave it out for the
   thumbstick.
 - `threshold` is how far the axis must travel (0–1) before it counts. Default `0.85`.
@@ -244,6 +249,7 @@ kSqueeze = { hand = "right", type = "axis", axis = "trigger", direction = "up", 
 | ---------------------------------------------------------------------------------------- | -------------------------------------------------------- |
 | `{ hand = "primary", type = "axis", direction = "up" }`                                  | Primary thumbstick pushed up                             |
 | `{ hand = "offhand", type = "axis", direction = "left", threshold = 0.5 }`               | Off-hand thumbstick pushed left past half travel         |
+| `{ hand = "primary", type = "axis", direction = "updown" }`                              | Primary thumbstick moved up or down, as to adjust a value |
 | `{ hand = "right", type = "axis", axis = "trigger", direction = "up", threshold = 0.7 }` | Right trigger squeezed past 0.7 (analog, not the button) |
 
 ## Modifiers (chords)

@@ -96,7 +96,8 @@ namespace f4cf::vrui
         }
 
         /**
-         * A thumbstick direction as an icon's name ends with it.
+         * A thumbstick direction as an icon's name ends with it: a push's one way, or the stick moved every
+         * way (move) or along one axis, drawn with arrowheads around its rim.
          */
         std::string_view directionIconName(const vrcf::Direction direction)
         {
@@ -107,6 +108,12 @@ namespace f4cf::vrui
                 return "left";
             case vrcf::Direction::Right:
                 return "right";
+            case vrcf::Direction::Any:
+                return "move";
+            case vrcf::Direction::UpDown:
+                return "updown";
+            case vrcf::Direction::RightLeft:
+                return "rightleft";
             case vrcf::Direction::Up:
             default:
                 return "up";
@@ -143,6 +150,12 @@ namespace f4cf::vrui
                 return "LEFT";
             case vrcf::Direction::Right:
                 return "RIGHT";
+            case vrcf::Direction::Any:
+                return "MOVE";
+            case vrcf::Direction::UpDown:
+                return "UP/DOWN";
+            case vrcf::Direction::RightLeft:
+                return "LEFT/RIGHT";
             case vrcf::Direction::Up:
             default:
                 return "UP";
@@ -221,8 +234,9 @@ namespace f4cf::vrui
      * - Press and Tap show the button alone, and every other way of working it the button with its mark: a
      *   clock (a long press), an arrow down onto a bar (a hold), 2x (a double press), an arrow up off a bar
      *   (a release), ripples (a touch).
-     * - A thumbstick push shows the thumbstick with that direction's arrow, and a pull of the trigger or the
-     *   grip axis that button alone.
+     * - A thumbstick push shows the thumbstick with that direction's arrow; the stick moved any way or along
+     *   one axis (Any, UpDown, RightLeft) shows it with arrowheads around its rim, so it never reads as a
+     *   push. A pull of the trigger or the grip axis shows that button alone.
      *
      * Empty for what no one icon shows: a chord (see bindingIconPaths), the system button, an axis other
      * than those three, and a disabled binding.

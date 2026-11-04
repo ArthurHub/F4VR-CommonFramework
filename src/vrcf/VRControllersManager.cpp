@@ -1,5 +1,6 @@
 #include "VRControllersManager.h"
 
+#include <cmath>
 #include <numbers>
 
 #include "VRControllersHaptic.h"
@@ -580,14 +581,32 @@ namespace f4cf::vrcf
         return current.rAxis[axisIndex];
     }
 
+    /**
+     * Whether the axis is pushed past `threshold` in `direction`, or in any direction it accepts (Any, UpDown,
+     * RightLeft), at most once per `cooldown`. UpDown and RightLeft read their own component of the axis, since
+     * getAxisPressed reports x before y and a diagonal push would otherwise miss an UpDown.
+     */
     bool VRControllersManager::ControllerState::isAxisPressedAndClear(const uint32_t axisIndex, const Direction direction, const float now, const float threshold,
         const float cooldown)
     {
         if (!valid || now - axisLastPassedPressCheck[axisIndex] < cooldown) {
             return false;
         }
-        const auto pressedDirection = getAxisPressed(axisIndex, threshold);
-        const bool isPressed = pressedDirection.has_value() && pressedDirection.value() == direction;
+        bool isPressed;
+        switch (direction) {
+        case Direction::Any:
+            isPressed = getAxisPressed(axisIndex, threshold).has_value();
+            break;
+        case Direction::UpDown:
+            isPressed = std::abs(getAxis(axisIndex).y) > threshold;
+            break;
+        case Direction::RightLeft:
+            isPressed = std::abs(getAxis(axisIndex).x) > threshold;
+            break;
+        default:
+            isPressed = getAxisPressed(axisIndex, threshold) == direction;
+            break;
+        }
         if (isPressed) {
             axisLastPassedPressCheck[axisIndex] = now;
         }

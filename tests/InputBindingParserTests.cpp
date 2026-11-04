@@ -66,6 +66,13 @@ TEST_CASE("InputBindingParser: the words of a hand, a type, a button, an axis an
     REQUIRE(parseDirection("down") == Direction::Down);
     REQUIRE(parseDirection("left") == Direction::Left);
     REQUIRE(parseDirection("right") == Direction::Right);
+    REQUIRE(parseDirection("any") == Direction::Any);
+    REQUIRE(parseDirection("move") == Direction::Any);
+    REQUIRE(parseDirection("updown") == Direction::UpDown);
+    REQUIRE(parseDirection("vertical") == Direction::UpDown);
+    REQUIRE(parseDirection("rightleft") == Direction::RightLeft);
+    REQUIRE(parseDirection("leftright") == Direction::RightLeft);
+    REQUIRE(parseDirection("horizontal") == Direction::RightLeft);
     REQUIRE_FALSE(parseDirection("forward"));
 }
 
@@ -139,6 +146,12 @@ TEST_CASE("InputBindingParser: an axis binding is a hand, the axis, and the dire
 
         REQUIRE(binding.axis == Axis::Thumbstick);
         REQUIRE(binding.direction == Direction::Left);
+    }
+    SECTION("the stick, moved any way or along one axis")
+    {
+        REQUIRE(parsed("offhand thumbstick move").direction == Direction::Any);
+        REQUIRE(parsed("primary stick updown 0.5").direction == Direction::UpDown);
+        REQUIRE(parsed("right thumbstick rightleft").direction == Direction::RightLeft);
     }
 }
 
@@ -359,7 +372,7 @@ TEST_CASE("InputBindingParser: a table that is not a binding says why, naming th
                  "direction is not a key of a tap binding, which has hand, type, button, duration, suppress and modifier" },
              { R"({ hand = "offhand", type = "axis", button = "grip", direction = "up" })",
                  "button is not a key of a axis binding, which has hand, type, axis, direction, threshold, suppress and modifier" },
-             { R"({ hand = "offhand", type = "axis" })", "the direction is missing, one of up, down, left, right" },
+             { R"({ hand = "offhand", type = "axis" })", "the direction is missing, one of up, down, left, right, any, updown, rightleft" },
              { R"({ hand = "offhand", type = "tap", button = "grip", suppress = "yes" })", "suppress is not true or false" },
              { R"({ hand = "offhand", type = "tap", button = "grip", modifier = "grip" })", R"(modifier is not a table, as { hand = "offhand", button = "grip" })" },
              { R"({ hand = "offhand", type = "tap", button = "grip", modifier = { hand = "left" } })",
@@ -382,6 +395,9 @@ TEST_CASE("InputBindingParser: a binding's table text reads back as the binding,
              { "primary press b +grip", R"({ hand = "primary", type = "press", button = "menu", modifier = { button = "grip" } })" },
              { "primary thumbstick up", R"({ hand = "primary", type = "axis", axis = "thumbstick", direction = "up" })" },
              { "right axis trigger down 0.5", R"({ hand = "right", type = "axis", axis = "trigger", direction = "down", threshold = 0.5 })" },
+             { "offhand thumbstick move", R"({ hand = "offhand", type = "axis", axis = "thumbstick", direction = "any" })" },
+             { "primary thumbstick vertical", R"({ hand = "primary", type = "axis", axis = "thumbstick", direction = "updown" })" },
+             { "left thumbstick horizontal", R"({ hand = "left", type = "axis", axis = "thumbstick", direction = "rightleft" })" },
              { "any tap grip +any:a", R"({ hand = "any", type = "tap", button = "grip", modifier = { hand = "any", button = "a" } })" },
              { "none", R"({ type = "none" })" },
          }) {

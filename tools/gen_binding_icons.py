@@ -13,12 +13,17 @@ Every icon is up to three parts, drawn in white for a tint to colour, each knock
     ripples for a touch. A press and a tap have none. A thumbstick push is a smaller disk with its direction's
     arrow, over the stick's bottom right.
 
+A disk in a corner is one action. The thumbstick moved rather than pushed one way, a binding's direction any,
+updown or rightleft, is instead drawn as solid arrowheads around its rim, one for each way, so it never reads as
+a push.
+
 The names are what bindingIconPath builds:
 
   <side>-trigger, <side>-grip, <side>-thumbstick       pressed or tapped
   x, y (left), a, b (right)                            a letter pressed or tapped
   <side>-<how>-<button>                                how: longpress, hold, double, release, touch
   <side>-thumbstick-<direction>                        pushed: up, down, left, right
+  <side>-thumbstick-<motion>                           moved: move (direction any), updown, rightleft
 
 <side> is left or right, and <button> trigger, grip, thumbstick or the letter. Each is 80 px tall with the button
 centred in it, so a prompt draws every button at one scale, and as wide as it needs, in whole multiples of 4.
@@ -50,6 +55,8 @@ CAP_RATIO = 0.711    # Roboto's capital height as a share of its font size
 # how a button is worked, as an icon's name has it
 HOWS = ('longpress', 'hold', 'double', 'release', 'touch')
 DIRECTIONS = ('up', 'down', 'left', 'right')
+# the ways the thumbstick is moved freely, by the arrowheads around its rim
+MOTIONS = {'move': DIRECTIONS, 'updown': ('up', 'down'), 'rightleft': ('left', 'right')}
 SIDES = {'left': ('x', 'y'), 'right': ('a', 'b')}
 
 # where the controller's circle and the marks sit against each button: the circle's top left, and the middle of the
@@ -63,6 +70,9 @@ LAYOUT = {
 MARK_RADIUS, MARK_SCALE = 16.5, 1.5     # the mark of how a button is worked, and its symbol's size
 ARROW_RADIUS, ARROW_SCALE = 13.4, 1.08  # a push's arrow, smaller
 GLYPH_WIDTH = 2.6                       # the symbol's lines, before its scale
+STICK_CENTER, STICK_RIM = 26, 24.4      # the thumbstick's middle and its rim's radius, in its own part
+HEAD_BASE, HEAD_DEPTH = 14, 8           # an arrowhead around the moved thumbstick, across and along its way
+HEAD_GAP = 1.6                          # between the rim and an arrowhead's base
 
 
 # ---------------- drawing ----------------
@@ -164,7 +174,7 @@ def ring(size, c, r, width):
 def thumbstick():
     """The ring and its knob, with depth: a half-opaque line around the ring as its raised rim, and a half-opaque
     shadow to the knob's lower right, a pixel apart from it, as light from the upper left."""
-    size, c, radius, rim = (52, 52), 26, 20, 24.4
+    size, c, radius, rim = (2 * STICK_CENTER, 2 * STICK_CENTER), STICK_CENTER, 20, STICK_RIM
     alpha = np.maximum(ring(size, c, rim, 2.0) * HALF, ring(size, c, radius, STROKE))
     shadow = np.clip(disk(size, c + 2.4, c + 2.4, 6.8) - disk(size, c, c, 7.5), 0, 255) * SHADOW
     alpha = np.maximum(alpha, shadow)
@@ -233,6 +243,18 @@ def mark(how, radius, scale):
     return Part(white(alpha), (xx - c + 0.5) ** 2 + (yy - c + 0.5) ** 2 <= radius ** 2)
 
 
+def arrowhead(direction):
+    """A solid arrowhead pointing `direction`, HEAD_BASE px across and HEAD_DEPTH px along it."""
+    w, h = (HEAD_BASE, HEAD_DEPTH) if direction in ('up', 'down') else (HEAD_DEPTH, HEAD_BASE)
+    size = (w + 2, h + 2)
+    points = {'up': [(1, 1 + h), (1 + w / 2, 1), (1 + w, 1 + h)],
+              'down': [(1, 1), (1 + w / 2, 1 + h), (1 + w, 1)],
+              'left': [(1 + w, 1), (1, 1 + h / 2), (1 + w, 1 + h)],
+              'right': [(1, 1), (1 + w, 1 + h / 2), (1, 1 + h)]}[direction]
+    alpha = supersampled(size, lambda d, s: d.polygon([(x * s, y * s) for x, y in points], fill=255)).resize(size, Image.LANCZOS)
+    return Part(white(alpha), np.array(alpha) > 40)
+
+
 def compose(parts):
     """The icon: parts [(Part, x, y)] from the bottom up, placed against the button's top left at (0, 0) - which
     is the second part - each knocking a 1 px gap into what is under it, in a canvas HEIGHT px tall with the
@@ -263,9 +285,9 @@ def centred(part, x, y):
     return part, round(x - part.img.width / 2), round(y - part.img.height / 2)
 
 
-def icon(side, button, how=None, lit=None):
+def icon(side, button, how=None, lit=None, motion=None):
     """The icon of a button on a controller, worked as `how` (one of HOWS, or None for a press), or the thumbstick
-    pushed to `lit`."""
+    pushed to `lit`, or moved as `motion` (one of MOTIONS)."""
     if button == 'trigger':
         main, kind = trigger(), 'trigger'
     elif button == 'grip':
@@ -280,6 +302,11 @@ def icon(side, button, how=None, lit=None):
         parts.append(centred(mark(how, MARK_RADIUS, MARK_SCALE), *layout['mark']))
     if lit:
         parts.append(centred(mark(lit, ARROW_RADIUS, ARROW_SCALE), *layout['arrow']))
+    if motion:
+        reach = STICK_RIM + HEAD_GAP + HEAD_DEPTH / 2
+        for direction in MOTIONS[motion]:
+            dx, dy = {'up': (0, -1), 'down': (0, 1), 'left': (-1, 0), 'right': (1, 0)}[direction]
+            parts.append(centred(arrowhead(direction), STICK_CENTER + dx * reach, STICK_CENTER + dy * reach))
     return compose(parts)
 
 
@@ -293,6 +320,8 @@ def all_icons():
                 icons[f'{side}-{how}-{button}'] = icon(side, button, how)
         for direction in DIRECTIONS:
             icons[f'{side}-thumbstick-{direction}'] = icon(side, 'thumbstick', lit=direction)
+        for motion in MOTIONS:
+            icons[f'{side}-thumbstick-{motion}'] = icon(side, 'thumbstick', motion=motion)
     return icons
 
 
@@ -315,6 +344,7 @@ def write_sheet(icons, path):
         for button in ('trigger', 'grip', 'thumbstick') + letters:
             rows.append([button if len(button) == 1 else f'{side}-{button}'] + [f'{side}-{how}-{button}' for how in HOWS])
         rows.append([f'{side}-thumbstick-{d}' for d in DIRECTIONS])
+        rows.append([f'{side}-thumbstick-{m}' for m in MOTIONS])
     cell = max(i.width for i in icons.values()) + 16
     sheet = Image.new('RGBA', (cell * 6 + 16, (HEIGHT + 12) * len(rows) + 16), (24, 30, 27, 255))
     for y, row in enumerate(rows):

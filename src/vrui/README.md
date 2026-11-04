@@ -273,9 +273,12 @@ buttons as the controller prints them (the runtime's `A` is `X` on the left one)
 mod-template ships in `Textures\<ModName>\f4cf\bindings`. Every way of working a button has its icon:
 the button alone for a press or a tap, with a mark for the rest (a clock for a long press, an arrow
 down onto a bar for a hold, 2x, an arrow up off a bar for a release, ripples for a touch), and the
-thumbstick with its direction's arrow for a push. A chord is its two icons with " + " between them
-(`bindingIconPaths`). The system button, which has no icon, falls back to words (`bindingLabel`), and
-`samePrompt` tells whether two bindings read the same, for a caller listing several at once.
+thumbstick with its direction's arrow for a push. A binding of the stick moved rather than pushed one
+way - `direction` `any`, `updown` or `rightleft`, as one that names the stick to walk, aim or adjust
+with - shows the stick with arrowheads around its rim, so it never reads as a push or as pressing the
+stick in. A chord is its two icons with " + " between them (`bindingIconPaths`). The system button,
+which has no icon, falls back to words (`bindingLabel`), and `samePrompt` tells whether two bindings
+read the same, for a caller listing several at once.
 
 The rows callback runs once per frame during layout; the text is only re-laid-out when a row's text,
 spans or height, the width, the text height or the tab width changes (or an image's texture finishes

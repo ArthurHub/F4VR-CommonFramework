@@ -69,7 +69,9 @@ namespace f4cf::vrcf
     };
 
     /**
-     * The direction of the controller thumbstick input.
+     * The direction of the controller thumbstick input. Right to Down are the one way an axis is pushed, all a
+     * pushed direction is ever read as; Any, UpDown and RightLeft are what a binding accepts when it asks for
+     * the stick to be moved rather than pushed one way: every direction, or the two of one axis.
      */
     enum class Direction : std::uint8_t
     {
@@ -77,6 +79,9 @@ namespace f4cf::vrcf
         Left,
         Up,
         Down,
+        Any,
+        UpDown,
+        RightLeft,
     };
 
     /**
@@ -105,7 +110,7 @@ namespace f4cf::vrcf
         Tap, // isTap - quick press-and-release (held < 0.3s); the "Tap" gesture
         LongPress, // isLongPressed - button held longer than `duration`
         DoublePress, // isDoublePressed - two presses within `duration`
-        AxisDirection, // isAxisPressed - `axis` pushed past `threshold` in `direction`
+        AxisDirection, // isAxisPressed - `axis` pushed past `threshold` in `direction` (or any of the ones it accepts)
     };
 
     /**

@@ -15,6 +15,13 @@ major version is `0`, a minor bump may break the API; the **Upgrading** notes sa
   Mods Config FO4 VR's choices of the framework's files write them; the short `f4cf\...` form still resolves.
   **Upgrading:** a mod whose config sets `sIcon` writes it in this form, or its row in Mods Config FO4 VR is
   invalid until the player picks an icon.
+- **A binding of the stick moved**: an axis binding's `direction` can be `any` (also `move`), `updown` or
+  `rightleft` (`vrcf::Direction::Any`, `UpDown`, `RightLeft`), which fires on a push past the threshold in
+  any direction it accepts. It is for a binding that names the stick to walk, aim or adjust with, whose
+  analog value the mod reads from the binding's hand, and its prompt shows the stick with arrowheads around
+  its rim, so it never reads as a push or a click. **Upgrading:** re-copy `Textures\MyMod\f4cf\bindings\`
+  from `mod-template/` for the six new `<side>-thumbstick-{move,updown,rightleft}.dds` icons; a mod that
+  switches over `vrcf::Direction` has three more values, which the getters of a pushed direction never return.
 
 ## 0.5.0 — unreleased
 
