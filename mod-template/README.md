@@ -58,7 +58,7 @@ guide for the full toolchain (VS 2022/2026, CMake 4.2+, `VCPKG_ROOT`). Quick ver
 ```sh
 git clone --recurse-submodules <your-repo-url>
 cd MyMod
-cmake --preset default      # generates build/MyMod.sln
+cmake --preset default      # generates build/MyMod.slnx
 ```
 
 Open the solution and build. To package, build the `package_mod` target in Release; it writes a versioned `.7z` under `build/package/`.

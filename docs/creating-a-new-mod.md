@@ -1,340 +1,159 @@
-# Creating a new Fallout 4 VR mod
+# Creating a new mod
 
-This walks you from an empty folder to a **working F4SE plugin** built on the F4VR Common
-Framework. By the end you'll have a DLL you can drop into Fallout 4 VR that pops an in-game
-notification when you pull the trigger — and a hot-reloadable config setting to go with it.
-
-Everything here starts from the bundled [`mod-template/`](../mod-template/), a complete, buildable
-plugin skeleton. You copy it, rename it, and fill in the one hook that matters.
-
-- **Time:** ~15 minutes once the [prerequisites](#prerequisites) are in place.
-- **You already know:** basic C++, Git, and where your Fallout 4 VR install lives.
-
----
-
-## What you'll end up with
-
-A minimal but real mod — call it **HelloVR** — that:
-
-- loads as an F4SE VR plugin (`HelloVR.dll`),
-- shows a *"Hello from HelloVR!"* notification each time you press the primary trigger,
-- reads one setting from a TOML config file that **hot-reloads** while the game runs (no restart),
-- writes a rotating log you can tail to see it working.
-
-The finished layout of your mod repo:
-
-```
-HelloVR/
-├── .github/workflows/            # CI: a Release build, and pre-commit with auto-fix
-├── external/
-│   └── F4VR-CommonFramework/     # the framework, as a git submodule
-├── cmake/                        # version + resource templates (from the template)
-├── data/
-│   ├── config/HelloVR.toml       # shipped config (also embedded in the DLL as the default)
-│   ├── resources/                # source PNGs for the UI atlases (not shipped)
-│   └── mod/                      # a ready-made game Data tree, shipped beside the DLL
-│       ├── Meshes/HelloVR/       #   f4cf/ (framework) + one .nif per UI sprite
-│       └── Textures/HelloVR/     #   f4cf/ (framework) + the packed UI atlases
-├── src/
-│   ├── HelloVR.h / HelloVR.cpp   # your mod class + F4SE entry points
-│   ├── Config.h / Config.cpp     # your config-backed settings
-│   ├── PCH.h                     # precompiled header
-│   └── Resources.h               # embedded-resource IDs
-├── .pre-commit-config.yaml       # clang-format + basic checks, run on every commit
-├── CLAUDE.md                     # guidance for Claude Code working in the repo
-├── CMakeLists.txt                # NAME / FRIENDLY_NAME / VERSION live at the top
-├── CMakeUserPresets.json         # your local build settings (git-ignored)
-└── vcpkg.json                    # dependency manifest
-```
-
----
+From an empty folder to a Fallout 4 VR F4SE plugin built on the framework, in about 15 minutes. You copy
+[`mod-template/`](../mod-template/), rename it, and add a feature. The example mod, **HelloVR**, shows a
+notification when you pull the trigger, with its text in a config file that reloads while the game runs.
 
 ## Prerequisites
 
-Same toolchain the framework itself uses — see the repo [README → Install](../README.md#install) for
-the exact winget commands:
+- **`VCPKG_ROOT`** set to a [vcpkg](https://github.com/microsoft/vcpkg) checkout.
+- **Visual Studio 2022 (v143) or 2026 (v145)**, x64, with the *Desktop development with C++* workload.
+- **CMake 4.2+** and **Git**.
+- **Fallout 4 VR** with [F4SEVR](https://f4se.silverlock.org/). Launch it once through
+  `f4sevr_loader.exe` to check it works: if F4SE doesn't load, no plugin will.
 
-- **`VCPKG_ROOT`** environment variable pointing at a [vcpkg](https://github.com/microsoft/vcpkg) checkout.
-- **Visual Studio 2022 (v143)** or **2026 (v145)**, x64, with the *Desktop development with C++* workload.
-- **CMake 4.2+**.
-- **Git** (the framework comes in as a submodule).
-- A **Fallout 4 VR** install with the **[Fallout 4 VR Script Extender (F4SEVR)](https://f4se.silverlock.org/)** working.
+The install commands are in the [README](../README.md#prerequisites).
 
-> Verify F4SEVR first. Launch the game through `f4sevr_loader.exe` once and confirm it runs — if F4SE
-> isn't loading, no plugin you build will load either.
-
----
-
-## The steps at a glance
-
-1. [Create the repo and add the framework submodule](#1-create-the-repo--add-the-framework)
-2. [Copy the template in](#2-copy-the-template-in)
-3. [Rename `MyMod` → your mod's name](#3-rename-mymod--your-mods-name)
-4. [Point the build at your game folder](#4-point-the-build-at-your-game-folder)
-5. [Generate and build](#5-generate-and-build)
-6. [Write the feature: notification on button press](#6-write-the-feature-notification-on-button-press)
-7. [Add a config value with hot-reload](#7-add-a-config-value-with-hot-reload)
-8. [Deploy and test in-game](#8-deploy-and-test-in-game)
-
----
-
-## 1. Create the repo & add the framework
-
-Make your repo and pull the framework in as a submodule under `external/`:
+## 1. Create the repo
 
 ```sh
 git init HelloVR
 cd HelloVR
-
 mkdir external
 git submodule add https://github.com/ArthurHub/F4VR-CommonFramework.git external/F4VR-CommonFramework
 git submodule update --init --recursive
 ```
 
-The last line is important: the framework has its own submodules (CommonLibF4VR and friends), and
-`--recursive` pulls them too. Skipping it is the #1 cause of a `F4VR-CommonFramework path not found`
-CMake error later.
+`--recursive` matters: the framework has submodules of its own (CommonLibF4VR). The submodule pins the
+framework version your mod builds against. To use a checkout elsewhere instead, set
+`F4VR_COMMON_FRAMEWORK_PATH` in step 4.
 
-> **Not using a submodule?** You can point `F4VR_COMMON_FRAMEWORK_PATH` at an existing checkout in
-> step 4 instead. The submodule is the recommended path — it pins the exact framework version your mod
-> builds against.
-
----
-
-## 2. Copy the template in
-
-Copy the **contents** of the framework's `mod-template/` folder into the root of your new repo:
+## 2. Copy the template
 
 ```sh
 cp -r external/F4VR-CommonFramework/mod-template/. .
-```
-
-Two files ship with a `.template` suffix so they don't accidentally get used as-is — rename them:
-
-```sh
-mv src/PCH.h.template            src/PCH.h
+mv src/PCH.h.template src/PCH.h
 mv CMakeUserPresets.json.template CMakeUserPresets.json
-```
-
-`CMakeUserPresets.json` is git-ignored on purpose — it holds *your* machine's paths, not something you
-commit. We'll fill it in at step 4.
-
-### Code style checks and CI
-
-The template also brought the repo's automation, which works as it came:
-
-| File | What it does |
-| ---- | ------------ |
-| `.pre-commit-config.yaml` | [pre-commit](https://pre-commit.com/) hooks: clang-format over `src/`, plus whitespace, YAML/JSON and large-file checks. `data/` and `external/` are skipped. |
-| `.github/workflows/maintenance.yml` | Runs those hooks on GitHub for every push and pull request to `main` and commits the fixes back (pull requests from forks are only checked). |
-| `.github/workflows/build.yml` | Configures and builds Release on GitHub for every push and pull request to `main`. |
-| `.vscode/settings.json` | Stops VS Code's commit UI from offering to skip the hooks. |
-| `CLAUDE.md` | Guidance for [Claude Code](https://claude.com/claude-code) working in the repo; fill in its TODOs as the mod grows, or delete it. |
-
-The hooks are per clone, so install them once in yours:
-
-```sh
 python -m pip install pre-commit
 pre-commit install
 ```
 
-You now have a **complete, buildable mod** — it just says `MyMod` everywhere. Renaming is next.
+You now have a complete mod that builds. It came with:
 
----
+- **`src/`:** the mod class and its F4SE entry points (`MyMod.h/.cpp`), its config (`Config.h/.cpp`), the
+  precompiled header.
+- **`data/config/MyMod.toml`:** the shipped config, also embedded in the DLL as the default.
+- **`data/mod/`:** a game `Data` tree shipped beside the DLL, with the framework's meshes and textures.
+- **`data/resources/`:** the source PNGs of the UI atlases, not shipped.
+- **`CMakeLists.txt`:** `NAME`, `FRIENDLY_NAME` and `VERSION` at the top. The version flows into the DLL
+  and the package name, so bump it there and nowhere else.
+- **`CMakeUserPresets.json`:** your machine's paths, git-ignored.
+- **Code style and CI:** `.pre-commit-config.yaml` runs clang-format and basic checks on each commit.
+  `.github/workflows/` runs them on GitHub and commits the fixes, and builds Release, on each push and
+  pull request to `main`.
+- **`CLAUDE.md`:** guidance for Claude Code. Fill in its TODOs as the mod grows, or delete it.
 
-## 3. Rename `MyMod` → your mod's name
+## 3. Rename `MyMod`
 
-Two tokens run through the template, plus one that's easy to miss:
+Find and replace across the tree, case-sensitive:
 
-| Find                | Replace with          | What it is                                             |
-| ------------------- | --------------------- | ----------------------------------------------------- |
-| `MyMod`             | `HelloVR`             | Code identifier / DLL name (no spaces, case-sensitive) |
-| `My Mod`            | `Hello VR`            | Friendly display name (may contain spaces)            |
-| `my_mod` *(namespace)* | `hello_vr`         | The C++ namespace — a naive `MyMod` search misses it  |
+| Find     | Replace    | What it is                                         |
+| -------- | ---------- | -------------------------------------------------- |
+| `MyMod`  | `HelloVR`  | The code name and the DLL's: no spaces             |
+| `My Mod` | `Hello VR` | The display name                                   |
+| `my_mod` | `hello_vr` | The C++ namespace, which a search for `MyMod` misses |
+| `myMod`  | `helloVR`  | The global, `g_myMod`                              |
 
-Do the replacements, then rename the files whose names contain `MyMod`:
+Then rename the files and asset folders that carry the name:
 
 ```sh
-mv src/MyMod.h          src/HelloVR.h
-mv src/MyMod.cpp        src/HelloVR.cpp
+mv src/MyMod.h src/HelloVR.h
+mv src/MyMod.cpp src/HelloVR.cpp
 mv data/config/MyMod.toml data/config/HelloVR.toml
-```
-
-Places the tokens actually appear (all handled by a find-and-replace across the tree, but worth
-knowing):
-
-| File | What changes |
-| ---- | ------------ |
-| `CMakeLists.txt` | `set(NAME "MyMod")`, `set(FRIENDLY_NAME "My Mod")`, and `set(VERSION 0.1.0)` at the very top |
-| `src/HelloVR.h` / `.cpp` | class `MyMod` → `HelloVR`, `namespace my_mod` → `hello_vr`, global `g_myMod` → `g_helloVR`, `#include "MyMod.h"` |
-| `src/Config.h` / `.cpp` | `namespace my_mod` → `hello_vr` |
-| `data/config/HelloVR.toml` | the `[MyMod]` section header, the `[MyMod_AnActivationSphere]` section, and the `Textures\MyMod\` of its `sIcon` |
-| `vcpkg.json` | `"name": "f4vr-my-mod"` (cosmetic) |
-| `README.md` | the template README's placeholders |
-| `CLAUDE.md` | the mod name, `namespace my_mod`, `g_myMod` and the paths to the renamed files |
-
-> **Why the config section name matters.** `CMakeLists.txt`'s `NAME` becomes `Version::PROJECT`, which the
-> config reads back as *both* the config file name (`HelloVR.toml`) **and** the default section header. So
-> the `[HelloVR]` section header in your config must match the CMake `NAME` exactly, or your settings
-> won't be found. The rename table above keeps them in sync.
-
-The version at the top of `CMakeLists.txt` flows automatically into the DLL metadata and the packaged
-release name — bump it there, nowhere else.
-
-### The UI assets that came with the template
-
-`MyMod` is in `data/mod/`'s **folder names** too, and a find-and-replace over source files does not
-touch those. Two kinds of asset live there, and they are renamed differently.
-
-**Framework assets, under `f4cf\`** — the shared mesh and textures the framework itself loads:
-
-| Path | What it is |
-| ---- | ---------- |
-| `Meshes\MyMod\f4cf\activation-sphere.nif` | the one sphere mesh every activation zone draws on … |
-| `Textures\MyMod\f4cf\activation-sphere.dds`, `debug-sphere.dds` | … and the textures its styles pick from (`f4vr::SphereStyle`) |
-| `Textures\MyMod\f4cf\activation-icon-{hand,ring,circle}.dds` | the icons an activation zone can be marked with (`sIcon` in the config) |
-| `Textures\MyMod\f4cf\bindings\` | the controller icons a binding prompt draws, so a prompt names the button actually bound |
-| `Textures\MyMod\f4cf\vrui\` | shared button icons — save, reset, exit, config, wiki, debug spheres |
-
-Nothing inside them names the mod: the framework resolves a partial path under **your** mod's folders
-(`"f4cf\activation-sphere.nif"` → `Data\Meshes\HelloVR\f4cf\activation-sphere.nif`) and sets the
-sphere's texture at runtime. So renaming the two `MyMod` folders is all they need:
-
-```sh
-mv data/mod/Meshes/MyMod   data/mod/Meshes/HelloVR
+mv data/mod/Meshes/MyMod data/mod/Meshes/HelloVR
 mv data/mod/Textures/MyMod data/mod/Textures/HelloVR
 ```
 
-Ship `f4cf\` as it came and refresh it from `mod-template/` when you update the framework. Your own
-assets go beside it, e.g. `Textures\HelloVR\vrui\`.
+> **The config section is the CMake `NAME`.** `NAME` is both the config file's name and its default
+> section, so `[HelloVR]` in the config has to match it exactly, or the mod finds no settings.
 
-**The NIF button atlases** — `Meshes\MyMod\ui-common\*.nif` with `Textures\MyMod\ui-common.DDS`
-(the standard back/exit/save/reset buttons and the toggle frames), and `ui-example` beside them (a
-demo — replace it with your own art or delete it). Moving these is **not** enough: each `.nif` has
-its texture path baked in, so they still point at `Textures\MyMod\`. Re-pack them under your name
-from the source PNGs the template also brought, in `data/resources/`:
+### The assets
 
-```sh
-python external/F4VR-CommonFramework/nif-tools/vrui_atlas.py pack \
-  --name ui-common --texture-subpath HelloVR \
-  data/resources/common --output data/mod
-```
+- **`f4cf\`, the framework's assets:** the activation-sphere mesh and textures, their icons, the binding
+  prompts' controller icons, and shared VR UI button icons. Nothing in them names the mod, so renaming
+  the folders is enough. Ship them as they came, and copy them again from `mod-template/` when you update
+  the framework. Your own assets go beside them, as `Textures\HelloVR\vrui\`.
+- **`ui-common` and `ui-example`, the NIF button atlases:** each `.nif` has its texture path inside it,
+  so after the `mv` it still points at `Textures\MyMod\`. Re-pack them under your name from
+  `data/resources/`, which overwrites them in place:
 
-Run it **after** the two `mv`s above and it overwrites the copies in place — same paths, now with
-the right texture baked in. Do the same with `--name ui-example data/resources/example` if you keep
-the demo. Each PNG's file name becomes the `.nif` name you pass to `UIButton` / `UIWidget` in code.
-Full options (and the reverse, `unpack`) are in the [nif-tools README](../nif-tools/README.md).
+  ```sh
+  python external/F4VR-CommonFramework/nif-tools/vrui_atlas.py pack \
+    --name ui-common --texture-subpath HelloVR data/resources/common --output data/mod
+  ```
 
-> **You may not need an atlas at all.** A `vrui::UIButtonPanel` composes its face from text and a
-> loose `.dds` at runtime, so a UI built from panels needs no NIF and no packing step — only the
-> `f4cf\` folders above. See [`vrui/`](../src/vrui/README.md#assets).
+  `ui-example` is a demo: re-pack it the same way, replace it, or delete it. Each PNG's name is the
+  `.nif` name you give `UIButton` / `UIWidget`. All the options: [nif-tools](../nif-tools/README.md).
 
----
+You may need no atlas at all: a `vrui::UIButtonPanel` draws its face from text and a `.dds` at runtime,
+with no NIF ([vrui assets](../src/vrui/README.md#assets)).
 
-## 4. Point the build at your game folder
+## 4. Point the build at the game
 
-Open `CMakeUserPresets.json` and set where the built DLL should be copied after each build so you can
-test it immediately. Point it at your **MO2 mod folder** or your **`Fallout4VR\Data`** folder:
+In `CMakeUserPresets.json`, delete the comment block at the top (JSON has no comments), then set where
+each build copies the DLL: your MO2 mod folder or the game's `Data` folder.
 
 ```json
-{
-  "version": 3,
-  "configurePresets": [
-    {
-      "name": "custom",
-      "inherits": "default",
-      "cacheVariables": {
-        "POST_BUILD_COPY_PLUGIN": true,
-        "COPY_PLUGIN_BASE_PATH": "C:/Path/To/MO2/mods/HelloVR"
-      }
-    }
-  ]
+"cacheVariables": {
+  "POST_BUILD_COPY_PLUGIN": true,
+  "COPY_PLUGIN_CONFIGURATIONS": "all",
+  "COPY_PLUGIN_BASE_PATH": "C:/Path/To/MO2/mods/HelloVR",
+  "F4VR_COMMON_FRAMEWORK_PATH": ""
 }
 ```
 
-- `POST_BUILD_COPY_PLUGIN: true` copies `HelloVR.dll` + `.pdb` into `<base>/F4SE/Plugins/` after every
-  build. Set it `false` to skip.
-- `COPY_PLUGIN_BASE_PATH` can be **several paths** separated by `;` (e.g. a MO2 folder *and* a live
-  Data folder).
-- `COPY_PLUGIN_CONFIGURATIONS` limits the copy to some build configurations: `all` (the default) or a
-  `;` list such as `"Release;Tracy"` or `"Debug;RelWithDebInfo"` (case-insensitive). Since a build preset picks
-  its `configuration`, this also decides which build presets deploy.
-- Add `"F4VR_COMMON_FRAMEWORK_PATH": "C:/path/to/checkout"` here only if you skipped the submodule.
+- **`COPY_PLUGIN_BASE_PATH`:** the DLL and its `.pdb` go to `<path>/F4SE/Plugins/`. Several paths are
+  separated by `;`. Use forward slashes: a backslash is an escape in JSON.
+- **`COPY_PLUGIN_CONFIGURATIONS`:** `all`, or the configurations to copy on, as `"Release;Tracy"`.
+- **`F4VR_COMMON_FRAMEWORK_PATH`:** empty uses the submodule.
 
-> Forward slashes in JSON. Use `C:/Path/...`, not `C:\Path\...` — a backslash is a JSON escape.
-
----
-
-## 5. Generate and build
-
-From the repo root:
+## 5. Build
 
 ```sh
-cmake --preset custom     # or: cmake --preset default  (VS 2026 toolset)
+cmake --preset custom
+cmake --build --preset custom-debug
 ```
 
-This configures the project and writes a Visual Studio solution to `build/`. The first configure is
-slow — vcpkg builds the dependencies once.
+The first configure is slow, as vcpkg builds the dependencies once. The solution is
+`build/HelloVR.slnx`, if you'd rather build and debug in Visual Studio.
 
-> **`default` vs `custom`:** `default` (VS 2026 / v145) is defined by the template. `custom` is the one
-> *you* just defined; it `inherits` from `default` and adds the copy-to-game step. Use `custom` so your
-> DLL lands in-game automatically. On VS 2022, add `"vs2022"` handling or edit the generator in
-> `CMakePresets.json`.
+- **`custom-release`:** a Release build.
+- **`custom-package`:** a Release build, packaged into a versioned `.7z` in `build/package/`: the DLL and
+  `data/mod/`, ready for a mod manager. That archive is your Nexus upload.
+- **`custom-tracy`:** a Release build the [Tracy](https://github.com/wolfpld/tracy) profiler connects to
+  ([perf README](../src/perf/README.md#tracy)).
+- **Visual Studio 2022:** the presets default to 2026. Make `custom` inherit
+  `["cmake-dev", "vcpkg", "windows", "vs2022"]` instead of `default`.
 
-Open `build/HelloVR.sln`, pick the **Debug** configuration, and build. You should get:
+The mod now loads, and does nothing.
 
-- `build/.../HelloVR.dll` and `HelloVR.pdb`,
-- a copy of both under `<COPY_PLUGIN_BASE_PATH>/F4SE/Plugins/` (if you enabled the copy).
+## 6. Add the feature
 
-Building the `package_mod` target in **Release** (`cmake --build build --config Release --target package_mod`) stages
-`data/mod/` + the DLL and zips a versioned `.7z` into `build/package/` — that archive *is* your Nexus
-upload. A normal build does not package.
-
-The **Tracy** configuration (`cmake --build --preset tracy`) is a Release build that the
-[Tracy](https://github.com/wolfpld/tracy) profiler connects to, for when you need to see where a frame
-goes ([perf README](../src/perf/README.md#tracy)).
-
-At this point the mod builds and loads, but does nothing. Time to give it a body.
-
----
-
-## 6. Write the feature: notification on button press
-
-Open `src/HelloVR.cpp`. The template already guards `onFrameUpdate()` on the player being loaded — you
-just add the input check. Replace the file body with this:
+In `src/HelloVR.cpp`, add the includes and fill in two of the hooks:
 
 ```cpp
 #include "HelloVR.h"
 
-#include "f4vr/F4VRUtils.h"             // f4vr::showNotification
-#include "vrcf/VRControllersManager.h"  // vrcf::VRControllers
+#include "f4vr/F4VRUtils.h"
+#include "vrcf/VRControllersManager.h"
 
-// F4SE entry points — the framework does the real work behind g_mod.
-extern "C" DLLEXPORT bool F4SEAPI F4SEPlugin_Query(const F4SE::QueryInterface* a_f4se, F4SE::PluginInfo* a_info)
-{
-    return g_mod->onF4SEPluginQuery(a_f4se, a_info);
-}
-
-extern "C" DLLEXPORT bool F4SEAPI F4SEPlugin_Load(const F4SE::LoadInterface* a_f4se)
-{
-    return g_mod->onF4SEPluginLoad(a_f4se);
-}
+// ... the F4SE entry points stay as they are ...
 
 namespace hello_vr
 {
-    void HelloVR::onModLoaded(const F4SE::LoadInterface*)
-    {
-        // Register Papyrus functions / install hooks here. Nothing to do yet.
-    }
-
     void HelloVR::onGameLoaded()
     {
-        logger::info("HelloVR loaded — pull the trigger to say hi");
-    }
-
-    void HelloVR::onGameSessionLoaded()
-    {
-        // Fires on new game and on every save load.
+        logger::info("HelloVR loaded - pull the trigger to say hi");
     }
 
     void HelloVR::onFrameUpdate()
@@ -345,7 +164,6 @@ namespace hello_vr
             return;
         }
 
-        // The exact frame the primary-hand trigger goes down (debounced):
         if (vrcf::VRControllers.isPressed(vrcf::Hand::Primary, vr::k_EButton_SteamVR_Trigger)) {
             f4vr::showNotification("Hello from HelloVR!");
             logger::info("trigger pressed - greeting shown");
@@ -354,150 +172,86 @@ namespace hello_vr
 }
 ```
 
-What each piece is doing:
+- **`VRControllers.isPressed`** is true only on the frame the button goes down, not while it is held.
+- **`Hand::Primary`** is the weapon hand, and follows left-handed mode.
+- **`showNotification`** is the corner message; `showMessagebox` is a modal box.
+- **`logger::sample(3000, ...)`** logs at most once every 3 s.
 
-- **`vrcf::VRControllers`** is the framework's per-frame controller snapshot (a global, driven for you
-  by `ModBase`). `isPressed(...)` is *debounced* — it returns true only on the frame the button first
-  goes down, not every frame it's held.
-- **`vrcf::Hand::Primary`** is the player's dominant/weapon hand and respects left-handed mode
-  automatically — prefer it over `Left`/`Right`.
-- **`f4vr::showNotification(...)`** is the small corner toast (like "Quest updated"). For a modal box
-  instead, use `f4vr::showMessagebox(...)`.
-- **`logger::info` / `logger::sample`** write to your rotating log (see step 8). `sample(3000, ...)`
-  logs at most once every 3 s so the "no player" branch doesn't spam.
+The trigger also fires your weapon, which is fine for a test. To take a button from the game, see
+[suppressing the game input](input-binding.md#suppressing-the-game-input).
 
-> The primary trigger *also* fires your weapon — that's fine for a first test. Step 7 makes the button
-> configurable, and the [input-binding guide](input-binding.md#suppressing-the-game-input) shows how to
-> *suppress* the game's use of a button when you want it for yourself.
+The other hooks: `onModLoaded` runs at F4SE load (Papyrus functions, hooks), `onGameLoaded` once, and
+`onGameSessionLoaded` on each new game and save load.
 
-Rebuild. Load a save, pull the trigger — you should see **"Hello from HelloVR!"** in the corner.
+## 7. Add a config value
 
----
-
-## 7. Add a config value with hot-reload
-
-Hard-coding the trigger is fine, but the framework's real strength is config settings that reload live.
-Let's make the greeting text configurable.
-
-**1. Declare the setting** in `src/Config.h` (next to the existing `myConfigValue`):
+**Declare it** in `src/Config.h`, beside `myConfigValue`:
 
 ```cpp
-// Mod configs
 std::string greeting = "Hello from HelloVR!";
 ```
 
-**2. Read it** in `src/Config.cpp` → `loadConfigInternal()`:
+**Read it** in `Config::loadConfigInternal` in `src/Config.cpp`. `value_or` gives the default for a key
+that is missing or of another type:
 
 ```cpp
-void Config::loadConfigInternal(const toml::table& config)
-{
-    // the default for a key that is missing, or that is not a string
-    greeting = config[DEFAULT_SECTION]["sGreeting"].value_or(std::string("Hello from HelloVR!"));
-}
+greeting = config[DEFAULT_SECTION]["sGreeting"].value_or(std::string("Hello from HelloVR!"));
 ```
 
-**3. Use it** in `HelloVR.cpp` instead of the literal:
+**Use it** in `HelloVR.cpp`: `f4vr::showNotification(g_config.greeting);`
 
-```cpp
-f4vr::showNotification(g_config.greeting);
-```
-
-**4. Add the key** to `data/config/HelloVR.toml` under the `[HelloVR]` section. The file is TOML, so
-a string goes in quotes, a float has its decimal point, and a Windows path goes in single quotes:
+**Ship it** in `data/config/HelloVR.toml`:
 
 ```toml
 [HelloVR]
 sGreeting = "Hello from HelloVR!"
 ```
 
-Rebuild once. Now the payoff: **launch the game, then edit the config while it's running.**
+Rebuild, start the game, and edit the live config while it runs:
+`Documents\My Games\Fallout4VR\Mods_Config\HelloVR\HelloVR.toml`, created from the embedded default on
+the first run. Save it, pull the trigger, and the new text shows. `loadConfigInternal()` runs again on
+each save, on the file watcher's thread, so it only reads values. Every way to read a value, and what
+runs after a load: [config README](../src/config/README.md).
 
-The live config lives at:
+To make the button configurable too, read an `InputBinding` with `getInputBindingValue` and check it with
+`VRControllers.check(binding)`. Players then rebind it in the config:
+`kGreetButton = { hand = "offhand", type = "longpress", button = "b" }`
+([bindings](input-binding.md), [`vrcf/`](../src/vrcf/README.md#config-driven-bindings)).
 
-```
-%USERPROFILE%\Documents\My Games\Fallout4VR\Mods_Config\HelloVR\HelloVR.toml
-```
+## 8. Test in game
 
-It's created from the DLL's embedded default on first run. Change `sGreeting` to something else, save
-the file, and pull the trigger again — the new text shows **without restarting**. `ConfigBase` watches
-the file and re-runs `loadConfigInternal()` on every save. A typo that breaks the file is logged with
-its line, and the values stay as they were until it is fixed.
+With `COPY_PLUGIN_BASE_PATH` set, the DLL is in place after each build. Otherwise copy
+`HelloVR.dll` (and `HelloVR.pdb`, for crash symbols) to `Data/F4SE/Plugins/`. Ship `data/mod/` beside
+it as a `Data` tree: without the `f4cf\` assets, activation spheres, their icons and binding prompts
+draw nothing.
 
-**Want the *button* itself configurable too?** Swap the hard-coded `isPressed` for a data-driven
-binding: declare an `f4cf::vrcf::InputBinding` in your config, load it with
-`getInputBindingValue(config, "HelloVR", "kGreetButton", …)`, and evaluate it each frame with
-`vrcf::VRControllers.check(binding)`. Then players rebind it from the config (`kGreetButton = { hand =
-"offhand", type = "longpress", button = "b" }`) with no rebuild. Every key of a binding: the
-[input-binding guide](input-binding.md).
-
----
-
-## 8. Deploy and test in-game
-
-If you set `COPY_PLUGIN_BASE_PATH`, the DLL is already in place after each build. Otherwise, copy by
-hand so the final layout is:
-
-```
-<Fallout 4 VR>/Data/F4SE/Plugins/HelloVR.dll      (or your MO2 mod folder)
-<Fallout 4 VR>/Data/F4SE/Plugins/HelloVR.pdb      (optional, for crash symbols)
-```
-
-Ship the contents of `data/mod/` alongside, as a `Data` tree: `Meshes\HelloVR\` and
-`Textures\HelloVR\`. HelloVR itself draws no UI, but the framework's `f4cf\` assets are what the
-activation spheres, their icons and the binding prompts load from — leave them out and those draw
-nothing (a missing file is logged, not fatal). See
-[the UI assets](#the-ui-assets-that-came-with-the-template).
-
-**Confirm it loaded.** F4SE writes a per-plugin log to:
-
-```
-%USERPROFILE%\Documents\My Games\Fallout4VR\F4SE\HelloVR.log
-```
-
-You should see your `HelloVR loaded — pull the trigger to say hi` line, then a `trigger pressed`
-line each time you fire. Bump `iLogLevel` in the `[Debug]` config section for more detail (`1` = debug,
-`0` = trace) — it hot-reloads like everything else.
-
-That's a complete mod: it builds, loads, responds to input, and reads live config. 🎉
-
----
+The log is `Documents\My Games\Fallout4VR\F4SE\HelloVR.log`. It has your `HelloVR loaded` line, then
+`trigger pressed` each time you pull it. For more detail, set `iLogLevel = 1` under `[Debug]`
+([debug settings](debug-config.md)).
 
 ## Troubleshooting
 
-| Symptom | Likely cause / fix |
-| ------- | ------------------ |
-| CMake: `F4VR-CommonFramework path not found` | Submodules not fetched — run `git submodule update --init --recursive`. |
-| CMake: `VCPKG_ROOT is not set` | Set the `VCPKG_ROOT` env var to your vcpkg checkout, then re-open the terminal. |
-| vcpkg fails building CommonLibF4VR | Keep the `"builtin-baseline"` in `vcpkg.json` (`5cd4931…`), the one the framework is built and tested against. |
-| Build succeeds, DLL never loads in-game | You're launching the flatscreen `Fallout4.exe` or plain launcher — launch through **`f4sevr_loader.exe`**. Also check the DLL is under `Data/F4SE/Plugins/`. |
-| Loads (log appears) but no notification | Make sure a save is fully loaded (the `no player data` guard), and that you're pressing the *primary* (weapon-hand) trigger. |
-| Config edits don't apply | Edit the **live** copy under `Documents\My Games\Fallout4VR\Mods_Config\HelloVR\`, not `data/config/` in your repo. |
-
----
+| Symptom                                    | Fix                                                                                          |
+| ------------------------------------------ | -------------------------------------------------------------------------------------------- |
+| CMake: `F4VR-CommonFramework path not found` | `git submodule update --init --recursive`                                                  |
+| CMake: `VCPKG_ROOT` not set                | Set it to your vcpkg checkout, then open a new terminal                                      |
+| CMake: can't parse `CMakeUserPresets.json` | Delete the comment block at its top                                                          |
+| vcpkg fails to build CommonLibF4VR         | Keep `vcpkg.json`'s `builtin-baseline`, the one the framework is tested against              |
+| The DLL never loads                        | Launch through `f4sevr_loader.exe`, and check the DLL is in `Data/F4SE/Plugins/`             |
+| It loads, but no notification              | Load a save fully, and pull the trigger of your weapon hand                                  |
+| Config edits don't apply                   | Edit the live file under `Documents\My Games\...\Mods_Config\HelloVR\`, not `data/config/`   |
 
 ## Where to go next
 
-You have the skeleton; the framework has a lot more to offer. Each subsystem has a code-adjacent README
-with examples:
-
-- **[Controller bindings](input-binding.md)** — make inputs rebindable from the config.
-- **[Activation spheres](activation-spheres.md)** — reach-into-a-zone gestures, and how players tune them.
-- **[`vrcf/`](../src/vrcf/README.md)** — the full controller API (long-press, double-tap, thumbstick,
-  haptics) and input suppression.
-- **[`f4vr/`](../src/f4vr/README.md)** — game-state utilities: nodes, skeleton, weapon/menu state,
-  Scaleform/HUD.
-- **[`vrui/`](../src/vrui/README.md)** — build an in-world VR UI (buttons and panels, from meshes or
-  composed at runtime from text and images) and wire it into FRIK's config menu.
-- **[`imgui/`](../src/imgui/README.md)** — put Dear ImGui content on a world-space quad, standalone
-  or as an element inside that VR UI.
-- **[`render/`](../src/render/README.md)** — draw your own lines, images and text over the VR view,
-  occluded by the world or on top of it.
-- **[`debug/`](../src/debug/README.md)** — wire primitives, world labels and a watch table for
-  working out why something is where it is.
-- **[`f4sevr/`](../src/f4sevr/README.md)** — register Papyrus native functions to talk to scripts.
-- **[Debug & logging config](debug-config.md)** — the `[Debug]` config keys: log patterns, flow flags,
-  data dumps, live tuning.
-- **[`src/README.md`](../src/README.md)** — how the subsystems fit together, at a glance.
-
-When you're ready to publish, build the `package_mod` target in **Release** — it packages a versioned
-`.7z` under `build/package/` with the DLL and `data/mod/` laid out ready for a mod manager.
+- **[`src/README.md`](../src/README.md):** how the subsystems fit, and `ModBase::Settings`.
+- **[Controller bindings](input-binding.md)** and **[activation spheres](activation-spheres.md):**
+  rebindable inputs and reach-into-a-zone gestures, as players see them.
+- **[`vrcf/`](../src/vrcf/README.md):** controller input, haptics, and taking buttons from the game.
+- **[`f4vr/`](../src/f4vr/README.md):** nodes, skeleton, weapon and menu state, the HUD, activation spheres.
+- **[`vrui/`](../src/vrui/README.md):** in-world VR UI, from meshes or from text and images.
+- **[`imgui/`](../src/imgui/README.md):** Dear ImGui on a world-space quad.
+- **[`render/`](../src/render/README.md):** your own lines, images and text over the VR view.
+- **[`modsconfig/`](../src/modsconfig/README.md):** the mod's page in Mods Config FO4 VR.
+- **[`devbench/`](../src/devbench/README.md):** actions an agent calls in the running game.
+- **[`debug/`](../src/debug/README.md)** and **[`perf/`](../src/perf/README.md):** debug draw, and timing.
+- **[`f4sevr/`](../src/f4sevr/README.md):** Papyrus native functions.
