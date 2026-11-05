@@ -2,31 +2,26 @@
 
 Namespace: `f4cf::perf`
 
-Cheap timing of the code a mod runs every frame, read on demand. A measured place is a **site**:
-one macro declares it and times the rest of the block, on any thread. Each site keeps a histogram
-of its call durations, how much of that went to the sites it opened (so self time is total minus
-children), and the site that opened it, so the sites nest into a tree per thread.
+Cheap timing of the code a mod runs every frame, read on demand. A measured place is a **site**: one
+macro declares it and times the rest of the block, on any thread. A site keeps a histogram of its
+durations, the time spent in the sites it opened (so self time is total minus children), and its
+caller, so the sites nest into a tree per thread.
 
-Recording is off until something switches it on with `perf::setEnabled(true)`; while off, a site
-costs one relaxed atomic load and takes no timestamp. Two things read it:
-
-- The mod's [devbench tool](../devbench/README.md) switches recording on when it arms: when
-  devbench is installed, a Tracy viewer connects, or `perf_reset` asks for it. Its `perf` action
-  reads every site as a JSON tree, a flat map or a text table.
-- Without devbench, `[Debug] aDumpDataOnce` does it through the config: `perf` writes the text
-  table to the mod log, and `perf_reset` does too, then starts a new window; the first
-  `perf_reset` switches recording on ([debug-config.md](../../docs/debug-config.md)).
-
-Sites time wall clock on the calling thread. **GPU sites** hold the GPU time of work the mod
-issues itself, read back from GPU timestamps ([GPU time](#gpu-time)); the framework's overlay
-drawing is timed that way. What they cost is read against the **frame context**, recorded over the
-same window while recording is on: the game's frame interval, the frame budget at the headset's
-refresh rate, and in VR the compositor's timing of each frame, which is where the whole frame's GPU
-time, late starts (the game being CPU-bound) and reprojected frames show. Each site's share of the
-budget (`%budget`) is its time per frame over the budget.
-
-For the frame by frame view, build the **`Tracy` configuration**: every site is then also a
-[Tracy](https://github.com/wolfpld/tracy) zone, on a timeline per thread (see [Tracy](#tracy)).
+- **Off until switched on** (`perf::setEnabled(true)`): a site then costs one atomic load and no
+  timestamp.
+- **Read by devbench:** the mod's [devbench tool](../devbench/README.md) switches it on when it arms
+  (devbench installed, a Tracy viewer connected, or `perf_reset`), and its `perf` action reads every
+  site as a JSON tree, a flat map or a text table.
+- **Or by the config:** `[Debug] aDumpDataOnce` with `perf` writes the table to the log, and
+  `perf_reset` does too, then starts a new window; the first one switches recording on
+  ([debug settings](../../docs/debug-config.md)).
+- **GPU sites** hold the GPU time of work the mod issues itself ([GPU time](#gpu-time)), as the
+  framework's overlay drawing.
+- **The frame context** is recorded over the same window: the game's frame interval, the budget at the
+  headset's refresh rate, and the compositor's timing (the whole frame's GPU time, late starts,
+  reprojected frames). A site's `%budget` is its time per frame over the budget.
+- **Frame by frame:** the **`Tracy` configuration** makes every site a
+  [Tracy](https://github.com/wolfpld/tracy) zone on a per-thread timeline ([Tracy](#tracy)).
 
 > Part of the [F4VR Common Framework](../README.md) source tree.
 

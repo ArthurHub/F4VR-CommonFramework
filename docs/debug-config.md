@@ -276,7 +276,7 @@ Row1 = Pos:(0.00,0.00,0.00), Rot:(0.00,0.00,0.00), Scale:(1.00), Padding:(0.30),
 
 Edit a line and save, and the UI follows in a fraction of a second. A closed UI keeps its lines. The
 file is removed when the key is turned off, so copy the values you want into the code. The fields, and
-what a removed line does: [`src/vrui/README.md`](../src/vrui/README.md#notes).
+what a removed line does: [`src/vrui/README.md`](../src/vrui/README.md#dev-layout).
 
 ### `iVersion`
 

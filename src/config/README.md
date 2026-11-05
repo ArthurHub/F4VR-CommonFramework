@@ -6,7 +6,7 @@ Namespace: `f4cf` (`ConfigBase`) and `f4cf::config` (the parts it is made of)
 saves values into it without touching its comments or layout, moves a user's file to the version
 the mod ships, and holds session overrides that preview a value without writing it. The starter
 code (a `Config` class, a read, a subscriber, an override) is in the
-[`src/` quick start](../README.md#1-config--derive-from-configbase); this page holds the rules.
+[`src/` quick start](../README.md#the-config-derive-from-configbase); this page holds the rules.
 
 > Part of the [F4VR Common Framework](../README.md) source tree.
 

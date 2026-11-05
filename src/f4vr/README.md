@@ -2,34 +2,49 @@
 
 Namespace: `f4cf::f4vr`
 
-The bridge to the running game: finding and manipulating scene nodes, reading player/weapon/menu
-state, the VR skeleton and player-node layout, Scaleform/HUD access, and the reverse-engineered RVAs
-that make it all work.
+The bridge to the running game: scene nodes, player, weapon and menu state, other actors, the VR
+skeleton and player nodes, Scaleform, and the reverse-engineered RVAs behind them. Each header's doc
+comments are the detail; this page is the map and the traps.
 
 > Part of the [F4VR Common Framework](../README.md) source tree.
 
 ## Files
 
-| File | Contents |
-|------|----------|
-| [`F4VRUtils.h`](F4VRUtils.h) | The workhorse: node search (`findNode`/`findAVObject`), visibility, transform updates (`updateDown`/`updateTransforms`), player/weapon state (`IsWeaponDrawn`, `isInPowerArmor`, `isSwimming`, `getEquippedWeaponName`…), other actors (`getActorsWithinRangeOfPoint` for a radius query, `getActorFacingAngleTo` / `isActorFacing` for how far an actor is turned away from a world point, off its own heading — `Actor::GetEyeVector` returns unusable values on VR — `getDetectionLevel` for how well one actor currently perceives another — a continuous scale, not a flag: `< 0` unaware, `0`–`20` suspicious/investigating, `>= 20` actually seeing (~50-60 point blank) — `isInActiveCombat` (use instead of the `Actor::IsInCombat()` virtual, which is always false on VR), and `startCombat` to queue an actor into combat with a target), settings (`isLeftHandedMode`, `getIniSetting`, and the game's Pip-Boy location: `isPipboyOnWrist`, `getPipboyPlacement`, and `setPipboyPlacement`, which applies and saves it as the game's settings menu does), UI (`showMessagebox`/`showNotification`, and `isGameMenuTakingInput`: whether an open menu pauses the game, uses the cursor or the menu context, or is modal, which the VR UI stands down for, and with `true` also one with an input context of its own, as workshop build mode), and `.nif` loading. |
-| [`EquippedWeaponHandler.h`](EquippedWeaponHandler.h) | Tracks the equipped weapon and detects when it (or power-armor state) changes; `detectChange(weaponNode)` returns true on change, then `weaponName()`/`isWeaponDrawn()`/`isInPowerArmor()`/`isMelee()` report the new state. Also tracks the throwable weapon (grenade/mine, present only mid-throw) via `detectThrowableChange()` + `throwableNode()`/`throwableName()`, and exposes `getEquippedWeaponNameExtended` (base game name + a "Rifle" suffix for pistol/rifle weapons). Detection only — the caller decides what to do on a change. |
-| [`CollisionLayers.h`](CollisionLayers.h) | Havok collision-layer (`RE::COL_LAYER`) helpers: the layer in a collision-filter word (`getCollisionLayer`), its readable name (`getCollisionLayerName` — "static", "actorZone", "charController"…, which is what makes a physics-query result legible), a name-or-number token back to a layer (`parseCollisionLayer`), and layer bitmasks for "which layers does this query care about" sets — `collisionLayerMask({ kTrigger, kActorZone… })` (`constexpr`, so a fixed set is free and a misspelling is a compile error), `parseCollisionLayerMask` for a set that comes from config, and `isCollisionLayerInMask` to test a filter word against either. |
-| [`F4VROffsets.h`](F4VROffsets.h) | All reverse-engineered RVAs (`REL::Relocation` / offsets) the framework calls into. |
-| [`PlayerRotation.h`](PlayerRotation.h) | Turns the player the way their VR comfort settings say (`iRotationType:VR` and friends, read live off the engine's `Setting` objects) — including where the game refuses to, since vanilla turning is a player-controls input handler and dialogue/menus take it away while a mod can still see the stick. Feed `turnByThumbstick(axisX)` each frame for the whole behaviour (snap per flick, continuous turn, or nothing, plus the stick latch), or drive it with `snapTurn`/`smoothTurn`; `getYaw`/`setYaw`/`rotateBy` bypass the configured style. Rotates the VR world (room) transform, as the engine does — not the actor. See [`../../docs/tech/vr-player-rotation.md`](../../docs/tech/vr-player-rotation.md). |
-| [`PlayerNodes.h`](PlayerNodes.h) | `getVRPlayerNodes()` — CommonLibF4's `RE::VRPlayerNodes`, the VR reference nodes at `PlayerCharacter + 0x6E0` (wands, weapon offsets, Pip-Boy, HMD, scope, etc.) — plus wand/weapon accessors like `getPrimaryWandNode()`. |
-| [`WandActivationSphere.h`](WandActivationSphere.h) | A gesture zone around a node, and its config section (`WandActivationConfig`). See [Activation spheres](#activation-spheres). |
-| [`SphereStyle.h`](SphereStyle.h) | How a sphere visual looks (activation-sphere zones, the vrui fingertip marker): a mesh plus the values `applySphereStyle` sets at runtime on its effect shader — color, alpha, glow, center/rim falloff opacity, and the texture. Each shape is restyled on a material of its own (a cloned mesh already owns one; a shared one is swapped for a private copy first). Named presets (`findSphereStylePreset`: `<color>-<strength>`, `debug`). Because the texture is set by code, the shipped meshes name no mod: every mod ships the same sphere mesh and textures from the `mod-template`. |
-| [`EffectShaderMaterials.h`](EffectShaderMaterials.h) | Runtime values on a cloned mesh's effect shaders (`BSEffectShaderProperty` — glows, beams, sphere visuals): `makeEffectShaderMaterialsPrivate` gives each effect-shaded shape a material of its own (call on a fresh clone, before it is first attached), then `forEachEffectShaderMaterial` hands you each such material to write — base color, base color scale, falloff opacities — which is safe live on a shown mesh, so it tints or fades one in place. `applySphereStyle` is built on it. |
-| [`F4VRSkelly.h`](F4VRSkelly.h) | `SkellyBones` — string names for 100+ skeleton bones and finger-pose scalars. `Skelly` reads the flattened bone tree: a bone's world transform by name (`findBoneWorldTransform`) and the index fingertip of a hand (`getIndexFingerTipWorldPosition`). It maps the bones on the first read and again when the skeleton is replaced. |
-| [`BSFlattenedBoneTree.h`](BSFlattenedBoneTree.h) | Access to the engine's flattened bone tree for fast per-bone transforms. |
-| [`ScaleformUtils.h`](ScaleformUtils.h) | GFx menu/HUD manipulation: read values, toggle visibility, drive list menus, dispatch events. |
-| [`GameMenusHandler.h`](GameMenusHandler.h) | `BSTEventSink` for menu open/close; query helpers (`isVatsActive`, `isInScopeMenu`, `isFavoritesMenuOpen`) + a callback. |
-| [`F4VRThumbstickControls.h`](F4VRThumbstickControls.h) | Enable/disable the player's analog thumbstick by swapping the controls deadzone INI settings. |
-| [`PapyrusGatewayBase.h`](PapyrusGatewayBase.h) | Base class to *call Papyrus from C++* via a registration script handshake (single instance). |
-| [`DebugDump.h`](DebugDump.h) | Diagnostic dumps (UI tree, skeleton, geometry, world, nodes) triggered by `aDumpDataOnce`. |
-| [`DebugInventory.h`](DebugInventory.h) | Bulk-add game items to the player inventory by category (weapons/throwables/ammo/armor/aid/misc). Each request is a TOML table read by `parseRequest`: an operation (`op`: `get` = obtainable / `get-all` = everything / `print` = dry-run of get / `print-all` = dry-run of get-all), one or more categories, and filter keys (`name`/`keyword` any category, armor `slot`/`class`, weapon `class` = `melee`/`gun`/`unarmed`). Also a typed public API (`ItemFilter`, `iterateObjects`) whose `ItemFilter` carries an optional code `predicate` (an arbitrary `bool(const TESForm*)` AND-constraint, e.g. to print/add only forms matching caller-side logic). Triggered by `aAddItemsOnce`. |
-| [`MiscStructs.h`](MiscStructs.h) | Small game structs not modeled by CommonLibF4VR. |
+| File | What it has |
+|------|-------------|
+| [`F4VRUtils.h`](F4VRUtils.h) | The workhorse. Nodes: find (`findNode`, `findAVObject`), show and hide, update transforms (`updateDown`, `updateTransforms`), load a `.nif`. Player and weapon: `isWeaponDrawn`, `isInPowerArmor`, `isSwimming`, `getEquippedWeaponName`... Other actors: `getActorsWithinRangeOfPoint`, `getActorFacingAngleTo` / `isActorFacing`, `getDetectionLevel`, `isInActiveCombat`, `startCombat`. Settings: `isLeftHandedMode`, `getIniSetting`, the Pip-Boy's placement (`getPipboyPlacement`, `setPipboyPlacement`, which saves it as the game's menu does). UI: `showNotification`, `showMessagebox`, `isGameMenuTakingInput`. |
+| [`EquippedWeaponHandler.h`](EquippedWeaponHandler.h) | Detects a change of the equipped weapon or of power armor: `detectChange()` each frame, then read `weaponName()`, `weaponNameExtended()` (a "Rifle" suffix for a weapon that is both), `isMelee()`... Also the throwable, which exists only mid-throw (`detectThrowableChange()`). Detection only: the caller decides what a change does. |
+| [`PlayerNodes.h`](PlayerNodes.h) | `getVRPlayerNodes()`, CommonLibF4's `RE::VRPlayerNodes` (wands, HMD, Pip-Boy, scope...), and accessors such as `getPrimaryWandNode()`. |
+| [`F4VRSkelly.h`](F4VRSkelly.h) | Bone names (`SkellyBones`), and `Skelly`: a bone's world transform by name, a hand's index fingertip. |
+| [`BSFlattenedBoneTree.h`](BSFlattenedBoneTree.h) | The engine's flattened bone tree, for fast per-bone transforms. |
+| [`PlayerRotation.h`](PlayerRotation.h) | Turns the player the way their comfort settings say, also where the game won't (dialogue, menus): `turnByThumbstick(axisX)` each frame, or `snapTurn` / `smoothTurn`. It rotates the VR room, not the actor ([design](../../docs/tech/vr-player-rotation.md)). |
+| [`WandActivationSphere.h`](WandActivationSphere.h) | A gesture zone around a node, and its config section. See [Activation spheres](#activation-spheres). |
+| [`SphereStyle.h`](SphereStyle.h) | How a sphere visual looks (activation spheres, the vrui fingertip marker): a mesh, and the color, glow, falloff and texture set on its shader at runtime. The presets (`findSphereStylePreset`). |
+| [`EffectShaderMaterials.h`](EffectShaderMaterials.h) | Live values on a cloned mesh's effect shaders (glows, beams, spheres): `makeEffectShaderMaterialsPrivate` on a fresh clone, before it is attached, then `forEachEffectShaderMaterial` to tint or fade it in place. |
+| [`CollisionLayers.h`](CollisionLayers.h) | Havok collision layers: a filter word's layer and its readable name, a name back to a layer, and layer masks (`collisionLayerMask({ ... })` at compile time, `parseCollisionLayerMask` from config). |
+| [`GameMenusHandler.h`](GameMenusHandler.h) | Menu open and close events, and `isVatsActive`, `isInScopeMenu`, `isFavoritesMenuOpen`. |
+| [`ScaleformUtils.h`](ScaleformUtils.h) | GFx menus and the HUD: read values, show and hide, drive list menus, dispatch events. |
+| [`F4VRThumbstickControls.h`](F4VRThumbstickControls.h) | Turns the player's thumbstick movement off and on, through the controls' deadzone settings. |
+| [`PapyrusGatewayBase.h`](PapyrusGatewayBase.h) | Calls Papyrus from C++, through a script that registers itself. |
+| [`DebugDump.h`](DebugDump.h), [`DebugInventory.h`](DebugInventory.h) | `aDumpDataOnce` and `aAddItemsOnce` ([debug settings](../../docs/debug-config.md)). `DebugInventory` also has a typed API (`ItemFilter` with a code `predicate`, `iterateObjects`). |
+| [`F4VROffsets.h`](F4VROffsets.h) | Every RVA the framework calls into. |
+| [`MiscStructs.h`](MiscStructs.h) | Small game structs CommonLibF4VR doesn't model. |
+
+## Traps
+
+- **Update after a move.** After moving or re-parenting nodes, call `updateDown` / `updateTransforms`, or
+  the engine keeps the old world transforms: "the node moved, but nothing changed".
+- **`Actor::IsInCombat()` is always false on VR.** Use `isInActiveCombat`.
+- **`Actor::GetEyeVector` returns unusable values on VR.** `getActorFacingAngleTo` uses the actor's own
+  heading instead, which is also what the AI turns toward a target.
+- **Detection is a scale, not a flag.** `getDetectionLevel` is below 0 when unaware, 0 to ~20 when
+  suspicious, and 20 and up when it sees the target (~50-60 point blank). An actor with no high process
+  reports not detecting.
+- **`startCombat` on an actor already fighting the target does nothing**, which is not a failure.
+- **`isGameMenuTakingInput`** is true for a menu that pauses, uses the cursor, or is modal, which the VR
+  UI stands down for. Workshop build mode sets none of those: pass `true` to count it too.
+- **RVAs are for Fallout 4 VR 1.2.72.** The authority is f4sevr 0.6.21, then CommonLibF4VR's address
+  library, then `Analysis/gold/F4VR-CommonFramework_RE_REFERENCE.md` in the modding reference library.
 
 ## Quick reference
 
@@ -44,7 +59,7 @@ if (auto* n = findNode(playerRoot, "PrimaryWandLaserPointer")) {
 }
 
 // Branch on game/player state:
-if (isInPowerArmor() || IsWeaponDrawn()) { /* ... */ }
+if (isInPowerArmor() || isWeaponDrawn()) { /* ... */ }
 if (isLeftHandedMode()) { /* swap hands */ }
 
 // Tell the player something:
@@ -94,14 +109,3 @@ from `mod-template`, under its own folder:
 - `Textures\<ModName>\f4cf\activation-sphere.dds` and `debug-sphere.dds`
 - `Textures\<ModName>\f4cf\activation-icon-hand.dds` (the default icon), `activation-icon-ring.dds` and
   `activation-icon-circle.dds`
-
-## Notes
-
-- After moving or re-parenting nodes, call the appropriate `updateDown*` / `updateTransforms*`
-  helper so the engine recomputes world transforms — skipping this is the usual cause of
-  "the node moved but nothing rendered."
-- RVAs in [`F4VROffsets.h`](F4VROffsets.h) are version-specific (Fallout 4 VR 1.2.72). The
-  authoritative source is `Analysis/gold/F4VR-CommonFramework_RE_REFERENCE.md` and the
-  f4sevr 0.6.21 / FRIK references in the modding reference library.
-- The node table is documented and maintained as `RE::VRPlayerNodes` in CommonLibF4
-  (`RE/Bethesda/PlayerCharacter.h`).
