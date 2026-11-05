@@ -157,8 +157,9 @@ panel->setContent([this] {
 - **The thumbstick scrolls.** The thumbstick of the hand that owns the pointer is ImGui's mouse
   wheel: pushed up or down it scrolls what the pointer is on, a list, a child window or an open
   combo, as the wheel does on a screen. The speed follows how far it is pushed, from nothing near
-  its center up to the style's `scrollSpeed` at a full push, in lines of text a second. The player
-  does not move or turn, since the wand is hidden from the game.
+  its center up to the style's `scrollSpeed` at a full push, in lines of text a second. A push that
+  is more to a side than up or down scrolls nothing, so the content can take it, to step a slider.
+  The player does not move or turn, since the wand is hidden from the game.
 - **What is drawn.** While the pointer is on a canvas: the owner's ray, and a mark on the canvas
   where the ray meets it. The ray is no longer than a set length, so it ends before a canvas that
   is further away and at the mark of a nearer one, and it fades in and out at its two ends. The
