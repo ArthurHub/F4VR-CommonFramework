@@ -147,9 +147,16 @@ namespace my_mod
 
 `setupMainGameLoop = true` installs the frame hook so `onFrameUpdate()` runs every frame.
 
-A mod that draws vrui panels, activation-sphere icons or other overlays should also set
-`_settings.preloadRendering = true;` in its constructor body, so the font and render pipeline are
-built before the main menu is left instead of stalling the first frame that draws.
+The other fields of [`Settings`](ModBase.h), set in the constructor's body (`_settings.x = ...;`):
+
+| Field | Default | What it does |
+|-------|---------|--------------|
+| `f4seName`, `logFileName` | `name` | The name reported to F4SE, and the log file's. |
+| `trampolineAllocationSize` | 256 | The bytes of the mod's trampoline for its hooks. |
+| `setupMainGameLoopLate` | `false` | Install the frame hook at game loaded instead of plugin load, so this mod's `onFrameUpdate()` runs before every other's (FRIK, which updates the player skeleton). |
+| `preloadRendering` | `false` | Build the font (on a background thread from plugin load) and the render pipeline (at game loaded) ahead of time instead of stalling the first frame that draws (~0.1s). Turn it on in a mod that draws vrui panels, activation-sphere icons or other overlays. |
+| `devbenchTool` | `true` | Register the mod's [devbench tool](devbench/README.md) when devbench is installed. |
+| `modsConfigClient`, `modsConfigMinVersion` | `true`, 1 | Connect the mod to [Mods Config FO4 VR](modsconfig/README.md) at `kPostLoad`, when it is installed with at least that API version. |
 
 ### 3. Entry points + lifecycle
 
@@ -218,7 +225,7 @@ flags for runtime toggling, debug-dump triggers, and batch config saves).
 | Folder / File                        | Namespace      | What it is                                                                                                       |
 | ------------------------------------ | -------------- | ---------------------------------------------------------------------------------------------------------------- |
 | [`ModBase`](ModBase.h)               | `f4cf`         | Base class every mod derives from. Owns the F4SE lifecycle, logging init, and the per-frame update hook.         |
-| [`ConfigBase`](config/ConfigBase.h)  | `f4cf`         | TOML config with hot-reload, embedded-default extraction, and version migration.                                  |
+| [`config/`](config/README.md)        | `f4cf`, `f4cf::config` | `ConfigBase`: TOML config with hot-reload, saves that keep the file's layout, session overrides, version migration. |
 | [`Logger.h`](Logger.h)               | `f4cf::logger` | spdlog wrapper. `logger::trace` / `debug` / `info` / `warn` / `error` functions + rate-limited `logger::sample`. |
 | [`common/`](common/README.md)        | `f4cf::common` | Math (quaternions, matrices, transforms) and engine-agnostic utilities (strings, files, resources, time).        |
 | [`debug/`](debug/README.md)          | `f4cf::debug`  | Immediate-mode in-world debug draw overlay: wire primitives, HUD text/labels, watch table. Zero cost until used. |
@@ -265,7 +272,7 @@ flags for runtime toggling, debug-dump triggers, and batch config saves).
   `f4cf::g_mod`, `f4cf::vrcf::VRControllers`, `f4cf::vrcf::VRControllersSuppress`,
   `f4cf::vrcf::VRHaptics`, and `f4cf::vrui::g_uiManager`.
 - **Style.** clang-format (LLVM-based, 180 cols, 4-space indent, CRLF, braces on new lines). See the
-  repo [CLAUDE.md](../CLAUDE.md) and [.clang-format](../.clang-format).
+  [.clang-format](../.clang-format); `pre-commit run --files <changed files>` applies it.
 
 ## Reverse-engineering reference
 
