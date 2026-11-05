@@ -62,7 +62,7 @@ overrides `onModLoaded` (F4SE load: Papyrus, hooks), `onGameLoaded` (once), `onG
 | `src/render/` | `f4cf::render` | Overlay drawing: the shared Submit hook, primitives, text, textures, scene-depth occlusion | [src/render/README.md](src/render/README.md), [docs/tech/scene-depth-occlusion.md](docs/tech/scene-depth-occlusion.md) |
 | `src/imgui/` | `f4cf::imgui` | Dear ImGui canvases on world-space quads, the wand pointer, the VR keyboard | [src/imgui/README.md](src/imgui/README.md), [docs/tech/vr-keyboard.md](docs/tech/vr-keyboard.md) |
 | `src/debug/` | `f4cf::debug` | Immediate-mode in-world debug draw (`debug::dd()`) | [src/debug/README.md](src/debug/README.md) |
-| `src/f4vr/` | `f4cf::f4vr` | Game state: nodes, skeleton, menus, Scaleform, player rotation; all RVAs in `F4VROffsets.h` | [src/f4vr/README.md](src/f4vr/README.md) |
+| `src/f4vr/` | `f4cf::f4vr` | Game state: nodes, skeleton, menus, Scaleform, player rotation, activation spheres; all RVAs in `F4VROffsets.h` | [src/f4vr/README.md](src/f4vr/README.md), [docs/activation-spheres.md](docs/activation-spheres.md) |
 | `src/f4sevr/` | `F4SEVR` | Ported F4SE VR SDK: Papyrus interop and native functions | [src/f4sevr/README.md](src/f4sevr/README.md) |
 | `src/common/` | `f4cf::common` | Math (quaternions, matrices), utilities, `TomlEditor` | [src/common/README.md](src/common/README.md) |
 | `src/devbench/` | `f4cf::devbench` | The mod's devbench tool: actions an agent calls in the running game | [src/devbench/README.md](src/devbench/README.md) |

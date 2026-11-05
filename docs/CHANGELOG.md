@@ -9,6 +9,9 @@ major version is `0`, a minor bump may break the API; the **Upgrading** notes sa
 
 ## 0.5.1 — unreleased
 
+- **Activation spheres have their own player guide**, [`activation-spheres.md`](activation-spheres.md),
+  and [`input-binding.md`](input-binding.md) keeps the binding alone. **Upgrading:** a mod's docs that link
+  `input-binding.md#activation-spheres` link `activation-spheres.md` instead.
 - **A held thumbstick scrolls faster**: an axis push (`check()` of an axis binding, `isAxisPressed`,
   `isThumbstickPressed`, `getAxisPressedDirection`, `getThumbstickPressedDirection`) steps at once on a fresh
   push, repeats first after `max(cooldown, 0.35s)`, then every `cooldown`, halved after 1s and quartered after

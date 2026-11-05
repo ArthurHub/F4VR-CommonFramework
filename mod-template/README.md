@@ -44,6 +44,7 @@ Settings live in a TOML file created on first run at:
 Edits apply **live** while the game is running — no restart needed.
 
 - Controller-binding syntax: [input-binding guide](https://github.com/ArthurHub/F4VR-CommonFramework/blob/main/docs/input-binding.md)
+- Gesture zones: [activation-spheres guide](https://github.com/ArthurHub/F4VR-CommonFramework/blob/main/docs/activation-spheres.md)
 - Logging / debug keys: [debug-config guide](https://github.com/ArthurHub/F4VR-CommonFramework/blob/main/docs/debug-config.md)
 
 TODO: document your mod's own settings here.

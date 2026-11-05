@@ -18,7 +18,7 @@ that make it all work.
 | [`F4VROffsets.h`](F4VROffsets.h) | All reverse-engineered RVAs (`REL::Relocation` / offsets) the framework calls into. |
 | [`PlayerRotation.h`](PlayerRotation.h) | Turns the player the way their VR comfort settings say (`iRotationType:VR` and friends, read live off the engine's `Setting` objects) — including where the game refuses to, since vanilla turning is a player-controls input handler and dialogue/menus take it away while a mod can still see the stick. Feed `turnByThumbstick(axisX)` each frame for the whole behaviour (snap per flick, continuous turn, or nothing, plus the stick latch), or drive it with `snapTurn`/`smoothTurn`; `getYaw`/`setYaw`/`rotateBy` bypass the configured style. Rotates the VR world (room) transform, as the engine does — not the actor. See [`../../docs/tech/vr-player-rotation.md`](../../docs/tech/vr-player-rotation.md). |
 | [`PlayerNodes.h`](PlayerNodes.h) | `getVRPlayerNodes()` — CommonLibF4's `RE::VRPlayerNodes`, the VR reference nodes at `PlayerCharacter + 0x6E0` (wands, weapon offsets, Pip-Boy, HMD, scope, etc.) — plus wand/weapon accessors like `getPrimaryWandNode()`. |
-| [`WandActivationSphere.h`](WandActivationSphere.h) | Reusable proximity "activation sphere": a sphere around a node that, while a wand is inside it, suppresses each opted-in binding's button (owner-keyed, per-binding `InputBinding::suppress`), pulses a one-shot entry haptic, and fires an `onActivated` callback when a bound press lands (with a per-binding activation haptic). Two optional visuals, each drawn never / always / only `WhenInside` a hand / `WhenAvailable` (any binding fed enabled) (`ActivationSphereVisibility`): a sphere styled per sphere by a `SphereStyle` (default = the `white-subtle` preset; a runtime change reloads a freshly styled clone) at a visual-only scale (draw it smaller than the interaction radius as an "inside" hint; `Frame::showZone` forces it on at the zone's true size), facing the player's heading or the world axes (`ActivationSphereOrientation`); and an icon (`ActivationIconStyle`: a DDS, tint, world size — default `f4cf\activation-icon-hand.dds`) drawn at the zone center facing the HMD, on one primitive-overlay layer shared by all spheres, fading in and out. The authored bundle is `WandActivationConfig` (zone + optional power-armor zone + two bindings + entry/per-binding haptics + per-visual visibility + sphere and icon styles), loaded from one config section via `ConfigBase::loadWandActivationConfig`. The caller mirrors the zone transform for handedness. See [`../../docs/input-binding.md`](../../docs/input-binding.md#activation-spheres). |
+| [`WandActivationSphere.h`](WandActivationSphere.h) | A gesture zone around a node, and its config section (`WandActivationConfig`). See [Activation spheres](#activation-spheres). |
 | [`SphereStyle.h`](SphereStyle.h) | How a sphere visual looks (activation-sphere zones, the vrui fingertip marker): a mesh plus the values `applySphereStyle` sets at runtime on its effect shader — color, alpha, glow, center/rim falloff opacity, and the texture. Each shape is restyled on a material of its own (a cloned mesh already owns one; a shared one is swapped for a private copy first). Named presets (`findSphereStylePreset`: `<color>-<strength>`, `debug`). Because the texture is set by code, the shipped meshes name no mod: every mod ships the same sphere mesh and textures from the `mod-template`. |
 | [`EffectShaderMaterials.h`](EffectShaderMaterials.h) | Runtime values on a cloned mesh's effect shaders (`BSEffectShaderProperty` — glows, beams, sphere visuals): `makeEffectShaderMaterialsPrivate` gives each effect-shaded shape a material of its own (call on a fresh clone, before it is first attached), then `forEachEffectShaderMaterial` hands you each such material to write — base color, base color scale, falloff opacities — which is safe live on a shown mesh, so it tints or fades one in place. `applySphereStyle` is built on it. |
 | [`F4VRSkelly.h`](F4VRSkelly.h) | `SkellyBones` — string names for 100+ skeleton bones and finger-pose scalars. `Skelly` reads the flattened bone tree: a bone's world transform by name (`findBoneWorldTransform`) and the index fingertip of a hand (`getIndexFingerTipWorldPosition`). It maps the bones on the first read and again when the skeleton is replaced. |
@@ -58,6 +58,42 @@ like `getPrimaryWandNode()`):
 ```cpp
 RE::NiNode* hmd = getVRPlayerNodes()->hmdNode;
 ```
+
+## Activation spheres
+
+An activation sphere is a gesture: a zone around a node (a wand, the HMD, a prop on the body) that a
+hand reaches into and presses a binding in. The player's side, every config key and preset, is
+[`docs/activation-spheres.md`](../../docs/activation-spheres.md).
+
+- **`WandActivationConfig`** is one config section: the zone and its power-armor variant, two bindings,
+  the entry and per-binding haptics, when the sphere and the icon show, and their styles. Load it with
+  `ConfigBase::loadWandActivationConfig(config, "Section", defaults)`.
+- **`WandActivationSphere`** is the zone at runtime, one per gesture, constructed with an owner key.
+  Each frame `onFrameUpdate(node, config, onActivated)` runs the proximity test, suppresses each
+  `suppress` binding while a hand is inside (under that key), plays the haptics, applies a cooldown and
+  draws the visuals. `onActivated(binding)` gets the binding that fired and returns whether it handled
+  it; the first one handled wins the frame.
+- **Gating:** a binding with no action in the current state (no weapon drawn) is passed as disabled for
+  that frame through the `Frame` overload. `whenavailable` visuals then show only what will work.
+- **Handedness:** the caller mirrors the zone transform for left-handed mode.
+- **Where the sphere hangs:** the zone is measured from `node`, but a raw tracking node (HMD, wand)
+  doesn't render children, so the sphere hangs under `sphereAttachNode` (the primary-hand UI node by
+  default) and is moved to the zone each frame. Never attach it inside the player's 3D: character
+  creation rebuilds that tree, and a sphere inside it crashes the game.
+- **`Frame::showZone`** draws the sphere at the zone's true size whatever the config says, for a tuning
+  mode that shows every zone.
+
+The icon (`ActivationIconStyle`: texture, tint, size) faces the HMD and fades in and out, drawn on one
+`render` layer shared by every sphere, so it needs no mesh. The sphere is a mesh restyled at runtime by
+a [`SphereStyle`](SphereStyle.h); a style change reloads a freshly styled clone.
+
+Because the sphere's texture is set by code, its mesh names no mod, and every mod ships the same files
+from `mod-template`, under its own folder:
+
+- `Meshes\<ModName>\f4cf\activation-sphere.nif`, the one mesh every preset draws on
+- `Textures\<ModName>\f4cf\activation-sphere.dds` and `debug-sphere.dds`
+- `Textures\<ModName>\f4cf\activation-icon-hand.dds` (the default icon), `activation-icon-ring.dds` and
+  `activation-icon-circle.dds`
 
 ## Notes
 

@@ -94,7 +94,8 @@ The framework's own [CLAUDE.md](external/F4VR-CommonFramework/CLAUDE.md) maps it
 | Need                                                        | Read                               |
 | ----------------------------------------------------------- | ---------------------------------- |
 | Controller input, input suppression, haptics                | `src/vrcf/README.md`               |
-| Rebindable controller bindings, activation spheres          | `docs/input-binding.md`            |
+| Rebindable controller bindings                              | `docs/input-binding.md`            |
+| Activation spheres (reach-into-a-zone gestures)             | `docs/activation-spheres.md`, `src/f4vr/README.md` |
 | In-world VR UI: panels and buttons from text and images     | `src/vrui/README.md`               |
 | Lines, images and text drawn over the VR view               | `src/render/README.md`             |
 | Dear ImGui content on world-space quads                     | `src/imgui/README.md`              |

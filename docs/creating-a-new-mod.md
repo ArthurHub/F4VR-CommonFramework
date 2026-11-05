@@ -480,8 +480,8 @@ That's a complete mod: it builds, loads, responds to input, and reads live confi
 You have the skeleton; the framework has a lot more to offer. Each subsystem has a code-adjacent README
 with examples:
 
-- **[Controller bindings & activation spheres](input-binding.md)** — make inputs rebindable from the
-  config, and build reach-into-a-zone gestures.
+- **[Controller bindings](input-binding.md)** — make inputs rebindable from the config.
+- **[Activation spheres](activation-spheres.md)** — reach-into-a-zone gestures, and how players tune them.
 - **[`vrcf/`](../src/vrcf/README.md)** — the full controller API (long-press, double-tap, thumbstick,
   haptics) and input suppression.
 - **[`f4vr/`](../src/f4vr/README.md)** — game-state utilities: nodes, skeleton, weapon/menu state,
