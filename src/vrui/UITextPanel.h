@@ -1,6 +1,7 @@
 #pragma once
 
 #include <functional>
+#include <limits>
 #include <memory>
 #include <optional>
 #include <string>
@@ -69,7 +70,8 @@ namespace f4cf::vrui
      *
      * A row is a paragraph rather than a line: a '\n' in its text starts a new line, and text too
      * wide for the panel wraps onto the next. Every line a row makes keeps its color, decoration and
-     * height. A '\t' moves on to the next tab stop (see UITextPanel::setTabWidth).
+     * height. A '\t' moves on to the next tab stop (see UITextPanel::setTabWidth), and a '\v' moves the
+     * rest of the row to the right edge (see TEXT_PANEL_RIGHT_TAB).
      *
      * For more than one color in a row, give it spans instead of text: they are drawn one after another
      * as a single paragraph, each in its own color or the row's, and wrap as one - a color change inside
@@ -129,6 +131,16 @@ namespace f4cf::vrui
     inline constexpr float TEXT_PANEL_TAB_SPACES = 4.0f;
 
     /**
+     * The right tab: in a row's text, moves the rest of the row to the panel's right edge, whatever the
+     * panel's alignment, as a value or a prompt ending a labelled row. It is measured as one space, the least
+     * room left between the two parts. The rest of the row hugs the right edge on the lines it wraps onto
+     * too. Only a row's first one does this; a later one is a space.
+     *
+     *     rows.push_back({ .spans = { { "INTENSITY\t1.0\v" }, { .image = "f4cf\\bindings\\right-thumbstick-updown.dds" } } });
+     */
+    inline constexpr char TEXT_PANEL_RIGHT_TAB = '\v';
+
+    /**
      * A vrui panel that draws rows of text with the framework's own primitive renderer.
      *
      * It is the low-fidelity sibling of imgui::UIImGuiPanel: the same idea - a rectangle in a vrui
@@ -153,7 +165,8 @@ namespace f4cf::vrui
      * Spaces at the start of a row indent its first line, and a tab moves on to the next stop, measured
      * from the start of the line in vrui units - so rows line up in columns even at different text
      * heights. Spaces at the start of a line the wrap made are dropped, as is a tab whose stop is past
-     * the width, which wraps instead.
+     * the width, which wraps instead. A right tab ('\v', TEXT_PANEL_RIGHT_TAB) ends the row at the right
+     * edge instead: a label on the left, its value on the right.
      *
      * The text is the framework's font - Roboto Medium, unless the mod ships its own at
      * render::CUSTOM_TEXT_FONT_PATH - kerned and drawn from a distance field so it stays sharp at any
@@ -165,7 +178,8 @@ namespace f4cf::vrui
      * then. A path that does not load takes no room.
      *
      * The content callback runs every frame, but the text is only re-wrapped and re-measured when a row's
-     * text, spans or height changes, or the width, text height or tab width it is laid out against does.
+     * text, spans or height changes, or the width, text height, tab width or image scale it is laid out
+     * against does.
      *
      * The chrome - background, border, rounding, padding, occlusion - is UIPanel's; the rows are laid
      * out inside what it leaves, and the style's content colour is the rows' default colour.
@@ -234,6 +248,13 @@ namespace f4cf::vrui
          */
         void setTabWidth(float units);
 
+        /**
+         * Scales every image in the rows on top of the height its span asks for; 1.0, the default, keeps
+         * that height. It sizes a panel's icons apart from the code that builds its rows, as the dev
+         * layout's Img field does.
+         */
+        void setImageScale(float multiplier);
+
     protected:
         std::optional<UISize> measureContent(float availableWidth, float availableHeight) override;
         void appendContent(render::PrimitiveDraw& frame, const UIPanelContentArea& area) const override;
@@ -285,6 +306,10 @@ namespace f4cf::vrui
             // in vrui units
             float imageOverhang = 0.0f;
 
+            // the first of the pieces after the row's right tab, which the draw moves to the right edge;
+            // past every piece when the line has none
+            std::size_t rightPiece = (std::numeric_limits<std::size_t>::max)();
+
             float width() const
             {
                 return pieceCount > 0 ? inkRight - bearing : 0.0f;
@@ -308,6 +333,7 @@ namespace f4cf::vrui
         float _textHeightUnits = TEXT_PANEL_TEXT_HEIGHT_UNITS;
         float _lineSpacing = TEXT_PANEL_LINE_SPACING;
         float _tabWidthUnits = 0.0f;
+        float _imageScale = 1.0f;
 
         // this frame's rows, fetched during layout and drawn at frame end; the callback fills the
         // scratch vector, which is kept only to compare against and to reuse its capacity
@@ -322,6 +348,7 @@ namespace f4cf::vrui
         float _linesWrapWidth = 0.0f;
         float _linesTextHeight = 0.0f;
         float _linesTabWidth = 0.0f;
+        float _linesImageScale = 1.0f;
         float _linesWidestUnits = 0.0f;
 
         // the textures the laid-out rows show, by path, held so they stay loaded while shown

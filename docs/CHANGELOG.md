@@ -9,6 +9,11 @@ major version is `0`, a minor bump may break the API; the **Upgrading** notes sa
 
 ## 0.5.1 — unreleased
 
+- **A text panel row can end on the right edge**: a `'\v'` (`vrui::TEXT_PANEL_RIGHT_TAB`) in its text or
+  spans moves the rest of the row to the panel's right edge, at least a space past what precedes it, so a
+  label and its value or binding prompt sit on either side of one row.
+- **A text panel scales its images**: `UITextPanel::setImageScale` multiplies every image span's height,
+  and the dev layout tunes it live as `Img:(scale)` on the panel's line.
 - **devbench actions of a mod without a frame update run on the game thread on Fallout 4 VR**: they go
   through devbench's own main-thread queue, as F4SE's task interface runs tasks on worker threads there.
   F4SE's queue stays the fallback for a devbench without that queue.

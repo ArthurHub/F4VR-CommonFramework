@@ -139,13 +139,16 @@ grow to (the max width, or the ~21-unit atlas).
 
 - **Wrapping:** at spaces, to the width it has; a word too long for a line is broken. `'\n'` starts a
   line. `'\t'` moves to the next tab stop from the line start (`setTabWidth`), so columns line up.
+  `'\v'` (`TEXT_PANEL_RIGHT_TAB`) moves the rest of the row to the right edge, at least a space past
+  what precedes it, whatever the panel's alignment: a label on the left, its value or prompt on the right.
 - **Rows:** each can set its own `textHeight`, and give `spans`, pieces in colors of their own, instead
   of one `text`.
 - **Images in a line:** a span can be an image, sized from the text height (`imageHeight`, 1.5x by
   default), centered on the capitals, wrapping like a word. `color` tints it, and `tintWithText` tints
-  it with the row's text color.
+  it with the row's text color. The panel's `setImageScale` scales every image on top of that.
 - **Re-layout:** the rows callback runs each frame, but the text is laid out again only when a row's
-  text, spans or height, the width, the text height or the tab width changes, or an image loads.
+  text, spans or height, the width, the text height, the tab width or the image scale changes, or an
+  image loads.
 
 ```cpp
 rows.push_back({ .spans = { { "PRESS " }, { .image = "f4cf\\bindings\\right-trigger.dds", .tintWithText = true }, { " TO FIRE" } } });
@@ -327,5 +330,6 @@ Tunes placement live, through a file, with nothing for the mod to call. Set `bVR
 
 A line has `Pos`, `Rot` (degrees around x, y, z), `Scale` and `Size`. A container has `Padding` and
 `Layout` instead of `Size`, and a boxed one its box's `Pad`. Panels add `Pad:(t,r,b,l)`, and `MaxW`
-while their width follows the content; text and button panels add their text sizes as `Text`; an ImGui
+while their width follows the content; text and button panels add their text sizes as `Text`, and text
+panels their image scale as `Img`; an ImGui
 panel adds its curve radius as `Curve`, 0 when flat. A field deleted from a line is no longer applied.
