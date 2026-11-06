@@ -81,7 +81,7 @@ requests, debug draw, scene depth) are in [`docs/debug-config.md`](../../docs/de
 - The mod's own save is not loaded back. The watcher loads the file only when its content is not
   what the mod last loaded or saved, so a write that does not go through `ConfigBase` is taken as
   someone else's and loaded. A read that loads no values (`getConfigValue`, the DebugAdjuster's field
-  mode) parses that kept content and reads no disk.
+  mode) uses the parse of that kept content, made once after each load or save, and reads no disk.
 
 ## Loads and their threads
 
@@ -101,6 +101,9 @@ requests, debug draw, scene depth) are in [`docs/debug-config.md`](../../docs/de
 - `setConfigOverride(s)` puts a value in place of the file's until `clearConfigOverride(s)`, and is
   never written to the file; several go with one reload. A set loads the kept content of the file and
   reads no disk, so it can run many times a second for a preview; a clear reads the file.
+- `reload = false` on a set or a clear records the change with no reload and tells no subscriber: for a
+  caller whose members have the values already, as a mod's own UI that hands its edits to Mods Config
+  FO4 VR. That costs a few lookups, so it can run every frame.
 - Every override has an owner, the first argument of each call, and an owner clears only its own.
   The devbench tool's is `devbench`, Mods Config FO4 VR's live preview is `ModsConfigFO4VR`, and a
   mod's API passes its caller's name. With two owners on one key the one set last applies, and the

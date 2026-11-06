@@ -59,20 +59,19 @@ namespace f4cf::config
      * why and what is wrong at which line, the kept content stays, and the result is Invalid.
      * From `Source::ChangedFile` a file that holds the kept content, or the content that was invalid, is left alone:
      * the file watcher's event is then of the mod's own save, or one more event of a write that is already handled.
-     * From `Source::Kept` the kept content is parsed and the file is not read, so an override that is previewed
-     * reads no disk. With nothing kept, the file is read.
+     * From `Source::Kept` the kept content's parse is copied and the file is not read, so an override that is
+     * previewed reads no disk and parses nothing. With nothing kept, the file is read.
      */
     ConfigFile::LoadResult ConfigFile::load(const std::string& path, toml::table& table, std::string& error, const Source source)
     {
         std::lock_guard lock(_mutex);
 
         if (source == Source::Kept && _content) {
-            auto parsed = common::parseToml(*_content, fileNameOf(path));
+            const auto parsed = parsedContent(path, &error);
             if (!parsed) {
-                error = std::move(parsed.error());
                 return LoadResult::Invalid;
             }
-            table = std::move(*parsed);
+            table = *parsed;
             return LoadResult::Loaded;
         }
 
@@ -92,29 +91,49 @@ namespace f4cf::config
 
         table = std::move(*parsed);
         _content = std::move(content);
+        _parsed.reset();
         _invalid.reset();
         return LoadResult::Loaded;
     }
 
     /**
-     * Parse the file as the mod has it into `table`, for a read that loads no values: the kept content with no read
-     * of the file, or the file when nothing is kept. Nothing is kept by it, so the file watcher still loads a file
-     * that was read here. Returns false when the file could not be read or is not TOML.
+     * The file as the mod has it, for a read that loads no values: the kept content's parse, made once for it, with
+     * no read of the file, or the file when nothing is kept. Nothing is kept by a read of the file, so the file
+     * watcher still loads it. Null when the file could not be read or is not TOML. The table is shared and never
+     * changes: a caller that changes it copies it.
      */
-    bool ConfigFile::read(const std::string& path, toml::table& table) const
+    std::shared_ptr<const toml::table> ConfigFile::read(const std::string& path) const
     {
         std::lock_guard lock(_mutex);
 
-        const auto content = _content ? _content : readFile(path);
+        if (_content) {
+            return parsedContent(path);
+        }
+        const auto content = readFile(path);
         if (!content) {
-            return false;
+            return nullptr;
         }
         auto parsed = common::parseToml(*content, fileNameOf(path));
-        if (!parsed) {
-            return false;
+        return parsed ? std::make_shared<const toml::table>(std::move(*parsed)) : nullptr;
+    }
+
+    /**
+     * The parse of the kept content, parsed on the first call after it changed. Null, with why in `error`, for
+     * content that is not TOML. Under _mutex, with content kept.
+     */
+    std::shared_ptr<const toml::table> ConfigFile::parsedContent(const std::string& path, std::string* error) const
+    {
+        if (!_parsed) {
+            auto parsed = common::parseToml(*_content, fileNameOf(path));
+            if (!parsed) {
+                if (error) {
+                    *error = std::move(parsed.error());
+                }
+                return nullptr;
+            }
+            _parsed = std::make_shared<const toml::table>(std::move(*parsed));
         }
-        table = std::move(*parsed);
-        return true;
+        return _parsed;
     }
 
     /**
@@ -137,6 +156,7 @@ namespace f4cf::config
         } else {
             _content.reset();
         }
+        _parsed.reset();
         return true;
     }
 }

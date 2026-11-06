@@ -266,7 +266,7 @@ TEST_CASE("ConfigFile: a file that is not TOML is not loaded, says why, and is r
     SECTION("a read of it fails, with nothing kept")
     {
         const ConfigFile fresh;
-        REQUIRE_FALSE(fresh.read(file.path, table));
+        REQUIRE_FALSE(fresh.read(file.path));
     }
 }
 
@@ -481,35 +481,40 @@ TEST_CASE("ConfigFile: a read gives the config as the mod has it, with no read o
     {
         writeBySomeoneElse(file, "fScale", 2.0f);
 
-        toml::table read;
-        REQUIRE(configFile.read(file.path, read));
-        REQUIRE(value(read, "fScale") == "1.0");
+        const auto read = configFile.read(file.path);
+        REQUIRE(read);
+        REQUIRE(value(*read, "fScale") == "1.0");
 
         toml::table eventLoad;
         REQUIRE(onFileEvent(configFile, file, eventLoad) == LoadResult::Loaded);
         REQUIRE(value(eventLoad, "fScale") == "2.0");
 
-        toml::table nextRead;
-        REQUIRE(configFile.read(file.path, nextRead));
-        REQUIRE(value(nextRead, "fScale") == "2.0");
+        const auto nextRead = configFile.read(file.path);
+        REQUIRE(nextRead);
+        REQUIRE(value(*nextRead, "fScale") == "2.0");
     }
     SECTION("the file can be gone")
     {
         std::filesystem::remove(file.path);
 
-        toml::table read;
-        REQUIRE(configFile.read(file.path, read));
-        REQUIRE(value(read, "fScale") == "1.0");
-        REQUIRE(value(read, "iMode") == "0");
+        const auto read = configFile.read(file.path);
+        REQUIRE(read);
+        REQUIRE(value(*read, "fScale") == "1.0");
+        REQUIRE(value(*read, "iMode") == "0");
     }
-    SECTION("the mod's own save is in it")
+    SECTION("the mod's own save is in it, and a table read before it stays as it was")
     {
+        const auto before = configFile.read(file.path);
+        REQUIRE(before);
+        REQUIRE(configFile.read(file.path) == before);
+
         saveByMod(configFile, file, "iMode", 3);
 
-        toml::table read;
-        REQUIRE(configFile.read(file.path, read));
-        REQUIRE(value(read, "iMode") == "3");
-        REQUIRE(value(read, "fScale") == "1.0");
+        const auto read = configFile.read(file.path);
+        REQUIRE(read);
+        REQUIRE(value(*read, "iMode") == "3");
+        REQUIRE(value(*read, "fScale") == "1.0");
+        REQUIRE(value(*before, "iMode") == "0");
     }
 }
 
@@ -521,9 +526,9 @@ TEST_CASE("ConfigFile: a read with nothing kept reads the file, and keeps nothin
 
     SECTION("before the first load")
     {
-        toml::table read;
-        REQUIRE(configFile.read(file.path, read));
-        REQUIRE(value(read, "fScale") == "1.0");
+        const auto read = configFile.read(file.path);
+        REQUIRE(read);
+        REQUIRE(value(*read, "fScale") == "1.0");
     }
     SECTION("after the mod saved over a write by someone else")
     {
@@ -531,10 +536,10 @@ TEST_CASE("ConfigFile: a read with nothing kept reads the file, and keeps nothin
         writeBySomeoneElse(file, "fScale", 2.0f);
         saveByMod(configFile, file, "iMode", 1);
 
-        toml::table read;
-        REQUIRE(configFile.read(file.path, read));
-        REQUIRE(value(read, "fScale") == "2.0");
-        REQUIRE(value(read, "iMode") == "1");
+        const auto read = configFile.read(file.path);
+        REQUIRE(read);
+        REQUIRE(value(*read, "fScale") == "2.0");
+        REQUIRE(value(*read, "iMode") == "1");
     }
 
     // the read loaded no values, so the file is still for the file watcher to load
@@ -545,7 +550,6 @@ TEST_CASE("ConfigFile: a read of a missing file with nothing kept fails")
 {
     const TempFile file;
     const ConfigFile configFile;
-    toml::table table;
 
-    REQUIRE_FALSE(configFile.read(file.path, table));
+    REQUIRE_FALSE(configFile.read(file.path));
 }

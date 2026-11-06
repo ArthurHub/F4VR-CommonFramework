@@ -7,6 +7,7 @@
 
 using f4cf::common::TomlEditor;
 using f4cf::config::applyOverride;
+using f4cf::config::canApplyOverride;
 using f4cf::config::ConfigKey;
 using f4cf::config::nodeOf;
 using f4cf::config::Overrides;
@@ -337,6 +338,27 @@ TEST_CASE("ConfigOverrides: an override of a value in a nested table is put by i
     REQUIRE_FALSE(applyOverride(config, { "Main", "fScale.x" }, "1"));
     REQUIRE_FALSE(applyOverride(config, { "Main", "two words" }, "1"));
     REQUIRE(TomlEditor::Value(*nodeOf(config, { "Main", "fScale" })).text() == "1.0");
+}
+
+TEST_CASE("ConfigOverrides: whether an override can be put is told as applyOverride puts it, with no change to the config")
+{
+    const auto config = toml::parse("[Main]\ng = { x = 1 }\nfScale = 1.0\n\n[Main.hand]\nfX = 1.5\n");
+    const auto before = config;
+
+    for (const auto& key : { SCALE,
+             ConfigKey{ "Main", "hand.fX" },
+             ConfigKey{ "Main", "g.x" },
+             ConfigKey{ "Main", "arm.fY" },
+             ConfigKey{ "New", "a.b" },
+             ConfigKey{ "Main", "fScale.x" },
+             ConfigKey{ "Main", "two words" },
+             ConfigKey{ "Main", "hand.fX.y" } }) {
+        auto tried = config;
+        CHECK(canApplyOverride(config, key) == applyOverride(tried, key, "1"));
+    }
+    CHECK_FALSE(canApplyOverride(config, { "Main", "fScale.x" }));
+    CHECK(canApplyOverride(config, { "Main", "arm.fY" }));
+    CHECK(config == before);
 }
 
 TEST_CASE("ConfigKey: two spellings of one path are one key, its first key the section")

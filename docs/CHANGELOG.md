@@ -9,6 +9,12 @@ major version is `0`, a minor bump may break the API; the **Upgrading** notes sa
 
 ## 0.5.1 — unreleased
 
+- **An edit a mod's UI hands to Mods Config FO4 VR costs no reload**: its change comes back marked
+  `handedOver` (client header of Mods Config FO4 VR), and the live preview records the override without
+  reloading the config, so the mod can hand over a value every frame. `setConfigOverrides` and
+  `clearConfigOverrides` take `reload = false` for the same, and a set no longer parses the file.
+  **Upgrading:** a mod applies a value in its own config before it calls `setPendingValue`, as the change
+  no longer reloads the config for it, and no config-changed subscriber is told of it.
 - **Activation spheres have their own player guide**, [`activation-spheres.md`](activation-spheres.md),
   and [`input-binding.md`](input-binding.md) keeps the binding alone. **Upgrading:** a mod's docs that link
   `input-binding.md#activation-spheres` link `activation-spheres.md` instead.

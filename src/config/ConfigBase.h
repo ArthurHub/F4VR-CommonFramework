@@ -65,11 +65,11 @@ namespace f4cf
 
         std::expected<void, std::string> setConfigOverride(const std::string& owner, const char* section, const char* key, const config::ConfigValue& value);
 
-        std::expected<void, std::string> setConfigOverrides(const std::string& owner, const std::vector<config::ConfigEntry>& overrides);
+        std::expected<void, std::string> setConfigOverrides(const std::string& owner, const std::vector<config::ConfigEntry>& overrides, bool reload = true);
 
         bool clearConfigOverride(const std::string& owner, const char* section, const char* key);
 
-        std::size_t clearConfigOverrides(const std::string& owner, const std::vector<config::ConfigKey>& keys);
+        std::size_t clearConfigOverrides(const std::string& owner, const std::vector<config::ConfigKey>& keys, bool reload = true);
 
         std::size_t clearAllConfigOverrides(const std::string& owner);
 
@@ -150,7 +150,7 @@ namespace f4cf
         toml::table loadEmbeddedDefault() const;
         void loadDebugSection(const toml::table& config);
         void applyConfig(const toml::table& config);
-        bool loadKeptConfig(toml::table& config) const;
+        std::shared_ptr<const toml::table> keptConfig() const;
         std::vector<config::ConfigKey> resolvedKeys(const std::vector<config::ConfigKey>& keys) const;
         void updateConfigToLatestVersion(int currentVersion, int latestVersion);
         void importIniConfig();

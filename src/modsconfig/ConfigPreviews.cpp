@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "common/CommonUtils.h"
+#include "perf/Perf.h"
 
 namespace
 {
@@ -36,16 +37,33 @@ namespace f4cf::modsconfig
 
     /**
      * Sets the override of a preview, or clears it for a discard, as the value is back at the file's. Nothing for a
-     * setting kept anywhere but the mod's config file.
+     * setting kept anywhere but the mod's config file. A change the mod's own setPendingValue handed over is only
+     * recorded, with no reload of the config: the mod applied the value before it handed it over, and a reload
+     * would drop the values it changed and has not handed over yet. So the mod can hand over a value every frame.
      */
     void ConfigPreviews::onChange(const mods_config::api::Change& change) const
     {
+        F4CF_PERF_FUNCTION();
         const auto key = keyOf(change);
         if (!key) {
             return;
         }
+        if (change.handedOver) {
+            F4CF_PERF_SCOPE("handedOver");
+            apply(*key, change, false);
+            return;
+        }
+        apply(*key, change, true);
+    }
+
+    /**
+     * Sets the override of a change's key to its value, or clears it for a discard, and reloads the config for it
+     * when `reload` is set.
+     */
+    void ConfigPreviews::apply(const config::ConfigKey& key, const mods_config::api::Change& change, const bool reload) const
+    {
         if (change.discard) {
-            _config.clearConfigOverrides(OWNER, { *key });
+            _config.clearConfigOverrides(OWNER, { key }, reload);
             return;
         }
         const auto value = std::visit(
@@ -54,7 +72,7 @@ namespace f4cf::modsconfig
             },
             change.value);
         // a refused value is in the log, with why, and the mod keeps the value it had
-        (void)_config.setConfigOverrides(OWNER, { config::ConfigEntry{ key->section, key->key, value } });
+        (void)_config.setConfigOverrides(OWNER, { config::ConfigEntry{ key.section, key.key, value } }, reload);
     }
 
     /**

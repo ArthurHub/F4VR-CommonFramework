@@ -535,6 +535,8 @@ namespace mods_config::api
      * with the script and the name of a property: the game has the value already. One kept in a state of the mod has
      * the state's name alone, and the state's setter has applied the value. A setting a Save wrote is one too, with its
      * value before the Save and the value written. Its texts are valid during the handler: copy what you keep.
+     * `handedOver` marks the change a value the mod's own setPendingValue is handing over makes in that call, a
+     * preview, or a Discard for its baseline: the mod has the value already, so a handler only records it.
      */
     struct Change
     {
@@ -550,6 +552,7 @@ namespace mods_config::api
         Value previous;
         Value value;
         bool discard = false;
+        bool handedOver = false;
     };
 
     /**
@@ -735,9 +738,9 @@ namespace mods_config::api
         /**
          * Sets the pending value of a setting of the config spec by its id, as the player's edit in the menu: a UI of
          * the mod's own hands its edits back with it, and saves nothing itself. A `live` one comes back to the change
-         * handlers. One whose handler reloads the config, as the framework's live preview does, drops the values not
-         * handed over yet: hand over each as it changes, or all at once. False while it is not connected, from inside a
-         * handler of the changes or the Saves, and for a value the menu refuses, whose log says why.
+         * handlers during this call, as a preview, or a Discard for its baseline, marked `handedOver`: the mod applies
+         * the value itself before it hands it over. False while it is not connected, from inside a handler of the
+         * changes or the Saves, and for a value the menu refuses, whose log says why.
          */
         bool setPendingValue(const std::string_view id, const Value& value)
         {
@@ -747,7 +750,12 @@ namespace mods_config::api
             const std::string settingId(id);
             std::string text;
             const auto setting = toSettingValue(value, text);
-            return _api->setPendingValue(this, settingId.c_str(), &setting);
+
+            // the id the change of this call comes back with, while the call lasts
+            _handingOverId = settingId;
+            const bool taken = _api->setPendingValue(this, settingId.c_str(), &setting);
+            _handingOverId.clear();
+            return taken;
         }
 
         /**
@@ -969,11 +977,13 @@ namespace mods_config::api
         }
 
         /**
-         * Calls the handlers of the changes with a change, as the C++ client has it, after the setter of a state.
+         * Calls the handlers of the changes with a change, as the C++ client has it, after the setter of a state. The
+         * change of the setting setPendingValue is handing over is marked `handedOver`.
          */
         void onChange(const SettingChange* change) override
         {
-            const auto mine = toChange(*change->setting, change->previousValue, change->value, change->phase == ChangePhase::Discard);
+            auto mine = toChange(*change->setting, change->previousValue, change->value, change->phase == ChangePhase::Discard);
+            mine.handedOver = !_handingOverId.empty() && mine.id == _handingOverId;
             applyState(mine);
             for (const auto& handler : _changeHandlers) {
                 handler(mine);
@@ -1018,6 +1028,9 @@ namespace mods_config::api
         std::vector<MenuEventHandler> _menuEventHandlers;
         std::vector<ChangeHandler> _changeHandlers;
         std::vector<SaveHandler> _saveHandlers;
+
+        // the id of the setting setPendingValue hands over while it runs, empty otherwise
+        std::string _handingOverId;
 
         // the text of a string state, which stays until a state is asked next: the menu copies it after the answer
         std::string _stateText;

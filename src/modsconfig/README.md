@@ -99,9 +99,9 @@ modsConfig.setPendingValue("fScale:Main", 1.5f);
   `restoreMenu` does nothing unless the menu is minimized.
 - **`setPendingValue`** hands an edit of the mod's own UI to the menu as a setting's pending value, in
   its valueType, so the menu's Save writes it. The menu takes it while it shows the mod, shown or
-  minimized, but not from a `subscribeToChanges` or `subscribeToSaves` handler. A `live` one comes back
-  as a preview, whose reload drops a value not handed over yet: hand each over as it changes, or all at
-  once.
+  minimized, but not from a `subscribeToChanges` or `subscribeToSaves` handler. The mod applies the value
+  before it hands it over: a `live` one comes back during the call marked `handedOver`, which the live
+  preview records with no reload, so a mod can hand over a value every frame.
 - **`subscribeToChanges` / `subscribeToSaves`** tell each change of a `live` setting and what each Save
   wrote, for what the overrides don't cover ([live preview](#live-preview-of-the-config)).
 - **`api()`** is the menu's interface, for what the class doesn't wrap; null until connected.
@@ -121,6 +121,8 @@ overrides, under the owner `ModsConfigFO4VR`:
   the config reloads as for a change of the file.
 - **A Discard** clears it, and the file's value applies again.
 - **A Save** clears the overrides of what it wrote, with one reload that reads the file.
+- **A change the mod handed over** (`handedOver`, from its own `setPendingValue`) sets or clears the override
+  with no reload: the mod has the value already, and its values not handed over yet stay.
 
 So a value the mod reads on each load previews live; one read only at startup doesn't, and its setting
 says `restart`. A setting of another file or of the game is the mod's, through `subscribeToChanges` and
