@@ -122,7 +122,8 @@ void MyMod::onModLoaded(const F4SE::LoadInterface*)
   `onFrameUpdate`, and the caller waits up to 2 seconds for it. `RunOn::Listener` runs it at once
   instead, for answers that must work while the game is stalled, as `health`, `state` and `perf` do; such a
   handler may only read atomics and data that no longer changes. A mod without `setupMainGameLoop` has no frame to run
-  the queue in, so its actions go through F4SE's task interface.
+  the queue in, so its actions go through devbench's own main-thread queue. F4SE's task interface is the fallback
+  on a devbench without that queue, and on Fallout 4 VR it runs them on worker threads, not the game thread.
 - **Answers.** A handler returns a JSON object and gets `"ok": true` added; throwing turns the
   call into `{ "ok": false, "error": "<message>" }`, which carries no other keys.
 - **Arming.** Anything that costs per-frame work waits for the tool to be armed
@@ -236,8 +237,8 @@ works with any devbench version. A later slot would have to be gated on `GetBuil
 
 | File | Contents |
 |------|----------|
-| [`DevBenchAPI.h`](DevBenchAPI.h) | The cross-plugin interface: `IDevBenchInterface001` (register tools, emit events), the handler types, and `GetDevBenchInterface001()`. |
-| [`DevBenchAPI.cpp`](DevBenchAPI.cpp) | `GetDevBenchInterface001()`: the F4SE messaging handshake, with a `GetProcAddress` fallback on `devbench.dll`. |
+| [`DevBenchAPI.h`](DevBenchAPI.h) | The cross-plugin interface: `IDevBenchInterface001` (register tools, emit events), the handler types, `GetDevBenchInterface001()`, and the main-thread service `DevBenchMainThreadApi` with `GetDevBenchMainThread()`. |
+| [`DevBenchAPI.cpp`](DevBenchAPI.cpp) | `GetDevBenchInterface001()` and `GetDevBenchMainThread()`: the F4SE messaging handshake, with a `GetProcAddress` fallback on `devbench.dll`. |
 | [`DevBenchAPI.LICENSE.txt`](DevBenchAPI.LICENSE.txt) | MIT license for these two files only; devbench itself is GPL-3.0. |
 
 They are devbench's `include/` files, copied byte for byte from devbench **1.22.0**

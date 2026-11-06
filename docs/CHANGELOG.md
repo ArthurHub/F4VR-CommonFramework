@@ -9,6 +9,9 @@ major version is `0`, a minor bump may break the API; the **Upgrading** notes sa
 
 ## 0.5.1 — unreleased
 
+- **devbench actions of a mod without a frame update run on the game thread on Fallout 4 VR**: they go
+  through devbench's own main-thread queue, as F4SE's task interface runs tasks on worker threads there.
+  F4SE's queue stays the fallback for a devbench without that queue.
 - **An edit a mod's UI hands to Mods Config FO4 VR costs no reload**: its change comes back marked
   `handedOver` (client header of Mods Config FO4 VR), and the live preview records the override without
   reloading the config, so the mod can hand over a value every frame. `setConfigOverrides` and

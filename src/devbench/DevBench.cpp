@@ -307,6 +307,16 @@ namespace f4cf::devbench
             }
         }
 
+        /**
+         * Callback for devbench's main-thread queue: runs the queued command and frees it.
+         * execute() catches everything, as RunOnMainThread requires a callback that does not throw.
+         */
+        void executeQueued(void* ctx)
+        {
+            const std::unique_ptr<Command> command(static_cast<Command*>(ctx));
+            execute(*command);
+        }
+
         void toolHandler(void* ctx, const char* argsJson, void* sink, DevBenchAPI::WriteFn write);
 
         /**
@@ -1011,8 +1021,17 @@ namespace f4cf::devbench
                     std::lock_guard lock(_commandsLock);
                     _commands.push_back(std::move(command));
                     _hasCommands.store(true, std::memory_order_relaxed);
+                } else if (const auto mainThread = DevBenchAPI::GetDevBenchMainThread()) {
+                    // a mod without a frame update never drains the queue, so borrow devbench's: on FO4VR, F4SE's AddTask runs
+                    // tasks on worker threads, never the game thread
+                    auto queued = std::make_unique<Command>(std::move(command));
+                    if (!mainThread->RunOnMainThread(&executeQueued, queued.get())) {
+                        return errorJson("devbench did not queue the command for the game thread, and this mod has no frame update to run it in");
+                    }
+                    // owned by the queue from here; executeQueued frees it
+                    queued.release();
                 } else {
-                    // a mod without a frame update never drains the queue, so borrow F4SE's, as devbench itself does
+                    // a devbench older than its main-thread service: F4SE's queue is all there is, game thread or not
                     const auto tasks = F4SE::GetTaskInterface();
                     if (!tasks) {
                         return errorJson("F4SE's task interface is unavailable, and this mod has no frame update to run the command in");
