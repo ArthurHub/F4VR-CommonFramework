@@ -24,6 +24,21 @@ nothing for it (`Settings::modsConfigClient = false` opts out). Without the menu
   "main": { "format": "toml", "root": "myGames", "path": "Mods_Config/FRIK/FRIK.toml", "pathFromClientState": "configFile" }
   ```
 
+- **`openDevLayoutFile`,** a client function that opens the [VR UI dev layout](../vrui/README.md#dev-layout)'s
+  file on the desktop, in Windows' default editor for `.ini` files. A press before the file exists (the
+  dev layout saved on, and a VR UI shown since) answers why. A spec's button enables it with the toggle:
+
+  ```json
+  {
+    "type": "button",
+    "text": "Dev layout file",
+    "buttonText": "Open",
+    "icon": "window",
+    "action": { "type": "CallNativeFunction", "function": "openDevLayoutFile" },
+    "enabledWhen": { "setting": "bVRUIDevLayout:Debug", "equals": true }
+  }
+  ```
+
 - **`Settings::modsConfigMinVersion`** is the oldest menu API the mod works with, 1 by default. A mod
   that uses something newer checks first, `ModsConfigFO4Client::get().apiVersion() >= 2`; one that
   can't work at all with an older menu sets the setting, and isn't connected to one, with a warning.

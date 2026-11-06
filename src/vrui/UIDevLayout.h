@@ -27,6 +27,8 @@ namespace f4cf::vrui
     class UIDevLayout
     {
     public:
+        static std::filesystem::path filePath();
+
         void onRootAttached();
         void onFrameUpdate(const std::vector<std::shared_ptr<UIElement>>& rootElements);
 

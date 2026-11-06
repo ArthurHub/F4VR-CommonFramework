@@ -9,6 +9,8 @@ major version is `0`, a minor bump may break the API; the **Upgrading** notes sa
 
 ## 0.5.1 — unreleased
 
+- **A Mods Config button opens the dev layout file**: the mod's client has the function `openDevLayoutFile`,
+  which opens the VR UI dev layout's file on the desktop, for a config spec's `CallNativeFunction` button.
 - **A text panel row can end on the right edge**: a `'\v'` (`vrui::TEXT_PANEL_RIGHT_TAB`) in its text or
   spans moves the rest of the row to the panel's right edge, at least a space past what precedes it, so a
   label and its value or binding prompt sit on either side of one row.
