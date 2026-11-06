@@ -308,6 +308,9 @@ imgui::internal::onFrameEnd()                   draw callback (DRAW_ORDER_PANELS
 - **No depth writes:** canvases don't hide each other and are drawn back to front. They are hidden by
   the world by default ([occlusion](../render/README.md#occlusion-by-the-world)), except where the
   engine's depth can't be captured, so it is a preference, not a promise.
+- **A snapshot** of the texture, for devbench's [`snapshot`](../devbench/README.md) action (`ImGuiSnapshot.cpp`):
+  the render thread copies it after it draws a frame into it, and reads the copy once the GPU has made it,
+  without waiting for the GPU. The caller waits on its own thread, and writes the PNG through WIC.
 - **Nothing is registered until the first canvas exists,** so a mod with none pays nothing.
 
 ## Building without it

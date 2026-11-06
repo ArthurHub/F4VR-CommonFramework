@@ -4,6 +4,7 @@
 #include <atomic>
 #include <cctype>
 #include <chrono>
+#include <filesystem>
 #include <format>
 #include <future>
 #include <mutex>
@@ -17,6 +18,10 @@
 #include "perf/Perf.h"
 #include "perf/Report.h"
 
+#if F4CF_WITH_IMGUI_UI
+#include "imgui/ImGuiSnapshot.h"
+#endif
+
 namespace f4cf::devbench
 {
     namespace
@@ -27,7 +32,8 @@ namespace f4cf::devbench
         // framework version it was built with, so this is how a client tells their tools apart (health reports it).
         // 2: perf answers without the game thread, as a tree per thread, a flat map or a text table (format)
         // 3: set and clear act on the tool's own session overrides only, and overrides says who set each
-        constexpr int TOOL_CONTRACT = 3;
+        // 4: snapshot saves the texture of the ImGui canvases as a PNG
+        constexpr int TOOL_CONTRACT = 4;
 
         // the owner of the session overrides that the tool's set action sets, see ConfigBase::setConfigOverride
         constexpr auto OVERRIDE_OWNER = "devbench";
@@ -35,6 +41,10 @@ namespace f4cf::devbench
         // devbench's own stall watchdog is 5000ms; answering well before it keeps "the mod did not answer" apart from
         // "devbench is stalled"
         constexpr auto GAME_THREAD_TIMEOUT = std::chrono::milliseconds(2000);
+
+        // a snapshot of the canvases waits for the render thread to read them back, 1-3 frames, and fails as none is shown,
+        // well before devbench's stall watchdog
+        constexpr auto SNAPSHOT_TIMEOUT = std::chrono::milliseconds(3000);
 
         // the free probe every mod answers
         constexpr auto HEALTH_ACTION = "health";
@@ -616,6 +626,19 @@ namespace f4cf::devbench
                               handler(&Tool::readPerf),
                               RunOn::Listener },
                     true);
+#if F4CF_WITH_IMGUI_UI
+                addAction({ "snapshot",
+                              "save the texture the mod's ImGui canvases are drawn into as a PNG: a dedicated panel's own texture is that panel, the "
+                              "atlas the canvases share has each canvas in its place. Read back from the next frame that draws a canvas, so it fails "
+                              "while none is shown. Answers the path, width, height and dedicated",
+                              { { "path",
+                                  argument("string",
+                                      "snapshot: the PNG file to write; by default a new one in the mod's snapshots folder under My "
+                                      "Games\\Fallout4VR\\Mods_Config") } },
+                              handler(&Tool::saveCanvasSnapshot),
+                              RunOn::Listener },
+                    true);
+#endif
             }
 
             /**
@@ -729,6 +752,32 @@ namespace f4cf::devbench
                 }
                 return { { "overrides", overrides } };
             }
+
+#if F4CF_WITH_IMGUI_UI
+            /**
+             * Listener thread: saves the texture the mod's ImGui canvases are drawn into as a PNG, at the path asked or
+             * as a new file in the mod's folder of My Games\Fallout4VR\Mods_Config. It waits here for the render thread
+             * to read it back, so neither the game thread nor a frame waits for it.
+             */
+            json saveCanvasSnapshot(const json& args) const
+            {
+                std::filesystem::path path = argString(args, "path");
+                if (path.empty()) {
+                    std::string modName;
+                    {
+                        std::lock_guard lock(_lock);
+                        modName = _settings.modName;
+                    }
+                    const auto now = std::chrono::floor<std::chrono::seconds>(std::chrono::system_clock::now());
+                    path = std::filesystem::path(BASE_PATH) / modName / "snapshots" / std::format("snapshot-{:%Y%m%d-%H%M%S}.png", now);
+                }
+                const auto saved = imgui::internal::saveSnapshot(path, SNAPSHOT_TIMEOUT);
+                if (!saved) {
+                    throw std::runtime_error(saved.error());
+                }
+                return { { "path", saved->path.string() }, { "width", saved->width }, { "height", saved->height }, { "dedicated", saved->dedicated } };
+            }
+#endif
 
             /**
              * Listener thread: the sites are read with atomic loads, so this never waits for the game thread or stalls

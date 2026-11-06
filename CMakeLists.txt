@@ -263,7 +263,8 @@ if(F4CF_WITH_IMGUI_UI)
   # NOTE: do NOT add IMGUI_DISABLE_OBSOLETE_FUNCTIONS / _KEYIO here. vcpkg builds the port with
   # ImGui's defaults, and those macros resize ImGuiIO::KeysData - defining them on our side only
   # would give us a different sizeof(ImGuiIO) than the library we link against.
-  target_link_libraries(${PROJECT_NAME} PUBLIC imgui::imgui)
+  # windowscodecs: the devbench snapshot of the canvases is written as a PNG through WIC (src/imgui/ImGuiSnapshot.cpp)
+  target_link_libraries(${PROJECT_NAME} PUBLIC imgui::imgui windowscodecs)
   target_compile_definitions(${PROJECT_NAME} PUBLIC F4CF_WITH_IMGUI_UI=1)
   # the bold and italic faces of the canvas font, beside the text font (src/imgui/ImGuiFonts.cpp)
   f4cf_embed_font("${SOURCE_DIR}/render/fonts/Roboto-Black.ttf" EmbeddedBoldFont.cpp f4cf::imgui::internal BOLD_FONT_TTF)
