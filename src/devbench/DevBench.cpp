@@ -629,8 +629,9 @@ namespace f4cf::devbench
                               RunOn::Listener },
                     true);
                 addAction({ "input",
-                              "the controller input suppressed now, so the game and other mods do not see it: each owner (a part of this mod "
-                              "that suppresses input, as ImGuiPointer) with its buttons and axes per physical hand, and the effective union "
+                              "the controller input suppressed or inverted now, so the game and other mods do not see it as it is: each owner (a "
+                              "part of this mod that suppresses input, as ImGuiPointer) with its buttons, axes and invertedAxes per physical hand, "
+                              "and the effective union "
                               "of all of them, by the input binding grammar's names. Only this mod's own; another mod's tool has its",
                               json::object(),
                               handler(&Tool::readInputSuppression) },

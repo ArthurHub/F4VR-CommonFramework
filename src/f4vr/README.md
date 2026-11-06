@@ -25,6 +25,7 @@ comments are the detail; this page is the map and the traps.
 | [`GameMenusHandler.h`](GameMenusHandler.h) | Menu open and close events, and `isVatsActive`, `isInScopeMenu`, `isFavoritesMenuOpen`. |
 | [`ScaleformUtils.h`](ScaleformUtils.h) | GFx menus and the HUD: read values, show and hide, drive list menus, dispatch events. |
 | [`F4VRThumbstickControls.h`](F4VRThumbstickControls.h) | Turns the player's thumbstick movement off and on, through the controls' deadzone settings. |
+| [`WandMovement.h`](WandMovement.h) | Controller-direction movement with the offhand controller held reversed: `alignTo(key, worldForward)` each frame inverts the offhand stick the game reads while the controller points more than 90° away from that forward. A call lasts through the next frame, so stopping the calls ends it. |
 | [`PapyrusGatewayBase.h`](PapyrusGatewayBase.h) | Calls Papyrus from C++, through a script that registers itself. |
 | [`DebugDump.h`](DebugDump.h), [`DebugInventory.h`](DebugInventory.h) | `aDumpDataOnce` and `aAddItemsOnce` ([debug settings](../../docs/debug-config.md)). `DebugInventory` also has a typed API (`ItemFilter` with a code `predicate`, `iterateObjects`). |
 | [`F4VROffsets.h`](F4VROffsets.h) | Every RVA the framework calls into. |

@@ -15,6 +15,7 @@
 #include "perf/Tracy.h"
 
 #include "f4vr/PlayerNodes.h"
+#include "f4vr/WandMovement.h"
 #include "render/PrimitiveDrawRenderer.h"
 #include "render/SubmitHook.h"
 #include "render/TextFont.h"
@@ -252,6 +253,7 @@ namespace f4cf
             vrcf::VRControllers.update(leftHanded);
             vrcf::VRControllersSuppress.update(leftHanded);
             vrcf::VRHaptics.update(leftHanded);
+            f4vr::WandMovement::onFrameStart();
 
             // debug-draw frame boundary around the mod update; both calls are a single atomic
             // read until the mod issues its first draw call ever (the zero-cost-when-unused contract)

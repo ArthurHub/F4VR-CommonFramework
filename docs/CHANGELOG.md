@@ -14,6 +14,11 @@ major version is `0`, a minor bump may break the API; the **Upgrading** notes sa
 - **devbench's `input` action reads the controller input a mod suppresses**, each owner's and the union, in place
   of the `input.suppression` event, which the ImGui pointer fired each time its ray came onto a panel or left it.
   **Upgrading:** a client that read the event calls the action. The tool's `contract` is 5.
+- **Controller-direction movement with the offhand controller held reversed**: `f4vr::WandMovement::alignTo(key,
+  worldForward)`, called each frame, inverts the offhand stick the game reads while the offhand controller points
+  more than 90° away from the forward the mod passes, as when it holds a flashlight in an overhand grip. Built on
+  `VRControllersSuppress.setAxisInverted(key, hand, axis, inverted)`, an owner-keyed axis inversion beside axis
+  suppression, which devbench's `input` action lists as `invertedAxes`.
 - **The thumbstick's prompt icon has its L or R inside**: the controller's letter sits in the stick's ring,
   where its knob was, as the game's own prompts draw it, and the small L or R circle over its top left is
   gone; the other buttons keep theirs. **Upgrading:** re-copy the `*thumbstick*.dds` icons of

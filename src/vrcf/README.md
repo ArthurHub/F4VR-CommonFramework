@@ -222,6 +222,11 @@ Convenience: `suppressAll` / `setAllSuppressed` / `setAllAxesSuppressed` (per-ha
 `isSuppressed(hand, button)` (aggregate) vs `isSuppressedBy(key, …)`, and `reset()` to wipe every
 owner (used by `ModBase` on save reload).
 
+The same hook can also **invert** an axis: `setAxisInverted(key, hand, axis, true)` makes the game read
+its `.x` and `.y` negated, owner-keyed like suppression (`release(key)` and `reset()` drop it too).
+Inverted by several owners is inverted once, and a suppressed axis stays zero.
+[`f4vr::WandMovement`](../f4vr/WandMovement.h) uses it on the offhand stick.
+
 ### Rules — read before using
 
 - **Main thread only** for `suppress` / `release` / `reset`. The hook runs on the OpenVR polling

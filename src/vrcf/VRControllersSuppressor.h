@@ -105,6 +105,9 @@ namespace f4cf::vrcf
 
         nlohmann::json toJson() const;
 
+        // Owner-keyed analog axis inversion: negates the given rAxis .x/.y for the game. Suppression wins over it.
+        void setAxisInverted(std::string_view key, Hand hand, Axis axis, bool inverted);
+
     private:
         // Published per-hand aggregate (union of all owners). Read lock-free by the hook on the
         // OpenVR thread; written only by republishAggregate on the main thread.
@@ -112,6 +115,7 @@ namespace f4cf::vrcf
         {
             std::atomic<uint64_t> buttons{ 0 }; // bits cleared from ulButtonPressed/ulButtonTouched
             std::atomic<uint8_t> axes{ 0 }; // bits -> matching rAxis[i] zeroed
+            std::atomic<uint8_t> invertedAxes{ 0 }; // bits -> matching rAxis[i] negated
         };
 
         // One owner's contribution for one physical side (non-atomic; main-thread only).
@@ -119,6 +123,7 @@ namespace f4cf::vrcf
         {
             uint64_t buttons = 0;
             uint8_t axes = 0;
+            uint8_t invertedAxes = 0;
             bool operator==(const SideMask&) const = default;
         };
 
