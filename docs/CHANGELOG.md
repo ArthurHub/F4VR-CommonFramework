@@ -9,6 +9,10 @@ major version is `0`, a minor bump may break the API; the **Upgrading** notes sa
 
 ## 0.5.1 — unreleased
 
+- **The thumbstick's prompt icon has its L or R inside**: the controller's letter sits in the stick's ring,
+  where its knob was, as the game's own prompts draw it, and the small L or R circle over its top left is
+  gone; the other buttons keep theirs. **Upgrading:** re-copy the `*thumbstick*.dds` icons of
+  `Textures\MyMod\f4cf\bindings\` from `mod-template/`.
 - **A Mods Config button opens the dev layout file**: the mod's client has the function `openDevLayoutFile`,
   which opens the VR UI dev layout's file on the desktop, for a config spec's `CallNativeFunction` button.
 - **A text panel row can end on the right edge**: a `'\v'` (`vrui::TEXT_PANEL_RIGHT_TAB`) in its text or

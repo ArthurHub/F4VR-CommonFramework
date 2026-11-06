@@ -6,8 +6,9 @@ Every icon is up to three parts, drawn in white for a tint to colour, each knock
 
   - the button, as the controller prints it: the trigger as a T in a box whose top slopes down, the grip as GRIP
     in a rounded box, a face button as its letter in a circle, the thumbstick as a ring with a half-opaque line
-    around it and its knob, with a half-opaque shadow to its lower right;
-  - the controller, an L or an R in a small circle, over the button's top left;
+    around it and the controller's L or R in its middle, as the game's own prompts draw it;
+  - the controller, an L or an R in a small circle, over the button's top left: all but the thumbstick, which has
+    it inside;
   - how it is worked, a solid disk with a symbol cut out of it, over the button's bottom left: a clock for a long
     press, an arrow down onto a bar for a hold, 2x for a double press, an arrow up off a bar for a release, and
     ripples for a touch. A press and a tap have none. A thumbstick push is a smaller disk with its direction's
@@ -47,8 +48,7 @@ FONT = ROOT / 'src' / 'render' / 'fonts' / 'Roboto-Black.ttf'
 SS = 8               # supersampling: every part is drawn 8 times larger and scaled down
 STROKE = 2.6         # an outline's width
 HALF = 0.5           # the opacity of the thumbstick's outer line
-SHADOW = 0.45        # the opacity of the shadow under its knob
-HEIGHT = 80          # every icon's height: the thumbstick with its circle above and a mark below needs it all
+HEIGHT = 80          # every icon's height: a button with its circle above and a mark below needs it all
 CENTER = 40          # the button's middle, from the top
 CAP_RATIO = 0.711    # Roboto's capital height as a share of its font size
 
@@ -60,12 +60,13 @@ MOTIONS = {'move': DIRECTIONS, 'updown': ('up', 'down'), 'rightleft': ('left', '
 SIDES = {'left': ('x', 'y'), 'right': ('a', 'b')}
 
 # where the controller's circle and the marks sit against each button: the circle's top left, and the middle of the
-# mark of how it is worked and of a push's arrow, from the button's top left
+# mark of how it is worked and of a push's arrow, from the button's top left. The thumbstick has no circle, as its
+# letter is inside it.
 LAYOUT = {
     'trigger': {'circle': (-20, -12), 'mark': (-5, 36)},
     'grip': {'circle': (-20, -18), 'mark': (-6, 29)},
     'letter': {'circle': (-20, -16), 'mark': (-5, 33)},
-    'thumbstick': {'circle': (-12, -12), 'mark': (7, 47), 'arrow': (47, 47)},
+    'thumbstick': {'mark': (7, 47), 'arrow': (47, 47)},
 }
 MARK_RADIUS, MARK_SCALE = 16.5, 1.5     # the mark of how a button is worked, and its symbol's size
 ARROW_RADIUS, ARROW_SCALE = 13.4, 1.08  # a push's arrow, smaller
@@ -171,15 +172,16 @@ def ring(size, c, r, width):
     return np.array(out.resize(size, Image.LANCZOS)).astype(float)
 
 
-def thumbstick():
-    """The ring and its knob, with depth: a half-opaque line around the ring as its raised rim, and a half-opaque
-    shadow to the knob's lower right, a pixel apart from it, as light from the upper left."""
+def thumbstick(side):
+    """The ring with the controller's L or R in its middle, and a half-opaque line around it as its raised rim:
+    the rim is what tells it from a face button's circle, or the controller's circle on the other buttons."""
     size, c, radius, rim = (2 * STICK_CENTER, 2 * STICK_CENTER), STICK_CENTER, 20, STICK_RIM
-    alpha = np.maximum(ring(size, c, rim, 2.0) * HALF, ring(size, c, radius, STROKE))
-    shadow = np.clip(disk(size, c + 2.4, c + 2.4, 6.8) - disk(size, c, c, 7.5), 0, 255) * SHADOW
-    alpha = np.maximum(alpha, shadow)
-    alpha = np.maximum(alpha, disk(size, c, c, 6.5))
-    return Part(white(Image.fromarray(alpha.astype(np.uint8))), disk(size, c, c, rim) > 40)
+    img = white(Image.fromarray(np.maximum(ring(size, c, rim, 2.0) * HALF, ring(size, c, radius, STROKE)).astype(np.uint8)))
+    t = text('L' if side == 'left' else 'R', 20)
+    # the L's ink sits left in its box, one pixel right centres it
+    dx = 1 if side == 'left' else 0
+    img.paste(Image.new('RGBA', t.size, (255, 255, 255, 255)), ((size[0] - t.width) // 2 + dx, (size[1] - t.height) // 2), t)
+    return Part(img, disk(size, c, c, rim) > 40)
 
 
 def mark(how, radius, scale):
@@ -255,11 +257,10 @@ def arrowhead(direction):
     return Part(white(alpha), np.array(alpha) > 40)
 
 
-def compose(parts):
-    """The icon: parts [(Part, x, y)] from the bottom up, placed against the button's top left at (0, 0) - which
-    is the second part - each knocking a 1 px gap into what is under it, in a canvas HEIGHT px tall with the
-    button's middle at CENTER, as wide as they need in multiples of 4, centred."""
-    button = parts[1][0]
+def compose(parts, button):
+    """The icon: parts [(Part, x, y)] from the bottom up, placed against the top left at (0, 0) of `button`, one
+    of them, each knocking a 1 px gap into what is under it, in a canvas HEIGHT px tall with the button's middle
+    at CENTER, as wide as they need in multiples of 4, centred."""
     top = CENTER - round(button.img.height / 2)
     left = min(x for _, x, _ in parts)
     width = max(x + p.img.width for p, x, _ in parts) - left
@@ -293,11 +294,12 @@ def icon(side, button, how=None, lit=None, motion=None):
     elif button == 'grip':
         main, kind = grip(), 'grip'
     elif button == 'thumbstick':
-        main, kind = thumbstick(), 'thumbstick'
+        main, kind = thumbstick(side), 'thumbstick'
     else:
         main, kind = letter(button), 'letter'
     layout = LAYOUT[kind]
-    parts = [(hand_circle(side), *layout['circle']), (main, 0, 0)]
+    parts = [(hand_circle(side), *layout['circle'])] if 'circle' in layout else []
+    parts.append((main, 0, 0))
     if how:
         parts.append(centred(mark(how, MARK_RADIUS, MARK_SCALE), *layout['mark']))
     if lit:
@@ -307,7 +309,7 @@ def icon(side, button, how=None, lit=None, motion=None):
         for direction in MOTIONS[motion]:
             dx, dy = {'up': (0, -1), 'down': (0, 1), 'left': (-1, 0), 'right': (1, 0)}[direction]
             parts.append(centred(arrowhead(direction), STICK_CENTER + dx * reach, STICK_CENTER + dy * reach))
-    return compose(parts)
+    return compose(parts, main)
 
 
 def all_icons():
