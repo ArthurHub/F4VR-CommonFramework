@@ -17,6 +17,7 @@
 #include "config/ConfigBase.h"
 #include "perf/Perf.h"
 #include "perf/Report.h"
+#include "vrcf/VRControllersSuppressor.h"
 
 #if F4CF_WITH_IMGUI_UI
 #include "imgui/ImGuiSnapshot.h"
@@ -33,7 +34,8 @@ namespace f4cf::devbench
         // 2: perf answers without the game thread, as a tree per thread, a flat map or a text table (format)
         // 3: set and clear act on the tool's own session overrides only, and overrides says who set each
         // 4: snapshot saves the texture of the ImGui canvases as a PNG
-        constexpr int TOOL_CONTRACT = 4;
+        // 5: input answers the controller input suppressed now, in place of the input.suppression event
+        constexpr int TOOL_CONTRACT = 5;
 
         // the owner of the session overrides that the tool's set action sets, see ConfigBase::setConfigOverride
         constexpr auto OVERRIDE_OWNER = "devbench";
@@ -626,6 +628,13 @@ namespace f4cf::devbench
                               handler(&Tool::readPerf),
                               RunOn::Listener },
                     true);
+                addAction({ "input",
+                              "the controller input suppressed now, so the game and other mods do not see it: each owner (a part of this mod "
+                              "that suppresses input, as ImGuiPointer) with its buttons and axes per physical hand, and the effective union "
+                              "of all of them, by the input binding grammar's names. Only this mod's own; another mod's tool has its",
+                              json::object(),
+                              handler(&Tool::readInputSuppression) },
+                    true);
 #if F4CF_WITH_IMGUI_UI
                 addAction({ "snapshot",
                               "save the texture the mod's ImGui canvases are drawn into as a PNG: a dedicated panel's own texture is that panel, the "
@@ -751,6 +760,14 @@ namespace f4cf::devbench
                     overrides.push_back({ { "section", entry.section }, { "key", entry.key }, { "value", entry.value }, { "owner", entry.owner } });
                 }
                 return { { "overrides", overrides } };
+            }
+
+            /**
+             * Game thread: the controller input the mod suppresses now, which only the game thread changes.
+             */
+            json readInputSuppression(const json&) const
+            {
+                return vrcf::VRControllersSuppress.toJson();
             }
 
 #if F4CF_WITH_IMGUI_UI

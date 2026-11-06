@@ -7,6 +7,8 @@
 #include <string_view>
 #include <unordered_map>
 
+#include <nlohmann/json.hpp>
+
 #include "VRControllersManager.h"
 
 #include "../../external/openvr/openvr.h"
@@ -101,6 +103,8 @@ namespace f4cf::vrcf
         // Hard reset: wipe every owner. For lifecycle reload (clean slate).
         void reset();
 
+        nlohmann::json toJson() const;
+
     private:
         // Published per-hand aggregate (union of all owners). Read lock-free by the hook on the
         // OpenVR thread; written only by republishAggregate on the main thread.
@@ -157,10 +161,6 @@ namespace f4cf::vrcf
         // Logs the effective masks + owner count at debug level. Called only on real changes, so it
         // is at most one line per suppression transition -- never per frame. Main thread only.
         void logState(std::string_view key, const char* action) const;
-
-        // Publishes key's masks and the effective ones as the mod's devbench "input.suppression" event. Called only on
-        // real changes, alongside logState, so never per frame. Main thread only.
-        void emitChange(std::string_view key) const;
 
         // Applies the suppression masks to a state read when shouldSuppress is true (i.e. not one of
         // our own SelfControllerReadScope reads). Called on the OpenVR / polling thread.

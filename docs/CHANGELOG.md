@@ -9,6 +9,11 @@ major version is `0`, a minor bump may break the API; the **Upgrading** notes sa
 
 ## 0.5.1 — unreleased
 
+- **devbench saves the ImGui canvases as a PNG**: every mod's tool has a `snapshot` action, which writes the
+  texture its ImGui canvases are drawn into, a dedicated panel's own or the shared atlas, without stalling a frame.
+- **devbench's `input` action reads the controller input a mod suppresses**, each owner's and the union, in place
+  of the `input.suppression` event, which the ImGui pointer fired each time its ray came onto a panel or left it.
+  **Upgrading:** a client that read the event calls the action. The tool's `contract` is 5.
 - **The thumbstick's prompt icon has its L or R inside**: the controller's letter sits in the stick's ring,
   where its knob was, as the game's own prompts draw it, and the small L or R circle over its top left is
   gone; the other buttons keep theirs. **Upgrading:** re-copy the `*thumbstick*.dds` icons of

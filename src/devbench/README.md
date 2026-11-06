@@ -25,6 +25,7 @@ default, so a call that names none is an error. Every framework mod has the same
 | `clear` | `key`, `section`, or `all` | Drop one session override that `set` made, or all of them. An override of another owner stays. |
 | `overrides` | — | The session overrides in effect, each with the owner that set it. |
 | `perf` | `reset`, `format` | Time spent in every [perf site](../perf/README.md) in the mod since the last reset, as a tree per thread (see below). `reset: true` clears every site after reading it. `format`: `tree` (the default), `flat` (one map keyed by function and label) or `text` (the tree as an indented table in `text`, the quickest to read). Answered without the game thread, so reading never stalls a frame. |
+| `input` | — | The controller input the mod suppresses now, which the game and other mods don't see: each owner (a part of the mod that suppresses input, as `ImGuiPointer`) with its `left`/`right` `buttons`/`axes`, and the `effective` union of all of them. Names are the input binding grammar's (`grip`, `trigger`, `menu`, `a`, `thumbstick`), and hands are physical. Only the mod's own: another mod's tool answers its. |
 | `snapshot` | `path` | Saves the texture the mod's [ImGui canvases](../imgui/README.md#a-dedicated-panel) are drawn into as a PNG: a dedicated panel's own texture is that panel, the atlas the canvases share has each canvas in its place. The render thread copies it after the next frame that draws a canvas and reads it back once the GPU has made the copy, 1-3 frames later, so neither the game thread nor a frame waits. It fails after 3 seconds while no canvas is shown. `path` defaults to a new `snapshots\snapshot-<date>-<time>.png` in the mod's folder of `My Games\Fallout4VR\Mods_Config`. The answer has `path`, `width`, `height` and `dedicated`. Only in a build with the ImGui layer (`F4CF_WITH_IMGUI_UI`). |
 
 `section` defaults to the mod's name, the section the mod template uses; a mod whose main section
@@ -210,11 +211,9 @@ and before the game has loaded, an emit is one atomic load and builds nothing.
   | `sessionLoaded` | After each save load and new game, once the mod's own `onGameSessionLoaded` has run | — |
   | `config.reloaded` | The file watcher applied a config change from disk, or `ConfigBase::reload()` ran | `file`, `trigger` (`file` or `reload`) |
   | `config.override` | An owner set a session override of a key it did not override before, or cleared one, whoever the owner is: a devbench call, the mod, or another mod through the mod's API. A new value for a key the owner already overrides is not an event: a previewed value changes many times a second | `owner`, and `section`, `key`, `value` (the one it was first set with, `null` when cleared), or `all: true` |
-  | `input.suppression` | An owner started or stopped suppressing controller input | `owner`, its `left`/`right` `buttons`/`axes` (empty once released), the `effective` union, `owners` |
 
-  Names are the input binding grammar's (`grip`, `trigger`, `menu`, `a`, `thumbstick`), and
-  hands are physical. A suppression that is re-applied every frame publishes nothing; only a
-  change does.
+  Which controller input a mod suppresses is no event, as the ImGui pointer takes and releases a
+  wand's input each time its ray comes onto a panel or leaves it: the `input` action reads it.
 - Events of every mod share one ring of 256 in devbench, so emit them when something changes
   (a skeleton rebuilt, a mode entered), never every frame.
 - Any thread. Before the tool is registered, and when devbench is absent, it does nothing.
