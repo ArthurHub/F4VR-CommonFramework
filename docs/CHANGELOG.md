@@ -9,6 +9,9 @@ major version is `0`, a minor bump may break the API; the **Upgrading** notes sa
 
 ## 0.5.1 — unreleased
 
+- **perf times the ImGui canvases' and the vrui panels' frame end**: `imguiCanvases`, with its placing, pointer,
+  ImGui frame, the mod's `content`, texture writes, draw data copy and quads under it, and `vruiPanels`, each under
+  `frameEndCallbacks`, so a mod sees what its panel costs the frame beside its own update.
 - **devbench saves the ImGui canvases as a PNG**: every mod's tool has a `snapshot` action, which writes the
   texture its ImGui canvases are drawn into, a dedicated panel's own or the shared atlas, without stalling a frame.
 - **devbench's `input` action reads the controller input a mod suppresses**, each owner's and the union, in place
