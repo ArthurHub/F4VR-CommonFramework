@@ -9,6 +9,9 @@ major version is `0`, a minor bump may break the API; the **Upgrading** notes sa
 
 ## 0.5.1 — unreleased
 
+- **A reload of a config file that did not change parses nothing**: the parse of the content the mod last loaded or
+  saved is kept and copied, so a Mods Config FO4 VR preview that is discarded, and every clear of an override, reads
+  the file but no longer parses it. A preview dragged through its saved value costs about half.
 - **perf times the ImGui canvases' and the vrui panels' frame end**: `imguiCanvases`, with its placing, pointer,
   ImGui frame, the mod's `content`, texture writes, draw data copy and quads under it, and `vruiPanels`, each under
   `frameEndCallbacks`, so a mod sees what its panel costs the frame beside its own update.

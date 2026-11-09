@@ -213,6 +213,32 @@ TEST_CASE("ConfigFile: a load reads the file, every time it is asked to")
     REQUIRE(value(second, "fScale") == "1.0");
 }
 
+TEST_CASE("ConfigFile: a load of the file as the mod has it keeps its parse")
+{
+    const TempFile file(SHIPPED);
+    ConfigFile configFile;
+    toml::table table;
+    REQUIRE(loadFile(configFile, file, table) == LoadResult::Loaded);
+    const auto parsed = configFile.read(file.path);
+    REQUIRE(parsed);
+
+    SECTION("a file that did not change is not parsed again")
+    {
+        toml::table again;
+        REQUIRE(loadFile(configFile, file, again) == LoadResult::Loaded);
+        REQUIRE(value(again, "fScale") == "1.0");
+        REQUIRE(configFile.read(file.path) == parsed);
+    }
+    SECTION("a write by someone else is parsed")
+    {
+        writeBySomeoneElse(file, "fScale", 2.0f);
+        toml::table changed;
+        REQUIRE(loadFile(configFile, file, changed) == LoadResult::Loaded);
+        REQUIRE(value(changed, "fScale") == "2.0");
+        REQUIRE(configFile.read(file.path) != parsed);
+    }
+}
+
 TEST_CASE("ConfigFile: a missing file fails to load")
 {
     const TempFile file;

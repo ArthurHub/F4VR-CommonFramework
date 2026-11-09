@@ -61,6 +61,7 @@ namespace f4cf::config
      * the file watcher's event is then of the mod's own save, or one more event of a write that is already handled.
      * From `Source::Kept` the kept content's parse is copied and the file is not read, so an override that is
      * previewed reads no disk and parses nothing. With nothing kept, the file is read.
+     * A file that holds the kept content is not parsed again either: its kept parse is copied.
      */
     ConfigFile::LoadResult ConfigFile::load(const std::string& path, toml::table& table, std::string& error, const Source source)
     {
@@ -81,6 +82,16 @@ namespace f4cf::config
         }
         if (source == Source::ChangedFile && (content == _content || content == _invalid)) {
             return LoadResult::Unchanged;
+        }
+        // the file as the mod has it: its kept parse, as a preview's discard reloads the file on every change
+        if (content == _content) {
+            const auto kept = parsedContent(path, &error);
+            if (!kept) {
+                return LoadResult::Invalid;
+            }
+            table = *kept;
+            _invalid.reset();
+            return LoadResult::Loaded;
         }
         auto parsed = common::parseToml(*content, fileNameOf(path));
         if (!parsed) {
