@@ -18,7 +18,7 @@ namespace F4SEVR
     public:
         VMStruct()
             : m_none(false),
-              m_struct(nullptr){};
+              m_struct(nullptr) {};
 
         ~VMStruct()
         {}

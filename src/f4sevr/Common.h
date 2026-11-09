@@ -10,7 +10,7 @@ namespace F4SEVR
 #define MEMBER_FN_PREFIX(className) typedef className _MEMBER_FN_BASE_TYPE
 
 #define DEFINE_MEMBER_FN_LONG(className, functionName, retnType, address, ...) \
-    typedef retnType (className::*_##functionName##_type)(__VA_ARGS__);        \
+    typedef retnType (className::* _##functionName##_type)(__VA_ARGS__);       \
                                                                                \
     inline _##functionName##_type* _##functionName##_GetPtr(void)              \
     {                                                                          \
@@ -52,7 +52,7 @@ namespace F4SEVR
     {                                                                      \
         struct empty_struct                                                \
         {};                                                                \
-        typedef retnType (empty_struct::*_##fnName##_type)();              \
+        typedef retnType (empty_struct::* _##fnName##_type)();             \
         const static uintptr_t address = addr + REL::Module::get().base(); \
         _##fnName##_type fn = *(_##fnName##_type*)&address;                \
         return (reinterpret_cast<empty_struct*>(this)->*fn)();             \
