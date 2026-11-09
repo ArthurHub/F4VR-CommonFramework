@@ -110,6 +110,10 @@ namespace f4cf::f4vr
         ActivationSphereVisibility showIcon = ActivationSphereVisibility::WhenInside;
         ActivationIconStyle iconStyle{};
 
+        // The config section it was read from, which Mods Config FO4 VR's menu names while its ray is on the sphere's
+        // rows (see WandActivationSphere::isPointedAt). Empty for a config not read from a section.
+        std::string section;
+
         /**
          * The zone to use for the given power-armor state: the PA variant when one was configured, otherwise
          * the regular zone.
@@ -198,6 +202,9 @@ namespace f4cf::f4vr
             ActivationSphereVisibility showIcon = ActivationSphereVisibility::WhenInside;
             // How the icon looks (see ActivationIconStyle). Null = the default style: the framework's hand icon.
             const ActivationIconStyle* iconStyle = nullptr;
+            // The config the frame is composed from: while the ray of Mods Config FO4 VR's menu is on a row of its
+            // section, the sphere is drawn as showZone draws it. Null lights nothing.
+            const WandActivationConfig* config = nullptr;
         };
 
         explicit WandActivationSphere(const char* key, const std::uint64_t cooldownMs = 400)
@@ -240,6 +247,7 @@ namespace f4cf::f4vr
                     .sphereOrientation = config.sphereOrientation,
                     .showIcon = config.showIcon,
                     .iconStyle = &config.iconStyle,
+                    .config = &config,
                 },
                 std::forward<OnActivated>(onActivated));
         }
@@ -255,7 +263,7 @@ namespace f4cf::f4vr
         bool onFrameUpdate(const Frame& frame, OnActivated&& onActivated)
         {
             if (!frame.enabled || !frame.node) {
-                updateVisual(frame, false);
+                updateVisual(frame, false, false);
                 updateIcon(frame, false);
                 resetInteraction();
                 return false;
@@ -303,8 +311,10 @@ namespace f4cf::f4vr
                 _hapticFired = false;
             }
 
-            // Resolve the visuals after the proximity test so WhenInside can react to it.
-            updateVisual(frame, frame.showZone || isShown(frame.showSphere, anyAvailable, anyInside));
+            // Resolve the visuals after the proximity test so WhenInside can react to it. The zone shows at its true
+            // size while tuning, and while the menu points at the sphere's section.
+            const bool showZone = frame.showZone || isMenuPointing(frame);
+            updateVisual(frame, showZone || isShown(frame.showSphere, anyAvailable, anyInside), showZone);
             updateIcon(frame, isShown(frame.showIcon, anyAvailable, anyInside));
 
             return handled;
@@ -325,6 +335,8 @@ namespace f4cf::f4vr
         {
             return containsSuppression(_suppressedBindings, binding);
         }
+
+        static bool isPointedAt(const WandActivationConfig& config, const std::vector<std::string>& pointedIds, bool inPowerArmor);
 
     private:
         /**
@@ -349,7 +361,8 @@ namespace f4cf::f4vr
 
         // --- Visuals. ---
         static bool isShown(ActivationSphereVisibility visibility, bool anyAvailable, bool anyInside);
-        void updateVisual(const Frame& frame, bool show);
+        static bool isMenuPointing(const Frame& frame);
+        void updateVisual(const Frame& frame, bool show, bool showZone);
         void updateIcon(const Frame& frame, bool show);
 
         bool isCoolingDown() const;

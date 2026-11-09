@@ -205,6 +205,9 @@ TEST_CASE("ConfigReaders: an activation sphere with nothing in its section is it
     REQUIRE(config.sphereOrientation == defaults.sphereOrientation);
     REQUIRE(config.showIcon == defaults.showIcon);
     REQUIRE(config.iconStyle == defaults.iconStyle);
+
+    // the section is the one it was read from, which Mods Config FO4 VR's menu names
+    REQUIRE(config.section == MAIN);
 }
 
 TEST_CASE("ConfigReaders: an activation sphere is read from the keys of its section")

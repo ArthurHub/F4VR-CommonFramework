@@ -98,6 +98,11 @@ hand reaches into and presses a binding in. The player's side, every config key 
   creation rebuilds that tree, and a sphere inside it crashes the game.
 - **`Frame::showZone`** draws the sphere at the zone's true size whatever the config says, for a tuning
   mode that shows every zone.
+- **Lit from the menu:** while the ray of [Mods Config FO4 VR](../modsconfig/README.md)'s menu is on a row
+  of the sphere's section, the sphere is drawn as `showZone` draws it, with nothing for the mod to add.
+  `loadWandActivationConfig` keeps the section in `WandActivationConfig::section`, and `Frame::config`
+  names the config the frame is built from, which the config overload sets. A zone's row lights it only
+  while that zone is the one in use (`tZonePA` in power armor, when the config has one).
 
 The icon (`ActivationIconStyle`: texture, tint, size) faces the HMD and fades in and out, drawn on one
 `render` layer shared by every sphere, so it needs no mesh. The sphere is a mesh restyled at runtime by

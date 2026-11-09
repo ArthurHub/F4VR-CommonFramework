@@ -9,6 +9,7 @@
 #include "common/MatrixUtils.h"
 #include "f4vr/F4VRUtils.h"
 #include "f4vr/PlayerNodes.h"
+#include "modsconfig/ModsConfigFO4Api.h"
 #include "render/PrimitiveDrawRenderer.h"
 #include "render/Texture.h"
 #include "vrcf/VRControllersHaptic.h"
@@ -361,10 +362,10 @@ namespace f4cf::f4vr
      * The frame's sphereStyle selects the mesh and the values set on its shader (null = the default style); a style
      * that draws the mesh differently from the cloned one releases the cached clone so a freshly styled one is loaded
      * on the next show (a style is applied only to a clone the renderer hasn't seen yet). The style's scale shrinks (or
-     * grows) the *visual* relative to the zone — the hit test always uses the unscaled zone — unless the frame's
-     * showZone asks for the zone's true size.
+     * grows) the *visual* relative to the zone — the hit test always uses the unscaled zone — unless showZone asks for
+     * the zone's true size.
      */
-    void WandActivationSphere::updateVisual(const Frame& frame, const bool show)
+    void WandActivationSphere::updateVisual(const Frame& frame, const bool show, const bool showZone)
     {
         const RE::NiNode* testNode = frame.node;
         RE::NiNode* attachParent = frame.sphereAttachNode;
@@ -425,7 +426,7 @@ namespace f4cf::f4vr
         // the hand. The style's scale shrinks/grows only the visual radius (the zone center is unchanged), so the drawn
         // sphere can sit inside the unscaled interaction zone.
         RE::NiTransform visualZone = frame.zone;
-        if (!frame.showZone) {
+        if (!showZone) {
             visualZone.scale *= desiredStyle.scale;
         }
         RE::NiTransform visualWorld = common::MatrixUtils::localToWorldTransform(testNode->world, visualZone);
@@ -435,6 +436,40 @@ namespace f4cf::f4vr
         // Push the placement to world ourselves rather than relying on the parent's subtree update to pick it up
         // (under the skeleton, FRIK's per-frame skeleton update did); this also avoids a frame of lag.
         updateTransformsDown(_sphereNode.get(), true);
+    }
+
+    /**
+     * Whether the ray of Mods Config FO4 VR's menu is on a row of the sphere's section, by the ids the menu tells,
+     * innermost first. A zone's row counts only while that zone is the one in use: tZone out of power armor or with no
+     * power-armor zone, tZonePA in power armor with one. A config read from no section is never pointed at.
+     */
+    bool WandActivationSphere::isPointedAt(const WandActivationConfig& config, const std::vector<std::string>& pointedIds, const bool inPowerArmor)
+    {
+        if (config.section.empty() || std::ranges::find(pointedIds, config.section) == pointedIds.end()) {
+            return false;
+        }
+        const auto& row = pointedIds.front();
+        const bool usesZonePA = inPowerArmor && config.zonePA.has_value();
+        if (row == std::format("tZone:{}", config.section)) {
+            return !usesZonePA;
+        }
+        if (row == std::format("tZonePA:{}", config.section)) {
+            return usesZonePA;
+        }
+        return true;
+    }
+
+    /**
+     * Whether the mod's menu in Mods Config FO4 VR points at the section the frame is composed from, as its client was
+     * told last. A client that is not connected is told nothing.
+     */
+    bool WandActivationSphere::isMenuPointing(const Frame& frame)
+    {
+        if (!frame.config) {
+            return false;
+        }
+        const auto& ids = mods_config::api::ModsConfigFO4Client::get().pointedIds();
+        return !ids.empty() && isPointedAt(*frame.config, ids, isInPowerArmor());
     }
 
     /**

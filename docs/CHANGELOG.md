@@ -9,6 +9,12 @@ major version is `0`, a minor bump may break the API; the **Upgrading** notes sa
 
 ## 0.5.1 — unreleased
 
+- **An activation sphere lights while Mods Config FO4 VR's menu points at it**: while the ray is on a row of the
+  section `loadWandActivationConfig` read it from, the sphere is drawn as `showZone` draws it, at the zone's true
+  size. A zone's row lights it only while that zone is the one in use, in power armor or not. The client header's
+  `subscribeToPointing` and `isPointedAt` tell a mod the same for its other items. **Upgrading:** a mod that builds
+  its sphere's `Frame` itself sets `.config` to the sphere's config; the `onFrameUpdate(node, config, ...)` overload
+  sets it.
 - **A reload of a config file that did not change parses nothing**: the parse of the content the mod last loaded or
   saved is kept and copied, so a Mods Config FO4 VR preview that is discarded, and every clear of an override, reads
   the file but no longer parses it. A preview dragged through its saved value costs about half.

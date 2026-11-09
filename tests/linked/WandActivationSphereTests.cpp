@@ -61,3 +61,34 @@ TEST_CASE("WandActivationSphere: an icon style without a texture draws the frame
     style.texture = "my-icon.dds";
     REQUIRE(style.textureOrDefault() == "my-icon.dds");
 }
+
+TEST_CASE("WandActivationSphere: the menu points at a sphere while its ray is on a row of its section")
+{
+    WandActivationConfig config;
+    config.section = "BodyGrab";
+    using Ids = std::vector<std::string>;
+
+    // a row of the section, the section's heading, and a row of a section inside a group around it
+    REQUIRE(WandActivationSphere::isPointedAt(config, Ids{ "kPrimaryBinding:BodyGrab", "BodyGrab" }, false));
+    REQUIRE(WandActivationSphere::isPointedAt(config, Ids{ "BodyGrab" }, false));
+    REQUIRE(WandActivationSphere::isPointedAt(config, Ids{ "sShowSphere:BodyGrab", "BodyGrab", "spheres" }, true));
+
+    // nothing, and the rows of another section
+    REQUIRE_FALSE(WandActivationSphere::isPointedAt(config, Ids{}, false));
+    REQUIRE_FALSE(WandActivationSphere::isPointedAt(config, Ids{ "tZone:HeadGrab", "HeadGrab" }, false));
+    REQUIRE_FALSE(WandActivationSphere::isPointedAt(config, Ids{ "bodygrab" }, false));
+
+    // with no power-armor zone, the zone is the one in use in power armor too
+    REQUIRE(WandActivationSphere::isPointedAt(config, Ids{ "tZone:BodyGrab", "BodyGrab" }, false));
+    REQUIRE(WandActivationSphere::isPointedAt(config, Ids{ "tZone:BodyGrab", "BodyGrab" }, true));
+
+    // with one, each zone's row only while it is the one in use
+    config.zonePA = RE::NiTransform{};
+    REQUIRE(WandActivationSphere::isPointedAt(config, Ids{ "tZone:BodyGrab", "BodyGrab" }, false));
+    REQUIRE_FALSE(WandActivationSphere::isPointedAt(config, Ids{ "tZone:BodyGrab", "BodyGrab" }, true));
+    REQUIRE_FALSE(WandActivationSphere::isPointedAt(config, Ids{ "tZonePA:BodyGrab", "BodyGrab" }, false));
+    REQUIRE(WandActivationSphere::isPointedAt(config, Ids{ "tZonePA:BodyGrab", "BodyGrab" }, true));
+
+    // a config read from no section is never pointed at
+    REQUIRE_FALSE(WandActivationSphere::isPointedAt(WandActivationConfig{}, Ids{ "" }, false));
+}

@@ -321,6 +321,7 @@ namespace f4cf::config
 
         cfg.showIcon = f4vr::parseActivationSphereVisibility(stringOf(config, section, "sShowIcon").value_or(""), defaults.showIcon);
         cfg.iconStyle = readIconStyle(config, section, defaults.iconStyle);
+        cfg.section = section;
         return cfg;
     }
 }
