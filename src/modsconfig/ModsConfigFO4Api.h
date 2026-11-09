@@ -364,11 +364,11 @@ namespace mods_config::api
         /**
          * Sets the pending value of a setting of the client's config spec by its id, in its valueType, as the player's
          * edit in the menu: a mod's own UI hands its edits back with it, and the menu's Save writes them. A color, a
-         * transform and a binding are the text of their TOML table. A value that is the baseline makes the setting clean,
-         * and a `live` one is told back with `onChange`, as a player's edit is. False, with nothing changed and why in the
-         * menu's log, unless the menu, shown or minimized, shows the client's mod, from inside the client's `onChange` or
-         * `onSaved`, and for a value it refuses: of an id it has no setting of, of a read-only setting, of another type, or
-         * no value of the setting, as one outside its limits.
+         * transform and a binding are the text of their TOML table, or their line in an INI file. A value that is the
+         * baseline makes the setting clean, and a `live` one is told back with `onChange`, as a player's edit is. False,
+         * with nothing changed and why in the menu's log, unless the menu, shown or minimized, shows the client's mod, from
+         * inside the client's `onChange` or `onSaved`, and for a value it refuses: of an id it has no setting of, of a
+         * read-only setting, of another type, or no value of the setting, as one outside its limits.
          */
         virtual bool setPendingValue(IClient* client, const char* settingId, const SettingValue* value) const = 0;
 
