@@ -3,6 +3,7 @@
 #define MODS_CONFIG_FO4_API_V1_H
 
 #include <Windows.h>
+#include <algorithm>
 #include <cstdint>
 #include <functional>
 #include <map>
@@ -43,6 +44,8 @@
 //     modsConfig.addState("pipboyType", [] { return std::optional<Value>(pipboyType()); }, [](const Value& value) { setPipboyType(std::get<int>(value)); });
 //     modsConfig.subscribeToChanges([](const Change& change) { previewOrRestore(change.path, change.value, change.discard); });
 //     modsConfig.subscribeToSaves([](const Saved&) { endPreviewsAndReload(); });
+//     // each frame: light the zone of a group of the config spec with "id": "grabZone" while the ray is on its rows
+//     const bool highlight = modsConfig.isPointedAt("grabZone");
 //
 //     // from F4SE's kPostLoad on, when every plugin's DLL is loaded: 0 while Mods Config FO4 VR is there
 //     const int err = modsConfig.connect("MyMod");
@@ -213,8 +216,10 @@ namespace mods_config::api
     };
 
     /**
-     * What happened in the menu: it opened or closed, which every client is told, and the client's mod or a page of its
-     * config spec that has an `id` was shown or left. A minimized menu is still open.
+     * What happened in the menu: it opened or closed, which every client is told, the client's mod or a page of its
+     * config spec that has an `id` was shown or left, and the ray came on an item of its config spec or left it
+     * (PointedAt). A minimized menu is still open. A client of an older header can be told a type it does not know,
+     * which it leaves alone.
      */
     enum class MenuEventType : std::uint32_t
     {
@@ -223,13 +228,21 @@ namespace mods_config::api
         ModShown,
         ModLeft,
         PageShown,
-        PageLeft
+        PageLeft,
+        PointedAt
     };
 
     struct MenuEvent
     {
         MenuEventType type;
         const char* pageId; // the page's `id` in the config spec, for PageShown and PageLeft, and null for the others
+
+        // For PointedAt, what the ray is on: the id of its row, then the id of each group the row is in, innermost
+        // first, as the config spec has them. A setting's id, given or made; a section's, an activation sphere's and
+        // a button's own `id`, and a sphere's section with none. An item with no id is left out, and none is nothing.
+        // Read them only for PointedAt: a menu of an older header has no such fields.
+        const char* const* pointedIds;
+        std::uint32_t pointedCount;
     };
 
     /**
@@ -286,7 +299,10 @@ namespace mods_config::api
         // gives the options of a choice with `listFromClientCallback`, as the mod is selected: false for one it has none of
         virtual bool giveOptions(const SettingView* setting, IOptions* options) = 0;
 
-        // what happens in the menu, as it happens
+        // What happens in the menu, as it happens. PointedAt is told as what the ray is on changes, so the mod shows in
+        // the world what the item sets: it stays across the gaps between rows and while the row's editor or Adjust in
+        // world is open, and is none as the ray leaves the rows, the menu leaves the mod, closes, or minimizes for
+        // another UI
         virtual void onEvent(const MenuEvent* event) = 0;
 
         // a change of a `live` setting, which the client shows in the game until it is saved or
@@ -583,6 +599,7 @@ namespace mods_config::api
     using StateSetter = std::function<void(const Value& value)>;
     using ClientOptions = std::function<std::vector<Option>()>;
     using MenuEventHandler = std::function<void(MenuEventType event, std::string_view pageId)>;
+    using PointingHandler = std::function<void(const std::vector<std::string>& ids)>;
     using ChangeHandler = std::function<void(const Change& change)>;
     using SaveHandler = std::function<void(const Saved& saved)>;
 
@@ -781,6 +798,33 @@ namespace mods_config::api
         }
 
         /**
+         * Calls a handler as what the ray is on in the menu changes: the id of the row of the config spec it is on, then
+         * the id of each group the row is in, innermost first, and none as the ray leaves the mod's rows. The menu-event
+         * handlers are not called with it.
+         */
+        void subscribeToPointing(PointingHandler handler)
+        {
+            _pointingHandlers.push_back(std::move(handler));
+        }
+
+        /**
+         * Whether the ray is on an item of the config spec by its id, or on a row inside it, as `isPointedAt("bodyGrab")`
+         * for an activation sphere: a mod that draws each frame asks it there.
+         */
+        bool isPointedAt(const std::string_view id) const
+        {
+            return std::ranges::find(_pointed, id) != _pointed.end();
+        }
+
+        /**
+         * What the ray is on: the id of its row, then of each group the row is in, innermost first. Empty for none.
+         */
+        const std::vector<std::string>& pointedIds() const
+        {
+            return _pointed;
+        }
+
+        /**
          * Calls a handler with each change of a `live` setting of the config spec: a preview of a pending value, and a
          * discard back to the value the session started with.
          */
@@ -910,10 +954,21 @@ namespace mods_config::api
         }
 
         /**
-         * Keeps what an event of the menu tells, whether it is open and the page that is shown, and calls the handlers.
+         * Keeps what an event of the menu tells, whether it is open, the page that is shown and what the ray is on, and
+         * calls the handlers: PointedAt the pointing handlers, and any other the menu-event handlers.
          */
         void onEvent(const MenuEvent* event) override
         {
+            if (event->type == MenuEventType::PointedAt) {
+                _pointed.clear();
+                for (std::uint32_t i = 0; i < event->pointedCount; ++i) {
+                    _pointed.emplace_back(event->pointedIds[i] ? event->pointedIds[i] : "");
+                }
+                for (const auto& handler : _pointingHandlers) {
+                    handler(_pointed);
+                }
+                return;
+            }
             switch (event->type) {
             case MenuEventType::MenuOpened:
                 _menuOpen = true;
@@ -929,6 +984,7 @@ namespace mods_config::api
                 _shownPage.reset();
                 break;
             case MenuEventType::ModShown:
+            case MenuEventType::PointedAt:
                 break;
             }
             const std::string_view page = event->pageId ? event->pageId : "";
@@ -1026,6 +1082,7 @@ namespace mods_config::api
         std::vector<std::pair<std::string, QuickLaunch>> _quickLaunch;
 
         std::vector<MenuEventHandler> _menuEventHandlers;
+        std::vector<PointingHandler> _pointingHandlers;
         std::vector<ChangeHandler> _changeHandlers;
         std::vector<SaveHandler> _saveHandlers;
 
@@ -1038,6 +1095,9 @@ namespace mods_config::api
         // what the menu's events told: whether it is open, and the page of the config spec that is shown
         bool _menuOpen = false;
         std::optional<std::string> _shownPage;
+
+        // what the ray is on, as PointedAt told it last
+        std::vector<std::string> _pointed;
     };
 }
 

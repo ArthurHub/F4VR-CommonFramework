@@ -96,6 +96,10 @@ modsConfig.addQuickLaunch("recalibrate", { .text = "Recalibrate", .help = "Measu
 modsConfig.subscribeToMenuEvents([](const MenuEventType event, std::string_view pageId) { /* ... */ });
 const bool spheresShown = modsConfig.shownPage() == "spheres";
 
+// what the ray is on: the id of its row, then of each section or activation sphere it is in, innermost first
+modsConfig.subscribeToPointing([](const std::vector<std::string>& ids) { /* ... */ });
+const bool zonePointed = modsConfig.isPointedAt("holsterZones");
+
 // the mod's wrist button opens its settings in the menu, on a page by its id
 modsConfig.openMenu("body");
 
