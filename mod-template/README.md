@@ -65,8 +65,10 @@ Open the solution and build. To package, build the `package_mod` target in Relea
 To profile with [Tracy](https://github.com/wolfpld/tracy), build the `Tracy` configuration (`cmake --build --preset tracy`): a Release build
 whose perf sites are also Tracy zones.
 
-Code style is enforced by clang-format through [pre-commit](https://pre-commit.com/): run `pre-commit install` once after cloning so
+Code style is enforced by clang-format for C++ and Prettier for JSON through [pre-commit](https://pre-commit.com/): run `pre-commit install` once after cloning so
 the checks run on every commit. The same checks, and a Release build, run on GitHub for every push and pull request to `main`.
+Prettier uses `.prettierrc.json` (180 columns, two-space indentation, CRLF), including for JSON specs under `data/mod/`.
+Exported JSON configs under `data/config/` keep their native layout.
 
 ## Support
 

@@ -1,4 +1,4 @@
-exclude: ^(data|external)/
+exclude: ^external/
 
 repos:
   - repo: https://github.com/pre-commit/mirrors-clang-format
@@ -8,12 +8,26 @@ repos:
         args: [--style=file]
         files: ^src/.*\.(c|cc|cpp|cxx|h|hh|hpp|hxx|inl)$
 
+  - repo: https://github.com/rbubley/mirrors-prettier
+    rev: v3.7.4
+    hooks:
+      - id: prettier
+        language_version: "26.13.0"
+        types: [json]
+        # Game-exported offsets retain their native layout.
+        exclude: ^data/config/
+
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.4.0
     hooks:
       - id: trailing-whitespace
+        exclude: ^data/
       - id: end-of-file-fixer
+        exclude: ^data/
       - id: check-yaml
+        exclude: ^data/
       - id: check-json
+        exclude: ^data/
       - id: check-added-large-files
+        exclude: ^data/
         args: [--maxkb=2048]

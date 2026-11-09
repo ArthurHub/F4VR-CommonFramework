@@ -48,7 +48,9 @@ You now have a complete mod that builds. It came with:
 - **`CMakeLists.txt`:** `NAME`, `FRIENDLY_NAME` and `VERSION` at the top. The version flows into the DLL
   and the package name, so bump it there and nowhere else.
 - **`CMakeUserPresets.json`:** your machine's paths, git-ignored.
-- **Code style and CI:** `.pre-commit-config.yaml` runs clang-format and basic checks on each commit.
+- **Code style and CI:** `.pre-commit-config.yaml` runs clang-format for C++ and Prettier for JSON,
+  plus basic checks, on each commit. Prettier uses `.prettierrc.json`, includes JSON specs under
+  `data/mod/`, and excludes exported configs under `data/config/`.
   `.github/workflows/` runs them on GitHub and commits the fixes, and builds Release, on each push and
   pull request to `main`.
 - **`CLAUDE.md`:** guidance for Claude Code. Fill in its TODOs as the mod grows, or delete it.
