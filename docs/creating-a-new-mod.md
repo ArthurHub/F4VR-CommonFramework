@@ -136,6 +136,8 @@ The first configure is slow, as vcpkg builds the dependencies once. The solution
   ([perf README](../src/perf/README.md#tracy)).
 - **Visual Studio 2022:** the presets default to 2026. Make `custom` inherit
   `["cmake-dev", "vcpkg", "windows", "vs2022"]` instead of `default`.
+- **Unit tests:** `ctest --test-dir build -C Debug` runs the template's two example tests, one of which checks
+  that the shipped config loads. Your own go beside them ([unit tests in a mod](mod-tests.md)).
 
 The mod now loads, and does nothing.
 
@@ -246,6 +248,7 @@ The log is `Documents\My Games\Fallout4VR\F4SE\HelloVR.log`. It has your `HelloV
 ## Where to go next
 
 - **[`src/README.md`](../src/README.md):** how the subsystems fit, and `ModBase::Settings`.
+- **[Unit tests in a mod](mod-tests.md):** testing the mod's logic with no game, and the tests' tree in VS Code.
 - **[Controller bindings](input-binding.md)** and **[activation spheres](activation-spheres.md):**
   rebindable inputs and reach-into-a-zone gestures, as players see them.
 - **[`vrcf/`](../src/vrcf/README.md):** controller input, haptics, and taking buttons from the game.

@@ -6,7 +6,7 @@ repos:
     hooks:
       - id: clang-format
         args: [--style=file]
-        files: ^src/.*\.(c|cc|cpp|cxx|h|hh|hpp|hxx|inl)$
+        files: ^(src|tests)/.*\.(c|cc|cpp|cxx|h|hh|hpp|hxx|inl)$
 
   - repo: https://github.com/rbubley/mirrors-prettier
     rev: v3.7.4

@@ -32,9 +32,15 @@ The default preset inherits `cmake-dev + vcpkg + windows + vs2026`. The `release
 
 **Packaging:** an explicit step, not part of a normal build — build the `package_mod` target (`cmake --build --preset package`, or `cmake --build build --config Release --target package_mod`), which builds the plugin if needed and runs `cmake/package.cmake` to produce a versioned `.7z` with the DLL and the `data/mod/` files in `build/package/`. A non-Release archive has the configuration in its file name.
 
-**No automated test suite** — testing is manual, in the game.
+**Unit tests:** Catch2, run with `ctest --test-dir build -C Release`, in two executables set up in [tests/CMakeLists.txt](tests/CMakeLists.txt), where a new test file and the sources it covers are listed ([the framework's guide](external/F4VR-CommonFramework/docs/mod-tests.md)). `MOD_BUILD_TESTS` (ON) builds them.
 
-**CI:** `.github/workflows/build.yml` configures and builds Release on every push and pull request to `main`. `.github/workflows/maintenance.yml` runs pre-commit there and commits any fixes back to the branch (pull requests from forks are only checked).
+- `tests/<area>/*Tests.cpp`: **plain std** logic, compiled with the sources it covers and no PCH, F4SE or CommonLibF4. The first choice: keep game-independent logic in a plain-std file of its own and test it here.
+- `tests/linked/<area>/*Tests.cpp`: code that needs the framework and CommonLibF4, linked with them, and the mod's embedded resources. There is no game in the process: a test that calls the game crashes with an access violation, so nodes, forms, the player and OpenVR stay out of reach.
+- The folder starts each test's CTest name (`linked: Config: ...`), which the VS Code Testing panel shows as a tree. A test file's name is unique across the folders.
+
+Behavior in the game is tested by hand, in the game.
+
+**CI:** `.github/workflows/build.yml` configures and builds Release, and runs the unit tests, on every push and pull request to `main`. `.github/workflows/maintenance.yml` runs pre-commit there and commits any fixes back to the branch (pull requests from forks are only checked).
 
 ## Code Style
 
@@ -110,6 +116,6 @@ The framework's own [CLAUDE.md](external/F4VR-CommonFramework/CLAUDE.md) maps it
 Pulled via vcpkg (`vcpkg.json`) with a **pinned baseline** required for CommonLibF4 compatibility:
 
 - `F4VR-CommonFramework` (git submodule at `external/`) — re-exports CommonLibF4 and the framework base classes
-- `spdlog`, `nlohmann-json`, `simpleini`, `tomlplusplus`, `thomasmonkman-filewatch`, `args`, `rapidcsv`, `rsm-mmio`, `xbyak`, `cpptrace`, `imgui` (with `dx11-binding` and `win32-binding`, for the framework's Dear ImGui UI layer, at 1.92.9 from the pinned baseline)
+- `spdlog`, `nlohmann-json`, `simpleini`, `tomlplusplus`, `thomasmonkman-filewatch`, `args`, `rapidcsv`, `rsm-mmio`, `xbyak`, `cpptrace`, `catch2` (the unit tests), `imgui` (with `dx11-binding` and `win32-binding`, for the framework's Dear ImGui UI layer, at 1.92.9 from the pinned baseline)
 
 The vcpkg baseline **must not be changed** without verifying CommonLibF4 still builds; it was specifically pinned to `5cd4931b18d49c77074703cf293a7837ac7506fa`.
