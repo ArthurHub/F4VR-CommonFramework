@@ -4,7 +4,8 @@
 # - F4VRCommon::test_main: the executable's main, tagging each test with its file's name ("[#ConfigFileTests]").
 # - F4VRCommon::test_no_game: REL::NO_GAME and a console logger, for an executable linked with the framework and
 #   CommonLibF4, in which a game address resolves into a range that cannot be used.
-# And always the function f4cf_discover_tests_by_folder, which an executable linking test_main registers with.
+# And always the function f4cf_discover_tests_by_folder(<target> [PREFIX <name>]), which an executable linking
+# test_main registers with.
 
 find_package(Catch2 3 CONFIG QUIET)
 if(TARGET Catch2::Catch2)
@@ -26,10 +27,18 @@ endif()
 
 # Registers the Catch2 tests of TARGET with CTest, starting each test's name with the folder of its file under the
 # calling CMakeLists.txt's folder, "/" written as ": " ("linked: config: ConfigBase: ..."), so the VS Code Testing
-# panel groups them by folder with cmake.ctest.testSuiteDelimiter ": ". TARGET links F4VRCommon::test_main: one
-# discovery per folder picks that folder's files by the tag it gives each test, "#" and its file's name, so a test
-# file's name must be unique across the folders. Only sources named *Tests.cpp are tests.
+# panel groups them by folder with cmake.ctest.testSuiteDelimiter ": ". PREFIX <name> puts a node of its own before
+# the folder ("MyMod: linked: Config: ..."), so the tests of a mod and of the framework it builds them with are two
+# trees in one list. TARGET links F4VRCommon::test_main: one discovery per folder picks that folder's files by the tag
+# it gives each test, "#" and its file's name, so a test file's name must be unique across the folders. Only sources
+# named *Tests.cpp are tests.
 function(f4cf_discover_tests_by_folder TARGET)
+  cmake_parse_arguments(PARSE_ARGV 1 arg "" "PREFIX" "")
+  set(name_prefix "")
+  if(arg_PREFIX)
+    set(name_prefix "${arg_PREFIX}: ")
+  endif()
+
   get_target_property(sources ${TARGET} SOURCES)
   set(folders "")
   foreach(source IN LISTS sources)
@@ -55,10 +64,16 @@ function(f4cf_discover_tests_by_folder TARGET)
     string(MAKE_C_IDENTIFIER "folder_${folder}" key)
     list(JOIN ${key} "," spec)
     if(folder STREQUAL ".")
-      catch_discover_tests(${TARGET} TEST_SPEC "${spec}")
+      set(prefix "${name_prefix}")
     else()
       string(REPLACE "/" ": " prefix "${folder}")
-      catch_discover_tests(${TARGET} TEST_SPEC "${spec}" TEST_PREFIX "${prefix}: ")
+      set(prefix "${name_prefix}${prefix}: ")
+    endif()
+    # an empty TEST_PREFIX is passed on as no value, which catch_discover_tests rejects
+    if(prefix STREQUAL "")
+      catch_discover_tests(${TARGET} TEST_SPEC "${spec}")
+    else()
+      catch_discover_tests(${TARGET} TEST_SPEC "${spec}" TEST_PREFIX "${prefix}")
     endif()
   endforeach()
 endfunction()

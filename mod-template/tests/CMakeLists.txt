@@ -3,7 +3,8 @@
 # - The files of this folder test sources under src/ that are plain std: each is compiled here by itself, with no
 #   PCH, F4SE or CommonLibF4. Keep pure logic in such files, so it is tested this way.
 # - The files of linked/ test code that needs the framework and CommonLibF4, and not the game to run.
-# Test files sit in a folder per src/ area, and the folder starts each test's CTest name ("linked: Config: ...").
+# Test files sit in a folder per src/ area, and the mod's name and the folder start each test's CTest name
+# ("MyMod: linked: Config: ..."), so they are a tree of their own beside the framework's, if those are built too.
 # A test file is named *Tests.cpp, and its name is unique across the folders.
 
 if(NOT TARGET F4VRCommon::test_main)
@@ -22,7 +23,7 @@ target_include_directories(${PROJECT_NAME}_tests PRIVATE ${SOURCE_DIR})
 target_compile_options(${PROJECT_NAME}_tests PRIVATE /utf-8 /permissive- /W4 /external:anglebrackets /external:W0)
 target_link_libraries(${PROJECT_NAME}_tests PRIVATE F4VRCommon::test_main)
 
-f4cf_discover_tests_by_folder(${PROJECT_NAME}_tests)
+f4cf_discover_tests_by_folder(${PROJECT_NAME}_tests PREFIX ${PROJECT_NAME})
 
 
 # >>> The tests of linked/, linked with the framework and CommonLibF4. There is no game in the process:
@@ -47,4 +48,4 @@ target_link_libraries(${PROJECT_NAME}_linked_tests PRIVATE F4VRCommon::framework
 # loaded on its first call, which no test makes. Release drops the unused import whole, hence the ignored warning.
 target_link_options(${PROJECT_NAME}_linked_tests PRIVATE /DELAYLOAD:openvr_api.dll /IGNORE:4199)
 
-f4cf_discover_tests_by_folder(${PROJECT_NAME}_linked_tests)
+f4cf_discover_tests_by_folder(${PROJECT_NAME}_linked_tests PREFIX ${PROJECT_NAME})

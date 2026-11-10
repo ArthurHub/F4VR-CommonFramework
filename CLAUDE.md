@@ -25,7 +25,8 @@ from [`mod-template/`](mod-template/), following [`docs/creating-a-new-mod.md`](
 Catch2, in two executables; a new test file is added to [`tests/CMakeLists.txt`](tests/CMakeLists.txt).
 Test files sit in a folder per `src/` area, and the folder starts each CTest name
 (`linked: config: ConfigBase: ...`), which the VS Code Testing panel shows as a tree with
-`cmake.ctest.testSuiteDelimiter` set to `": "`. A folder's tests are picked by their file's name, so
+`cmake.ctest.testSuiteDelimiter` set to `": "`. Built with a mod's tests, they start with `framework: `
+as well, so they are a tree of their own beside the mod's. A folder's tests are picked by their file's name, so
 a test file's name is unique across the folders. The executables are built of the pieces a mod's
 tests use, in [`cmake/tests.cmake`](cmake/tests.cmake) ([docs/mod-tests.md](docs/mod-tests.md)), so a
 change there reaches every mod.

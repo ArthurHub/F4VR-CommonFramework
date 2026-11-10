@@ -12,6 +12,12 @@ if(NOT TARGET F4VRCommon::test_main)
                       ">> or configure with -DF4CF_BUILD_TESTS=OFF.")
 endif()
 
+# Built with a mod's tests, the framework's start their CTest names with "framework: ", so the two are separate trees
+set(discover_prefix "")
+if(NOT PROJECT_IS_TOP_LEVEL)
+  set(discover_prefix PREFIX framework)
+endif()
+
 add_executable(${PROJECT_NAME}_tests
   common/TomlEditorTests.cpp
   config/ConfigFileTests.cpp
@@ -71,7 +77,7 @@ target_compile_options(${PROJECT_NAME}_tests PRIVATE /utf-8 /permissive- /W4 /ex
 find_package(nlohmann_json CONFIG REQUIRED)
 target_link_libraries(${PROJECT_NAME}_tests PRIVATE F4VRCommon::test_main nlohmann_json::nlohmann_json)
 
-f4cf_discover_tests_by_folder(${PROJECT_NAME}_tests)
+f4cf_discover_tests_by_folder(${PROJECT_NAME}_tests ${discover_prefix})
 
 
 # >>> The tests of linked/, linked with the framework and CommonLibF4. There is no game in the process:
@@ -117,4 +123,4 @@ if(F4CF_WITH_IMGUI_UI)
   target_sources(${PROJECT_NAME}_linked_tests PRIVATE linked/imgui/ImGuiFontsTests.cpp linked/imgui/ImGuiImageTests.cpp linked/imgui/ImGuiTexturesTests.cpp)
 endif()
 
-f4cf_discover_tests_by_folder(${PROJECT_NAME}_linked_tests)
+f4cf_discover_tests_by_folder(${PROJECT_NAME}_linked_tests ${discover_prefix})

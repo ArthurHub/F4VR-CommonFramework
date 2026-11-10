@@ -12,9 +12,10 @@ template's `tests/` folder, `catch2` in `vcpkg.json` and the `MOD_BUILD_TESTS` b
   - **linked**: a mod's `.cpp` files that need the framework and CommonLibF4, linked with them. There is no game
     in the process, so a game address resolves into a range that cannot be used, and a test that calls the game
     fails with an access violation. Nodes, forms, the player and OpenVR stay out of reach.
-- **Folders:** test files sit in a folder per area of the mod, under `tests/` and `tests/linked/`. The folder
-  starts each test's CTest name (`linked: config: Config: ...`), and the VS Code Testing panel shows the folders
-  as a tree. A file directly in `tests/` or `tests/linked/` has no area folder in its name.
+- **Folders:** test files sit in a folder per area of the mod, under `tests/` and `tests/linked/`. The mod's
+  name and the folder start each test's CTest name (`MyMod: linked: config: Config: ...`), and the VS Code Testing
+  panel shows them as a tree. A file directly in `tests/` or `tests/linked/` has no area folder in its name. A mod
+  that also builds the framework's tests (`F4CF_BUILD_TESTS`) sees those under a `framework` node of their own.
 - **Needs:** `catch2` in the mod's `vcpkg.json`. Without it, the pieces below are not defined.
 
 ## The pieces
@@ -22,15 +23,17 @@ template's `tests/` folder, `catch2` in `vcpkg.json` and the `MOD_BUILD_TESTS` b
 The framework defines them for any project that adds it with `add_subdirectory`, whether or not the framework's
 own tests are built ([`cmake/tests.cmake`](../cmake/tests.cmake)).
 
-| Piece                                    | What it is                                                                                     |
-| ---------------------------------------- | ---------------------------------------------------------------------------------------------- |
-| `F4VRCommon::test_main`                  | The executable's `main`: Catch2's, with every test tagged by its file's name (`[#ConfigTests]`) |
-| `F4VRCommon::test_no_game`               | Sets `REL::NO_GAME` and a console logger, for a linked executable                              |
-| `f4cf_discover_tests_by_folder(<target>)` | Registers the target's tests with CTest, each name starting with its folder                    |
+| Piece                                                     | What it is                                                                                      |
+| --------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| `F4VRCommon::test_main`                                   | The executable's `main`: Catch2's, with every test tagged by its file's name (`[#ConfigTests]`) |
+| `F4VRCommon::test_no_game`                                | Sets `REL::NO_GAME` and a console logger, for a linked executable                               |
+| `f4cf_discover_tests_by_folder(<target> [PREFIX <name>])` | Registers the target's tests with CTest, each name starting with `<name>` and its folder        |
 
 `f4cf_discover_tests_by_folder` takes the folders from the target's sources named `*Tests.cpp`, relative to the
 `CMakeLists.txt` that calls it. It picks a folder's tests by the tag `test_main` gives them, so the target links
-`test_main`, and a test file's name is unique across the folders.
+`test_main`, and a test file's name is unique across the folders. `PREFIX` puts a node before the folders: the
+template passes the mod's name, and the framework passes `framework` for its own tests when a mod builds them, so
+the two are separate trees in one list.
 
 ## A mod's tests
 
@@ -55,12 +58,12 @@ CI runs them after its build. `-DMOD_BUILD_TESTS=OFF` leaves them out.
 ## The VS Code Testing panel
 
 With the CMake Tools extension, the panel lists CTest's tests. The template's `.vscode/settings.json` splits the
-names at `": "` into the tree, for up to three levels: `linked`, the area folder, and the `"Prefix: "` a test's
-name starts with.
+names at `": "` into the tree, for up to four levels: the mod's name, `linked`, the area folder, and the
+`"Prefix: "` a test's name starts with.
 
 ```json
 {
   "cmake.ctest.testSuiteDelimiter": ": ",
-  "cmake.ctest.testSuiteDelimiterMaxOccurrence": 3
+  "cmake.ctest.testSuiteDelimiterMaxOccurrence": 4
 }
 ```

@@ -36,7 +36,7 @@ The default preset inherits `cmake-dev + vcpkg + windows + vs2026`. The `release
 
 - `tests/<area>/*Tests.cpp`: **plain std** logic, compiled with the sources it covers and no PCH, F4SE or CommonLibF4. The first choice: keep game-independent logic in a plain-std file of its own and test it here.
 - `tests/linked/<area>/*Tests.cpp`: code that needs the framework and CommonLibF4, linked with them, and the mod's embedded resources. There is no game in the process: a test that calls the game crashes with an access violation, so nodes, forms, the player and OpenVR stay out of reach.
-- The folder starts each test's CTest name (`linked: Config: ...`), which the VS Code Testing panel shows as a tree. A test file's name is unique across the folders.
+- The mod's name and the folder start each test's CTest name (`MyMod: linked: Config: ...`), which the VS Code Testing panel shows as a tree. A test file's name is unique across the folders.
 
 Behavior in the game is tested by hand, in the game.
 

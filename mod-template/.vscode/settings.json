@@ -1,5 +1,5 @@
 {
   "git.allowNoVerifyCommit": false,
   "cmake.ctest.testSuiteDelimiter": ": ",
-  "cmake.ctest.testSuiteDelimiterMaxOccurrence": 3
+  "cmake.ctest.testSuiteDelimiterMaxOccurrence": 4
 }
