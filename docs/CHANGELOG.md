@@ -15,6 +15,11 @@ major version is `0`, a minor bump may break the API; the **Upgrading** notes sa
   `subscribeToPointing` and `isPointedAt` tell a mod the same for its other items. **Upgrading:** a mod that builds
   its sphere's `Frame` itself sets `.config` to the sphere's config; the `onFrameUpdate(node, config, ...)` overload
   sets it.
+- **Unit tests in a mod**: the framework defines the pieces of a Catch2 test executable for the project that adds
+  it, when the project has `catch2` in its `vcpkg.json`: `F4VRCommon::test_main`, `F4VRCommon::test_no_game` for
+  an executable linked with the framework and no game, and `f4cf_discover_tests_by_folder`, which starts each
+  test's CTest name with its folder, so the VS Code Testing panel shows them as a tree. See
+  [Unit tests in a mod](mod-tests.md).
 - **A reload of a config file that did not change parses nothing**: the parse of the content the mod last loaded or
   saved is kept and copied, so a Mods Config FO4 VR preview that is discarded, and every clear of an override, reads
   the file but no longer parses it. A preview dragged through its saved value costs about half.

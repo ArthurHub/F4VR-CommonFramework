@@ -26,16 +26,19 @@ Catch2, in two executables; a new test file is added to [`tests/CMakeLists.txt`]
 Test files sit in a folder per `src/` area, and the folder starts each CTest name
 (`linked: config: ConfigBase: ...`), which the VS Code Testing panel shows as a tree with
 `cmake.ctest.testSuiteDelimiter` set to `": "`. A folder's tests are picked by their file's name, so
-a test file's name is unique across the folders.
+a test file's name is unique across the folders. The executables are built of the pieces a mod's
+tests use, in [`cmake/tests.cmake`](cmake/tests.cmake) ([docs/mod-tests.md](docs/mod-tests.md)), so a
+change there reaches every mod.
 
 - `tests/<area>/*.cpp`: **plain std** logic. The binary compiles the `.cpp` files it covers directly
   (listed in `tests/CMakeLists.txt`), with no PCH, F4SE or CommonLibF4. This is the first choice:
   put game-independent logic in a plain-std file of its own (`vrcf/AxisRepeat`, `config/ConfigFile`)
   and test it here.
 - `tests/linked/<area>/*.cpp`: code that needs the framework and CommonLibF4 to link, but not the game to
-  run. `tests/linked/Setup.cpp` sets `REL::NO_GAME`, so every game address resolves into an unusable
-  range and a test that calls the game crashes with an access violation. Nodes, the left-handed
-  setting, controller state and OpenVR stay out of reach.
+  run. `F4VRCommon::test_no_game` ([`tests/support/NoGame.cpp`](tests/support/NoGame.cpp)) sets
+  `REL::NO_GAME`, so every game address resolves into an unusable range and a test that calls the
+  game crashes with an access violation. Nodes, the left-handed setting, controller state and OpenVR
+  stay out of reach.
 
 ## Code style
 

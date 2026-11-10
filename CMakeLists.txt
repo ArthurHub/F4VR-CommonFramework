@@ -408,6 +408,10 @@ string(REPLACE "/Ob2" "/Ob3" CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE}
 string(REPLACE "/Ob2" "/Ob3" CMAKE_CXX_FLAGS_TRACY "${CMAKE_CXX_FLAGS_TRACY}")
 
 
+# >>> The pieces of a unit test executable, the framework's and a mod's: F4VRCommon::test_main,
+# F4VRCommon::test_no_game and f4cf_discover_tests_by_folder (docs/mod-tests.md)
+include(${ROOT_DIR}/cmake/tests.cmake)
+
 # >>> Unit tests for the game-independent logic (tests/), run with ctest. ON when the framework is built on its
 # own; a mod that adds it with add_subdirectory turns it on to build and run them with its own tests, and then
 # needs catch2 in its vcpkg.json.
