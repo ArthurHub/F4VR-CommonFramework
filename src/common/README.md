@@ -14,7 +14,7 @@ utilities, and time helpers. Everything here is usable from any other subsystem.
 | [`Quaternion.h`](Quaternion.h) | `Quaternion` class — normalize, conjugate, slerp, angle-axis, vector-to-vector, matrix conversion, and operators. Header-only. |
 | [`MatrixUtils.h`](MatrixUtils.h) | `MatrixUtils` — vector math (`vec3Norm`/`vec3Dot`/`vec3Cross`), Euler↔matrix conversion, `NiTransform` builders, relocation/delta/target transforms. |
 | [`CommonUtils.h`](CommonUtils.h) | Free functions: float compare, string trim/lower, embedded-resource extraction, filesystem helpers, time (`nowMillis`/`nowNanosec`), and the `Documents\My Games` path resolver. |
-| [`TomlEditor.h`](TomlEditor.h) | `TomlEditor` — sets values in the text of a TOML file and keeps every other byte: comments, blank lines, key order, how the other values are written. Plain std and toml++, unit tested. |
+| [`TomlEditor.h`](TomlEditor.h) | `TomlEditor` — sets and removes values in the text of a TOML file and keeps every other byte: comments, blank lines, key order, how the other values are written. Plain std and toml++, unit tested. |
 
 ## Quick reference
 
@@ -62,6 +62,8 @@ if (!editor.set({ "New", "key" }, true)) {           // a missing section is add
 
 // several values: the same result as a set of each, in about the time of one
 editor.set({ { { "Main", "fScale" }, 1.25f }, { { "Main", "bFlag" }, true } });
+
+editor.remove({ "Main", "sOld" });                   // its lines taken out; one it does not have stays so
 writeFile(path, editor.text());
 ```
 
@@ -81,6 +83,9 @@ writeFile(path, editor.text());
   stays a float. A replaced literal string (`'C:\path'`) stays literal when the new string can be one.
 - A value that is rewritten takes this formatting: a multi-line string becomes one line, `0x1F`
   becomes `31`.
+- A **removed key** takes the lines its value is written on out of the text, with a comment at the end
+  of them; a comment above it, and a section left with no keys, stay. A table of dotted keys goes with
+  its last key. A key that shares its line with another, as in an inline table, is refused.
 - Every edit is parsed back and kept only when the document holds the new value and nothing else
   changed. Otherwise `set` returns false, the text stays, and `error()` says why: a path that is a
   section or goes through a value, an array of tables (`[[name]]`), a value TOML can't hold.

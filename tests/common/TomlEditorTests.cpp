@@ -443,3 +443,74 @@ TEST_CASE("TomlEditor: a set after a refused one works")
     CHECK(editor.error().empty());
     CHECK(editor.text() == "[M]\nx = 2\n");
 }
+
+TEST_CASE("TomlEditor: a removed key takes its lines out, with its inline comment, and no other byte")
+{
+    TomlEditor editor(SHIPPED);
+    REQUIRE(editor.remove({ "Main", "fScale" }));
+    CHECK(editor.text() == replaced(SHIPPED, "fScale = 71.0   # inline\r\n", ""));
+    CHECK(!editor.table()["Main"]["fScale"]);
+    CHECK(editor.table()["Main"]["bFlag"].value<bool>() == false);
+
+    // a key of the root, which has no section, and one written over several lines
+    const std::string text = "SS2 = \"Gameplay\"\n\"My Mod\" = \"Combat\"\nlist = [\n  1,\n  2,\n]\nlast = 1";
+    TomlEditor root(text);
+    REQUIRE(root.remove({ "My Mod" }));
+    REQUIRE(root.remove({ "list" }));
+    CHECK(root.text() == "SS2 = \"Gameplay\"\nlast = 1");
+
+    // the last line, with no line ending
+    REQUIRE(root.remove({ "last" }));
+    CHECK(root.text() == "SS2 = \"Gameplay\"\n");
+}
+
+TEST_CASE("TomlEditor: a removed key leaves its section, and takes a table of dotted keys with its last key")
+{
+    TomlEditor section("[Main]\nkey = 1\n\n[Debug]\niVersion = 1\n");
+    REQUIRE(section.remove({ "Main", "key" }));
+    CHECK(section.text() == "[Main]\n\n[Debug]\niVersion = 1\n");
+    CHECK(section.table()["Main"].is_table());
+
+    TomlEditor dotted("[Main]\nhand.x = 1\nhand.y = 2\n");
+    REQUIRE(dotted.remove({ "Main", "hand", "x" }));
+    CHECK(dotted.text() == "[Main]\nhand.y = 2\n");
+    REQUIRE(dotted.remove({ "Main", "hand", "y" }));
+    CHECK(dotted.text() == "[Main]\n");
+    CHECK(!dotted.table()["Main"]["hand"]);
+}
+
+TEST_CASE("TomlEditor: a key the text does not have is already removed")
+{
+    TomlEditor editor(SHIPPED);
+    CHECK(editor.remove({ "Main", "missing" }));
+    CHECK(editor.remove({ "Missing", "key" }));
+    CHECK(editor.text() == SHIPPED);
+    CHECK(editor.error().empty());
+}
+
+TEST_CASE("TomlEditor: a key it cannot remove is refused and the text stays")
+{
+    const auto refused = [](const std::string& text, const std::initializer_list<std::string_view> path, const std::string& reason) {
+        TomlEditor editor(text);
+        CHECK(!editor.remove(path));
+        CHECK(editor.text() == text);
+        INFO(editor.error());
+        CHECK(editor.error().contains(reason));
+    };
+    // a key of an inline table shares its line with the others
+    refused("hand = { x = 1, y = 2 }\n", { "hand", "x" }, "hand.x: is not on lines of its own");
+    refused(SHIPPED, { "Main" }, "Main: is a table, not a value");
+    refused("[[item]]\nname = 'a'\n", { "item" }, "item: is an array of tables, not a value");
+    refused(SHIPPED, {}, "no key to remove");
+}
+
+TEST_CASE("TomlEditor: a set after a remove, and a remove after a set, work on the edited text")
+{
+    TomlEditor editor(SHIPPED);
+    REQUIRE(editor.set({ "Main", "iMode" }, 2));
+    REQUIRE(editor.remove({ "Main", "bFlag" }));
+    REQUIRE(editor.set({ "Main", "bFlag" }, true));
+    CHECK(editor.table()["Main"]["iMode"].value<int>() == 2);
+    CHECK(editor.table()["Main"]["bFlag"].value<bool>() == true);
+    CHECK(editor.text().contains("iMode = 2\r\nsButton = \"offhand tap grip\"\r\nbFlag = true\r\n"));
+}

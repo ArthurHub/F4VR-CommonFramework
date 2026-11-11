@@ -9,6 +9,9 @@ major version is `0`, a minor bump may break the API; the **Upgrading** notes sa
 
 ## 0.5.1 — unreleased
 
+- **`TomlEditor::remove` takes a key out of a TOML file**: the lines its value is written on go, and every other
+  byte stays. It is checked as a set is: the document has to be the old one less that key, so a key that shares its
+  line with another, as in an inline table, is refused. A key the file does not have is already removed.
 - **An activation sphere lights while Mods Config FO4 VR's menu points at it**: while the ray is on a row of the
   section `loadWandActivationConfig` read it from, the sphere is drawn as `showZone` draws it, at the zone's true
   size. A zone's row lights it only while that zone is the one in use, in power armor or not. The client header's

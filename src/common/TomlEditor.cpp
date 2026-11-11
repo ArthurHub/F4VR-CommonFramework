@@ -453,6 +453,27 @@ namespace
     }
 
     /**
+     * Remove the key at a path from a document, which has it, and the tables over it that are left with no keys and
+     * are not sections of the text, as a table of dotted keys: the text has nothing of them once their keys are gone.
+     * `chain` is the nodes along the path, from the root.
+     */
+    void erase(toml::table& root, const std::string_view text, const toml::table& original, const std::span<const std::string_view> path,
+        const std::span<const toml::node* const> chain)
+    {
+        std::vector<toml::table*> tables{ &root };
+        for (const auto key : path.first(path.size() - 1)) {
+            tables.push_back(tables.back()->get(key)->as_table());
+        }
+        tables.back()->erase(path.back());
+        for (auto depth = path.size() - 1; depth > 0; --depth) {
+            if (!tables[depth]->empty() || isSection(text, original, *chain[depth]->as_table(), depth)) {
+                break;
+            }
+            tables[depth - 1]->erase(path[depth - 1]);
+        }
+    }
+
+    /**
      * The nodes along a path, from the root to the last one the document has: one more than the path when it has
      * the whole path.
      */
@@ -642,6 +663,61 @@ namespace f4cf::common
         }
 
         _text = std::move(*edited);
+        _table = std::move(*result);
+        return true;
+    }
+
+    /**
+     * Remove the key at a path of keys, such as {"Section", "key"}, with its value: the lines the value is written on
+     * are taken out, the key's line first, with a comment at the end of the last of them. Every other byte stays,
+     * also a comment on a line above the key and a section left with no keys. A key the text does not have is
+     * already removed, and nothing changes.
+     * The edit is parsed back, and kept only when the document is then the old one less that key. Returns false and
+     * leaves the text as it was when it is not: for a key that shares its lines with another, as in an inline table,
+     * for a path that is a section or an array of tables, and for a text that did not parse. error() then says why.
+     */
+    bool TomlEditor::remove(const std::span<const std::string_view> path)
+    {
+        F4CF_PERF_FUNCTION();
+        if (!_parsed) {
+            return false;
+        }
+        _error.clear();
+        if (path.empty()) {
+            _error = "no key to remove";
+            return false;
+        }
+        const auto chain = chainOf(_table, path);
+        if (chain.size() != path.size() + 1) {
+            return true;
+        }
+        const auto& node = *chain.back();
+        if (const auto* table = node.as_table(); table && !table->is_inline()) {
+            _error = std::format("{}: is a table, not a value", pathText(path));
+            return false;
+        }
+        if (isArrayOfSections(node)) {
+            _error = std::format("{}: is an array of tables, not a value", pathText(path));
+            return false;
+        }
+        const auto& source = node.source();
+        const auto begin = source.begin.line == 0 ? std::nullopt : lineStart(_text, source.begin.line);
+        if (!begin) {
+            _error = std::format("{}: has no position in the text", pathText(path));
+            return false;
+        }
+        const auto end = lineStart(_text, static_cast<std::size_t>(source.end.line) + 1).value_or(_text.size());
+        auto edited = std::format("{}{}", std::string_view(_text).substr(0, *begin), std::string_view(_text).substr(end));
+
+        auto expected = _table;
+        erase(expected, _text, _table, path, chain);
+        auto result = verify(_text, edited, expected, _sourceName);
+        if (!result) {
+            _error = std::format("{}: is not on lines of its own: {}", pathText(path), result.error());
+            return false;
+        }
+
+        _text = std::move(edited);
         _table = std::move(*result);
         return true;
     }
