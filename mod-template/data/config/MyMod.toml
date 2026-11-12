@@ -11,7 +11,7 @@
 # duration (seconds), suppress (true/false) and modifier = { hand = "offhand", button = "grip" }.
 # A thumbstick push is { hand = "primary", type = "axis", direction = "up" }; { type = "none" } turns it off.
 # Guide: https://github.com/ArthurHub/F4VR-CommonFramework/blob/main/docs/input-binding.md
-# A Windows path goes in single quotes, where a backslash is just a backslash: 'f4cf\icon.dds'.
+# A Windows path goes in single quotes, where a backslash is just a backslash: 'Textures\MyMod\icon.dds'.
 
 
 # This is my value, there are many like it but this one is mine
@@ -19,7 +19,7 @@ fMyConfigValue = 3.0
 
 
 # A sphere for activating functionality when player hand/wand is inside it.
-# https://github.com/ArthurHub/F4VR-CommonFramework/blob/main/docs/input-binding.md#activation-spheres
+# https://github.com/ArthurHub/F4VR-CommonFramework/blob/main/docs/activation-spheres.md
 [MyMod_AnActivationSphere]
 tZone = { pos = [3.91, 7.11, 0.67], scale = 20.0 }
 tZonePA = { pos = [4.01, 10.21, -4.6], scale = 24.0 }
@@ -29,7 +29,7 @@ sEntryHaptic = "Tick"
 sPrimaryHaptic = "DoubleClick"
 sSecondaryHaptic = "DoubleClick"
 sShowIcon = "wheninside"
-sIcon = 'f4cf\activation-icon-hand.dds'
+sIcon = 'Textures\MyMod\f4cf\activation-icon-hand.dds'
 fIconSize = 1.0
 sShowSphere = "wheninside"
 sSphereStyle = "white-subtle"

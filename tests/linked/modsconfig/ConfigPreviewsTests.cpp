@@ -113,3 +113,36 @@ TEST_CASE("ConfigPreviews: a preview of a setting of the mod's config file overr
         CHECK(hasOverrideOf(config, "devbench", "iMode"));
     }
 }
+
+TEST_CASE("ConfigPreviews: a change the mod handed over is recorded with no reload, so its values not handed over yet stay")
+{
+    const TempFolder folder;
+    const auto path = folder.file("TestMod.toml");
+    writeFile(path, USER_FILE);
+    PreviewedConfig config(path);
+    REQUIRE(config.loadConfigValues());
+    ConfigPreviews previews(config);
+
+    // the mod's own UI changed both values, and hands over the scale first
+    config.scale = 2.5f;
+    config.mode = 3;
+    const Change scale{ .id = "fScale", .fileName = "config", .filePath = path, .path = { "Main", "fScale" }, .previous = 1.0f, .value = 2.5f, .handedOver = true };
+    previews.onChange(scale);
+    CHECK(config.mode == 3);
+    CHECK(hasOverrideOf(config, ConfigPreviews::OWNER, "fScale"));
+
+    // a later load keeps the value handed over, and has the file's for the one that was not
+    REQUIRE(config.loadConfigValues());
+    CHECK(f4cf::common::fEqual(config.scale, 2.5f));
+    CHECK(config.mode == 0);
+
+    // the mod hands over the file's value, which comes back as a Discard: the override goes, with no reload either
+    config.scale = 1.0f;
+    config.mode = 3;
+    auto discard = scale;
+    discard.discard = true;
+    discard.value = 1.0f;
+    previews.onChange(discard);
+    CHECK_FALSE(config.hasConfigOverride("Main", "fScale"));
+    CHECK(config.mode == 3);
+}

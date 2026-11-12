@@ -297,7 +297,8 @@ namespace f4cf::config
      * Read the whole section of an activation sphere into a f4vr::WandActivationConfig, each key falling back to the
      * matching field of `defaults`: the zone (tZone, and tZonePA for power armor), the two bindings (kPrimaryBinding,
      * kSecondaryBinding), the haptics (sEntryHaptic, sPrimaryHaptic, sSecondaryHaptic), the sphere (sShowSphere,
-     * sSphereOrientation, and its look, see readSphereStyle) and the icon (sShowIcon, and its look, see readIconStyle).
+     * sSphereOrientation, and its look, see readSphereStyle), the icon (sShowIcon, and its look, see readIconStyle) and
+     * the binding icon (sShowBindingIcon, sBindingIcons, tBindingIcon whose scale must be > 0, cBindingIconColor).
      */
     f4vr::WandActivationConfig ConfigReaders::loadWandActivationConfig(const toml::table& config, const char* section, const f4vr::WandActivationConfig& defaults)
     {
@@ -321,6 +322,16 @@ namespace f4cf::config
 
         cfg.showIcon = f4vr::parseActivationSphereVisibility(stringOf(config, section, "sShowIcon").value_or(""), defaults.showIcon);
         cfg.iconStyle = readIconStyle(config, section, defaults.iconStyle);
+
+        cfg.showBindingIcon = f4vr::parseActivationSphereVisibility(stringOf(config, section, "sShowBindingIcon").value_or(""), defaults.showBindingIcon);
+        cfg.bindingIconStyle.bindings = f4vr::parseActivationBindingIcons(stringOf(config, section, "sBindingIcons").value_or(""), defaults.bindingIconStyle.bindings);
+        cfg.bindingIconStyle.transform = getTransformValue(config, section, "tBindingIcon", defaults.bindingIconStyle.transform);
+        if (cfg.bindingIconStyle.transform.scale <= 0.0f) {
+            logger::warn("Config: binding icon size '{}.tBindingIcon' scale = {} is out of range (expected > 0). Using default.", section, cfg.bindingIconStyle.transform.scale);
+            cfg.bindingIconStyle.transform.scale = defaults.bindingIconStyle.transform.scale;
+        }
+        cfg.bindingIconStyle.color = getColorValue(config, section, "cBindingIconColor", defaults.bindingIconStyle.color);
+        cfg.section = section;
         return cfg;
     }
 }

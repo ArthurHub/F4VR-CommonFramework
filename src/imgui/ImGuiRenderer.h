@@ -1,5 +1,9 @@
 #pragma once
 
+#include <cstdint>
+#include <future>
+#include <vector>
+
 #include "../render/SubmitHook.h"
 #include "ImGuiLayer.h"
 
@@ -33,5 +37,19 @@ namespace f4cf::imgui::internal
         void publish(RenderFrame&& frame);
 
         void setSrgbImageShader(const ImDrawList* drawList, const ImDrawCmd* command);
+
+        /**
+         * The pixels of the texture the canvases were drawn into, the atlas or the dedicated canvas's own: RGBA, 4 bytes
+         * a pixel, in rows from the top.
+         */
+        struct Capture
+        {
+            int width = 0;
+            int height = 0;
+            bool dedicated = false;
+            std::vector<std::uint8_t> rgba;
+        };
+
+        std::future<Capture> requestCapture();
     }
 }

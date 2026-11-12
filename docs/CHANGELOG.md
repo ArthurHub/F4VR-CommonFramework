@@ -7,6 +7,94 @@ and tooling tweaks are left to the git history.
 Versions follow `set(VERSION ...)` in the root [`CMakeLists.txt`](../CMakeLists.txt). While the
 major version is `0`, a minor bump may break the API; the **Upgrading** notes say what to change.
 
+## 0.5.1 — unreleased
+
+- **An activation sphere can show its bindings' icons**: a third visual, the icons of the bindings that fire the
+  gesture (the binding prompt icons of `vrui`), in a row facing the player. `sShowBindingIcon` says when (the
+  visibility values, `never` by default), `sBindingIcons` which bindings (`inside` by default: those whose hand is
+  in the zone; or `all`, `primary`, `secondary`), `tBindingIcon` where (x right, y up, z toward the HMD from the
+  zone's center; its scale is each icon's size) and `cBindingIconColor` the tint. With `sShowIcon = "never"` the
+  icons take the icon's place. **Upgrading:** a mod that builds its sphere's `Frame` itself sets `.showBindingIcon`
+  and `.bindingIconStyle` to show them; the `onFrameUpdate(node, config, ...)` overload sets both.
+- **`TomlEditor::remove` takes a key out of a TOML file**: the lines its value is written on go, and every other
+  byte stays. It is checked as a set is: the document has to be the old one less that key, so a key that shares its
+  line with another, as in an inline table, is refused. A key the file does not have is already removed.
+- **An activation sphere lights while Mods Config FO4 VR's menu points at it**: while the ray is on a row of the
+  section `loadWandActivationConfig` read it from, the sphere is drawn as `showZone` draws it, at the zone's true
+  size. A zone's row lights it only while that zone is the one in use, in power armor or not. The client header's
+  `subscribeToPointing` and `isPointedAt` tell a mod the same for its other items. **Upgrading:** a mod that builds
+  its sphere's `Frame` itself sets `.config` to the sphere's config; the `onFrameUpdate(node, config, ...)` overload
+  sets it.
+- **Unit tests in a mod**: the framework defines the pieces of a Catch2 test executable for the project that adds
+  it, when the project has `catch2` in its `vcpkg.json`: `F4VRCommon::test_main`, `F4VRCommon::test_no_game` for
+  an executable linked with the framework and no game, and `f4cf_discover_tests_by_folder`, which starts each
+  test's CTest name with its folder and an optional `PREFIX` node, so the VS Code Testing panel shows them as a
+  tree. The framework's own tests, built with a mod's, are under a `framework` node. `mod-template/` has them
+  set up, a plain and a linked executable with an example each, run by its CI. See
+  [Unit tests in a mod](mod-tests.md). **Upgrading:** optional; a mod that wants them copies the template's
+  `tests/`, `catch2` in `vcpkg.json`, the `MOD_BUILD_TESTS` block of `CMakeLists.txt` and the `cmake.ctest.*`
+  settings of `.vscode/settings.json`.
+- **A reload of a config file that did not change parses nothing**: the parse of the content the mod last loaded or
+  saved is kept and copied, so a Mods Config FO4 VR preview that is discarded, and every clear of an override, reads
+  the file but no longer parses it. A preview dragged through its saved value costs about half.
+- **perf times the ImGui canvases' and the vrui panels' frame end**: `imguiCanvases`, with its placing, pointer,
+  ImGui frame, the mod's `content`, texture writes, draw data copy and quads under it, and `vruiPanels`, each under
+  `frameEndCallbacks`, so a mod sees what its panel costs the frame beside its own update.
+- **devbench saves the ImGui canvases as a PNG**: every mod's tool has a `snapshot` action, which writes the
+  texture its ImGui canvases are drawn into, a dedicated panel's own or the shared atlas, without stalling a frame.
+- **devbench's `input` action reads the controller input a mod suppresses**, each owner's and the union, in place
+  of the `input.suppression` event, which the ImGui pointer fired each time its ray came onto a panel or left it.
+  **Upgrading:** a client that read the event calls the action. The tool's `contract` is 5.
+- **Controller-direction movement with the offhand controller held reversed**: `f4vr::WandMovement::alignTo(key,
+  worldForward)`, called each frame, inverts the offhand stick the game reads while the offhand controller points
+  more than 90° away from the forward the mod passes, as when it holds a flashlight in an overhand grip. Built on
+  `VRControllersSuppress.setAxisInverted(key, hand, axis, inverted)`, an owner-keyed axis inversion beside axis
+  suppression, which devbench's `input` action lists as `invertedAxes`.
+- **The thumbstick's prompt icon has its L or R inside**: the controller's letter sits in the stick's ring,
+  where its knob was, as the game's own prompts draw it, and the small L or R circle over its top left is
+  gone; the other buttons keep theirs. **Upgrading:** re-copy the `*thumbstick*.dds` icons of
+  `Textures\MyMod\f4cf\bindings\` from `mod-template/`.
+- **A Mods Config button opens the dev layout file**: the mod's client has the function `openDevLayoutFile`,
+  which opens the VR UI dev layout's file on the desktop, for a config spec's `CallNativeFunction` button.
+- **A text panel row can end on the right edge**: a `'\v'` (`vrui::TEXT_PANEL_RIGHT_TAB`) in its text or
+  spans moves the rest of the row to the panel's right edge, at least a space past what precedes it, so a
+  label and its value or binding prompt sit on either side of one row.
+- **A text panel scales its images**: `UITextPanel::setImageScale` multiplies every image span's height,
+  and the dev layout tunes it live as `Img:(scale)` on the panel's line.
+- **devbench actions of a mod without a frame update run on the game thread on Fallout 4 VR**: they go
+  through devbench's own main-thread queue, as F4SE's task interface runs tasks on worker threads there.
+  F4SE's queue stays the fallback for a devbench without that queue.
+- **An edit a mod's UI hands to Mods Config FO4 VR costs no reload**: its change comes back marked
+  `handedOver` (client header of Mods Config FO4 VR), and the live preview records the override without
+  reloading the config, so the mod can hand over a value every frame. `setConfigOverrides` and
+  `clearConfigOverrides` take `reload = false` for the same, and a set no longer parses the file.
+  **Upgrading:** a mod applies a value in its own config before it calls `setPendingValue`, as the change
+  no longer reloads the config for it, and no config-changed subscriber is told of it.
+- **Activation spheres have their own player guide**, [`activation-spheres.md`](activation-spheres.md),
+  and [`input-binding.md`](input-binding.md) keeps the binding alone. **Upgrading:** a mod's docs that link
+  `input-binding.md#activation-spheres` link `activation-spheres.md` instead.
+- **A held thumbstick scrolls faster**: an axis push (`check()` of an axis binding, `isAxisPressed`,
+  `isThumbstickPressed`, `getAxisPressedDirection`, `getThumbstickPressedDirection`) steps at once on a fresh
+  push, repeats first after `max(cooldown, 0.35s)`, then every `cooldown`, halved after 1s and quartered after
+  2.5s of holding. A binding's `accelerate = false` (the `accelerate` parameter of the calls) keeps the repeat
+  at `cooldown`. **Upgrading:** the feel changes with no code change: a quick second flick within the cooldown
+  now steps, a flick shorter than 0.35s is one step where it could be two, and a long hold speeds up; a push
+  past the threshold on both components reads as the larger one, which only a threshold under 0.71 allows.
+
+- **Asset paths of the Data folder**: a texture or nif path can be written from the Data folder, as
+  `Textures\MyMod\f4cf\activation-icon-hand.dds`, which `resolveTexturePath` and `resolveNifPath` try after the
+  path as given. `mod-template`'s config and the docs write `sIcon`, `sSphereNif` and `sSphereTexture` so, as
+  Mods Config FO4 VR's choices of the framework's files write them; the short `f4cf\...` form still resolves.
+  **Upgrading:** a mod whose config sets `sIcon` writes it in this form, or its row in Mods Config FO4 VR is
+  invalid until the player picks an icon.
+- **A binding of the stick moved**: an axis binding's `direction` can be `any` (also `move`), `updown` or
+  `rightleft` (`vrcf::Direction::Any`, `UpDown`, `RightLeft`), which fires on a push past the threshold in
+  any direction it accepts. It is for a binding that names the stick to walk, aim or adjust with, whose
+  analog value the mod reads from the binding's hand, and its prompt shows the stick with arrowheads around
+  its rim, so it never reads as a push or a click. **Upgrading:** re-copy `Textures\MyMod\f4cf\bindings\`
+  from `mod-template/` for the six new `<side>-thumbstick-{move,updown,rightleft}.dds` icons; a mod that
+  switches over `vrcf::Direction` has three more values, which the getters of a pushed direction never return.
+
 ## 0.5.0 — unreleased
 
 - **A binding of any hand**: a binding's `hand` can be `any`, which fires on whichever controller works

@@ -311,19 +311,21 @@ namespace f4cf::imgui::internal
     };
 
     /**
-     * How much a thumbstick scrolls, from -1 to 1, for how far it is pushed along one axis, from -1 to 1.
+     * How much a thumbstick scrolls, from -1 to 1, for its push up or down (y) and to a side (x), each from -1 to 1.
      * Nothing inside the dead zone around its center, and from there evenly up to 1 at a full push, so the
-     * scrolling starts slow at the edge of the dead zone instead of at a jump.
+     * scrolling starts slow at the edge of the dead zone instead of at a jump. A push that is more to a side
+     * scrolls nothing: it is the content's, as a slider that steps, and one push does one of the two.
      */
-    inline float scrollFromThumbstick(const float push, const float deadZone)
+    inline float scrollFromThumbstick(const float x, const float y, const float deadZone)
     {
-        const float past = (push < 0.0f ? -push : push) - deadZone;
+        const float up = y < 0.0f ? -y : y;
+        const float past = up - deadZone;
         // negated so a NaN scrolls nothing
-        if (!(past > 0.0f) || !(deadZone < 1.0f)) {
+        if (!(past > 0.0f) || !(deadZone < 1.0f) || !(up >= (x < 0.0f ? -x : x))) {
             return 0.0f;
         }
         const float amount = past < 1.0f - deadZone ? past / (1.0f - deadZone) : 1.0f;
-        return push < 0.0f ? -amount : amount;
+        return y < 0.0f ? -amount : amount;
     }
 
     enum class PointerOwner : std::uint8_t

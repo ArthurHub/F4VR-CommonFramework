@@ -26,6 +26,7 @@ namespace f4cf::vrcf
      *     modifier = { hand = "offhand", button = "thumbstick" } }
      *   { hand = "left", type = "tap", button = "grip", suppress = true }
      *   { hand = "primary", type = "axis", axis = "thumbstick", direction = "up", threshold = 0.5 }
+     *   { hand = "offhand", type = "axis", direction = "updown", accelerate = false }
      *   { type = "none" }
      *
      * The words, with their aliases:
@@ -34,7 +35,10 @@ namespace f4cf::vrcf
      *                | axis/thumbstick/stick (AxisDirection) | none/off/disabled
      *   button     : system | menu/applicationmenu/b | grip | a | trigger | thumbstick/touchpad/joystick
      *   axis       : thumbstick/touchpad/joystick | trigger | grip
-     *   direction  : up | down | left | right
+     *   direction  : up | down | left | right | any/move | updown/vertical | rightleft/leftright/horizontal
+     *
+     * any, updown and rightleft ask for the stick to be moved rather than pushed one way: the binding fires on a
+     * push in any direction, or either way along one axis, and its prompt shows the stick with arrowheads around it.
      *
      * parseInputBinding reads the one-line text form of a mod's INI config, which only the INI import reads, to
      * move a player's binding to the table.

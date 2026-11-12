@@ -12,12 +12,10 @@
     "tomlplusplus",
     "thomasmonkman-filewatch",
     "cpptrace",
+    "catch2",
     {
       "name": "imgui",
-      "features": [
-        "dx11-binding",
-        "win32-binding"
-      ]
+      "features": ["dx11-binding", "win32-binding"]
     }
   ],
   "builtin-baseline": "5cd4931b18d49c77074703cf293a7837ac7506fa"

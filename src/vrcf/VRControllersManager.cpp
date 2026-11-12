@@ -1,5 +1,6 @@
 #include "VRControllersManager.h"
 
+#include <cmath>
 #include <numbers>
 
 #include "VRControllersHaptic.h"
@@ -118,7 +119,7 @@ namespace f4cf::vrcf
         case ActivationType::DoublePress:
             return isDoublePressed(binding.hand, binding.button, binding.duration > 0.0f ? binding.duration : 0.4f);
         case ActivationType::AxisDirection:
-            return isAxisPressed(binding.hand, binding.axis, binding.direction, binding.threshold, binding.cooldown);
+            return isAxisPressed(binding.hand, binding.axis, binding.direction, binding.threshold, binding.cooldown, binding.accelerate);
         default:
             return false;
         }
@@ -291,33 +292,36 @@ namespace f4cf::vrcf
     }
 
     /**
-     * Is the analog axis is pressed in the specified direction.
-     * Pressed is defined as the axis value being above a certain threshold in the specified direction.
-     * There is cooldown milliseconds debounce time between consecutive positive passing checks.
+     * Whether the axis steps in `direction` (one direction, or Any / UpDown / RightLeft for any of theirs): a push past
+     * `threshold` steps at once, and held it repeats, first after max(cooldown, 0.35s), then every `cooldown`,
+     * halved after 1s and quartered after 2.5s of holding when `accelerate`. The repeat is the axis's, shared by its
+     * callers (see AxisRepeat).
      */
-    bool VRControllersManager::isAxisPressed(const Hand primaryHand, const Axis axis, const Direction direction, const float threshold, const float cooldown)
+    bool VRControllersManager::isAxisPressed(const Hand primaryHand, const Axis axis, const Direction direction, const float threshold, const float cooldown, const bool accelerate)
     {
-        return isAxisPressed(getHand(primaryHand), axis, direction, threshold, cooldown);
+        return isAxisPressed(getHand(primaryHand), axis, direction, threshold, cooldown, accelerate);
     }
 
-    bool VRControllersManager::isAxisPressed(const vr::ETrackedControllerRole hand, const Axis axis, const Direction direction, const float threshold, const float cooldown)
+    bool VRControllersManager::isAxisPressed(const vr::ETrackedControllerRole hand, const Axis axis, const Direction direction, const float threshold, const float cooldown,
+        const bool accelerate)
     {
-        return get(hand).isAxisPressedAndClear(static_cast<uint32_t>(axis), direction, _currentTime, threshold, cooldown);
+        return get(hand).stepAxis(static_cast<uint32_t>(axis), direction, _currentTime, threshold, cooldown, accelerate).has_value();
     }
 
     /**
-     * Get the direction of analog axis if it is pressed.
-     * Pressed is defined as the axis value being above a certain threshold in the specified direction.
-     * There is cooldown milliseconds debounce time between consecutive positive passing checks.
+     * The direction the axis steps in, any of the four, by the same auto-repeat as isAxisPressed. Empty when this
+     * check is not a step.
      */
-    std::optional<Direction> VRControllersManager::getAxisPressedDirection(const Hand primaryHand, const Axis axis, const float threshold, const float cooldown)
+    std::optional<Direction> VRControllersManager::getAxisPressedDirection(const Hand primaryHand, const Axis axis, const float threshold, const float cooldown,
+        const bool accelerate)
     {
-        return getAxisPressedDirection(getHand(primaryHand), axis, threshold, cooldown);
+        return getAxisPressedDirection(getHand(primaryHand), axis, threshold, cooldown, accelerate);
     }
 
-    std::optional<Direction> VRControllersManager::getAxisPressedDirection(const vr::ETrackedControllerRole hand, const Axis axis, const float threshold, const float cooldown)
+    std::optional<Direction> VRControllersManager::getAxisPressedDirection(const vr::ETrackedControllerRole hand, const Axis axis, const float threshold, const float cooldown,
+        const bool accelerate)
     {
-        return get(hand).getAxisPressedAndClear(static_cast<uint32_t>(axis), _currentTime, threshold, cooldown);
+        return get(hand).stepAxis(static_cast<uint32_t>(axis), Direction::Any, _currentTime, threshold, cooldown, accelerate);
     }
 
     /**
@@ -335,33 +339,31 @@ namespace f4cf::vrcf
     }
 
     /**
-     * Is the analog thumbstick is pressed in the specified direction.
-     * Pressed is defined as the axis value being above a certain threshold in the specified direction.
-     * There is cooldown milliseconds debounce time between consecutive positive passing checks.
+     * isAxisPressed of the thumbstick.
      */
-    bool VRControllersManager::isThumbstickPressed(const Hand primaryHand, const Direction direction, const float threshold, const float cooldown)
+    bool VRControllersManager::isThumbstickPressed(const Hand primaryHand, const Direction direction, const float threshold, const float cooldown, const bool accelerate)
     {
-        return isThumbstickPressed(getHand(primaryHand), direction, threshold, cooldown);
+        return isThumbstickPressed(getHand(primaryHand), direction, threshold, cooldown, accelerate);
     }
 
-    bool VRControllersManager::isThumbstickPressed(const vr::ETrackedControllerRole hand, const Direction direction, const float threshold, const float cooldown)
+    bool VRControllersManager::isThumbstickPressed(const vr::ETrackedControllerRole hand, const Direction direction, const float threshold, const float cooldown,
+        const bool accelerate)
     {
-        return get(hand).isAxisPressedAndClear(static_cast<uint32_t>(Axis::Thumbstick), direction, _currentTime, threshold, cooldown);
+        return isAxisPressed(hand, Axis::Thumbstick, direction, threshold, cooldown, accelerate);
     }
 
     /**
-     * Get the direction of analog thumbstick if it is pressed.
-     * Pressed is defined as the axis value being above a certain threshold in the specified direction.
-     * There is cooldown milliseconds debounce time between consecutive positive passing checks.
+     * getAxisPressedDirection of the thumbstick.
      */
-    std::optional<Direction> VRControllersManager::getThumbstickPressedDirection(const Hand primaryHand, const float threshold, const float cooldown)
+    std::optional<Direction> VRControllersManager::getThumbstickPressedDirection(const Hand primaryHand, const float threshold, const float cooldown, const bool accelerate)
     {
-        return getThumbstickPressedDirection(getHand(primaryHand), threshold, cooldown);
+        return getThumbstickPressedDirection(getHand(primaryHand), threshold, cooldown, accelerate);
     }
 
-    std::optional<Direction> VRControllersManager::getThumbstickPressedDirection(const vr::ETrackedControllerRole hand, const float threshold, const float cooldown)
+    std::optional<Direction> VRControllersManager::getThumbstickPressedDirection(const vr::ETrackedControllerRole hand, const float threshold, const float cooldown,
+        const bool accelerate)
     {
-        return get(hand).getAxisPressedAndClear(static_cast<uint32_t>(Axis::Thumbstick), _currentTime, threshold, cooldown);
+        return getAxisPressedDirection(hand, Axis::Thumbstick, threshold, cooldown, accelerate);
     }
 
     /**
@@ -506,8 +508,9 @@ namespace f4cf::vrcf
         lastReleaseTime.clear();
         lastPressDownTime.clear();
         longPressHandled.clear();
-        for (auto& t : axisLastPassedPressCheck)
-            t = 0.0f;
+        for (auto& repeat : axisRepeat) {
+            repeat.reset();
+        }
     }
 
     bool VRControllersManager::ControllerState::isPressed(const vr::EVRButtonId button) const
@@ -580,48 +583,19 @@ namespace f4cf::vrcf
         return current.rAxis[axisIndex];
     }
 
-    bool VRControllersManager::ControllerState::isAxisPressedAndClear(const uint32_t axisIndex, const Direction direction, const float now, const float threshold,
-        const float cooldown)
+    /**
+     * The direction of a step of the axis for a caller that takes `accepted` (one direction, or Any / UpDown /
+     * RightLeft), by the axis's shared auto-repeat (AxisRepeat): at once on a fresh push, then repeating while it is
+     * held, faster the longer it is held when `accelerate`. Empty when this check is not a step.
+     */
+    std::optional<Direction> VRControllersManager::ControllerState::stepAxis(const uint32_t axisIndex, const Direction accepted, const float now, const float threshold,
+        const float cooldown, const bool accelerate)
     {
-        if (!valid || now - axisLastPassedPressCheck[axisIndex] < cooldown) {
-            return false;
-        }
-        const auto pressedDirection = getAxisPressed(axisIndex, threshold);
-        const bool isPressed = pressedDirection.has_value() && pressedDirection.value() == direction;
-        if (isPressed) {
-            axisLastPassedPressCheck[axisIndex] = now;
-        }
-        return isPressed;
-    }
-
-    std::optional<Direction> VRControllersManager::ControllerState::getAxisPressedAndClear(const uint32_t axisIndex, const float now, const float threshold, const float cooldown)
-    {
-        if (!valid || now - axisLastPassedPressCheck[axisIndex] < cooldown) {
+        if (!valid || axisIndex >= std::size(axisRepeat)) {
             return std::nullopt;
         }
-        const auto pressedDirection = getAxisPressed(axisIndex, threshold);
-        if (pressedDirection.has_value()) {
-            axisLastPassedPressCheck[axisIndex] = now;
-        }
-        return pressedDirection;
-    }
-
-    std::optional<Direction> VRControllersManager::ControllerState::getAxisPressed(const uint32_t axisIndex, const float threshold) const
-    {
         const auto axis = getAxis(axisIndex);
-        if (axis.x > threshold) {
-            return Direction::Right;
-        }
-        if (axis.x < -threshold) {
-            return Direction::Left;
-        }
-        if (axis.y > threshold) {
-            return Direction::Up;
-        }
-        if (axis.y < -threshold) {
-            return Direction::Down;
-        }
-        return std::nullopt;
+        return axisRepeat[axisIndex].step(axis.x, axis.y, now, threshold, cooldown, accelerate, accepted);
     }
 
     float VRControllersManager::ControllerState::getHeldDuration(const vr::EVRButtonId button, const float now) const

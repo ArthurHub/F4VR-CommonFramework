@@ -15,16 +15,42 @@
 #include "perf/Tracy.h"
 
 #include "f4vr/PlayerNodes.h"
+#include "f4vr/WandMovement.h"
 #include "render/PrimitiveDrawRenderer.h"
 #include "render/SubmitHook.h"
 #include "render/TextFont.h"
 #include "vrcf/VRControllersHaptic.h"
 #include "vrcf/VRControllersManager.h"
 #include "vrcf/VRControllersSuppressor.h"
+#include "vrui/UIDevLayout.h"
 #include "vrui/UIManager.h"
+
+#include <shellapi.h>
 
 namespace f4cf
 {
+    namespace
+    {
+        /**
+         * Opens the VR UI dev layout's file with Windows' default handler for it, on the desktop. The file is
+         * there only once the dev layout is on and a VR UI has been shown since, so a press before then says so.
+         */
+        mods_config::api::FunctionResult openDevLayoutFile()
+        {
+            const auto path = vrui::UIDevLayout::filePath();
+            std::error_code error;
+            if (!std::filesystem::exists(path, error)) {
+                return { .done = false, .message = "The file is made once the dev layout is on, saved, and a VR UI is shown." };
+            }
+            const auto result = reinterpret_cast<INT_PTR>(ShellExecuteW(nullptr, L"open", path.c_str(), nullptr, nullptr, SW_SHOWNORMAL));
+            if (result <= 32) {
+                logger::warn("Windows did not open the dev layout file '{}' (error {})", path.string(), result);
+                return { .done = false, .message = "Windows did not open the file. The mod's log has its path." };
+            }
+            return { .done = true, .message = {} };
+        }
+    }
+
     ModBase::Settings::Settings(const std::string_view& name, const std::string_view& version, ConfigBase* config)
         : name(name),
           f4seName(name),
@@ -227,6 +253,7 @@ namespace f4cf
             vrcf::VRControllers.update(leftHanded);
             vrcf::VRControllersSuppress.update(leftHanded);
             vrcf::VRHaptics.update(leftHanded);
+            f4vr::WandMovement::onFrameStart();
 
             // debug-draw frame boundary around the mod update; both calls are a single atomic
             // read until the mod issues its first draw call ever (the zero-cost-when-unused contract)
@@ -320,7 +347,8 @@ namespace f4cf
     /**
      * Gives the mod's client of Mods Config FO4 VR what the framework answers for every mod, and connects it: the states
      * `modVersion` and `configFile`, the config file the mod loaded, which a file of its config spec takes its path
-     * from with `pathFromClientState`, and the preview of a `live` setting of that file through its overrides.
+     * from with `pathFromClientState`, the function `openDevLayoutFile` for a spec's button, and the preview of a
+     * `live` setting of that file through its overrides.
      */
     void ModBase::setupModsConfigClient()
     {
@@ -333,6 +361,9 @@ namespace f4cf
             client.addState("configFile", [config = _settings.config] {
                 const auto path = std::filesystem::path(config->getConfigFilePath()).u8string();
                 return std::optional<mods_config::api::Value>(std::string(path.begin(), path.end()));
+            });
+            client.addFunction("openDevLayoutFile", [](const mods_config::api::Params&) {
+                return openDevLayoutFile();
             });
             _configPreviews.emplace(*_settings.config);
             _configPreviews->subscribe(client);

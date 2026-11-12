@@ -44,6 +44,7 @@ Settings live in a TOML file created on first run at:
 Edits apply **live** while the game is running — no restart needed.
 
 - Controller-binding syntax: [input-binding guide](https://github.com/ArthurHub/F4VR-CommonFramework/blob/main/docs/input-binding.md)
+- Gesture zones: [activation-spheres guide](https://github.com/ArthurHub/F4VR-CommonFramework/blob/main/docs/activation-spheres.md)
 - Logging / debug keys: [debug-config guide](https://github.com/ArthurHub/F4VR-CommonFramework/blob/main/docs/debug-config.md)
 
 TODO: document your mod's own settings here.
@@ -57,15 +58,17 @@ guide for the full toolchain (VS 2022/2026, CMake 4.2+, `VCPKG_ROOT`). Quick ver
 ```sh
 git clone --recurse-submodules <your-repo-url>
 cd MyMod
-cmake --preset default      # generates build/MyMod.sln
+cmake --preset default      # generates build/MyMod.slnx
 ```
 
-Open the solution and build. To package, build the `package_mod` target in Release; it writes a versioned `.7z` under `build/package/`.
+Open the solution and build. Run the unit tests with `ctest --test-dir build -C Release`. To package, build the `package_mod` target in Release; it writes a versioned `.7z` under `build/package/`.
 To profile with [Tracy](https://github.com/wolfpld/tracy), build the `Tracy` configuration (`cmake --build --preset tracy`): a Release build
 whose perf sites are also Tracy zones.
 
-Code style is enforced by clang-format through [pre-commit](https://pre-commit.com/): run `pre-commit install` once after cloning so
-the checks run on every commit. The same checks, and a Release build, run on GitHub for every push and pull request to `main`.
+Code style is enforced by clang-format for C++ and Prettier for JSON through [pre-commit](https://pre-commit.com/): run `pre-commit install` once after cloning so
+the checks run on every commit. The same checks, a Release build and the unit tests run on GitHub for every push and pull request to `main`.
+Prettier uses `.prettierrc.json` (180 columns, two-space indentation, CRLF), including for JSON specs under `data/mod/`.
+Exported JSON configs under `data/config/` keep their native layout.
 
 ## Support
 

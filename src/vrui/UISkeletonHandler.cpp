@@ -28,7 +28,7 @@ namespace f4cf::vrui
 
         // From the controller's node to the point that presses the UI while no hand is drawn there, along the node's axes,
         // found in the game. The values are the right hand's; the left hand's are their mirror, left to right.
-        const RE::NiPoint3 WAND_PRESS_POINT_OFFSET(0.0f, -4.0f, -2.0f);
+        const RE::NiPoint3 WAND_PRESS_POINT_OFFSET(-1.5f, 1.0f, -3.7f);
 
         /**
          * The point that presses the UI for a hand with no arm drawn at its controller.

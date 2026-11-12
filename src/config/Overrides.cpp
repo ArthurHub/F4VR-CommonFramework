@@ -378,4 +378,28 @@ namespace f4cf::config
         });
         return true;
     }
+
+    /**
+     * Whether applyOverride puts a value at a key of a config, with no change to it: the key is a TOML key, and its
+     * path goes through no value that is not a table, up to where the config has no more of it.
+     */
+    bool canApplyOverride(const toml::table& table, const ConfigKey& key)
+    {
+        const auto path = key.path();
+        if (!path) {
+            return false;
+        }
+        const toml::table* parent = &table;
+        for (std::size_t i = 0; i + 1 < path->size(); i++) {
+            const auto* node = parent->get((*path)[i]);
+            if (!node) {
+                return true;
+            }
+            parent = node->as_table();
+            if (!parent) {
+                return false;
+            }
+        }
+        return true;
+    }
 }

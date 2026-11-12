@@ -5,6 +5,7 @@
 #include <unordered_map>
 
 #include "../../external/openvr/openvr.h"
+#include "AxisRepeat.h"
 
 namespace f4cf::vrcf
 {
@@ -69,7 +70,9 @@ namespace f4cf::vrcf
     };
 
     /**
-     * The direction of the controller thumbstick input.
+     * The direction of the controller thumbstick input. Right to Down are the one way an axis is pushed, all a
+     * pushed direction is ever read as; Any, UpDown and RightLeft are what a binding accepts when it asks for
+     * the stick to be moved rather than pushed one way: every direction, or the two of one axis.
      */
     enum class Direction : std::uint8_t
     {
@@ -77,6 +80,9 @@ namespace f4cf::vrcf
         Left,
         Up,
         Down,
+        Any,
+        UpDown,
+        RightLeft,
     };
 
     /**
@@ -105,7 +111,7 @@ namespace f4cf::vrcf
         Tap, // isTap - quick press-and-release (held < 0.3s); the "Tap" gesture
         LongPress, // isLongPressed - button held longer than `duration`
         DoublePress, // isDoublePressed - two presses within `duration`
-        AxisDirection, // isAxisPressed - `axis` pushed past `threshold` in `direction`
+        AxisDirection, // isAxisPressed - `axis` pushed past `threshold` in `direction` (or any of the ones it accepts)
     };
 
     /**
@@ -146,6 +152,8 @@ namespace f4cf::vrcf
         float duration = 0.0f;
         float threshold = 0.85f; // AxisDirection only
         float cooldown = 0.15f; // AxisDirection only
+        // AxisDirection only: a held push repeats faster the longer it is held (see AxisRepeat); false keeps it at `cooldown`
+        bool accelerate = true;
 
         // When a consumer applies suppression for this binding (e.g. WandActivationSphere while the bound
         // hand is inside its zone), hide the physical button from the game. Off by default.
@@ -232,17 +240,17 @@ namespace f4cf::vrcf
 
         vr::VRControllerAxis_t getAxisValue(Hand primaryHand, Axis axis) const;
         vr::VRControllerAxis_t getAxisValue(vr::ETrackedControllerRole hand, Axis axis) const;
-        bool isAxisPressed(Hand primaryHand, Axis axis, Direction direction, float threshold = 0.85f, float cooldown = 0.15f);
-        bool isAxisPressed(vr::ETrackedControllerRole hand, Axis axis, Direction direction, float threshold = 0.85f, float cooldown = 0.15f);
-        std::optional<Direction> getAxisPressedDirection(Hand primaryHand, Axis axis, float threshold = 0.85f, float cooldown = 0.15f);
-        std::optional<Direction> getAxisPressedDirection(vr::ETrackedControllerRole hand, Axis axis, float threshold = 0.85f, float cooldown = 0.15f);
+        bool isAxisPressed(Hand primaryHand, Axis axis, Direction direction, float threshold = 0.85f, float cooldown = 0.15f, bool accelerate = true);
+        bool isAxisPressed(vr::ETrackedControllerRole hand, Axis axis, Direction direction, float threshold = 0.85f, float cooldown = 0.15f, bool accelerate = true);
+        std::optional<Direction> getAxisPressedDirection(Hand primaryHand, Axis axis, float threshold = 0.85f, float cooldown = 0.15f, bool accelerate = true);
+        std::optional<Direction> getAxisPressedDirection(vr::ETrackedControllerRole hand, Axis axis, float threshold = 0.85f, float cooldown = 0.15f, bool accelerate = true);
 
         vr::VRControllerAxis_t getThumbstickValue(Hand primaryHand) const;
         vr::VRControllerAxis_t getThumbstickValue(vr::ETrackedControllerRole hand) const;
-        bool isThumbstickPressed(Hand primaryHand, Direction direction, float threshold = 0.85f, float cooldown = 0.15f);
-        bool isThumbstickPressed(vr::ETrackedControllerRole hand, Direction direction, float threshold = 0.85f, float cooldown = 0.15f);
-        std::optional<Direction> getThumbstickPressedDirection(Hand primaryHand, float threshold = 0.85f, float cooldown = 0.15f);
-        std::optional<Direction> getThumbstickPressedDirection(vr::ETrackedControllerRole hand, float threshold = 0.85f, float cooldown = 0.15f);
+        bool isThumbstickPressed(Hand primaryHand, Direction direction, float threshold = 0.85f, float cooldown = 0.15f, bool accelerate = true);
+        bool isThumbstickPressed(vr::ETrackedControllerRole hand, Direction direction, float threshold = 0.85f, float cooldown = 0.15f, bool accelerate = true);
+        std::optional<Direction> getThumbstickPressedDirection(Hand primaryHand, float threshold = 0.85f, float cooldown = 0.15f, bool accelerate = true);
+        std::optional<Direction> getThumbstickPressedDirection(vr::ETrackedControllerRole hand, float threshold = 0.85f, float cooldown = 0.15f, bool accelerate = true);
 
         float getControllerHeading(Hand primaryHand) const;
         float getControllerHeading(vr::ETrackedControllerRole hand) const;
@@ -270,7 +278,7 @@ namespace f4cf::vrcf
             std::unordered_map<vr::EVRButtonId, float> lastReleaseTime;
             std::unordered_map<vr::EVRButtonId, float> lastPressDownTime; // Track time of last press-down for double press detection
             std::unordered_map<vr::EVRButtonId, bool> longPressHandled; // Track if long press was handled
-            float axisLastPassedPressCheck[5] = { 0, 0, 0, 0, 0 };
+            AxisRepeat axisRepeat[vr::k_unControllerStateAxisCount];
 
             void update(vr::TrackedDeviceIndex_t newIndex, float now, vr::ETrackedControllerRole role, const ControllerStateAdjuster& adjuster);
             void reset();
@@ -281,9 +289,7 @@ namespace f4cf::vrcf
             bool justDoublePressed(vr::EVRButtonId button, float now, float maxInterval);
             static bool checkDebounce(float& lastTime, float now, float cooldown);
             vr::VRControllerAxis_t getAxis(uint32_t axisIndex) const;
-            bool isAxisPressedAndClear(uint32_t axisIndex, Direction direction, float now, float threshold, float cooldown);
-            std::optional<Direction> getAxisPressedAndClear(uint32_t axisIndex, float now, float threshold, float cooldown);
-            std::optional<Direction> getAxisPressed(uint32_t axisIndex, float threshold) const;
+            std::optional<Direction> stepAxis(uint32_t axisIndex, Direction accepted, float now, float threshold, float cooldown, bool accelerate);
             float getHeldDuration(vr::EVRButtonId button, float now) const;
             void clearHeldDuration(vr::EVRButtonId button);
             float getHeldDurationForRelease(vr::EVRButtonId button, float now) const;

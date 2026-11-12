@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 4.2)
 
 # >>> Project
 set(NAME "F4VRCommonFramework")
-set(VERSION 0.5.0)
+set(VERSION 0.5.1)
 
 
 # >>> Folders
@@ -263,7 +263,8 @@ if(F4CF_WITH_IMGUI_UI)
   # NOTE: do NOT add IMGUI_DISABLE_OBSOLETE_FUNCTIONS / _KEYIO here. vcpkg builds the port with
   # ImGui's defaults, and those macros resize ImGuiIO::KeysData - defining them on our side only
   # would give us a different sizeof(ImGuiIO) than the library we link against.
-  target_link_libraries(${PROJECT_NAME} PUBLIC imgui::imgui)
+  # windowscodecs: the devbench snapshot of the canvases is written as a PNG through WIC (src/imgui/ImGuiSnapshot.cpp)
+  target_link_libraries(${PROJECT_NAME} PUBLIC imgui::imgui windowscodecs)
   target_compile_definitions(${PROJECT_NAME} PUBLIC F4CF_WITH_IMGUI_UI=1)
   # the bold and italic faces of the canvas font, beside the text font (src/imgui/ImGuiFonts.cpp)
   f4cf_embed_font("${SOURCE_DIR}/render/fonts/Roboto-Black.ttf" EmbeddedBoldFont.cpp f4cf::imgui::internal BOLD_FONT_TTF)
@@ -406,6 +407,10 @@ target_link_options(${PROJECT_NAME}
 string(REPLACE "/Ob2" "/Ob3" CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE}")
 string(REPLACE "/Ob2" "/Ob3" CMAKE_CXX_FLAGS_TRACY "${CMAKE_CXX_FLAGS_TRACY}")
 
+
+# >>> The pieces of a unit test executable, the framework's and a mod's: F4VRCommon::test_main,
+# F4VRCommon::test_no_game and f4cf_discover_tests_by_folder (docs/mod-tests.md)
+include(${ROOT_DIR}/cmake/tests.cmake)
 
 # >>> Unit tests for the game-independent logic (tests/), run with ctest. ON when the framework is built on its
 # own; a mod that adds it with add_subdirectory turns it on to build and run them with its own tests, and then

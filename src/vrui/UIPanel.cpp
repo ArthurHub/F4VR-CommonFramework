@@ -10,6 +10,7 @@
 
 #include "../ModBase.h"
 #include "../common/MatrixUtils.h"
+#include "../perf/Perf.h"
 #include "../render/PrimitiveDrawRenderer.h"
 
 namespace f4cf::vrui
@@ -202,6 +203,7 @@ namespace f4cf::vrui
          */
         void onFrameEnd()
         {
+            F4CF_PERF_SCOPE("vruiPanels");
             render::PrimitiveDraw occluded;
             render::PrimitiveDraw alwaysOnTop;
             std::vector<const UIPanel*> backdrops;

@@ -1,8 +1,12 @@
 #include "ImGuiRenderer.h"
 
 #include <algorithm>
+#include <cstring>
+#include <format>
 #include <iterator>
+#include <memory>
 #include <mutex>
+#include <stdexcept>
 #include <utility>
 #include <vector>
 
@@ -147,6 +151,25 @@ float4 main(PS_INPUT input) : SV_Target {
 
         // the context of the frame being drawn, for the callbacks of its draw data
         ID3D11DeviceContext* s_drawContext = nullptr;
+
+        // --- a capture of the canvases' texture: asked on any thread, made on the render thread ---------
+        /**
+         * A capture that was asked for: the promise its pixels are given to, and the render thread's copy of the
+         * texture, which the CPU reads once the GPU has made it.
+         */
+        struct CaptureRequest
+        {
+            std::promise<Capture> promise;
+            ID3D11Texture2D* staging = nullptr;
+            Capture capture;
+        };
+
+        // asked for, and not copied yet
+        std::mutex s_captureMutex;
+        std::unique_ptr<CaptureRequest> s_captureAsked;
+
+        // render thread only: copied, and not read yet
+        std::unique_ptr<CaptureRequest> s_captureCopied;
 
         // --- D3D objects, created once ----------------------------------------------------------
         ID3D11VertexShader* s_quadVertexShader = nullptr;
@@ -444,6 +467,73 @@ float4 main(PS_INPUT input) : SV_Target {
         }
 
         /**
+         * Copies the texture a frame was just drawn into for a capture that was asked for, into a texture the CPU
+         * reads, which readCapture reads once the GPU has made it. A capture copied before and not read yet is
+         * dropped, which breaks its promise.
+         */
+        void copyForCapture(ID3D11Device* device, ID3D11DeviceContext* context, const RenderTarget& target, const bool dedicated)
+        {
+            std::unique_ptr<CaptureRequest> request;
+            {
+                std::scoped_lock lock(s_captureMutex);
+                request = std::move(s_captureAsked);
+            }
+            if (!request) {
+                return;
+            }
+            if (s_captureCopied && s_captureCopied->staging) {
+                s_captureCopied->staging->Release();
+            }
+            s_captureCopied.reset();
+
+            D3D11_TEXTURE2D_DESC desc{};
+            target.texture->GetDesc(&desc);
+            desc.Usage = D3D11_USAGE_STAGING;
+            desc.BindFlags = 0;
+            desc.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
+            desc.MiscFlags = 0;
+            if (FAILED(device->CreateTexture2D(&desc, nullptr, &request->staging))) {
+                request->promise.set_exception(std::make_exception_ptr(std::runtime_error("the texture to read the canvases back could not be created")));
+                return;
+            }
+            context->CopyResource(request->staging, target.texture);
+            request->capture = { .width = target.width, .height = target.height, .dedicated = dedicated, .rgba = {} };
+            s_captureCopied = std::move(request);
+        }
+
+        /**
+         * Reads the copy of a capture into its pixels once the GPU has made it, without waiting for the GPU: a copy
+         * that is not made yet is read by a later frame.
+         */
+        void readCapture(ID3D11DeviceContext* context)
+        {
+            if (!s_captureCopied) {
+                return;
+            }
+            auto& request = *s_captureCopied;
+            D3D11_MAPPED_SUBRESOURCE mapped{};
+            const HRESULT hr = context->Map(request.staging, 0, D3D11_MAP_READ, D3D11_MAP_FLAG_DO_NOT_WAIT, &mapped);
+            if (hr == DXGI_ERROR_WAS_STILL_DRAWING) {
+                return;
+            }
+            if (SUCCEEDED(hr)) {
+                auto& capture = request.capture;
+                const auto rowBytes = static_cast<std::size_t>(capture.width) * 4;
+                capture.rgba.resize(rowBytes * static_cast<std::size_t>(capture.height));
+                for (int row = 0; row < capture.height; ++row) {
+                    std::memcpy(capture.rgba.data() + rowBytes * row, static_cast<const std::uint8_t*>(mapped.pData) + static_cast<std::size_t>(mapped.RowPitch) * row, rowBytes);
+                }
+                context->Unmap(request.staging, 0);
+                request.promise.set_value(std::move(capture));
+            } else {
+                request.promise.set_exception(
+                    std::make_exception_ptr(std::runtime_error(std::format("the canvases could not be read back (0x{:08X})", static_cast<unsigned>(hr)))));
+            }
+            request.staging->Release();
+            s_captureCopied.reset();
+        }
+
+        /**
          * The registered draw callback. Two passes: rasterize the ImGui frame flat into its texture, the
          * atlas or the dedicated canvas's own, then place slices of that texture in the world.
          */
@@ -470,6 +560,7 @@ float4 main(PS_INPUT input) : SV_Target {
             }
             auto* context = submitFrame.context;
             writeTextures(context, textureWrites);
+            readCapture(context);
             if (!drawData || quads.empty()) {
                 return;
             }
@@ -490,6 +581,7 @@ float4 main(PS_INPUT input) : SV_Target {
             s_drawContext = context;
             ImGui_ImplDX11_RenderDrawData(&drawData->drawData);
             s_drawContext = nullptr;
+            copyForCapture(submitFrame.device, context, target, dedicated);
 
             // pass 2: back onto the eye texture the hook host bound for us. Rebinding it is this
             // callback's responsibility - the host binds it once for the whole callback list, so a
@@ -556,5 +648,20 @@ float4 main(PS_INPUT input) : SV_Target {
             s_frame = std::move(frame);
         }
         render::setDrawCallbackActive(s_drawCallback, hasContent, readsSceneDepth);
+    }
+
+    /**
+     * Asks the render thread for the pixels of the texture the canvases are drawn into, as the next frame that draws a
+     * canvas leaves it (any thread). The future is ready 1-3 frames later, once the GPU has made the copy, and never
+     * while no canvas is drawn: wait for it with a timeout. A capture asked again before it was copied is replaced,
+     * which breaks the first one's promise.
+     */
+    std::future<Capture> requestCapture()
+    {
+        auto request = std::make_unique<CaptureRequest>();
+        auto future = request->promise.get_future();
+        std::scoped_lock lock(s_captureMutex);
+        s_captureAsked = std::move(request);
+        return future;
     }
 }

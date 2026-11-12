@@ -21,6 +21,10 @@ namespace f4cf::vrui
          */
         constexpr float FIT_SLACK_UNITS = 0.001f;
 
+        // the characters that end a word: spaces, tabs, line breaks and the right tab
+        constexpr std::string_view WORD_ENDS = " \t\r\n\v";
+        static_assert(WORD_ENDS.back() == TEXT_PANEL_RIGHT_TAB);
+
         /**
          * Length in bytes of the UTF-8 character that starts at text[0], so a forced break never splits
          * one.
@@ -62,7 +66,8 @@ namespace f4cf::vrui
      * Positions are pen positions from the line's start, in vrui units. Spaces are held back until a word
      * follows them, so the spaces a line ends on take no room; they are dropped at the start of a line the
      * wrap made, and indent a row's first line. A tab moves the pen to the next stop past it, or wraps when
-     * that stop is past the width.
+     * that stop is past the width. A right tab takes a space's width and marks where the line's right part
+     * starts, and every line the row wraps onto after it is all right part; the draw moves that part.
      *
      * Consecutive text of one span is merged into one piece, the spaces between included, so a run of one
      * colour goes out as a single run of text: kerned throughout, and underlined across its spaces.
@@ -89,6 +94,7 @@ namespace f4cf::vrui
             _row = &row;
             _rowIndex = rowIndex;
             _textHeight = textHeight;
+            _rightAligned = false;
             startLine(true);
 
             for (std::size_t span = 0; span < spanCount(row); ++span) {
@@ -113,13 +119,17 @@ namespace f4cf::vrui
                         flushWord();
                         addTab();
                         ++pos;
+                    } else if (c == TEXT_PANEL_RIGHT_TAB) {
+                        flushWord();
+                        addRightTab();
+                        ++pos;
                     } else if (c == ' ') {
                         flushWord();
                         const std::size_t end = (std::min)(text.find_first_not_of(' ', pos), text.size());
                         addSpaces(span, pos, end - pos);
                         pos = end;
                     } else {
-                        const std::size_t end = (std::min)(text.find_first_of(" \t\r\n", pos), text.size());
+                        const std::size_t end = (std::min)(text.find_first_of(WORD_ENDS, pos), text.size());
                         _word.push_back({ span, pos, end - pos, render::measureTextRun(text.substr(pos, end - pos), _textHeight) });
                         pos = end;
                     }
@@ -146,12 +156,13 @@ namespace f4cf::vrui
         };
 
         /**
-         * Add an image span to the word being gathered, at its height and as wide as its proportions make
-         * it. One whose size is not known - not loaded yet, or never will be - takes no room.
+         * Add an image span to the word being gathered, at its height times the panel's image scale and as
+         * wide as its proportions make it. One whose size is not known - not loaded yet, or never will be -
+         * takes no room.
          */
         void addImage(const std::size_t span, const TextSpan& image)
         {
-            const float height = (std::max)(0.0f, image.imageHeight) * _textHeight;
+            const float height = (std::max)(0.0f, image.imageHeight) * _panel._imageScale * _textHeight;
             const float width = height * _panel.imageAspect(image.image);
             _word.push_back({ .span = span,
                 .begin = 0,
@@ -164,6 +175,9 @@ namespace f4cf::vrui
         void startLine(const bool paragraphStart)
         {
             _line = TextLine{ .row = _rowIndex, .firstPiece = _pieces.size(), .pieceCount = 0, .textHeight = _textHeight, .bearing = 0.0f, .inkRight = 0.0f };
+            if (_rightAligned) {
+                _line.rightPiece = _pieces.size();
+            }
             _paragraphStart = paragraphStart;
             _penX = 0.0f;
             clearPending();
@@ -220,6 +234,24 @@ namespace f4cf::vrui
             }
             _penX = stop;
             _pieceBreak = true;
+        }
+
+        /**
+         * Start the row's right part: laid out a space's width after what precedes it, the least gap the
+         * two parts keep, and moved to the right edge by the draw. A line's start takes no gap, and a row's
+         * later right tabs are only the gap.
+         */
+        void addRightTab()
+        {
+            if (!lineAtStart()) {
+                _pendingAdvance += render::measureTextRun(" ", _textHeight).advance;
+            }
+            // the right tab is not drawn, so the text after it starts a piece of its own
+            _pieceBreak = true;
+            if (!_rightAligned) {
+                _rightAligned = true;
+                _line.rightPiece = _pieces.size();
+            }
         }
 
         /**
@@ -408,6 +440,9 @@ namespace f4cf::vrui
         // set by a tab: the next text starts a piece of its own, even in the same span
         bool _pieceBreak = false;
 
+        // set by the row's right tab: every line the row wraps onto from then on is all right part
+        bool _rightAligned = false;
+
         std::vector<WordPart> _word;
     };
 
@@ -465,14 +500,19 @@ namespace f4cf::vrui
         _tabWidthUnits = (std::max)(0.0f, units);
     }
 
+    void UITextPanel::setImageScale(const float multiplier)
+    {
+        _imageScale = (std::max)(0.0f, multiplier);
+    }
+
     /**
      * The panel's fields, then the text size and spacing as Text:(height,spacing) - the two that most
-     * change how much a text panel holds.
+     * change how much a text panel holds - and the size of its images as Img:(scale).
      */
     void UITextPanel::writeDevLayoutFields(std::string& line) const
     {
         UIPanel::writeDevLayoutFields(line);
-        line += std::format(", Text:({:.2f},{:.2f})", _textHeightUnits, _lineSpacing);
+        line += std::format(", Text:({:.2f},{:.2f}), Img:({:.2f})", _textHeightUnits, _lineSpacing, _imageScale);
     }
 
     void UITextPanel::readDevLayoutFields(const DevLayoutFields& fields)
@@ -481,6 +521,9 @@ namespace f4cf::vrui
         if (const auto text = fields.find("Text"); text != fields.end() && text->second.size() == 2) {
             setTextHeight(text->second[0]);
             setLineSpacing(text->second[1]);
+        }
+        if (const auto image = fields.find("Img"); image != fields.end() && image->second.size() == 1) {
+            setImageScale(image->second[0]);
         }
     }
 
@@ -575,8 +618,8 @@ namespace f4cf::vrui
      *
      * The callback runs every frame, but it usually produces the same rows as last frame, so only what
      * affects the layout is compared - texts, spans and heights - and the layout is redone only when one
-     * differs, or the width, text height or tab width does, or an image laid out without its size has
-     * loaded. The rows are taken either way, so a colour or decoration change still reaches the draw.
+     * differs, or the width, text height, tab width or image scale does, or an image laid out without its
+     * size has loaded. The rows are taken either way, so a colour or decoration change still reaches the draw.
      *
      * An image reaching above the first line's capitals or below the last line's descenders makes the
      * block that much taller.
@@ -593,7 +636,7 @@ namespace f4cf::vrui
         std::swap(_rows, _scratchRows);
 
         if (layoutChanged || !_linesValid || availableWidth != _linesWrapWidth || _textHeightUnits != _linesTextHeight || _tabWidthUnits != _linesTabWidth ||
-            awaitedImageLoaded()) {
+            _imageScale != _linesImageScale || awaitedImageLoaded()) {
             wrapRows(availableWidth);
         }
 
@@ -625,6 +668,7 @@ namespace f4cf::vrui
         _linesWrapWidth = wrapWidth;
         _linesTextHeight = _textHeightUnits;
         _linesTabWidth = _tabWidthUnits;
+        _linesImageScale = _imageScale;
         _linesValid = true;
 
         // the images are gathered afresh, reusing the textures the last layout held
@@ -652,6 +696,9 @@ namespace f4cf::vrui
      *
      * An image is drawn centred on its line's capitals, stretched to the size it was laid out at, and left
      * out when it does not fit the width whole.
+     *
+     * A line's right part, after its row's right tab, moves by all of the line's spare width, so it ends on
+     * the right edge whatever the panel's alignment.
      */
     void UITextPanel::appendContent(render::PrimitiveDraw& frame, const UIPanelContentArea& area) const
     {
@@ -687,7 +734,8 @@ namespace f4cf::vrui
 
             for (std::size_t p = line.firstPiece; p < line.firstPiece + line.pieceCount; ++p) {
                 const TextPiece& piece = _pieces[p];
-                const float inkX = (piece.penX + piece.inkLeft - line.bearing) * area.scale + alignOffset;
+                const float offset = p >= line.rightPiece ? spare : alignOffset;
+                const float inkX = (piece.penX + piece.inkLeft - line.bearing) * area.scale + offset;
                 const float room = area.width + slack - inkX;
                 if (room <= 0.0f) {
                     break;

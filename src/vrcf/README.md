@@ -53,7 +53,20 @@ Press-state helpers (all debounced):
 | `isTouching` | capacitive touch without a press |
 
 Thumbstick/axis gestures: `isThumbstickPressed(hand, Direction)` and `getThumbstickPressedDirection`
-turn analog deflection into discrete up/down/left/right events with a threshold + cooldown.
+(and `isAxisPressed` / `getAxisPressedDirection` for any axis) turn analog deflection into discrete
+up/down/left/right steps, with a threshold and an auto-repeat that speeds up while the stick is held:
+
+- a fresh push past `threshold` steps at once, whatever the cooldown, so quick flicks are never dropped;
+- held, it repeats first after `max(cooldown, 0.35s)`, so a short flick is one step, then every `cooldown`,
+  halved after 1s and quartered after 2.5s of holding. `accelerate = false` keeps it at `cooldown`;
+- the hold ends when the stick falls below 0.7 × `threshold`, is pushed another way, or is not checked
+  for 0.25s, and the next push is a fresh one;
+- a push is read along its dominant component, the same for every caller.
+
+The repeat is one per controller axis, shared by every caller of it ([`AxisRepeat`](AxisRepeat.h)): a
+step a caller doesn't accept (it asks for `Up`, the stick is pushed right) is left for one that does, and
+a step one caller takes starts the wait for all of them. A check reports at most one step, so a mod
+updating less often than the fastest rate steps at its own rate.
 
 **When another mod rewrites the controller state.** The poll goes through the shared `IVRSystem` vtable,
 so a mod that rewrites the state for every reader (e.g. remapping the trigger from one hand to the other)
@@ -84,7 +97,10 @@ if (VRControllers.check(openMenu)) { /* binding triggered */ }
 ```
 
 `check()` dispatches by `type` to the matching read method above; for `AxisDirection` it uses the
-`axis` + `direction` + `threshold` + `cooldown` fields instead of `button`. The optional `modifier`
+`axis` + `direction` + `threshold` + `cooldown` + `accelerate` fields instead of `button`. A `direction` of
+`Direction::Any`, `UpDown` or `RightLeft` accepts a push either way it names (and draws its prompt as the
+stick moved, not pushed); the getters that report a pushed direction only ever return the four single ones.
+The optional `modifier`
 must be held down for the binding to fire — on the binding's own hand by default, or on the
 `InputModifier::hand` you specify.
 
@@ -205,6 +221,11 @@ VRControllersSuppress.release("MyMod");
 Convenience: `suppressAll` / `setAllSuppressed` / `setAllAxesSuppressed` (per-hand and both-hands),
 `isSuppressed(hand, button)` (aggregate) vs `isSuppressedBy(key, …)`, and `reset()` to wipe every
 owner (used by `ModBase` on save reload).
+
+The same hook can also **invert** an axis: `setAxisInverted(key, hand, axis, true)` makes the game read
+its `.x` and `.y` negated, owner-keyed like suppression (`release(key)` and `reset()` drop it too).
+Inverted by several owners is inverted once, and a suppressed axis stays zero.
+[`f4vr::WandMovement`](../f4vr/WandMovement.h) uses it on the offhand stick.
 
 ### Rules — read before using
 

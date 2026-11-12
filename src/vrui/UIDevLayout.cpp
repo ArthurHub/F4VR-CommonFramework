@@ -55,13 +55,22 @@ namespace f4cf::vrui
     }
 
     /**
+     * The dev layout's file: `<config file name>_DevLayout.ini`, beside the config file the mod loaded. It
+     * exists only while the mode is on and a root has been attached since.
+     */
+    fs::path UIDevLayout::filePath()
+    {
+        fs::path path(g_mod->getConfig()->getConfigFilePath());
+        path.replace_filename(path.stem().string() + FILE_NAME_SUFFIX);
+        return path;
+    }
+
+    /**
      * Turn the mode on. A file left by an earlier run is removed, so its lines are not applied to this one.
      */
     void UIDevLayout::start()
     {
-        fs::path path(g_mod->getConfig()->getConfigFilePath());
-        path.replace_filename(path.stem().string() + FILE_NAME_SUFFIX);
-        _filePath = path.string();
+        _filePath = filePath().string();
 
         _active = true;
         _syncNeeded = true;

@@ -8,7 +8,6 @@
 #include <utility>
 
 #include "InputBindingParser.h"
-#include "devbench/DevBench.h"
 #include "perf/Perf.h"
 
 namespace f4cf::vrcf
@@ -137,7 +136,7 @@ namespace f4cf::vrcf
      */
     bool VRControllersSuppressor::isOwnerEmpty(const OwnerMask& owner)
     {
-        return owner.left.buttons == 0 && owner.left.axes == 0 && owner.right.buttons == 0 && owner.right.axes == 0;
+        return owner.left == SideMask{} && owner.right == SideMask{};
     }
 
     /**
@@ -165,7 +164,6 @@ namespace f4cf::vrcf
         if (changed) {
             republishAggregate();
             logState(key, "updated");
-            emitChange(key);
         }
     }
 
@@ -177,16 +175,21 @@ namespace f4cf::vrcf
     {
         uint64_t leftButtons = 0, rightButtons = 0;
         uint8_t leftAxes = 0, rightAxes = 0;
+        uint8_t leftInverted = 0, rightInverted = 0;
         for (const auto& owner : _owners | std::views::values) {
             leftButtons |= owner.left.buttons;
             leftAxes |= owner.left.axes;
+            leftInverted |= owner.left.invertedAxes;
             rightButtons |= owner.right.buttons;
             rightAxes |= owner.right.axes;
+            rightInverted |= owner.right.invertedAxes;
         }
         _left.buttons.store(leftButtons, std::memory_order_release);
         _left.axes.store(leftAxes, std::memory_order_release);
+        _left.invertedAxes.store(leftInverted, std::memory_order_release);
         _right.buttons.store(rightButtons, std::memory_order_release);
         _right.axes.store(rightAxes, std::memory_order_release);
+        _right.invertedAxes.store(rightInverted, std::memory_order_release);
     }
 
     /**
@@ -195,13 +198,15 @@ namespace f4cf::vrcf
      */
     void VRControllersSuppressor::logState(const std::string_view key, const char* const action) const
     {
-        logger::debug("VRControllersSuppress: {} '{}' -> L(btn=0x{:X} ax=0x{:X}) R(btn=0x{:X} ax=0x{:X}); {} owner(s)",
+        logger::debug("VRControllersSuppress: {} '{}' -> L(btn=0x{:X} ax=0x{:X} inv=0x{:X}) R(btn=0x{:X} ax=0x{:X} inv=0x{:X}); {} owner(s)",
             action,
             key,
             _left.buttons.load(std::memory_order_relaxed),
             static_cast<unsigned>(_left.axes.load(std::memory_order_relaxed)),
+            static_cast<unsigned>(_left.invertedAxes.load(std::memory_order_relaxed)),
             _right.buttons.load(std::memory_order_relaxed),
             static_cast<unsigned>(_right.axes.load(std::memory_order_relaxed)),
+            static_cast<unsigned>(_right.invertedAxes.load(std::memory_order_relaxed)),
             _owners.size());
     }
 
@@ -211,7 +216,7 @@ namespace f4cf::vrcf
          * One hand's mask by the input binding grammar's names (InputBindingParser), so an event reads like a config
          * binding. Axis bits index rAxis, which is what Axis numbers.
          */
-        nlohmann::json sideJson(const uint64_t buttons, const uint8_t axes)
+        nlohmann::json axisNamesJson(const uint8_t axes)
         {
             nlohmann::json axisNames = nlohmann::json::array();
             for (uint32_t axis = 0; axis < 8; ++axis) {
@@ -219,29 +224,35 @@ namespace f4cf::vrcf
                     axisNames.push_back(axisName(static_cast<Axis>(axis)));
                 }
             }
-            return { { "buttons", buttonNames(buttons) }, { "axes", axisNames } };
+            return axisNames;
+        }
+
+        nlohmann::json sideJson(const uint64_t buttons, const uint8_t axes, const uint8_t invertedAxes)
+        {
+            return { { "buttons", buttonNames(buttons) }, { "axes", axisNamesJson(axes) }, { "invertedAxes", axisNamesJson(invertedAxes) } };
         }
     }
 
     /**
-     * Publishes one owner's change as the mod's devbench event: the owner's masks after it (empty once released) and
-     * the effective union every owner adds up to, per physical hand. The cross-mod timeline of who held which input.
+     * The suppression as it is now, which devbench's input action answers: each owner with its masks, and the effective
+     * union every owner adds up to, per physical hand, by the input binding grammar's names. Main thread only.
      */
-    void VRControllersSuppressor::emitChange(const std::string_view key) const
+    nlohmann::json VRControllersSuppressor::toJson() const
     {
-        devbench::emit("input.suppression", [&] {
-            const auto it = _owners.find(key);
-            const OwnerMask owner = it != _owners.end() ? it->second : OwnerMask{};
-            return nlohmann::json{
-                { "owner", std::string(key) },
-                { "left", sideJson(owner.left.buttons, owner.left.axes) },
-                { "right", sideJson(owner.right.buttons, owner.right.axes) },
-                { "effective",
-                    { { "left", sideJson(_left.buttons.load(std::memory_order_relaxed), _left.axes.load(std::memory_order_relaxed)) },
-                        { "right", sideJson(_right.buttons.load(std::memory_order_relaxed), _right.axes.load(std::memory_order_relaxed)) } } },
-                { "owners", _owners.size() },
-            };
-        });
+        auto owners = nlohmann::json::array();
+        for (const auto& [key, owner] : _owners) {
+            owners.push_back({ { "owner", key },
+                { "left", sideJson(owner.left.buttons, owner.left.axes, owner.left.invertedAxes) },
+                { "right", sideJson(owner.right.buttons, owner.right.axes, owner.right.invertedAxes) } });
+        }
+        return { { "owners", std::move(owners) },
+            { "effective",
+                { { "left",
+                      sideJson(_left.buttons.load(std::memory_order_relaxed), _left.axes.load(std::memory_order_relaxed), _left.invertedAxes.load(std::memory_order_relaxed)) },
+                    { "right",
+                        sideJson(_right.buttons.load(std::memory_order_relaxed),
+                            _right.axes.load(std::memory_order_relaxed),
+                            _right.invertedAxes.load(std::memory_order_relaxed)) } } } };
     }
 
     /**
@@ -377,6 +388,28 @@ namespace f4cf::vrcf
     }
 
     /**
+     * Sets or clears `key`'s inversion of one analog axis: the game reads its .x and .y negated. Inverted by any owner
+     * is inverted once, and a suppressed axis stays zero. Out-of-range axes are ignored.
+     */
+    void VRControllersSuppressor::setAxisInverted(const std::string_view key, const Hand hand, const Axis axis, const bool inverted)
+    {
+        const auto axisIndex = static_cast<int>(axis);
+        if (std::cmp_greater_equal(axisIndex, vr::k_unControllerStateAxisCount)) {
+            return;
+        }
+        const bool left = isLeftHand(hand);
+        const uint8_t bit = static_cast<uint8_t>(1u << axisIndex);
+        editOwner(key, inverted, [&](OwnerMask& owner) {
+            SideMask& side = left ? owner.left : owner.right;
+            if (inverted) {
+                side.invertedAxes |= bit;
+            } else {
+                side.invertedAxes &= static_cast<uint8_t>(~bit);
+            }
+        });
+    }
+
+    /**
      * Suppresses every analog axis on the given hand for `key`.
      */
     void VRControllersSuppressor::suppressAllAxes(const std::string_view key, const Hand hand)
@@ -462,7 +495,6 @@ namespace f4cf::vrcf
             _owners.erase(it);
             republishAggregate();
             logState(key, "released owner");
-            emitChange(key);
         }
     }
 
@@ -471,19 +503,14 @@ namespace f4cf::vrcf
      */
     void VRControllersSuppressor::reset()
     {
-        const bool hadOwners = !_owners.empty();
         _owners.clear();
         _left.buttons.store(0, std::memory_order_release);
         _left.axes.store(0, std::memory_order_release);
+        _left.invertedAxes.store(0, std::memory_order_release);
         _right.buttons.store(0, std::memory_order_release);
         _right.axes.store(0, std::memory_order_release);
+        _right.invertedAxes.store(0, std::memory_order_release);
         logger::info("VRControllersSuppress: reset (all owners cleared)");
-        if (hadOwners) {
-            // every owner stopped at once; without it a client tracking owners would think they still suppress
-            devbench::emit("input.suppression", [] {
-                return nlohmann::json{ { "reset", true }, { "owners", 0 } };
-            });
-        }
     }
 
     /**
@@ -523,7 +550,7 @@ namespace f4cf::vrcf
     }
 
     /**
-     * Clears the suppressed button/axis bits from a state read meant for the game or another mod.
+     * Negates the inverted axes and clears the suppressed button/axis bits of a state read meant for the game or another mod.
      * No-op for our own reads (shouldSuppress == false, i.e. inside a SelfControllerReadScope) so we
      * keep seeing raw hardware input. OpenVR / polling thread.
      */
@@ -535,6 +562,16 @@ namespace f4cf::vrcf
 
         const bool isLeft = idx == _leftIndex.load(std::memory_order_relaxed);
         const HandMask& mask = isLeft ? _left : _right;
+
+        // inverted first, so a suppressed axis still reads as zero
+        if (const uint8_t imask = mask.invertedAxes.load(std::memory_order_acquire)) {
+            for (int i = 0; std::cmp_less(i, vr::k_unControllerStateAxisCount); ++i) {
+                if (imask & (1u << i)) {
+                    state->rAxis[i].x = -state->rAxis[i].x;
+                    state->rAxis[i].y = -state->rAxis[i].y;
+                }
+            }
+        }
 
         const uint64_t bmask = mask.buttons.load(std::memory_order_acquire);
         state->ulButtonPressed &= ~bmask;

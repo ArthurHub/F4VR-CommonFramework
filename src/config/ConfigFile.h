@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <memory>
 #include <mutex>
 #include <optional>
 #include <string>
@@ -46,7 +47,7 @@ namespace f4cf::config
 
         LoadResult load(const std::string& path, toml::table& table, std::string& error, Source source = Source::File);
 
-        bool read(const std::string& path, toml::table& table) const;
+        std::shared_ptr<const toml::table> read(const std::string& path) const;
 
         bool save(const std::string& path, const std::string& text);
 
@@ -55,10 +56,16 @@ namespace f4cf::config
         static bool writeFile(const std::string& path, const std::string& content);
 
     private:
+        std::shared_ptr<const toml::table> parsedContent(const std::string& path, std::string* error = nullptr) const;
+
         // The file's content as the mod last loaded it, or saved it over that. No value before the first load,
         // and from a save over a file that someone else changed until the next load: the file is then loaded
         // whatever it holds.
         std::optional<std::string> _content;
+
+        // The parse of _content, made by the first read or load from the kept content that needs it, and dropped as
+        // _content changes. Shared, as a read hands it out: it is never changed once made.
+        mutable std::shared_ptr<const toml::table> _parsed;
 
         // The last content of the file that was not TOML, which the file watcher's events of it leave alone.
         std::optional<std::string> _invalid;

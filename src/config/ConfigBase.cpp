@@ -283,11 +283,12 @@ namespace f4cf
     {
         std::lock_guard lock(_loadMutex);
 
-        toml::table config;
-        if (!loadKeptConfig(config)) {
+        const auto kept = keptConfig();
+        if (!kept) {
             return;
         }
         // persistent session overrides first, then the caller's transient one-off override on top
+        auto config = *kept;
         _overrides.applyTo(config);
         config::applyOverride(config, { section, key }, value);
         applyConfig(config);
@@ -303,14 +304,14 @@ namespace f4cf
      */
     std::string ConfigBase::getConfigValue(const char* section, const char* key, const char* defaultValue) const
     {
-        toml::table config;
-        const bool loaded = loadKeptConfig(config);
-        const auto configKey = config::keyWithOtherPrefix(config, { section, key });
+        static const toml::table none;
+        const auto config = keptConfig();
+        const auto configKey = config::keyWithOtherPrefix(config ? *config : none, { section, key });
         if (const auto value = _overrides.find(configKey)) {
             return *value;
         }
 
-        const auto* node = loaded ? config::nodeOf(config, configKey) : nullptr;
+        const auto* node = config ? config::nodeOf(*config, configKey) : nullptr;
         if (!node) {
             return defaultValue ? defaultValue : std::string{};
         }
@@ -342,10 +343,12 @@ namespace f4cf
     /**
      * Set several session overrides of one owner with one reload of the config, see setConfigOverride. When one of
      * them is refused, none is set, and the result says why.
-     * The reload reads no disk, so a value can be set many times a second while it is previewed. For that reason
-     * only a key the owner did not override before is logged at the info level and is a devbench event.
+     * The reload reads and parses nothing, so a value can be set many times a second while it is previewed. For that
+     * reason only a key the owner did not override before is logged at the info level and is a devbench event.
+     * With `reload` false nothing is reloaded and no subscriber is told: for a caller whose members have the values
+     * already, so later loads keep them. That costs a few lookups, so it can be called every frame.
      */
-    std::expected<void, std::string> ConfigBase::setConfigOverrides(const std::string& owner, const std::vector<config::ConfigEntry>& overrides)
+    std::expected<void, std::string> ConfigBase::setConfigOverrides(const std::string& owner, const std::vector<config::ConfigEntry>& overrides, const bool reload)
     {
         if (overrides.empty()) {
             return {};
@@ -353,10 +356,15 @@ namespace f4cf
 
         // each value as it applies over the file's, the form it is kept and read back in; a file that can't be read
         // has no type to check a value against. A key that can't be put, as one under a value that is not a table,
-        // is refused as well: it is tried on a copy of the file.
-        toml::table kept;
-        _configFile.read(_configFilePath, kept);
-        auto tried = kept;
+        // is refused as well. A batch of several is tried on a copy of the file, as one of them can put a table
+        // another one goes through.
+        static const toml::table none;
+        const auto file = _configFile.read(_configFilePath);
+        const auto& kept = file ? *file : none;
+        std::optional<toml::table> tried;
+        if (overrides.size() > 1) {
+            tried = kept;
+        }
         std::vector<config::ConfigEntry> applied;
         applied.reserve(overrides.size());
         for (const auto& entry : overrides) {
@@ -379,7 +387,7 @@ namespace f4cf
                 return refuse(
                     std::format("'{}' is not of the type of {}.{} in the config file, which is {}", value.toString(), section, key, common::TomlEditor::Value(*existing).text()));
             }
-            if (!config::applyOverride(tried, configKey, *text)) {
+            if (tried ? !config::applyOverride(*tried, configKey, *text) : !config::canApplyOverride(kept, configKey)) {
                 return refuse(std::format("{}.{} is under a value of the config file that is not a table", section, key));
             }
             applied.push_back({ section, key, std::move(*text) });
@@ -390,13 +398,16 @@ namespace f4cf
         for (const auto& entry : added) {
             logger::info("Config: '{}' set session override \"{}.{} = {}\"", owner, entry.section, entry.key, entry.value);
         }
+        // a value previewed as it is dragged is set every frame
         if (logger::isDebugEnabled()) {
             for (const auto& entry : applied) {
-                logger::debug("Config: '{}' session override \"{}.{} = {}\"", owner, entry.section, entry.key, entry.value.toString());
+                logger::sampleDebug("Config: '{}' session override \"{}.{} = {}\"", owner, entry.section, entry.key, entry.value.toString());
             }
         }
 
-        loadConfigValues(config::ConfigFile::Source::Kept);
+        if (reload) {
+            loadConfigValues(config::ConfigFile::Source::Kept);
+        }
 
         for (const auto& entry : added) {
             devbench::emit("config.override", [&] {
@@ -419,9 +430,10 @@ namespace f4cf
     /**
      * Remove several session overrides of one owner with one reload, and return how many were removed. A key the
      * owner does not override is skipped, and nothing is reloaded when none was removed.
-     * The reload reads the file, so values that were saved to it right before the clear apply at once.
+     * The reload reads the file, so values that were saved to it right before the clear apply at once. With `reload`
+     * false nothing is reloaded and no subscriber is told: for a caller whose members have the values already.
      */
-    std::size_t ConfigBase::clearConfigOverrides(const std::string& owner, const std::vector<config::ConfigKey>& keys)
+    std::size_t ConfigBase::clearConfigOverrides(const std::string& owner, const std::vector<config::ConfigKey>& keys, const bool reload)
     {
         const auto removed = _overrides.clear(owner, resolvedKeys(keys));
         if (removed.empty()) {
@@ -431,7 +443,9 @@ namespace f4cf
             logger::info("Config: '{}' cleared session override \"{}.{}\"", owner, entry.section, entry.key);
         }
 
-        loadConfigValues();
+        if (reload) {
+            loadConfigValues();
+        }
 
         for (const auto& entry : removed) {
             devbench::emit("config.override", [&] {
@@ -473,12 +487,12 @@ namespace f4cf
      */
     std::vector<config::ConfigKey> ConfigBase::resolvedKeys(const std::vector<config::ConfigKey>& keys) const
     {
-        toml::table config;
-        _configFile.read(_configFilePath, config);
+        static const toml::table none;
+        const auto config = _configFile.read(_configFilePath);
         std::vector<config::ConfigKey> resolved;
         resolved.reserve(keys.size());
         for (const auto& key : keys) {
-            resolved.push_back(config::keyWithOtherPrefix(config, key));
+            resolved.push_back(config::keyWithOtherPrefix(config ? *config : none, key));
         }
         return resolved;
     }
@@ -493,16 +507,17 @@ namespace f4cf
     }
 
     /**
-     * Parse the config as the mod last loaded or saved it into `config`, with no read of the disk, for a read that
-     * loads no values, see config::ConfigFile::read.
+     * The config as the mod last loaded or saved it, with no read of the disk, for a read that loads no values, see
+     * config::ConfigFile::read. Shared and never changed: copy it to change it. Null, with a warning, when it can't be
+     * read.
      */
-    bool ConfigBase::loadKeptConfig(toml::table& config) const
+    std::shared_ptr<const toml::table> ConfigBase::keptConfig() const
     {
-        if (!_configFile.read(_configFilePath, config)) {
+        auto config = _configFile.read(_configFilePath);
+        if (!config) {
             logger::warn("Config: failed to read '{}'", _configFilePath);
-            return false;
         }
-        return true;
+        return config;
     }
 
     /**
@@ -591,11 +606,11 @@ namespace f4cf
      */
     RE::NiTransform ConfigBase::readTransformValue(const char* section, const char* key, const RE::NiTransform& defaultValue) const
     {
-        toml::table config;
-        if (!loadKeptConfig(config)) {
+        const auto config = keptConfig();
+        if (!config) {
             return defaultValue;
         }
-        return getTransformValue(config, section, key, defaultValue);
+        return getTransformValue(*config, section, key, defaultValue);
     }
 
     /**
@@ -603,11 +618,11 @@ namespace f4cf
      */
     std::array<float, 22> ConfigBase::readHandPoseValue(const char* section, const char* key, const std::array<float, 22>& defaultValue) const
     {
-        toml::table config;
-        if (!loadKeptConfig(config)) {
+        const auto config = keptConfig();
+        if (!config) {
             return defaultValue;
         }
-        return getHandPoseValue(config, section, key, defaultValue);
+        return getHandPoseValue(*config, section, key, defaultValue);
     }
 
     /**
@@ -615,11 +630,11 @@ namespace f4cf
      */
     float ConfigBase::readFloatValue(const char* section, const char* key, const float defaultValue) const
     {
-        toml::table config;
-        if (!loadKeptConfig(config)) {
+        const auto config = keptConfig();
+        if (!config) {
             return defaultValue;
         }
-        const auto* node = config::nodeOf(config, { section, key });
+        const auto* node = config::nodeOf(*config, { section, key });
         return node ? node->value_or(defaultValue) : defaultValue;
     }
 

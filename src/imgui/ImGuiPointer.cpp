@@ -281,7 +281,7 @@ namespace f4cf::imgui
     /**
      * ImGui's mouse wheel for this frame, from the thumbstick of the hand that owns the pointer: pushed up it
      * scrolls up, as a wheel turned away does. The speed follows how far the thumbstick is pushed past a
-     * dead zone around its center, up to the style's speed at a full push.
+     * dead zone around its center, up to the style's speed at a full push. A push more to a side scrolls nothing.
      * The game does not get the thumbstick: the wand of the hand that points is hidden from it.
      */
     float Pointer::wheelFromThumbstick(const bool primaryHand, const float deltaSeconds) const
@@ -289,8 +289,8 @@ namespace f4cf::imgui
         if (_style.scrollSpeed <= 0.0f) {
             return 0.0f;
         }
-        const float push = vrcf::VRControllers.getThumbstickValue(primaryHand ? vrcf::Hand::Primary : vrcf::Hand::Offhand).y;
-        return internal::scrollFromThumbstick(push, SCROLL_DEAD_ZONE) * _style.scrollSpeed / LINES_PER_WHEEL_STEP * deltaSeconds;
+        const auto push = vrcf::VRControllers.getThumbstickValue(primaryHand ? vrcf::Hand::Primary : vrcf::Hand::Offhand);
+        return internal::scrollFromThumbstick(push.x, push.y, SCROLL_DEAD_ZONE) * _style.scrollSpeed / LINES_PER_WHEEL_STEP * deltaSeconds;
     }
 
     /**

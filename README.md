@@ -79,7 +79,7 @@ git submodule update --init --recursive
 cmake --preset default          # or: cmake --preset vs2026
 ```
 
-This generates a Visual Studio solution in `build/`. Open `build/F4VRCommonFramework.sln`, then build
+This generates a Visual Studio solution in `build/`. Open `build/F4VRCommonFramework.slnx`, then build
 and debug as usual. All project configuration changes go in `CMakeLists.txt`, not the VS project.
 
 Build options: `F4VR_BUILD_SHARED=ON` builds a DLL instead of a static lib (default `OFF`);

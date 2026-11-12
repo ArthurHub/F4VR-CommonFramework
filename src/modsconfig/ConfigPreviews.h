@@ -12,7 +12,8 @@ namespace f4cf::modsconfig
      * of its config spec that is kept in the mod's config file is a session override of the config, which reloads the
      * mod's values as a change of the file does. A preview sets it, a discard clears it, and a Save clears the ones
      * of the settings it wrote, as the file has their values then. The overrides are under an owner of their own, so
-     * those of the devbench tool and of the mod's API callers stay.
+     * those of the devbench tool and of the mod's API callers stay. A change the mod's own UI handed over is only
+     * recorded, with no reload: the mod has the value already.
      */
     class ConfigPreviews
     {
@@ -29,6 +30,7 @@ namespace f4cf::modsconfig
         void onSaved(const mods_config::api::Saved& saved) const;
 
     private:
+        void apply(const config::ConfigKey& key, const mods_config::api::Change& change, bool reload) const;
         std::optional<config::ConfigKey> keyOf(const mods_config::api::Change& change) const;
 
         ConfigBase& _config;

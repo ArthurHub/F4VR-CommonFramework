@@ -62,8 +62,9 @@ namespace f4cf::f4vr
      * How an activation sphere's icon looks: a small image at the zone's center, turned to face the player and drawn
      * on top of the world. The image is best a white glyph on a transparent background, so the tint colors it.
      *
-     * The texture resolves like any framework resource: as given, then under Data\Textures\, then under this mod's own
-     * folder there — so "f4cf\activation-icon-hand.dds" finds Data\Textures\<ModName>\f4cf\activation-icon-hand.dds.
+     * The texture resolves like any framework resource: as given, then under Data\, then under Data\Textures\, then
+     * under this mod's own folder there — so "Textures\<ModName>\f4cf\activation-icon-hand.dds" and
+     * "f4cf\activation-icon-hand.dds" both find Data\Textures\<ModName>\f4cf\activation-icon-hand.dds.
      */
     struct ActivationIconStyle
     {
@@ -83,9 +84,45 @@ namespace f4cf::f4vr
     };
 
     /**
+     * Which of an activation sphere's bindings its binding icon shows. Only a binding fed enabled this frame shows,
+     * whatever the choice, and two that look the same show once.
+     */
+    enum class ActivationBindingIcons : std::uint8_t
+    {
+        All = 0, // every binding fed enabled this frame, in their order
+        Primary, // the first binding only
+        Secondary, // the second binding only
+        Inside, // only the bindings whose hand is inside the zone
+    };
+
+    /**
+     * Parse an ActivationBindingIcons from config text, case-insensitively: "all"/"both" -> All; "primary" -> Primary;
+     * "secondary" -> Secondary; "inside"/"wheninside"/"hand" -> Inside. Empty or unrecognized text returns `fallback`
+     * (unrecognized is logged).
+     */
+    ActivationBindingIcons parseActivationBindingIcons(std::string_view text, ActivationBindingIcons fallback);
+
+    /**
+     * How an activation sphere's binding icon looks: the icons of the bindings that fire the gesture (see
+     * vrui::bindingIconPaths), in a row facing the player, drawn on top of the world like the icon.
+     *
+     * The transform places the row in the plane that faces the HMD, measured from the zone's center in game units:
+     * translate x is to the right, y up and z toward the HMD; its scale is each icon's longer side, and its rotation
+     * is ignored. Positive x aligns the row's left edge there, so it grows away from an icon at the center, negative
+     * x its right edge, and zero centers it. The offset is in view space, so it is never mirrored for handedness.
+     */
+    struct ActivationBindingIconStyle
+    {
+        ActivationBindingIcons bindings = ActivationBindingIcons::Inside;
+        RE::NiTransform transform{};
+        // Tint as r, g, b, a (0..1 each), multiplied into the icons; the shipped icons are white.
+        render::Color color{ 1.0f, 1.0f, 1.0f, 0.9f };
+    };
+
+    /**
      * Authored, config-loadable description of one activation sphere: its zone (+ optional PA variant), its
      * two bindings (each carrying its own suppress flag), the entry haptic plus a per-binding activation
-     * haptic, and when each visual (the sphere, the icon) is shown and how it looks. A mod parses one config section into this
+     * haptic, and when each visual (the sphere, the icon, the binding icon) is shown and how it looks. A mod parses one config section into this
      * (ConfigBase::loadWandActivationConfig); the per-frame WandActivationSphere::Frame is composed from it
      * with live gating (real binding vs the disabled binding) and any runtime zone re-anchor on top. The
      * sphere only uses the zone's translate + scale (it is rotation-invariant). `secondary` defaults to
@@ -108,6 +145,12 @@ namespace f4cf::f4vr
         ActivationSphereOrientation sphereOrientation = ActivationSphereOrientation::Body;
         ActivationSphereVisibility showIcon = ActivationSphereVisibility::WhenInside;
         ActivationIconStyle iconStyle{};
+        ActivationSphereVisibility showBindingIcon = ActivationSphereVisibility::Never;
+        ActivationBindingIconStyle bindingIconStyle{};
+
+        // The config section it was read from, which Mods Config FO4 VR's menu names while its ray is on the sphere's
+        // rows (see WandActivationSphere::isPointedAt). Empty for a config not read from a section.
+        std::string section;
 
         /**
          * The zone to use for the given power-armor state: the PA variant when one was configured, otherwise
@@ -197,6 +240,14 @@ namespace f4cf::f4vr
             ActivationSphereVisibility showIcon = ActivationSphereVisibility::WhenInside;
             // How the icon looks (see ActivationIconStyle). Null = the default style: the framework's hand icon.
             const ActivationIconStyle* iconStyle = nullptr;
+            // When the binding icon is drawn; resolved like showSphere.
+            ActivationSphereVisibility showBindingIcon = ActivationSphereVisibility::Never;
+            // Which bindings the binding icon shows and where (see ActivationBindingIconStyle). Null = the default style.
+            // The first of `bindings` is the primary one and the second the secondary.
+            const ActivationBindingIconStyle* bindingIconStyle = nullptr;
+            // The config the frame is composed from: while the ray of Mods Config FO4 VR's menu is on a row of its
+            // section, the sphere is drawn as showZone draws it. Null lights nothing.
+            const WandActivationConfig* config = nullptr;
         };
 
         explicit WandActivationSphere(const char* key, const std::uint64_t cooldownMs = 400)
@@ -239,6 +290,9 @@ namespace f4cf::f4vr
                     .sphereOrientation = config.sphereOrientation,
                     .showIcon = config.showIcon,
                     .iconStyle = &config.iconStyle,
+                    .showBindingIcon = config.showBindingIcon,
+                    .bindingIconStyle = &config.bindingIconStyle,
+                    .config = &config,
                 },
                 std::forward<OnActivated>(onActivated));
         }
@@ -254,8 +308,9 @@ namespace f4cf::f4vr
         bool onFrameUpdate(const Frame& frame, OnActivated&& onActivated)
         {
             if (!frame.enabled || !frame.node) {
-                updateVisual(frame, false);
+                updateVisual(frame, false, false);
                 updateIcon(frame, false);
+                updateBindingIcons(frame, false);
                 resetInteraction();
                 return false;
             }
@@ -269,9 +324,10 @@ namespace f4cf::f4vr
             bool anyAvailable = false;
             bool anyInside = false;
             bool handled = false;
+            _frameBindings.clear();
             const auto updateBinding = [&](const vrcf::InputBinding& binding, const std::optional<vrcf::HapticPattern> activateHaptic) {
                 if (!isInsideZone(frame, binding)) {
-                    return;
+                    return false;
                 }
 
                 anyInside = true;
@@ -284,15 +340,20 @@ namespace f4cf::f4vr
                     triggerActivation(binding.hand, activateHaptic);
                     handled = true;
                 }
+                return true;
             };
             for (const auto& action : frame.bindings) {
                 anyAvailable = anyAvailable || action.binding.type != vrcf::ActivationType::Disabled;
-                // a binding of any hand is the binding of whichever hand is in the zone, which onActivated gets
+                // a binding of any hand is the binding of whichever hand is in the zone, which onActivated gets; its
+                // icon is that hand's too, or the primary hand's while neither is inside
                 if (action.binding.hand == vrcf::Hand::Any) {
-                    updateBinding(action.binding.on(vrcf::Hand::Primary), action.activateHaptic);
-                    updateBinding(action.binding.on(vrcf::Hand::Offhand), action.activateHaptic);
+                    const auto onPrimary = action.binding.on(vrcf::Hand::Primary);
+                    const auto onOffhand = action.binding.on(vrcf::Hand::Offhand);
+                    const bool primaryInside = updateBinding(onPrimary, action.activateHaptic);
+                    const bool offhandInside = updateBinding(onOffhand, action.activateHaptic);
+                    _frameBindings.push_back({ .binding = offhandInside && !primaryInside ? onOffhand : onPrimary, .inside = primaryInside || offhandInside });
                 } else {
-                    updateBinding(action.binding, action.activateHaptic);
+                    _frameBindings.push_back({ .binding = action.binding, .inside = updateBinding(action.binding, action.activateHaptic) });
                 }
             }
 
@@ -302,9 +363,12 @@ namespace f4cf::f4vr
                 _hapticFired = false;
             }
 
-            // Resolve the visuals after the proximity test so WhenInside can react to it.
-            updateVisual(frame, frame.showZone || isShown(frame.showSphere, anyAvailable, anyInside));
+            // Resolve the visuals after the proximity test so WhenInside can react to it. The zone shows at its true
+            // size while tuning, and while the menu points at the sphere's section.
+            const bool showZone = frame.showZone || isMenuPointing(frame);
+            updateVisual(frame, showZone || isShown(frame.showSphere, anyAvailable, anyInside), showZone);
             updateIcon(frame, isShown(frame.showIcon, anyAvailable, anyInside));
+            updateBindingIcons(frame, isShown(frame.showBindingIcon, anyAvailable, anyInside));
 
             return handled;
         }
@@ -324,6 +388,30 @@ namespace f4cf::f4vr
         {
             return containsSuppression(_suppressedBindings, binding);
         }
+
+        /**
+         * The binding icons on screen, as texture paths in their order: empty once the binding icon has faded out. Kept
+         * through the fade, so the icons of a hand that just left still show for a moment.
+         */
+        std::span<const std::string> shownBindingIcons() const
+        {
+            return _bindingIconOpacity > 0.0f ? std::span<const std::string>(_bindingIconPaths) : std::span<const std::string>();
+        }
+
+        static bool isPointedAt(const WandActivationConfig& config, const std::vector<std::string>& pointedIds, bool inPowerArmor);
+
+        /**
+         * A binding fed to the sphere this frame as its binding icon sees it: a binding of any hand resolved to the
+         * hand inside the zone (the primary hand while neither is), and whether that hand is inside.
+         */
+        struct FrameBinding
+        {
+            vrcf::InputBinding binding;
+            bool inside = false;
+        };
+
+        static std::vector<vrcf::InputBinding> selectIconBindings(std::span<const FrameBinding> bindings, ActivationBindingIcons which);
+        static std::vector<float> layoutIconRow(std::span<const float> widths, float gap, float anchor);
 
     private:
         /**
@@ -348,8 +436,10 @@ namespace f4cf::f4vr
 
         // --- Visuals. ---
         static bool isShown(ActivationSphereVisibility visibility, bool anyAvailable, bool anyInside);
-        void updateVisual(const Frame& frame, bool show);
+        static bool isMenuPointing(const Frame& frame);
+        void updateVisual(const Frame& frame, bool show, bool showZone);
         void updateIcon(const Frame& frame, bool show);
+        void updateBindingIcons(const Frame& frame, bool show);
 
         bool isCoolingDown() const;
         static bool containsSuppression(std::span<const vrcf::InputBinding> bindings, const vrcf::InputBinding& binding);
@@ -366,8 +456,15 @@ namespace f4cf::f4vr
         std::string _iconTexturePath; // the path _iconTexture was loaded for, as configured (the loader resolves it)
         float _iconOpacity = 0.0f; // how far the icon has faded in: 0 hidden, 1 fully shown
         std::uint64_t _iconFadeTime = 0; // when _iconOpacity was last stepped
+        std::vector<FrameBinding> _frameBindings; // this frame's bindings, refilled each frame without reallocating
+        std::vector<std::string> _bindingIconPaths; // the binding icons last shown, kept while they fade out
+        std::vector<std::shared_ptr<render::Texture>> _bindingIconTextures; // the images of _bindingIconPaths, in order
+        float _bindingIconOpacity = 0.0f; // like _iconOpacity, for the binding icon
+        std::uint64_t _bindingIconFadeTime = 0;
+        bool _missingBindingIconLogged = false; // a binding with no icon is logged once per sphere
 
         static constexpr float SPHERE_NIF_BASE_RADIUS = 0.5f;
         static constexpr float ICON_FADE_MS = 100.0f;
+        static constexpr float BINDING_ICON_GAP = 0.15f; // between the binding icons in a row, as a part of their size
     };
 }

@@ -4,6 +4,7 @@
 #include <atomic>
 #include <cctype>
 #include <chrono>
+#include <filesystem>
 #include <format>
 #include <future>
 #include <mutex>
@@ -16,6 +17,11 @@
 #include "config/ConfigBase.h"
 #include "perf/Perf.h"
 #include "perf/Report.h"
+#include "vrcf/VRControllersSuppressor.h"
+
+#if F4CF_WITH_IMGUI_UI
+#include "imgui/ImGuiSnapshot.h"
+#endif
 
 namespace f4cf::devbench
 {
@@ -27,7 +33,9 @@ namespace f4cf::devbench
         // framework version it was built with, so this is how a client tells their tools apart (health reports it).
         // 2: perf answers without the game thread, as a tree per thread, a flat map or a text table (format)
         // 3: set and clear act on the tool's own session overrides only, and overrides says who set each
-        constexpr int TOOL_CONTRACT = 3;
+        // 4: snapshot saves the texture of the ImGui canvases as a PNG
+        // 5: input answers the controller input suppressed now, in place of the input.suppression event
+        constexpr int TOOL_CONTRACT = 5;
 
         // the owner of the session overrides that the tool's set action sets, see ConfigBase::setConfigOverride
         constexpr auto OVERRIDE_OWNER = "devbench";
@@ -35,6 +43,10 @@ namespace f4cf::devbench
         // devbench's own stall watchdog is 5000ms; answering well before it keeps "the mod did not answer" apart from
         // "devbench is stalled"
         constexpr auto GAME_THREAD_TIMEOUT = std::chrono::milliseconds(2000);
+
+        // a snapshot of the canvases waits for the render thread to read them back, 1-3 frames, and fails as none is shown,
+        // well before devbench's stall watchdog
+        constexpr auto SNAPSHOT_TIMEOUT = std::chrono::milliseconds(3000);
 
         // the free probe every mod answers
         constexpr auto HEALTH_ACTION = "health";
@@ -305,6 +317,16 @@ namespace f4cf::devbench
                 command.result->set_value(std::move(result));
             } catch (const std::future_error&) {
             }
+        }
+
+        /**
+         * Callback for devbench's main-thread queue: runs the queued command and frees it.
+         * execute() catches everything, as RunOnMainThread requires a callback that does not throw.
+         */
+        void executeQueued(void* ctx)
+        {
+            const std::unique_ptr<Command> command(static_cast<Command*>(ctx));
+            execute(*command);
         }
 
         void toolHandler(void* ctx, const char* argsJson, void* sink, DevBenchAPI::WriteFn write);
@@ -606,6 +628,27 @@ namespace f4cf::devbench
                               handler(&Tool::readPerf),
                               RunOn::Listener },
                     true);
+                addAction({ "input",
+                              "the controller input suppressed or inverted now, so the game and other mods do not see it as it is: each owner (a "
+                              "part of this mod that suppresses input, as ImGuiPointer) with its buttons, axes and invertedAxes per physical hand, "
+                              "and the effective union "
+                              "of all of them, by the input binding grammar's names. Only this mod's own; another mod's tool has its",
+                              json::object(),
+                              handler(&Tool::readInputSuppression) },
+                    true);
+#if F4CF_WITH_IMGUI_UI
+                addAction({ "snapshot",
+                              "save the texture the mod's ImGui canvases are drawn into as a PNG: a dedicated panel's own texture is that panel, the "
+                              "atlas the canvases share has each canvas in its place. Read back from the next frame that draws a canvas, so it fails "
+                              "while none is shown. Answers the path, width, height and dedicated",
+                              { { "path",
+                                  argument("string",
+                                      "snapshot: the PNG file to write; by default a new one in the mod's snapshots folder under My "
+                                      "Games\\Fallout4VR\\Mods_Config") } },
+                              handler(&Tool::saveCanvasSnapshot),
+                              RunOn::Listener },
+                    true);
+#endif
             }
 
             /**
@@ -719,6 +762,40 @@ namespace f4cf::devbench
                 }
                 return { { "overrides", overrides } };
             }
+
+            /**
+             * Game thread: the controller input the mod suppresses now, which only the game thread changes.
+             */
+            json readInputSuppression(const json&) const
+            {
+                return vrcf::VRControllersSuppress.toJson();
+            }
+
+#if F4CF_WITH_IMGUI_UI
+            /**
+             * Listener thread: saves the texture the mod's ImGui canvases are drawn into as a PNG, at the path asked or
+             * as a new file in the mod's folder of My Games\Fallout4VR\Mods_Config. It waits here for the render thread
+             * to read it back, so neither the game thread nor a frame waits for it.
+             */
+            json saveCanvasSnapshot(const json& args) const
+            {
+                std::filesystem::path path = argString(args, "path");
+                if (path.empty()) {
+                    std::string modName;
+                    {
+                        std::lock_guard lock(_lock);
+                        modName = _settings.modName;
+                    }
+                    const auto now = std::chrono::floor<std::chrono::seconds>(std::chrono::system_clock::now());
+                    path = std::filesystem::path(BASE_PATH) / modName / "snapshots" / std::format("snapshot-{:%Y%m%d-%H%M%S}.png", now);
+                }
+                const auto saved = imgui::internal::saveSnapshot(path, SNAPSHOT_TIMEOUT);
+                if (!saved) {
+                    throw std::runtime_error(saved.error());
+                }
+                return { { "path", saved->path.string() }, { "width", saved->width }, { "height", saved->height }, { "dedicated", saved->dedicated } };
+            }
+#endif
 
             /**
              * Listener thread: the sites are read with atomic loads, so this never waits for the game thread or stalls
@@ -1011,8 +1088,17 @@ namespace f4cf::devbench
                     std::lock_guard lock(_commandsLock);
                     _commands.push_back(std::move(command));
                     _hasCommands.store(true, std::memory_order_relaxed);
+                } else if (const auto mainThread = DevBenchAPI::GetDevBenchMainThread()) {
+                    // a mod without a frame update never drains the queue, so borrow devbench's: on FO4VR, F4SE's AddTask runs
+                    // tasks on worker threads, never the game thread
+                    auto queued = std::make_unique<Command>(std::move(command));
+                    if (!mainThread->RunOnMainThread(&executeQueued, queued.get())) {
+                        return errorJson("devbench did not queue the command for the game thread, and this mod has no frame update to run it in");
+                    }
+                    // owned by the queue from here; executeQueued frees it
+                    queued.release();
                 } else {
-                    // a mod without a frame update never drains the queue, so borrow F4SE's, as devbench itself does
+                    // a devbench older than its main-thread service: F4SE's queue is all there is, game thread or not
                     const auto tasks = F4SE::GetTaskInterface();
                     if (!tasks) {
                         return errorJson("F4SE's task interface is unavailable, and this mod has no frame update to run the command in");

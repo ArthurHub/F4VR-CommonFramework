@@ -205,6 +205,9 @@ TEST_CASE("ConfigReaders: an activation sphere with nothing in its section is it
     REQUIRE(config.sphereOrientation == defaults.sphereOrientation);
     REQUIRE(config.showIcon == defaults.showIcon);
     REQUIRE(config.iconStyle == defaults.iconStyle);
+
+    // the section is the one it was read from, which Mods Config FO4 VR's menu names
+    REQUIRE(config.section == MAIN);
 }
 
 TEST_CASE("ConfigReaders: an activation sphere is read from the keys of its section")
@@ -333,5 +336,51 @@ TEST_CASE("ConfigReaders: the look of an activation sphere's icon is single valu
         const Config file("cIconColor = { rgb = [1, 2] }\nfIconSize = -1\n");
 
         REQUIRE(ConfigReaders::loadWandActivationConfig(file.table, MAIN, defaults).iconStyle == defaults.iconStyle);
+    }
+}
+
+TEST_CASE("ConfigReaders: an activation sphere's binding icon is hidden by default and read from its keys")
+{
+    const f4vr::WandActivationConfig defaults;
+
+    SECTION("with no keys, it is hidden and shows the bindings whose hand is inside, at the zone's center")
+    {
+        const Config file("");
+
+        const auto config = ConfigReaders::loadWandActivationConfig(file.table, MAIN, defaults);
+
+        REQUIRE(config.showBindingIcon == f4vr::ActivationSphereVisibility::Never);
+        REQUIRE(config.bindingIconStyle.bindings == f4vr::ActivationBindingIcons::Inside);
+        // its rotation is ignored, so only the position and the size are compared
+        requireNear(config.bindingIconStyle.transform.translate, RE::NiPoint3(0, 0, 0));
+        requireNear(config.bindingIconStyle.transform.scale, 1.0f);
+        requireNear(config.bindingIconStyle.color.a, 0.9f);
+    }
+    SECTION("each key sets one value")
+    {
+        const Config file(
+            "sShowBindingIcon = \"whenavailable\"\n"
+            "sBindingIcons = \"All\"\n"
+            "tBindingIcon = { pos = [1.5, -2, 0.5], scale = 0.8 }\n"
+            "cBindingIconColor = { rgb = [255, 0, 51], alpha = 102 }\n");
+
+        const auto config = ConfigReaders::loadWandActivationConfig(file.table, MAIN, defaults);
+
+        REQUIRE(config.showBindingIcon == f4vr::ActivationSphereVisibility::WhenAvailable);
+        REQUIRE(config.bindingIconStyle.bindings == f4vr::ActivationBindingIcons::All);
+        requireNear(config.bindingIconStyle.transform.translate, RE::NiPoint3(1.5f, -2.0f, 0.5f));
+        requireNear(config.bindingIconStyle.transform.scale, 0.8f);
+        requireNear(config.bindingIconStyle.color.r, 1.0f);
+        requireNear(config.bindingIconStyle.color.a, 0.4f);
+    }
+    SECTION("an unknown choice and a size that is not above zero keep their defaults")
+    {
+        const Config file("sBindingIcons = \"some\"\ntBindingIcon = { pos = [1, 2, 3], scale = 0 }\n");
+
+        const auto config = ConfigReaders::loadWandActivationConfig(file.table, MAIN, defaults);
+
+        REQUIRE(config.bindingIconStyle.bindings == f4vr::ActivationBindingIcons::Inside);
+        requireNear(config.bindingIconStyle.transform.translate.x, 1.0f);
+        requireNear(config.bindingIconStyle.transform.scale, 1.0f);
     }
 }

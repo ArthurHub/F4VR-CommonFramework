@@ -32,9 +32,15 @@ The default preset inherits `cmake-dev + vcpkg + windows + vs2026`. The `release
 
 **Packaging:** an explicit step, not part of a normal build — build the `package_mod` target (`cmake --build --preset package`, or `cmake --build build --config Release --target package_mod`), which builds the plugin if needed and runs `cmake/package.cmake` to produce a versioned `.7z` with the DLL and the `data/mod/` files in `build/package/`. A non-Release archive has the configuration in its file name.
 
-**No automated test suite** — testing is manual, in the game.
+**Unit tests:** Catch2, run with `ctest --test-dir build -C Release`, in two executables set up in [tests/CMakeLists.txt](tests/CMakeLists.txt), where a new test file and the sources it covers are listed ([the framework's guide](external/F4VR-CommonFramework/docs/mod-tests.md)). `MOD_BUILD_TESTS` (ON) builds them.
 
-**CI:** `.github/workflows/build.yml` configures and builds Release on every push and pull request to `main`. `.github/workflows/maintenance.yml` runs pre-commit there and commits any fixes back to the branch (pull requests from forks are only checked).
+- `tests/<area>/*Tests.cpp`: **plain std** logic, compiled with the sources it covers and no PCH, F4SE or CommonLibF4. The first choice: keep game-independent logic in a plain-std file of its own and test it here.
+- `tests/linked/<area>/*Tests.cpp`: code that needs the framework and CommonLibF4, linked with them, and the mod's embedded resources. There is no game in the process: a test that calls the game crashes with an access violation, so nodes, forms, the player and OpenVR stay out of reach.
+- The mod's name and the folder start each test's CTest name (`MyMod: linked: Config: ...`), which the VS Code Testing panel shows as a tree. A test file's name is unique across the folders.
+
+Behavior in the game is tested by hand, in the game.
+
+**CI:** `.github/workflows/build.yml` configures and builds Release, and runs the unit tests, on every push and pull request to `main`. `.github/workflows/maintenance.yml` runs pre-commit there and commits any fixes back to the branch (pull requests from forks are only checked).
 
 ## Code Style
 
@@ -79,7 +85,7 @@ TODO: add a row for each component as the mod grows.
 
 - The main section is `[MyMod]`; it must match `NAME` in `CMakeLists.txt`, which the config reads back as both the file name and the default section.
 - `[Debug]` holds the framework's keys (log level and pattern, flow flags, data dumps, debug draw).
-- To add a value: a member in `Config.h`, a read in `Config::loadConfigInternal()` (`config[SECTION]["key"].value_or(default)`, which gives the default for a key that is missing or of another type), and the key in the shipped file. Write a float with a decimal point (`1.0`) and a string in quotes; a Windows path in single quotes (`'f4cf\icon.dds'`), where a backslash is not an escape.
+- To add a value: a member in `Config.h`, a read in `Config::loadConfigInternal()` (`config[SECTION]["key"].value_or(default)`, which gives the default for a key that is missing or of another type), and the key in the shipped file. Write a float with a decimal point (`1.0`) and a string in quotes; a Windows path in single quotes (`'Textures\MyMod\icon.dds'`), where a backslash is not an escape.
 - `ConfigBase` watches the file and reloads it on change, so edits apply while the game runs. The reload runs on the watcher's thread: apply anything that calls into the engine in a `subscribeForConfigChangedEvent` callback, which the framework calls on the game thread at the start of the next frame, or from `onFrameUpdate()`.
 - Bump `iVersion` in `[Debug]` when the shipped file changes, so existing users' files are migrated. A value whose type changes is left to `updateConfigToLatestVersionCustom`. Saves (`saveConfigValue(s)`) change only the values in the file and keep its comments and layout.
 
@@ -94,7 +100,8 @@ The framework's own [CLAUDE.md](external/F4VR-CommonFramework/CLAUDE.md) maps it
 | Need                                                        | Read                               |
 | ----------------------------------------------------------- | ---------------------------------- |
 | Controller input, input suppression, haptics                | `src/vrcf/README.md`               |
-| Rebindable controller bindings, activation spheres          | `docs/input-binding.md`            |
+| Rebindable controller bindings                              | `docs/input-binding.md`            |
+| Activation spheres (reach-into-a-zone gestures)             | `docs/activation-spheres.md`, `src/f4vr/README.md` |
 | In-world VR UI: panels and buttons from text and images     | `src/vrui/README.md`               |
 | Lines, images and text drawn over the VR view               | `src/render/README.md`             |
 | Dear ImGui content on world-space quads                     | `src/imgui/README.md`              |
@@ -109,6 +116,6 @@ The framework's own [CLAUDE.md](external/F4VR-CommonFramework/CLAUDE.md) maps it
 Pulled via vcpkg (`vcpkg.json`) with a **pinned baseline** required for CommonLibF4 compatibility:
 
 - `F4VR-CommonFramework` (git submodule at `external/`) — re-exports CommonLibF4 and the framework base classes
-- `spdlog`, `nlohmann-json`, `simpleini`, `tomlplusplus`, `thomasmonkman-filewatch`, `args`, `rapidcsv`, `rsm-mmio`, `xbyak`, `cpptrace`, `imgui` (with `dx11-binding` and `win32-binding`, for the framework's Dear ImGui UI layer, at 1.92.9 from the pinned baseline)
+- `spdlog`, `nlohmann-json`, `simpleini`, `tomlplusplus`, `thomasmonkman-filewatch`, `args`, `rapidcsv`, `rsm-mmio`, `xbyak`, `cpptrace`, `catch2` (the unit tests), `imgui` (with `dx11-binding` and `win32-binding`, for the framework's Dear ImGui UI layer, at 1.92.9 from the pinned baseline)
 
 The vcpkg baseline **must not be changed** without verifying CommonLibF4 still builds; it was specifically pinned to `5cd4931b18d49c77074703cf293a7837ac7506fa`.

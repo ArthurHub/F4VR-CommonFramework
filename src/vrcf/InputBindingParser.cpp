@@ -68,10 +68,10 @@ namespace f4cf::vrcf
         constexpr auto TYPES = "tap, press, longpress, double, hold, release, touch, thumbstick, axis";
         constexpr auto BUTTONS = "trigger, grip, a, b, thumbstick, menu, system";
         constexpr auto AXES = "thumbstick, trigger, grip";
-        constexpr auto DIRECTIONS = "up, down, left, right";
+        constexpr auto DIRECTIONS = "up, down, left, right, any, updown, rightleft";
         // the types of a binding's table, where an axis is one type and none is the disabled binding
         constexpr auto TABLE_TYPES = "tap, press, longpress, double, hold, release, touch, axis, none";
-        constexpr auto TABLE_KEYS = "hand, type, button, axis, direction, duration, threshold, suppress, modifier";
+        constexpr auto TABLE_KEYS = "hand, type, button, axis, direction, duration, threshold, accelerate, suppress, modifier";
 
         /**
          * The error of a word that is none of the words of its part of the line.
@@ -256,6 +256,15 @@ namespace f4cf::vrcf
         if (t == "right") {
             return Direction::Right;
         }
+        if (t == "any" || t == "move") {
+            return Direction::Any;
+        }
+        if (t == "updown" || t == "vertical") {
+            return Direction::UpDown;
+        }
+        if (t == "rightleft" || t == "leftright" || t == "horizontal") {
+            return Direction::RightLeft;
+        }
         return std::nullopt;
     }
 
@@ -341,7 +350,8 @@ namespace f4cf::vrcf
     }
 
     /**
-     * The canonical word for a direction - up, down, left, right - which parseDirection reads back as the same one.
+     * The canonical word for a direction - up, down, left, right, any, updown, rightleft - which parseDirection
+     * reads back as the same one.
      */
     std::string directionName(const Direction direction)
     {
@@ -352,6 +362,12 @@ namespace f4cf::vrcf
             return "left";
         case Direction::Right:
             return "right";
+        case Direction::Any:
+            return "any";
+        case Direction::UpDown:
+            return "updown";
+        case Direction::RightLeft:
+            return "rightleft";
         default:
             return "up";
         }
@@ -540,7 +556,8 @@ namespace f4cf::vrcf
      * Read a binding from its inline table, the form a config has it in, see the examples above. Every binding has
      * a `type`, and all but the disabled one ("none", with no other key) a `hand`. A button type (tap, press,
      * longpress, double, hold, release, touch) has a `button` and an optional `duration` in seconds; the axis type
-     * has a `direction`, an optional `axis` (the thumbstick when left out) and an optional `threshold` (0..1). Any
+     * has a `direction`, an optional `axis` (the thumbstick when left out), an optional `threshold` (0..1) and an
+     * optional `accelerate` (true when left out: a held push repeats faster the longer it is held). Any
      * of them takes an optional `suppress` (false when left out) and `modifier`, { button = .., hand = .. }, a
      * button held while the binding fires, on the binding's own hand when the hand is left out. The words are read
      * as the line's are, with no regard to case and with their aliases.
@@ -555,7 +572,7 @@ namespace f4cf::vrcf
         if (!table) {
             return std::unexpected(std::string(R"(it is not a table, as { hand = "offhand", type = "tap", button = "grip" })"));
         }
-        constexpr std::string_view KEYS[] = { "hand", "type", "button", "axis", "direction", "duration", "threshold", "suppress", "modifier" };
+        constexpr std::string_view KEYS[] = { "hand", "type", "button", "axis", "direction", "duration", "threshold", "accelerate", "suppress", "modifier" };
         for (const auto& [key, value] : *table) {
             if (std::ranges::find(KEYS, key.str()) == std::end(KEYS)) {
                 return std::unexpected(std::format("it has the key '{}', which is not one of {}", key.str(), TABLE_KEYS));
@@ -595,7 +612,7 @@ namespace f4cf::vrcf
         binding.hand = **hand;
 
         if (binding.type == ActivationType::AxisDirection) {
-            constexpr auto AXIS_KEYS = "hand, type, axis, direction, threshold, suppress and modifier";
+            constexpr auto AXIS_KEYS = "hand, type, axis, direction, threshold, accelerate, suppress and modifier";
             for (const auto* key : { "button", "duration" }) {
                 if (table->contains(key)) {
                     return notOfType(key, "axis", AXIS_KEYS);
@@ -619,9 +636,15 @@ namespace f4cf::vrcf
                 return std::unexpected(threshold.error());
             }
             binding.threshold = threshold->value_or(binding.threshold);
+            if (const auto* accelerate = table->get("accelerate")) {
+                if (!accelerate->is_boolean()) {
+                    return std::unexpected(std::string("accelerate is not true or false"));
+                }
+                binding.accelerate = accelerate->as_boolean()->get();
+            }
         } else {
             constexpr auto BUTTON_KEYS = "hand, type, button, duration, suppress and modifier";
-            for (const auto* key : { "axis", "direction", "threshold" }) {
+            for (const auto* key : { "axis", "direction", "threshold", "accelerate" }) {
                 if (table->contains(key)) {
                     return notOfType(key, activationTypeName(binding.type), BUTTON_KEYS);
                 }
@@ -679,9 +702,9 @@ namespace f4cf::vrcf
 
     /**
      * A binding as the TOML text of its inline table, which parseInputBindingTable reads back as the same binding:
-     * the canonical words, the keys in the order hand, type, button or axis and direction, duration or threshold,
-     * suppress, modifier, and a value left out where it is the default (no duration, the default threshold, no
-     * suppress, no modifier), so it is the table a person writes. A disabled binding is { type = "none" }.
+     * the canonical words, the keys in the order hand, type, button or axis and direction, duration or threshold and
+     * accelerate, suppress, modifier, and a value left out where it is the default (no duration, the default
+     * threshold, accelerating, no suppress, no modifier), so it is the table a person writes. A disabled binding is { type = "none" }.
      */
     std::string inputBindingTomlText(const InputBinding& binding)
     {
@@ -694,6 +717,9 @@ namespace f4cf::vrcf
             text += std::format(R"(, axis = "{}", direction = "{}")", axisName(binding.axis), directionName(binding.direction));
             if (std::abs(binding.threshold - InputBinding{}.threshold) > 0.0001f) {
                 text += ", threshold = " + numberText(binding.threshold);
+            }
+            if (!binding.accelerate) {
+                text += ", accelerate = false";
             }
         } else {
             text += std::format(R"(, button = "{}")", buttonName(binding.button));
