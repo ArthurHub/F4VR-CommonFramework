@@ -82,7 +82,7 @@ hand reaches into and presses a binding in. The player's side, every config key 
 [`docs/activation-spheres.md`](../../docs/activation-spheres.md).
 
 - **`WandActivationConfig`** is one config section: the zone and its power-armor variant, two bindings,
-  the entry and per-binding haptics, when the sphere and the icon show, and their styles. Load it with
+  the entry and per-binding haptics, when the sphere, the icon and the binding icon show, and their styles. Load it with
   `ConfigBase::loadWandActivationConfig(config, "Section", defaults)`.
 - **`WandActivationSphere`** is the zone at runtime, one per gesture, constructed with an owner key.
   Each frame `onFrameUpdate(node, config, onActivated)` runs the proximity test, suppresses each
@@ -105,7 +105,11 @@ hand reaches into and presses a binding in. The player's side, every config key 
   while that zone is the one in use (`tZonePA` in power armor, when the config has one).
 
 The icon (`ActivationIconStyle`: texture, tint, size) faces the HMD and fades in and out, drawn on one
-`render` layer shared by every sphere, so it needs no mesh. The sphere is a mesh restyled at runtime by
+`render` layer shared by every sphere, so it needs no mesh. The binding icon (`ActivationBindingIconStyle`)
+is drawn the same way: the `vrui::bindingIconPaths` icons of the bindings it selects, in a row placed by
+its transform in the plane facing the HMD. It is fed from the frame's bindings, the first being the
+primary and the second the secondary, and a binding of any hand shows the hand inside the zone. The
+selection and the row are `WandActivationSphere::selectIconBindings` and `layoutIconRow`. The sphere is a mesh restyled at runtime by
 a [`SphereStyle`](SphereStyle.h); a style change reloads a freshly styled clone.
 
 Because the sphere's texture is set by code, its mesh names no mod, and every mod ships the same files
@@ -115,3 +119,4 @@ from `mod-template`, under its own folder:
 - `Textures\<ModName>\f4cf\activation-sphere.dds` and `debug-sphere.dds`
 - `Textures\<ModName>\f4cf\activation-icon-hand.dds` (the default icon), `activation-icon-ring.dds` and
   `activation-icon-circle.dds`
+- `Textures\<ModName>\f4cf\bindings\`, the binding icons, which the binding icon draws

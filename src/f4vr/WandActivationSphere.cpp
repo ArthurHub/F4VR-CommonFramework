@@ -1,8 +1,11 @@
 #include "WandActivationSphere.h"
 
 #include <algorithm>
+#include <optional>
+#include <span>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include "ModBase.h"
 #include "common/CommonUtils.h"
@@ -14,6 +17,7 @@
 #include "render/Texture.h"
 #include "vrcf/VRControllersHaptic.h"
 #include "vrcf/VRControllersSuppressor.h"
+#include "vrui/BindingPrompt.h"
 
 namespace f4cf::f4vr
 {
@@ -85,6 +89,72 @@ namespace f4cf::f4vr
             auto look = *loaded;
             look.scale = desired.scale;
             return look == desired;
+        }
+
+        /**
+         * Step a visual's `opacity` (0 hidden to 1 fully shown) toward shown or hidden by the time since its last step,
+         * taking `fadeMs` for the whole way.
+         */
+        void stepFade(float& opacity, std::uint64_t& lastStepTime, const bool show, const float fadeMs)
+        {
+            const std::uint64_t now = common::nowMillis();
+            const float elapsed = lastStepTime ? static_cast<float>((std::min)(now - lastStepTime, MAX_ICON_FADE_STEP_MS)) : 0.0f;
+            lastStepTime = now;
+            const float step = elapsed / fadeMs;
+            opacity = std::clamp(opacity + (show ? step : -step), 0.0f, 1.0f);
+        }
+
+        /**
+         * The plane an icon is drawn in at `center`: facing the HMD, and kept upright to the HMD rather than to world up,
+         * so it reads upright however the head is tilted and stays well defined seen from straight above, which an icon
+         * on the chest nearly is.
+         */
+        struct Billboard
+        {
+            RE::NiPoint3 right;
+            RE::NiPoint3 up;
+            RE::NiPoint3 facing; // toward the HMD
+        };
+
+        /**
+         * The billboard at `center` for the HMD at `hmd`, or none at the eye, where no direction is left to face.
+         */
+        std::optional<Billboard> billboardAt(const RE::NiPoint3& center, const RE::NiAVObject& hmd)
+        {
+            const RE::NiPoint3 toViewer = hmd.world.translate - center;
+            const float distance = common::MatrixUtils::vec3Len(toViewer);
+            if (distance < 1.0f) {
+                return std::nullopt;
+            }
+            const RE::NiPoint3 facing = toViewer * (1.0f / distance);
+
+            // this codebase keeps world rotations transposed: row i of `rotate` is where local axis i points
+            const RE::NiMatrix3& hmdRotation = hmd.world.rotate;
+            const RE::NiPoint3 hmdRight(hmdRotation.entry[0][0], hmdRotation.entry[0][1], hmdRotation.entry[0][2]);
+            const RE::NiPoint3 hmdUp(hmdRotation.entry[2][0], hmdRotation.entry[2][1], hmdRotation.entry[2][2]);
+            RE::NiPoint3 right = common::MatrixUtils::vec3Cross(hmdUp, facing);
+            const float rightLength = common::MatrixUtils::vec3Len(right);
+            right = rightLength > 0.001f ? right * (1.0f / rightLength) : hmdRight; // straight above/below the head's up axis
+            return Billboard{ .right = right, .up = common::MatrixUtils::vec3Cross(facing, right), .facing = facing };
+        }
+
+        /**
+         * Add an image as a quad centered at `center` in `plane`, its longer side `size` long so a non-square image keeps
+         * its proportions inside the same bounds.
+         */
+        void addIconQuad(const render::Texture& texture, const render::TextureView& view, const RE::NiPoint3& center, const Billboard& plane, const float size,
+            const render::Color& tint)
+        {
+            const float longestSide = static_cast<float>((std::max)(texture.width(), texture.height()));
+            const float halfWidth = 0.5f * size * static_cast<float>(texture.width()) / longestSide;
+            const float halfHeight = 0.5f * size * static_cast<float>(texture.height()) / longestSide;
+            iconFrame().addImage(view,
+                texture.isSRGB(),
+                center - plane.right * halfWidth + plane.up * halfHeight,
+                center + plane.right * halfWidth + plane.up * halfHeight,
+                center + plane.right * halfWidth - plane.up * halfHeight,
+                center - plane.right * halfWidth - plane.up * halfHeight,
+                tint);
         }
     }
 
@@ -500,11 +570,7 @@ namespace f4cf::f4vr
      */
     void WandActivationSphere::updateIcon(const Frame& frame, const bool show)
     {
-        const std::uint64_t now = common::nowMillis();
-        const float elapsed = _iconFadeTime ? static_cast<float>((std::min)(now - _iconFadeTime, MAX_ICON_FADE_STEP_MS)) : 0.0f;
-        _iconFadeTime = now;
-        const float step = elapsed / ICON_FADE_MS;
-        _iconOpacity = std::clamp(_iconOpacity + (show ? step : -step), 0.0f, 1.0f);
+        stepFade(_iconOpacity, _iconFadeTime, show, ICON_FADE_MS);
 
         const auto hmd = getPlayer() ? getVRPlayerNodes()->hmdNode : nullptr;
         if (_iconOpacity <= 0.0f || !frame.node || !hmd) {
@@ -521,39 +587,167 @@ namespace f4cf::f4vr
             return;
         }
         const render::TextureView view = _iconTexture->view();
-        const float longestSide = static_cast<float>((std::max)(_iconTexture->width(), _iconTexture->height()));
-        if (!view || longestSide <= 0.0f) {
+        if (!view || (std::max)(_iconTexture->width(), _iconTexture->height()) == 0) {
             return;
         }
 
         const RE::NiPoint3 center = common::MatrixUtils::localToWorldPoint(frame.node->world, frame.zone.translate);
-        const RE::NiPoint3 toViewer = hmd->world.translate - center;
-        const float distance = common::MatrixUtils::vec3Len(toViewer);
-        if (distance < 1.0f) {
-            return; // at the eye, there is no direction left to face
+        const auto plane = billboardAt(center, *hmd);
+        if (!plane) {
+            return;
         }
-        const RE::NiPoint3 facing = toViewer * (1.0f / distance);
+        addIconQuad(*_iconTexture, view, center, *plane, style.size, { style.color.r, style.color.g, style.color.b, style.color.a * _iconOpacity });
+    }
 
-        // this codebase keeps world rotations transposed: row i of `rotate` is where local axis i points
-        const RE::NiMatrix3& hmdRotation = hmd->world.rotate;
-        const RE::NiPoint3 hmdRight(hmdRotation.entry[0][0], hmdRotation.entry[0][1], hmdRotation.entry[0][2]);
-        const RE::NiPoint3 hmdUp(hmdRotation.entry[2][0], hmdRotation.entry[2][1], hmdRotation.entry[2][2]);
-        RE::NiPoint3 right = common::MatrixUtils::vec3Cross(hmdUp, facing);
-        const float rightLength = common::MatrixUtils::vec3Len(right);
-        right = rightLength > 0.001f ? right * (1.0f / rightLength) : hmdRight; // straight above/below the head's up axis
-        const RE::NiPoint3 up = common::MatrixUtils::vec3Cross(facing, right);
+    /**
+     * Case-insensitive name -> ActivationBindingIcons, tolerating separators. Empty or unknown returns `fallback`
+     * (unknown is logged).
+     */
+    ActivationBindingIcons parseActivationBindingIcons(const std::string_view text, const ActivationBindingIcons fallback)
+    {
+        const std::string key = common::normalizeConfigToken(text);
 
-        // the style's size is the longer side, so a non-square image keeps its proportions inside the same bounds
-        const float halfWidth = 0.5f * style.size * static_cast<float>(_iconTexture->width()) / longestSide;
-        const float halfHeight = 0.5f * style.size * static_cast<float>(_iconTexture->height()) / longestSide;
-        const render::Color tint{ style.color.r, style.color.g, style.color.b, style.color.a * _iconOpacity };
-        iconFrame().addImage(view,
-            _iconTexture->isSRGB(),
-            center - right * halfWidth + up * halfHeight,
-            center + right * halfWidth + up * halfHeight,
-            center + right * halfWidth - up * halfHeight,
-            center - right * halfWidth - up * halfHeight,
-            tint);
+        if (key.empty()) {
+            return fallback;
+        }
+        if (key == "all" || key == "both") {
+            return ActivationBindingIcons::All;
+        }
+        if (key == "primary") {
+            return ActivationBindingIcons::Primary;
+        }
+        if (key == "secondary") {
+            return ActivationBindingIcons::Secondary;
+        }
+        if (key == "inside" || key == "wheninside" || key == "hand") {
+            return ActivationBindingIcons::Inside;
+        }
+        logger::warn("parseActivationBindingIcons: unrecognized value '{}' - using fallback", key);
+        return fallback;
+    }
+
+    /**
+     * The bindings the binding icon shows, in their order: of the enabled ones, all, the first, the second, or those
+     * whose hand is inside. A binding that shows the same prompt as one before it (vrui::samePrompt) is left out, so a
+     * tap and a press of one button show once.
+     */
+    std::vector<vrcf::InputBinding> WandActivationSphere::selectIconBindings(const std::span<const FrameBinding> bindings, const ActivationBindingIcons which)
+    {
+        std::vector<vrcf::InputBinding> selected;
+        for (std::size_t i = 0; i < bindings.size(); ++i) {
+            const auto& [binding, inside] = bindings[i];
+            const bool wanted = which == ActivationBindingIcons::All || (which == ActivationBindingIcons::Primary && i == 0) ||
+                                (which == ActivationBindingIcons::Secondary && i == 1) || (which == ActivationBindingIcons::Inside && inside);
+            if (!wanted || !binding.isEnabled()) {
+                continue;
+            }
+            if (std::ranges::none_of(selected, [&](const vrcf::InputBinding& shown) {
+                    return vrui::samePrompt(shown, binding);
+                })) {
+                selected.push_back(binding);
+            }
+        }
+        return selected;
+    }
+
+    /**
+     * The centers of a row of icons `widths` wide with `gap` between them, along the row from its anchor: a positive
+     * anchor is the row's left edge, a negative one its right edge, and zero its middle.
+     */
+    std::vector<float> WandActivationSphere::layoutIconRow(const std::span<const float> widths, const float gap, const float anchor)
+    {
+        float total = 0.0f;
+        for (const float width : widths) {
+            total += width;
+        }
+        if (!widths.empty()) {
+            total += gap * static_cast<float>(widths.size() - 1);
+        }
+
+        float left = anchor - total / 2;
+        if (!common::fEqual(anchor, 0.0f)) {
+            left = anchor > 0.0f ? anchor : anchor - total;
+        }
+
+        std::vector<float> centers;
+        centers.reserve(widths.size());
+        for (const float width : widths) {
+            centers.push_back(left + width / 2);
+            left += width + gap;
+        }
+        return centers;
+    }
+
+    /**
+     * Draws the optional binding icon: the icons of the bindings the style selects, in a row placed by the style's
+     * transform in the plane facing the HMD, fading like the icon. The icons shown last are kept while they fade out, so
+     * a hand leaving the zone fades its icon instead of dropping it. A binding with no icon (a chord the icons can't
+     * show, the system button) draws nothing and is logged once; a mod without the icons draws nothing, which the
+     * texture loader logs.
+     */
+    void WandActivationSphere::updateBindingIcons(const Frame& frame, const bool show)
+    {
+        static const ActivationBindingIconStyle defaultStyle{};
+        const ActivationBindingIconStyle& style = frame.bindingIconStyle ? *frame.bindingIconStyle : defaultStyle;
+
+        // an empty selection keeps the last icons, which fade out
+        bool hasIcons = false;
+        if (show) {
+            std::vector<std::string> paths;
+            for (const auto& binding : selectIconBindings(_frameBindings, style.bindings)) {
+                const auto icons = vrui::bindingIconPaths(binding);
+                if (icons.empty() && !_missingBindingIconLogged) {
+                    _missingBindingIconLogged = true;
+                    logger::warn("WandActivationSphere: no icon shows binding '{}' ({})", vrui::bindingLabel(binding), _sphereKey);
+                }
+                paths.insert(paths.end(), icons.begin(), icons.end());
+            }
+            hasIcons = !paths.empty();
+            if (hasIcons && paths != _bindingIconPaths) {
+                _bindingIconTextures.clear();
+                for (const auto& path : paths) {
+                    _bindingIconTextures.push_back(render::Texture::load(path));
+                }
+                _bindingIconPaths = std::move(paths);
+            }
+        }
+
+        stepFade(_bindingIconOpacity, _bindingIconFadeTime, hasIcons, ICON_FADE_MS);
+        const auto hmd = getPlayer() ? getVRPlayerNodes()->hmdNode : nullptr;
+        if (_bindingIconOpacity <= 0.0f || !frame.node || !hmd) {
+            return;
+        }
+
+        const RE::NiPoint3 zoneCenter = common::MatrixUtils::localToWorldPoint(frame.node->world, frame.zone.translate);
+        const auto plane = billboardAt(zoneCenter, *hmd);
+        if (!plane) {
+            return;
+        }
+
+        // the textures that are there, and their widths along the row: each icon's longer side is the transform's scale
+        const float size = style.transform.scale;
+        std::vector<std::pair<const render::Texture*, render::TextureView>> icons;
+        std::vector<float> widths;
+        for (const auto& texture : _bindingIconTextures) {
+            if (!texture) {
+                continue;
+            }
+            // the first view() loads the file, and the size is 0 until it has
+            auto view = texture->view();
+            if (!view || (std::max)(texture->width(), texture->height()) == 0) {
+                continue;
+            }
+            widths.push_back(size * static_cast<float>(texture->width()) / static_cast<float>((std::max)(texture->width(), texture->height())));
+            icons.emplace_back(texture.get(), std::move(view));
+        }
+
+        const auto& offset = style.transform.translate;
+        const RE::NiPoint3 rowCenter = zoneCenter + plane->up * offset.y + plane->facing * offset.z;
+        const auto centers = layoutIconRow(widths, BINDING_ICON_GAP * size, offset.x);
+        const render::Color tint{ style.color.r, style.color.g, style.color.b, style.color.a * _bindingIconOpacity };
+        for (std::size_t i = 0; i < icons.size(); ++i) {
+            addIconQuad(*icons[i].first, icons[i].second, rowCenter + plane->right * centers[i], *plane, size, tint);
+        }
     }
 
     /**

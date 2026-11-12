@@ -7,7 +7,7 @@ moves with what it is attached to. While your hand is in it:
 - a vibration tells you it is there,
 - the gesture's buttons are taken from the game, so the trigger doesn't also fire your weapon,
 - pressing one fires the gesture,
-- an icon, a sphere, or both, can mark the zone.
+- an icon, a sphere, the icons of its buttons, or any of them together, can mark the zone.
 
 Each gesture has a section of its own in the mod's config file
 (`Documents\My Games\Fallout4VR\Mods_Config\<ModName>\<ModName>.toml`). The section's name is up to the
@@ -60,11 +60,11 @@ Each is `none` or one of: `Tick`, `Click`, `DoubleClick`, `TripleClick`, `Succes
 
 ## When the icon and sphere show
 
-`sShowIcon` and `sShowSphere` each take one of:
+`sShowIcon`, `sShowSphere` and `sShowBindingIcon` each take one of:
 
 | Value           | Shows                                                                                   |
 | --------------- | --------------------------------------------------------------------------------------- |
-| `never`         | Never. The sphere's default                                                             |
+| `never`         | Never. The sphere's and the binding icon's default                                      |
 | `always`        | All the time, which helps while you place the zone                                      |
 | `wheninside`    | While your hand is in the zone. The icon's default                                      |
 | `whenavailable` | While the gesture can do something: one that needs a drawn weapon, only while one is drawn |
@@ -84,6 +84,22 @@ inside your body or on a prop.
 | `fIconSize`  | The size of its longer side, in game units, `1` by default                                                                                 |
 
 An icon of your own works best as a white shape on a transparent background, so the tint colors it.
+
+## The binding icon
+
+The icons of the buttons that fire the gesture, such as the left trigger with a clock for a long press, in a
+row that faces you. Shown beside the icon, it says which button to press. With `sShowIcon = "never"` and the
+row at the zone's center, it takes the icon's place.
+
+| Key                 | What it is                                                                                                                                                  |
+| ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `sShowBindingIcon`  | When it shows, see above. `never` by default                                                                                                               |
+| `sBindingIcons`     | Which bindings: `inside` (the default: those of the hand in the zone), `all`, `primary` or `secondary`. A binding the gesture can't use right now never shows |
+| `tBindingIcon`      | `{ pos = [x, y, z], scale = size }`: `x` right, `y` up and `z` toward your eyes from the zone's center, and `scale` each icon's size, in game units           |
+| `cBindingIconColor` | The tint, `{ rgb = [r, g, b], alpha = a }`, each 0 to 255. White by default, as the icons are drawn                                                       |
+
+With a positive `x` the row starts there and grows to the right, away from the icon; with a negative `x` it
+ends there; at `0` it is centered. A button with no icon, such as the system button, shows nothing.
 
 ## The sphere
 

@@ -9,6 +9,13 @@ major version is `0`, a minor bump may break the API; the **Upgrading** notes sa
 
 ## 0.5.1 — unreleased
 
+- **An activation sphere can show its bindings' icons**: a third visual, the icons of the bindings that fire the
+  gesture (the binding prompt icons of `vrui`), in a row facing the player. `sShowBindingIcon` says when (the
+  visibility values, `never` by default), `sBindingIcons` which bindings (`inside` by default: those whose hand is
+  in the zone; or `all`, `primary`, `secondary`), `tBindingIcon` where (x right, y up, z toward the HMD from the
+  zone's center; its scale is each icon's size) and `cBindingIconColor` the tint. With `sShowIcon = "never"` the
+  icons take the icon's place. **Upgrading:** a mod that builds its sphere's `Frame` itself sets `.showBindingIcon`
+  and `.bindingIconStyle` to show them; the `onFrameUpdate(node, config, ...)` overload sets both.
 - **`TomlEditor::remove` takes a key out of a TOML file**: the lines its value is written on go, and every other
   byte stays. It is checked as a set is: the document has to be the old one less that key, so a key that shares its
   line with another, as in an inline table, is refused. A key the file does not have is already removed.

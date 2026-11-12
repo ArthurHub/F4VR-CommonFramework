@@ -1,6 +1,9 @@
 #include <catch2/catch_test_macros.hpp>
 
+#include <cmath>
+
 #include "f4vr/WandActivationSphere.h"
+#include "vrcf/InputBindingParser.h"
 
 using namespace f4cf::f4vr;
 
@@ -60,6 +63,76 @@ TEST_CASE("WandActivationSphere: an icon style without a texture draws the frame
 
     style.texture = "my-icon.dds";
     REQUIRE(style.textureOrDefault() == "my-icon.dds");
+}
+
+TEST_CASE("WandActivationSphere: which bindings a binding icon shows is read by its word")
+{
+    using Icons = ActivationBindingIcons;
+
+    REQUIRE(parseActivationBindingIcons("all", Icons::Inside) == Icons::All);
+    REQUIRE(parseActivationBindingIcons("Both", Icons::Inside) == Icons::All);
+    REQUIRE(parseActivationBindingIcons("primary", Icons::Inside) == Icons::Primary);
+    REQUIRE(parseActivationBindingIcons("SECONDARY", Icons::Inside) == Icons::Secondary);
+    REQUIRE(parseActivationBindingIcons("inside", Icons::All) == Icons::Inside);
+    REQUIRE(parseActivationBindingIcons("when-inside", Icons::All) == Icons::Inside);
+
+    // the fallback for no word, and for one it does not know
+    REQUIRE(parseActivationBindingIcons("", Icons::Primary) == Icons::Primary);
+    REQUIRE(parseActivationBindingIcons("some", Icons::Primary) == Icons::Primary);
+}
+
+// The bindings here name the left or the right hand: the primary and the off hand are resolved by the game's
+// left-handed setting, which a test cannot read.
+TEST_CASE("WandActivationSphere: a binding icon shows the enabled bindings it is set to, each prompt once")
+{
+    using Icons = ActivationBindingIcons;
+    using FrameBinding = WandActivationSphere::FrameBinding;
+    const auto binding = [](const std::string_view text) {
+        const auto parsed = f4cf::vrcf::parseInputBinding(text);
+        REQUIRE(parsed);
+        return *parsed;
+    };
+    const auto leftTrigger = binding("left tap trigger");
+    const auto rightTrigger = binding("right tap trigger");
+    const auto leftLongTrigger = binding("left longpress trigger");
+    const auto disabled = f4cf::vrcf::VRControllersManager::DisabledBinding;
+
+    // a body grab: either hand's trigger, only the left hand inside
+    const std::vector<FrameBinding> bodyGrab{ { .binding = leftTrigger, .inside = true }, { .binding = rightTrigger, .inside = false } };
+    REQUIRE(WandActivationSphere::selectIconBindings(bodyGrab, Icons::All) == std::vector{ leftTrigger, rightTrigger });
+    REQUIRE(WandActivationSphere::selectIconBindings(bodyGrab, Icons::Inside) == std::vector{ leftTrigger });
+    REQUIRE(WandActivationSphere::selectIconBindings(bodyGrab, Icons::Primary) == std::vector{ leftTrigger });
+    REQUIRE(WandActivationSphere::selectIconBindings(bodyGrab, Icons::Secondary) == std::vector{ rightTrigger });
+
+    // a binding gated off for the frame shows under no choice
+    const std::vector<FrameBinding> gated{ { .binding = disabled, .inside = false }, { .binding = leftLongTrigger, .inside = true } };
+    REQUIRE(WandActivationSphere::selectIconBindings(gated, Icons::All) == std::vector{ leftLongTrigger });
+    REQUIRE(WandActivationSphere::selectIconBindings(gated, Icons::Primary).empty());
+
+    // a press and a tap of one button are one picture, which shows once
+    const std::vector<FrameBinding> same{ { .binding = leftTrigger, .inside = true }, { .binding = binding("left press trigger"), .inside = true } };
+    REQUIRE(WandActivationSphere::selectIconBindings(same, Icons::All) == std::vector{ leftTrigger });
+}
+
+TEST_CASE("WandActivationSphere: a row of binding icons is aligned by the side of its anchor")
+{
+    const std::vector widths{ 1.0f, 2.0f };
+    const auto near = [](const std::vector<float>& actual, const std::vector<float>& expected) {
+        REQUIRE(actual.size() == expected.size());
+        for (std::size_t i = 0; i < actual.size(); ++i) {
+            CAPTURE(i);
+            REQUIRE(std::abs(actual[i] - expected[i]) < 0.0001f);
+        }
+    };
+
+    // to the right of the anchor, to its left, and centered on zero
+    near(WandActivationSphere::layoutIconRow(widths, 0.5f, 1.0f), { 1.5f, 3.5f });
+    near(WandActivationSphere::layoutIconRow(widths, 0.5f, -1.0f), { -4.0f, -2.0f });
+    near(WandActivationSphere::layoutIconRow(widths, 0.5f, 0.0f), { -1.25f, 0.75f });
+
+    // one icon on zero is centered on it, and no icons are no centers
+    near(WandActivationSphere::layoutIconRow(std::vector{ 2.0f }, 0.5f, 0.0f), { 0.0f });
+    REQUIRE(WandActivationSphere::layoutIconRow({}, 0.5f, 1.0f).empty());
 }
 
 TEST_CASE("WandActivationSphere: the menu points at a sphere while its ray is on a row of its section")
