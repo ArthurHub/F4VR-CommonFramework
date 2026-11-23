@@ -64,6 +64,7 @@ if (!editor.set({ "New", "key" }, true)) {           // a missing section is add
 editor.set({ { { "Main", "fScale" }, 1.25f }, { { "Main", "bFlag" }, true } });
 
 editor.remove({ "Main", "sOld" });                   // its lines taken out; one it does not have stays so
+editor.remove({ "Main", "color" });                  // a table: its values and [header] lines too
 writeFile(path, editor.text());
 ```
 
@@ -84,8 +85,10 @@ writeFile(path, editor.text());
 - A value that is rewritten takes this formatting: a multi-line string becomes one line, `0x1F`
   becomes `31`.
 - A **removed key** takes the lines its value is written on out of the text, with a comment at the end
-  of them; a comment above it, and a section left with no keys, stay. A table of dotted keys goes with
-  its last key. A key that shares its line with another, as in an inline table, is refused.
+  of them; comments and blank lines elsewhere stay. A removed **table** takes all of its lines: its
+  values, its `[header]` and those of the sections under it. A section or a table of dotted keys the
+  removal leaves with no keys goes too, its `[header]` with it, up to the root. A key that shares its
+  line with another, as in an inline table, is refused, and so is a table holding an array of tables.
 - Every edit is parsed back and kept only when the document holds the new value and nothing else
   changed. Otherwise `set` returns false, the text stays, and `error()` says why: a path that is a
   section or goes through a value, an array of tables (`[[name]]`), a value TOML can't hold.
