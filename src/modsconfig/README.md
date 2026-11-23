@@ -117,6 +117,8 @@ modsConfig.setPendingValue("fScale:Main", 1.5f);
   `subscribeToSaves`. A state with no setter is a `readOnly` setting's.
 - **`minimizeMenu` / `restoreMenu`** move the menu aside and back, from any flow of the mod.
   `restoreMenu` does nothing unless the menu is minimized.
+- **`closeMenu`** closes the menu as the player's Exit does: with unsaved changes it asks first, or
+  drops them with `closeMenu(true)`. It needs a menu of API version 2, and does nothing on an older one.
 - **`setPendingValue`** hands an edit of the mod's own UI to the menu as a setting's pending value, in
   its valueType, so the menu's Save writes it. The menu takes it while it shows the mod, shown or
   minimized, but not from a `subscribeToChanges` or `subscribeToSaves` handler. The mod applies the value

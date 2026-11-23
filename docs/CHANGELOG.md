@@ -7,8 +7,13 @@ and tooling tweaks are left to the git history.
 Versions follow `set(VERSION ...)` in the root [`CMakeLists.txt`](../CMakeLists.txt). While the
 major version is `0`, a minor bump may break the API; the **Upgrading** notes say what to change.
 
-## 0.5.1 — unreleased
+## 0.5.2 — unreleased
 
+- **The Mods Config FO4 VR client closes the menu**: `closeMenu()` closes it as the player's Exit does, which asks
+  first while the shown mod has unsaved changes, and `closeMenu(true)` drops them. The header is API version 2; on an
+  older menu the call does nothing.
+
+## 0.5.1 — 2026-11-13
 - **An activation sphere can show its bindings' icons**: a third visual, the icons of the bindings that fire the
   gesture (the binding prompt icons of `vrui`), in a row facing the player. `sShowBindingIcon` says when (the
   visibility values, `never` by default), `sBindingIcons` which bindings (`inside` by default: those whose hand is

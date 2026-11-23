@@ -55,9 +55,9 @@ namespace mods_config::api
 {
 #define MODS_CONFIG_FO4_CALL __cdecl
 
-    // The version of this header: what V1 has. A method is only added at the end of an interface, and a struct only
-    // grows at its end, so a host of a later version takes a client of this one.
-    inline constexpr std::uint32_t MODS_CONFIG_FO4_API_VERSION = 1;
+    // The version of this header: 2 adds closeMenu to what 1 has. A method is only added at the end of an interface,
+    // and a struct only grows at its end, so a host of a later version takes a client of this one.
+    inline constexpr std::uint32_t MODS_CONFIG_FO4_API_VERSION = 2;
 
     // the host's DLL, and the function it exports that gives the API
     inline constexpr auto MODS_CONFIG_FO4_DLL = "ModsConfigFO4VR.dll";
@@ -323,7 +323,7 @@ namespace mods_config::api
     {
     public:
         /**
-         * The version of the host's API: what V1 has. Check it before you call what a later version added.
+         * The version of the host's API. Check it before you call what a later version added: closeMenu needs 2.
          */
         virtual std::uint32_t getVersion() const = 0;
 
@@ -387,6 +387,13 @@ namespace mods_config::api
          * read-only setting, of another type, or no value of the setting, as one outside its limits.
          */
         virtual bool setPendingValue(IClient* client, const char* settingId, const SettingValue* value) const = 0;
+
+        /**
+         * Closes the menu, shown or minimized, as the player's Exit does: one that shows a mod with unsaved changes asks
+         * first, shown again for it, unless discardChanges, which drops them, with a `live` setting's Discard told.
+         * Nothing while it is closed. Since version 2: check getVersion before you call it.
+         */
+        virtual void closeMenu(bool discardChanges) const = 0;
 
         /**
          * Finds Mods Config FO4 VR's DLL and gets its API. Returns 0 when the API is there, and else:
@@ -739,6 +746,17 @@ namespace mods_config::api
         {
             if (_api) {
                 _api->restoreMenu();
+            }
+        }
+
+        /**
+         * Closes the menu as the player's Exit does, which asks first while the shown mod has unsaved changes, or drops
+         * them with discardChanges. Nothing while it is not connected, or the menu's API is older than version 2.
+         */
+        void closeMenu(const bool discardChanges = false) const
+        {
+            if (_api && _api->getVersion() >= 2) {
+                _api->closeMenu(discardChanges);
             }
         }
 
