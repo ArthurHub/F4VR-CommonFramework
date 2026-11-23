@@ -667,10 +667,12 @@ namespace f4cf::common
      * is replaced where it is written, and nothing else in the text changes; one that already holds the value stays as
      * it is written, so a save of unchanged values changes nothing. A key it does not have is added as a
      * line after the last value of its section, as a dotted key when its table is not a section of its own, and a
-     * section it does not have is added at the end with a [header].
+     * section it does not have is added at the end with a [header]. A table written on lines of its own, a section or
+     * a table of dotted keys, set to a table keeps its form, see setTable.
      * The edit is parsed back, and kept only when the document then holds the value and is otherwise the same.
-     * Returns false and leaves the text as it was when it is not: for a path that is a table or goes through a value
-     * that is not a table, and for a text that did not parse. error() then says why.
+     * Returns false and leaves the text as it was when it is not: for a path that is such a table and a value that is
+     * not a table, or that goes through a value that is not a table, and for a text that did not parse. error() then
+     * says why.
      */
     bool TomlEditor::set(const std::span<const std::string_view> path, const Value& value)
     {
@@ -692,6 +694,10 @@ namespace f4cf::common
 
         std::expected<std::string, std::string> edited;
         if (const auto chain = chainOf(_table, path); chain.size() == path.size() + 1) {
+            const auto* existing = chain.back()->as_table();
+            if (const auto* table = parsedValue->get("v")->as_table(); table && existing && !existing->is_inline()) {
+                return setTable(path, *table);
+            }
             const auto splice = spliceFor(_text, *chain.back(), value);
             if (splice && holdsValue(*chain.back(), *parsedValue->get("v"))) {
                 // already holds it: the text stays as it is written
@@ -718,6 +724,53 @@ namespace f4cf::common
 
         _text = std::move(*edited);
         _table = std::move(*result);
+        return true;
+    }
+
+    /**
+     * Set a table written on lines of its own, a section or a table of dotted keys, to a table in place: each key of the
+     * new table is set in it (see set, so a table under it is set the same way), and each key the new table does not
+     * have is removed (see remove). Its [header], its comments and the order of its keys stay, and a key it already
+     * holds is not touched. An empty table is refused, as it would take the table out. Returns false and leaves the
+     * text as it was when any of the edits cannot be made, and error() then says why.
+     */
+    bool TomlEditor::setTable(const std::span<const std::string_view> path, const toml::table& value)
+    {
+        if (value.empty()) {
+            _error = std::format("{}: is a table on lines of its own, which an empty table is not written over", pathText(path));
+            return false;
+        }
+        // the keys it has now, as the edits change the document they are read from
+        std::vector<std::string> before;
+        for (const auto& [key, child] : *chainOf(_table, path).back()->as_table()) {
+            before.emplace_back(key.str());
+        }
+
+        const auto text = _text;
+        const auto table = _table;
+        const auto undo = [&]() {
+            auto error = std::move(_error);
+            _text = text;
+            _table = table;
+            _error = std::move(error);
+            return false;
+        };
+        std::vector<std::string_view> keyPath(path.begin(), path.end());
+        keyPath.emplace_back();
+        for (const auto& [key, child] : keysInTextOrder(value)) {
+            keyPath.back() = key;
+            if (!set(keyPath, Value(*child))) {
+                return undo();
+            }
+        }
+        for (const auto& key : before) {
+            if (!value.contains(key)) {
+                keyPath.back() = key;
+                if (!remove(keyPath)) {
+                    return undo();
+                }
+            }
+        }
         return true;
     }
 

@@ -427,11 +427,52 @@ TEST_CASE("TomlEditor: a value the text already holds stays as it is written")
         CHECK(editor.error().empty());
     }
 
-    SECTION("a section is still refused")
+    SECTION("a section set to a table it holds stays as it is written")
     {
         TomlEditor editor("[M]\nx = 1\n");
-        CHECK_FALSE(editor.set({ "M" }, toml::table{ { "x", 1 } }));
+        CHECK(editor.set({ "M" }, toml::table{ { "x", 1 } }));
+        CHECK(editor.text() == "[M]\nx = 1\n");
     }
+}
+
+TEST_CASE("TomlEditor: a table on lines of its own set to a table keeps its form: its keys are set, and the ones it no longer has removed")
+{
+    const auto color = toml::parse("v = { rgb = [1, 2, 3], alpha = 200 }");
+    const auto& value = *color.get("v");
+
+    // a section of its own, with its comments
+    CHECK(setOne("[Debug]\nx = 1\n\n[Debug.color]  # tint\n# red\nrgb = [255, 107, 107]\nalpha = 255\n", { "Debug", "color" }, value) ==
+          "[Debug]\nx = 1\n\n[Debug.color]  # tint\n# red\nrgb = [1, 2, 3]\nalpha = 200\n");
+
+    // a table of dotted keys, among other keys
+    CHECK(setOne("[Debug]\ncolor.rgb = [255, 107, 107]\nx = 1\ncolor.alpha = 255\n", { "Debug", "color" }, value) == "[Debug]\ncolor.rgb = [1, 2, 3]\nx = 1\ncolor.alpha = 200\n");
+
+    // a key it does not have is added, one the new table does not have removed, and a table under it set the same way
+    const auto binding = toml::parse("v = { hand = \"left\", modifier = { button = \"grip\" } }");
+    CHECK(setOne("[K]\nhand = \"right\"\nduration = 1.0\n\n[K.modifier]\nhand = \"any\"\nbutton = \"a\"\n", { "K" }, *binding.get("v")) ==
+          "[K]\nhand = \"left\"\n\n[K.modifier]\nbutton = \"grip\"\n");
+
+    // through several sets, as a Save writes it
+    TomlEditor editor("[Debug.color]\nrgb = [255, 107, 107]\nalpha = 255\n[Main]\nf = 1.0\n");
+    CHECK(editor.set({ { { "Main", "f" }, 2.0f }, { { "Debug", "color" }, value } }));
+    CHECK(editor.text() == "[Debug.color]\nrgb = [1, 2, 3]\nalpha = 200\n[Main]\nf = 2.0\n");
+}
+
+TEST_CASE("TomlEditor: a table on lines of its own set to an empty table, or with a key it cannot set, is refused and the text stays")
+{
+    const std::string text = "[Debug.color]\nrgb = [255, 107, 107]\nalpha = 255\n";
+    TomlEditor empty(text);
+    CHECK_FALSE(empty.set({ "Debug", "color" }, toml::table{}));
+    CHECK(empty.text() == text);
+    CHECK(empty.error().contains("Debug.color: is a table on lines of its own"));
+
+    // its first key is set, and the second cannot be: the first is put back
+    const std::string items = "[T]\na = 1\n[[T.items]]\nname = 'n'\n";
+    TomlEditor arrays(items);
+    CHECK_FALSE(arrays.set({ "T" }, toml::table{ { "a", 2 }, { "items", 3 } }));
+    CHECK(arrays.text() == items);
+    INFO(arrays.error());
+    CHECK(arrays.error().contains("T.items"));
 }
 
 TEST_CASE("TomlEditor: a set after a refused one works")

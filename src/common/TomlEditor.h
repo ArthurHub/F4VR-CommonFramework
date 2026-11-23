@@ -145,6 +145,7 @@ namespace f4cf::common
 
     private:
         std::expected<std::string, std::string> insert(std::span<const std::string_view> path, std::span<const toml::node* const> chain, const Value& value) const;
+        bool setTable(std::span<const std::string_view> path, const toml::table& value);
 
         std::string _text;
         std::string _sourceName;

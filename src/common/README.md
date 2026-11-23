@@ -84,6 +84,9 @@ writeFile(path, editor.text());
   stays a float. A replaced literal string (`'C:\path'`) stays literal when the new string can be one.
 - A value that is rewritten takes this formatting: a multi-line string becomes one line, `0x1F`
   becomes `31`.
+- A **table on lines of its own**, a `[header]` section or a table of dotted keys, set to a table keeps
+  its form: each key of the new table is set in it, the keys it no longer has are removed, and its
+  comments and key order stay. An empty table is refused.
 - A **removed key** takes the lines its value is written on out of the text, with a comment at the end
   of them; comments and blank lines elsewhere stay. A removed **table** takes all of its lines: its
   values, its `[header]` and those of the sections under it. A section or a table of dotted keys the
@@ -91,7 +94,8 @@ writeFile(path, editor.text());
   line with another, as in an inline table, is refused, and so is a table holding an array of tables.
 - Every edit is parsed back and kept only when the document holds the new value and nothing else
   changed. Otherwise `set` returns false, the text stays, and `error()` says why: a path that is a
-  section or goes through a value, an array of tables (`[[name]]`), a value TOML can't hold.
+  section set to a value that is not a table, or that goes through a value, an array of tables
+  (`[[name]]`), a value TOML can't hold.
 
 ## Notes
 

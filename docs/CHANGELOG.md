@@ -16,6 +16,9 @@ major version is `0`, a minor bump may break the API; the **Upgrading** notes sa
   its values and the `[header]` of it and of the sections under it, as a key's are. A section or a table of dotted
   keys that a removal leaves with no keys now goes too, with its `[header]`, up to the root. **Upgrading:** a caller
   that wants an emptied section kept sets a key back in it.
+- **`TomlEditor::set` sets a table written as a section**: a `[header]` table or a table of dotted keys set to a
+  table keeps its form, its keys set in place and the ones the new table lacks removed. It was refused before, so a
+  color, a transform or a binding a file has as a section could not be saved.
 
 ## 0.5.1 — 2026-11-13
 - **An activation sphere can show its bindings' icons**: a third visual, the icons of the bindings that fire the
