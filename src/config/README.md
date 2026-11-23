@@ -113,6 +113,8 @@ requests, debug draw, scene depth) are in [`docs/debug-config.md`](../../docs/de
   `config::appliedText`). A value not of the type, a key that is not a TOML key, or one under a value
   that is not a table is refused with the rest of its set, and the call's `std::expected` error says
   why.
+- `getConfigOverrides()` gives the override that applies for each key; `getConfigOverrides(section, key)`
+  gives every owner's override of one key, the one that applies first, as Mods Config FO4 VR shows them.
 - Overrides are kept by `ConfigKey::canonical()`, so two spellings of one key's path are one
   override. Only a key its owner did not override before is logged at info and is a
   `config.override` devbench event.

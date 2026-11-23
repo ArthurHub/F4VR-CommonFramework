@@ -11,6 +11,9 @@
 
 using f4cf::modsconfig::ConfigPreviews;
 using mods_config::api::Change;
+using mods_config::api::Setting;
+using mods_config::api::Value;
+using mods_config::api::ValueType;
 using test_files::readFile;
 using test_files::TempFolder;
 using test_files::writeFile;
@@ -145,4 +148,50 @@ TEST_CASE("ConfigPreviews: a change the mod handed over is recorded with no relo
     previews.onChange(discard);
     CHECK_FALSE(config.hasConfigOverride("Main", "fScale"));
     CHECK(config.mode == 3);
+}
+
+TEST_CASE("ConfigPreviews: every override of a setting of the mod's config file is told, the one in effect first, in the setting's type")
+{
+    const TempFolder folder;
+    const auto path = folder.file("TestMod.toml");
+    writeFile(path, USER_FILE);
+    PreviewedConfig config(path);
+    REQUIRE(config.loadConfigValues());
+    ConfigPreviews previews(config);
+
+    REQUIRE(config.setConfigOverride("OtherMod", "Main", "fScale", 2.0f));
+    previews.onChange({ .id = "fScale", .fileName = "config", .filePath = path, .path = { "Main", "fScale" }, .previous = 1.0f, .value = 2.5f });
+    REQUIRE(config.setConfigOverride("OtherMod", "Main", "iMode", 3));
+    const Setting scale{ .id = "fScale", .valueType = ValueType::Float, .fileName = "config", .filePath = path, .path = { "Main", "fScale" } };
+
+    // the menu's own preview is told too: the menu leaves it out
+    const auto overrides = previews.overridesOf(scale);
+    REQUIRE(overrides.size() == 2);
+    CHECK(overrides[0].owner == ConfigPreviews::OWNER);
+    CHECK(f4cf::common::fEqual(std::get<float>(overrides[0].value), 2.5f));
+    CHECK(overrides[1].owner == "OtherMod");
+    CHECK(f4cf::common::fEqual(std::get<float>(overrides[1].value), 2.0f));
+
+    SECTION("an int, and a value not of the setting's type, which is its text")
+    {
+        auto mode = scale;
+        mode.id = "iMode";
+        mode.valueType = ValueType::Int;
+        mode.path = { "Main", "iMode" };
+        CHECK(previews.overridesOf(mode).front().value == Value(3));
+        mode.valueType = ValueType::Bool;
+        CHECK(previews.overridesOf(mode).front().value == Value(std::string("3")));
+    }
+
+    SECTION("none for a setting of another file, and one of the game")
+    {
+        auto other = scale;
+        other.filePath = folder.file("Other.toml");
+        CHECK(previews.overridesOf(other).empty());
+        auto global = scale;
+        global.filePath = {};
+        global.path = {};
+        global.form = "MyMod.esp|800";
+        CHECK(previews.overridesOf(global).empty());
+    }
 }

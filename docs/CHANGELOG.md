@@ -12,6 +12,10 @@ major version is `0`, a minor bump may break the API; the **Upgrading** notes sa
 - **The Mods Config FO4 VR client closes the menu**: `closeMenu()` closes it as the player's Exit does, which asks
   first while the shown mod has unsaved changes, and `closeMenu(true)` drops them. The header is API version 2; on an
   older menu the call does nothing.
+- **Mods Config FO4 VR shows a setting another mod overrides**: the client tells the menu every session override of
+  a setting of the mod's config file, who set it and to what, so the menu says why a change of it does nothing. No
+  code of the mod's; one with overrides of its own adds them with `addOverrides`. `ConfigBase::getConfigOverrides(section,
+  key)` gives every owner's override of one key, the one that applies first.
 - **`TomlEditor::remove` removes a table, and the sections it empties**: a path to a table takes all of its lines,
   its values and the `[header]` of it and of the sections under it, as a key's are. A section or a table of dotted
   keys that a removal leaves with no keys now goes too, with its `[header]`, up to the root. **Upgrading:** a caller

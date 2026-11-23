@@ -150,6 +150,23 @@ So a value the mod reads on each load previews live; one read only at startup do
 says `restart`. A setting of another file or of the game is the mod's, through `subscribeToChanges` and
 `subscribeToSaves`. The overrides of devbench and the mod's API callers stay.
 
+## Overrides the menu shows
+
+A value another caller overrides for the session, as another mod does through the mod's API, makes a change
+of its setting in the menu do nothing until the override ends. `ConfigPreviews` answers the menu, through
+the client's `addOverrides`, with every override of a setting kept in the mod's config file
+(`getConfigOverrides(section, key)`): the owner's name, as the caller gave it, and the value in the
+setting's type, the one in effect first. It leaves none out: the menu drops its own previews, under its name.
+The menu marks the row and names the owner and the value in effect.
+
+A mod with overrides of its own, outside the config, adds a source the same way:
+
+```cpp
+modsConfig.addOverrides([](const Setting& setting) {
+    return setting.id == "fScale:Main" && g_scaleLocked ? std::vector<Override>{ { .owner = "Photo mode", .value = 1.0f } } : std::vector<Override>{};
+});
+```
+
 ## Vendored header
 
 `ModsConfigFO4Api.h` is the menu's client header, copied verbatim from its `src/api/`: never edit or

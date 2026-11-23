@@ -1,6 +1,8 @@
 #include "ConfigPreviews.h"
 
+#include <charconv>
 #include <filesystem>
+#include <optional>
 #include <string>
 #include <variant>
 #include <vector>
@@ -18,12 +20,52 @@ namespace
     {
         return f4cf::common::str_tolower(std::filesystem::path(path).lexically_normal().make_preferred().string());
     }
+
+    /**
+     * A number read from the whole of a text, or none when the text is not one.
+     */
+    template <typename T>
+    std::optional<T> wholeNumber(const std::string_view text)
+    {
+        T value{};
+        const auto [end, error] = std::from_chars(text.data(), text.data() + text.size(), value);
+        return error == std::errc{} && end == text.data() + text.size() ? std::optional{ value } : std::nullopt;
+    }
+
+    /**
+     * The text of a value as the config keeps it, see config::appliedText, as a value of a setting's valueType: "true"
+     * or "false" for a bool, and a number's TOML text for a number. The text as a string when it is not of the type.
+     */
+    mods_config::api::Value valueOf(const std::string& text, const mods_config::api::ValueType type)
+    {
+        using mods_config::api::ValueType;
+        switch (type) {
+        case ValueType::Bool:
+            if (text == "true" || text == "false") {
+                return text == "true";
+            }
+            break;
+        case ValueType::Int:
+            if (const auto number = wholeNumber<int>(text)) {
+                return *number;
+            }
+            break;
+        case ValueType::Float:
+            if (const auto number = wholeNumber<float>(text)) {
+                return *number;
+            }
+            break;
+        case ValueType::String:
+            break;
+        }
+        return text;
+    }
 }
 
 namespace f4cf::modsconfig
 {
     /**
-     * Has the client hand this the changes and the Saves of the mod's config spec.
+     * Has the client hand this the changes and the Saves of the mod's config spec, and ask it the overrides of a setting.
      */
     void ConfigPreviews::subscribe(mods_config::api::ModsConfigFO4Client& client)
     {
@@ -32,6 +74,9 @@ namespace f4cf::modsconfig
         });
         client.subscribeToSaves([this](const mods_config::api::Saved& saved) {
             onSaved(saved);
+        });
+        client.addOverrides([this](const mods_config::api::Setting& setting) {
+            return overridesOf(setting);
         });
     }
 
@@ -44,7 +89,7 @@ namespace f4cf::modsconfig
     void ConfigPreviews::onChange(const mods_config::api::Change& change) const
     {
         F4CF_PERF_FUNCTION();
-        const auto key = keyOf(change);
+        const auto key = keyOf(change.format, change.filePath, change.path);
         if (!key) {
             return;
         }
@@ -83,7 +128,7 @@ namespace f4cf::modsconfig
     {
         std::vector<config::ConfigKey> keys;
         for (const auto& setting : saved.settings) {
-            if (const auto key = keyOf(setting)) {
+            if (const auto key = keyOf(setting.format, setting.filePath, setting.path)) {
                 keys.push_back(*key);
             }
         }
@@ -96,12 +141,31 @@ namespace f4cf::modsconfig
      * The key of the config of a setting kept in the mod's config file, by the path of its value from the file's root.
      * None for one of another file, as another mod's, and of the game.
      */
-    std::optional<config::ConfigKey> ConfigPreviews::keyOf(const mods_config::api::Change& change) const
+    std::optional<config::ConfigKey> ConfigPreviews::keyOf(const mods_config::api::FileFormat format, const std::string_view filePath,
+        const std::vector<std::string_view>& path) const
     {
-        if (change.format != mods_config::api::FileFormat::Toml || change.path.empty() || change.filePath.empty() ||
-            comparablePath(change.filePath) != comparablePath(_config.getConfigFilePath())) {
+        if (format != mods_config::api::FileFormat::Toml || path.empty() || filePath.empty() || comparablePath(filePath) != comparablePath(_config.getConfigFilePath())) {
             return std::nullopt;
         }
-        return config::ConfigKey::ofPath({ change.path.begin(), change.path.end() });
+        return config::ConfigKey::ofPath({ path.begin(), path.end() });
+    }
+
+    /**
+     * Every session override of a setting kept in the mod's config file, the one in effect first, by any owner: the
+     * menu leaves out its own previews. Each value is in the setting's valueType, read from the text the override keeps,
+     * see ConfigBase::setConfigOverride, or that text as a string when it is not of the type. None for a setting of
+     * another file or of the game.
+     */
+    std::vector<mods_config::api::Override> ConfigPreviews::overridesOf(const mods_config::api::Setting& setting) const
+    {
+        const auto key = keyOf(setting.format, setting.filePath, setting.path);
+        if (!key) {
+            return {};
+        }
+        std::vector<mods_config::api::Override> overrides;
+        for (auto& applied : _config.getConfigOverrides(key->section.c_str(), key->key.c_str())) {
+            overrides.push_back({ .owner = std::move(applied.owner), .value = valueOf(applied.value, setting.valueType) });
+        }
+        return overrides;
     }
 }

@@ -77,6 +77,8 @@ namespace f4cf
 
         std::vector<config::AppliedOverride> getConfigOverrides() const;
 
+        std::vector<config::AppliedOverride> getConfigOverrides(const char* section, const char* key) const;
+
         void loadEmbeddedDefaultOnly();
 
         // A section and a key are TOML dotted keys, so "hand.x" is a value in a nested table, see config::ConfigKey.

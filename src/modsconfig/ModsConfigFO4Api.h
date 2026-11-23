@@ -55,7 +55,7 @@ namespace mods_config::api
 {
 #define MODS_CONFIG_FO4_CALL __cdecl
 
-    // The version of this header: 2 adds closeMenu to what 1 has. A method is only added at the end of an interface,
+    // The version of this header: 2 adds closeMenu and giveOverrides to what 1 has. A method is only added at the end of an interface,
     // and a struct only grows at its end, so a host of a later version takes a client of this one.
     inline constexpr std::uint32_t MODS_CONFIG_FO4_API_VERSION = 2;
 
@@ -278,6 +278,20 @@ namespace mods_config::api
     };
 
     /**
+     * Where the client gives the overrides of a setting, which the host passes it.
+     */
+    class IOverrides
+    {
+    public:
+        // Adds an override: who set it, by the name they gave, and its value, in the setting's valueType, or as a
+        // String of its text when it is not one. The one in effect first, then each one under it.
+        virtual void add(const char* owner, const SettingValue* value) = 0;
+
+    protected:
+        ~IOverrides() = default;
+    };
+
+    /**
      * What a client implements, which the menu asks by name. It is registered once, and lives for the whole run of the
      * game. Each method answers at once.
      */
@@ -311,6 +325,12 @@ namespace mods_config::api
 
         // what a Save of its config spec wrote, once a Save
         virtual void onSaved(const SaveBatch* batch) = 0;
+
+        // Since version 2. Gives the overrides of a setting, as the menu reads the mod's values: values set in place of
+        // the setting's own for the game session, as by another mod, so a change of it is saved but does nothing while
+        // one is there. Give every override the client knows: the menu leaves out its own previews, those under its
+        // name, MODS_CONFIG_FO4_F4SE_NAME. Nothing for a setting with none
+        virtual void giveOverrides(const SettingView* setting, IOverrides* overrides) = 0;
 
     protected:
         ~IClient() = default;
@@ -579,6 +599,34 @@ namespace mods_config::api
     };
 
     /**
+     * A setting of the config spec, as the C++ client hands it to the mod: its id, its valueType and where it is kept,
+     * as a Change has it. Its texts are valid during the call: copy what you keep.
+     */
+    struct Setting
+    {
+        std::string_view id;
+        ValueType valueType = ValueType::String;
+        std::string_view fileName;
+        FileFormat format = FileFormat::Toml;
+        std::string_view filePath;
+        std::vector<std::string_view> path;
+        std::string_view form;
+        std::string_view scriptName;
+        std::string_view propertyName;
+        std::string_view clientState;
+    };
+
+    /**
+     * An override of a setting: who set it, by the name they gave, and the value it sets in place of the setting's own,
+     * in the setting's valueType, or a string of its text when it is not one.
+     */
+    struct Override
+    {
+        std::string owner;
+        Value value;
+    };
+
+    /**
      * A file a Save wrote: its name in the config spec's `files`, its format and its absolute path.
      */
     struct SavedFile
@@ -605,6 +653,7 @@ namespace mods_config::api
     using ClientState = std::function<std::optional<Value>()>;
     using StateSetter = std::function<void(const Value& value)>;
     using ClientOptions = std::function<std::vector<Option>()>;
+    using ClientOverrides = std::function<std::vector<Override>(const Setting& setting)>;
     using MenuEventHandler = std::function<void(MenuEventType event, std::string_view pageId)>;
     using PointingHandler = std::function<void(const std::vector<std::string>& ids)>;
     using ChangeHandler = std::function<void(const Change& change)>;
@@ -707,6 +756,16 @@ namespace mods_config::api
         bool addOptions(std::string settingId, ClientOptions options)
         {
             return _options.try_emplace(std::move(settingId), std::move(options)).second;
+        }
+
+        /**
+         * Adds what gives the overrides of a setting, which the menu asks for each setting as it reads the mod's values:
+         * values set in place of the setting's own for the game session, the one in effect first, so the menu says why a
+         * change of it does nothing. The menu leaves out its own previews. Each one added is asked, in the order added.
+         */
+        void addOverrides(ClientOverrides overrides)
+        {
+            _overrides.push_back(std::move(overrides));
         }
 
         /**
@@ -1012,13 +1071,14 @@ namespace mods_config::api
         }
 
         /**
-         * A change of a setting as the C++ client has it, whose texts point into the setting's view.
+         * A setting as the C++ client has it, whose texts point into the setting's view.
          */
-        static Change toChange(const SettingView& setting, const SettingValue& previous, const SettingValue& value, const bool discard)
+        static Setting toSetting(const SettingView& view)
         {
-            const auto& storage = setting.storage;
+            const auto& storage = view.storage;
             const auto* file = storage.file;
-            Change change{ .id = setting.id ? setting.id : "",
+            Setting setting{ .id = view.id ? view.id : "",
+                .valueType = view.valueType,
                 .fileName = file && file->name ? file->name : "",
                 .format = file ? file->format : FileFormat::Toml,
                 .filePath = file && file->path ? file->path : "",
@@ -1026,14 +1086,31 @@ namespace mods_config::api
                 .form = storage.form ? storage.form : "",
                 .scriptName = storage.scriptName ? storage.scriptName : "",
                 .propertyName = storage.propertyName ? storage.propertyName : "",
-                .clientState = storage.clientState ? storage.clientState : "",
+                .clientState = storage.clientState ? storage.clientState : "" };
+            for (std::uint32_t i = 0; i < storage.pathCount; ++i) {
+                setting.path.emplace_back(storage.path[i] ? storage.path[i] : "");
+            }
+            return setting;
+        }
+
+        /**
+         * A change of a setting as the C++ client has it, whose texts point into the setting's view.
+         */
+        static Change toChange(const SettingView& view, const SettingValue& previous, const SettingValue& value, const bool discard)
+        {
+            auto setting = toSetting(view);
+            return Change{ .id = setting.id,
+                .fileName = setting.fileName,
+                .format = setting.format,
+                .filePath = setting.filePath,
+                .path = std::move(setting.path),
+                .form = setting.form,
+                .scriptName = setting.scriptName,
+                .propertyName = setting.propertyName,
+                .clientState = setting.clientState,
                 .previous = fromSettingValue(previous),
                 .value = fromSettingValue(value),
                 .discard = discard };
-            for (std::uint32_t i = 0; i < storage.pathCount; ++i) {
-                change.path.emplace_back(storage.path[i] ? storage.path[i] : "");
-            }
-            return change;
         }
 
         /**
@@ -1085,6 +1162,24 @@ namespace mods_config::api
             }
         }
 
+        /**
+         * Gives the menu the overrides of a setting that each added source answers, in the order they were added.
+         */
+        void giveOverrides(const SettingView* view, IOverrides* overrides) override
+        {
+            if (_overrides.empty()) {
+                return;
+            }
+            const auto setting = toSetting(*view);
+            for (const auto& source : _overrides) {
+                for (const auto& found : source(setting)) {
+                    std::string text;
+                    const auto value = toSettingValue(found.value, text);
+                    overrides->add(found.owner.c_str(), &value);
+                }
+            }
+        }
+
         const ModsConfigFO4ApiV1* _api = nullptr;
 
         // the name it connected under, the mod's
@@ -1095,6 +1190,9 @@ namespace mods_config::api
         std::map<std::string, ClientState, std::less<>> _states;
         std::map<std::string, StateSetter, std::less<>> _stateSetters;
         std::map<std::string, ClientOptions, std::less<>> _options;
+
+        // what gives the overrides of a setting, in the order added
+        std::vector<ClientOverrides> _overrides;
 
         // the quick launch entries added before it connected, by their functions
         std::vector<std::pair<std::string, QuickLaunch>> _quickLaunch;

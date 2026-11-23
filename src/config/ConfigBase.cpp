@@ -507,6 +507,16 @@ namespace f4cf
     }
 
     /**
+     * Every owner's session override of one section/key, the one that applies first, then each one under it, which
+     * applies when the ones before it are cleared. A key the file does not have is the one beside it with another
+     * type prefix, as setConfigOverride takes it.
+     */
+    std::vector<config::AppliedOverride> ConfigBase::getConfigOverrides(const char* section, const char* key) const
+    {
+        return _overrides.of(resolvedKeys({ { section, key } }).front());
+    }
+
+    /**
      * The config as the mod last loaded or saved it, with no read of the disk, for a read that loads no values, see
      * config::ConfigFile::read. Shared and never changed: copy it to change it. Null, with a warning, when it can't be
      * read.
