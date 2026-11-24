@@ -15,7 +15,7 @@ dropping the removed headers:
 | Removed header | Its replacement |
 |---|---|
 | `f4vr/F4VROffsets.h` | the CommonLibF4VR members in the tables below |
-| `f4vr/MiscStructs.h` | `RE::BGSObjectInstance`, `RE::NiCloningProcess`, `RE::NEW_REFR_DATA` |
+| `f4vr/MiscStructs.h` | `RE::BGSObjectInstance`, `RE::NiCloningProcess`, `RE::NEW_REFR_DATA`, `RE::MuzzleFlash` |
 | `f4vr/BSFlattenedBoneTree.h` | `RE/Bethesda/BSFlattenedBoneTree.h` |
 | `f4vr/CollisionLayers.h` | `RE/Bethesda/CollisionLayers.h` |
 
@@ -28,7 +28,7 @@ dropping the removed headers:
 | `useWandDirectionalMovement()` | `RE::VRSettings::IsWandDirectionalMovement()` | |
 | `PipboyPlacement::Wrist` / `InFront` / `Projected` | `RE::VRSettings::PipboyPlacement::kWrist` / `kInFront` / `kProjected` | same values |
 | `getPipboyPlacement()`, `setPipboyPlacement(p)` | `RE::VRSettings::GetPipboyPlacement()`, `SetPipboyPlacement(p)` | the setter still runs the game's handlers and saves `Fallout4Prefs.ini` |
-| `isPipboyOnWrist()` | `RE::VRSettings::GetPipboyPlacement() == RE::VRSettings::PipboyPlacement::kWrist` | |
+| `isPipboyOnWrist()` | `RE::VRSettings::IsPipboyOnWrist()` | |
 | `isSwimming(player)`, `isUnderwater(player)` | `actor->IsSwimming()`, `actor->IsUnderwater()` | any actor; the helpers took the player by default |
 | `getProcessLists()` | `RE::ProcessLists::GetSingleton()` | its ID resolves on VR |
 | `getActorsWithinRangeOfPoint(p, r, out)` | `RE::ProcessLists::GetSingleton()->GetActorsWithinRangeOfPoint(p, r, out)` | null-check the singleton |
@@ -147,8 +147,11 @@ calls, and `Verify()`, which checks the bytes are still that call before anythin
 - `worldRootCamera1`, `g_frameCounter` and `g_equipIndex`: globals nothing used and nobody identified.
 - `bhkNPCollisionObject_AddToWorld` (VR `0x141E07BE0`, ID 795695): CommonLibF4VR has no
   `bhkNPCollisionObject` class to put it on yet.
-- From `MiscStructs.h`: `MuzzleFlash`, a guessed layout nothing used, and the form IDs `PipboyAA`,
-  `PipboyArmor`, `MiningHelmet` and `PALightKW`, which are `Fallout4.esm` data rather than engine facts.
+- From `MiscStructs.h`: the form IDs `PipboyAA`, `PipboyArmor`, `MiningHelmet` and `PALightKW`, which are
+  `Fallout4.esm` data rather than engine facts.
+
+`RE::MuzzleFlash` is `EquippedWeaponData::muzzleFlash`'s type. The old struct's `fireNode` (+10) is its `flash3D`,
+the flash's own 3D, and its `projectileNode` (+18) is its `fireNode`, the projectile's fire node.
 
 ## Recipe
 
