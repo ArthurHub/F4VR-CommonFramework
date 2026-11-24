@@ -47,11 +47,9 @@ namespace f4cf::imgui
         render::Color keyHovered = render::Color::rgba(56, 74, 62);
         render::Color text = render::Color::rgba(220, 255, 230);
 
-        // Done and Close, which leave the field, apart from the keys that type: muted, so the keys stay what the eye finds
-        render::Color done = render::Color::rgba(34, 86, 62);
-        render::Color doneHovered = render::Color::rgba(46, 112, 82);
-        render::Color close = render::Color::rgba(98, 42, 38);
-        render::Color closeHovered = render::Color::rgba(128, 56, 50);
+        // the keys that do not type a character, as Shift, Backspace and Done: darker, apart from the keys that type
+        render::Color functionKey = render::Color::rgba(26, 29, 28);
+        render::Color functionKeyHovered = render::Color::rgba(46, 60, 51);
 
         // a key that is held down, Shift or Caps while on, and the caret
         render::Color accent = render::Color::rgba(10, 250, 120);
@@ -72,8 +70,8 @@ namespace f4cf::imgui
      *   leaves the field edited.
      * - It is typed with the rays, both hands at once. A ray on it is the keyboard's: what is behind it is not
      *   pointed at, and the wand is hidden from the game.
-     * - Done leaves the field with its text, and Close, or a tap of the close binding (setCloseBinding), gives the
-     *   field back the text it had.
+     * - Done, or a tap of the close binding (setCloseBinding), leaves the field with its text. Enter starts a new
+     *   line of a multiline field, and is dimmed on a one-line one.
      * - The player moves it with the world-move binding (vrui::UIManager::setWorldMoveBinding), as a panel in the
      *   world. It keeps that place beside the canvas for the session, and follows the canvas when the canvas moves.
      * - The keys of the game's window type into a field too: a physical keyboard, and a keyboard overlay that sends
@@ -170,13 +168,11 @@ namespace f4cf::imgui
         };
 
         /**
-         * Where the parts of the keyboard are, in its canvas's pixels.
+         * Where the keys are on the keyboard, the line of the field's text among them, in its canvas's pixels.
          */
         struct Layout
         {
             ImVec2 size;
-            ImVec2 fieldMin;
-            ImVec2 fieldMax;
             ImVec2 keysMin;
             ImVec2 keysMax;
             float gap = 0.0f;
@@ -194,12 +190,12 @@ namespace f4cf::imgui
         void close();
         void follow(const internal::PointerTarget& canvas);
         void updateHand(bool primaryHand, ImGuiInputTextState& field, float deltaSeconds);
-        void placeCaret(ImGuiInputTextState& field, float x);
+        void placeCaret(ImGuiInputTextState& field, const internal::KeyRect& line, float x);
         void checkCloseBinding();
         void giveInput();
         void readField(const ImGuiInputTextState& field);
         void draw();
-        void drawField(ImDrawList* drawList, const Layout& layout);
+        void drawField(ImDrawList* drawList, ImVec2 fieldMin, ImVec2 fieldMax);
         void drawKeys(ImDrawList* drawList, const Layout& layout);
 
         // the game's window procedure, which every message is passed on to. Null while none is hooked.

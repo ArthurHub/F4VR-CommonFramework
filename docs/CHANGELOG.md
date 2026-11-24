@@ -12,10 +12,10 @@ major version is `0`, a minor bump may break the API; the **Upgrading** notes sa
 - **The framework's own VR keyboard replaces SteamVR's**: while ImGui edits a text field on an interactive canvas, the
   framework shows a keyboard under that canvas, typed with the rays of both hands at once, on every runtime
   (OpenComposite and xrizer, which have no keyboard of their own, too). It has QWERTY with digits, symbols and accented
-  letters, a line that shows the field's text, where a press puts the caret, and Done and Close. The player moves it
-  with the world-move binding, and it keeps that place beside the canvas for the session
+  letters, a line that shows the field's text, where a press puts the caret, Enter for a multiline field, and Done.
+  The player moves it with the world-move binding, and it keeps that place beside the canvas for the session
   ([VR keyboard](tech/vr-keyboard.md)). `imgui::keyboard()` has its style (`setStyle`), the binding that closes it as
-  Close does (`setCloseBinding`, a mod's Back) and `isOpen()`. **Upgrading:** nothing to call for typing; a mod whose
+  Done does (`setCloseBinding`, a mod's Back) and `isOpen()`. **Upgrading:** nothing to call for typing; a mod whose
   Back steps its menu skips that while `isOpen()`, and gives its Back as the close binding.
 - **devbench drives the VR keyboard**: every mod's tool has a `keyboard` action, which reports the keyboard, its
   keys and the hands on it, and presses a key as a pull does. The tool's `contract` is 6.

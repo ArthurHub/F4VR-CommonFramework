@@ -655,7 +655,7 @@ namespace f4cf::devbench
                               "accents), shift, caps, the field's text and cursor as its line shows them, width and height of its canvas, each hand "
                               "on it (on, x, y, down, the key it holds) and the keys of the page (label, action, x, y, width, height), places in its "
                               "canvas's pixels from its top left. With key, presses that key of the page first, as a pull on it does: by its label as "
-                              "shown, or its action (Backspace, Clear, Left, Right, Shift, Caps, Space, Done, Close); ImGui gets what it types from "
+                              "shown, or its action (Backspace, Clear, Left, Right, Shift, Caps, Space, Enter, Done); ImGui gets what it types from "
                               "the next frame, one stroke a frame",
                               { { "key", argument("string", "keyboard: the key to press, by its label or action") } },
                               handler(&Tool::keyboard) },

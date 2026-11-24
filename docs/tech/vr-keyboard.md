@@ -32,7 +32,7 @@ with ImGui's own key and character events.
 
 - **Shown** while ImGui edits a text field (the active item with an `InputTextState` that is not
   read-only) on an interactive canvas that is shown. It is hidden when the field is left, which Done
-  and Close do, and when no interactive canvas is shown.
+  does, and when no interactive canvas is shown.
 - **A canvas of its own context** (`Canvas::setOwnContext`, see the [imgui README](../../src/imgui/README.md#how-it-is-drawn)):
   an `imgui::UIImGuiPanel` drawn in a second ImGui context into its own texture, so it shows beside a
   dedicated canvas, and nothing done on it reaches the main context, where the field stays the active
@@ -40,18 +40,19 @@ with ImGui's own key and character events.
 - **Hidden by the world** in front of it, as a canvas is by default (`setOccluded`): the hands, which
   are near it as they type, are drawn over it.
 - **Pages:** the rows of a US PC keyboard, as SteamVR's keyboard has them, with what a US keyboard
-  types with Shift; Clear is where Tab is, Done where Enter is, and Close where the right Shift is: at
-  the edge, away from the keys a hand types on, as it takes back what was typed. Done and Close have
-  muted colors of their own, green and red. The symbols (`?123`), each a key of its own, with the
-  marks and signs of Latin-1 such as ¿ « € °. The accented letters of Latin-1 and of the languages of
-  Europe beside it, with their capitals (`áé`). Each page ends in two page keys, Space, Left and
-  Right, and has Backspace, Clear, Done and Close. A key shows what it types: its shifted character
-  while Shift is on. Shift shifts one character; Caps shifts the letters until pressed again. A key
-  wider than one spans the gaps it covers, so the rows are staggered as on a keyboard, and a row with
-  fewer keys is centered.
-- **The line of the field's text** along its top: the text, its selection and its caret, scrolled to
-  keep the caret in view. The keyboard reads them from the field's `InputTextState` before each frame,
-  as its own context does not have the field.
+  types with Shift, Enter and both Shifts where it has them; Clear is where Tab is. The symbols
+  (`?123`), each a key of its own, with the marks and signs of Latin-1 such as ¿ « € °. The accented
+  letters of Latin-1 and of the languages of Europe beside it, with their capitals (`áé`). Each page
+  ends in two page keys, Space and Done, and has Backspace, Clear and Enter. A key shows what it types:
+  its shifted character while Shift is on. Shift shifts one character; Caps shifts the letters until
+  pressed again. A key wider than one spans the gaps it covers, so the rows are staggered as on a
+  keyboard, and a row with fewer keys is centered. The keys that do not type a character are darker,
+  as SteamVR's are; Enter, which a one-line field has no use for, has a dim label there and is not
+  pressed.
+- **The line of the field's text** along its top, as a row of the keys, with Left and Right at its
+  right: the text, its selection and its caret, scrolled to keep the caret in view. The keyboard reads
+  them from the field's `InputTextState` before each frame, as its own context does not have the field,
+  and with them its flags: whether it is multiline.
 
 ## Typing with the rays
 
@@ -70,15 +71,17 @@ a hand on the keyboard leaves the other the mouse of the canvas behind it.
   (`InputTextState::SetSelection`), from where the text was drawn in the frame before.
 - **What a key gives the field:** a character is typed (`io.AddInputCharactersUTF8`), so the field's
   filter takes it as a typed one: a number field drops a letter. Backspace, Left and Right are their
-  keys. Clear is Ctrl+A, which selects the whole text, then Backspace. Done is Enter, which leaves a
-  single-line field with its text, and Close is Escape, which gives it back the text it had and leaves it.
+  keys. Clear is Ctrl+A, which selects the whole text, then Backspace. Done leaves the field with its
+  text: Enter on a one-line field, and Ctrl+Enter on a multiline one, where Enter starts a new line
+  (the other way round with `ImGuiInputTextFlags_CtrlEnterForNewLine`). Nothing on the keyboard gives
+  the field back the text it had, as no VR keyboard does; a physical keyboard's Escape still does.
 - **One stroke a frame** (`KeyStrokeQueue`): the keys of a stroke are pressed in one frame and let go of
   in the next, and text is given in a frame of its own. The layer has ImGui take every event in the
   frame it is given in (`ConfigInputTrickleEventQueue` off), so a key pressed and let go of in one frame
   would not be seen as pressed, and the field takes the strokes in the order they were typed.
 - **The close binding** (`setCloseBinding`), on a hand whose ray is on the keyboard or on a canvas,
-  sends Escape as Close does. A mod gives its Back binding, so Back closes the keyboard, and skips its
-  own Back while `isOpen()`: Back would otherwise leave a page with a field still edited.
+  leaves the field as Done does. A mod gives its Back binding, so Back closes the keyboard, and skips
+  its own Back while `isOpen()`: Back would otherwise leave a page with a field still edited.
 
 ## Where it is
 

@@ -35,18 +35,20 @@ namespace f4cf::imgui::internal
         }
 
         // The keys every page has. The pages follow a US PC keyboard, as SteamVR's does: rows 15 units wide, staggered
-        // by the widths of the keys at their ends; a row with fewer keys is centered. Done is where Enter is, Clear where
-        // Tab is, which a one-line field has no use for, and Close where the right Shift is: at the edge, away from the
-        // keys a hand types on, as it takes back what was typed.
+        // by the widths of the keys at their ends; a row with fewer keys is centered. Clear is where Tab is, which a
+        // one-line field has no use for, and Done at the bottom right, as SteamVR's key that hides its keyboard. Over
+        // the keys, the line of the field's text, with the keys that move the caret at its right.
+        constexpr KeyboardKey LINE = action("", 13.0f, KeyAction::Line);
+        constexpr KeyboardKey LEFT = action("Left", 1.0f, KeyAction::Left);
+        constexpr KeyboardKey RIGHT = action("Right", 1.0f, KeyAction::Right);
         constexpr KeyboardKey BACKSPACE = action("Backspace", 2.0f, KeyAction::Backspace);
         constexpr KeyboardKey CLEAR = action("Clear", 1.5f, KeyAction::Clear);
         constexpr KeyboardKey CAPS = action("Caps", 1.75f, KeyAction::Caps);
-        constexpr KeyboardKey DONE = action("Done", 2.25f, KeyAction::Done);
-        constexpr KeyboardKey SHIFT = action("Shift", 2.25f, KeyAction::Shift);
-        constexpr KeyboardKey CLOSE = action("Close", 2.75f, KeyAction::Close);
-        constexpr KeyboardKey SPACE = action("Space", 9.0f, KeyAction::Space);
-        constexpr KeyboardKey LEFT = action("Left", 1.5f, KeyAction::Left);
-        constexpr KeyboardKey RIGHT = action("Right", 1.5f, KeyAction::Right);
+        constexpr KeyboardKey ENTER = action("Enter", 2.25f, KeyAction::NewLine);
+        constexpr KeyboardKey SHIFT_LEFT = action("Shift", 2.25f, KeyAction::Shift);
+        constexpr KeyboardKey SHIFT_RIGHT = action("Shift", 2.75f, KeyAction::Shift);
+        constexpr KeyboardKey SPACE = action("Space", 10.0f, KeyAction::Space);
+        constexpr KeyboardKey DONE = action("Done", 2.5f, KeyAction::Done);
         constexpr KeyboardKey TO_LETTERS = toPage("abc", KeyboardPage::Letters);
         constexpr KeyboardKey TO_SYMBOLS = toPage("?123", KeyboardPage::Symbols);
         constexpr KeyboardKey TO_ACCENTS = toPage("\xC3\xA1\xC3\xA9", KeyboardPage::Accents);
@@ -92,8 +94,8 @@ namespace f4cf::imgui::internal
             letter("l", "L"),
             character(";", ":"),
             character("'", "\""),
-            DONE };
-        constexpr std::array LETTERS_3 = { SHIFT,
+            ENTER };
+        constexpr std::array LETTERS_3 = { SHIFT_LEFT,
             letter("z", "Z"),
             letter("x", "X"),
             letter("c", "C"),
@@ -104,8 +106,8 @@ namespace f4cf::imgui::internal
             character(",", "<"),
             character(".", ">"),
             character("/", "?"),
-            CLOSE };
-        constexpr std::array LETTERS_4 = { TO_SYMBOLS, TO_ACCENTS, SPACE, LEFT, RIGHT };
+            SHIFT_RIGHT };
+        constexpr std::array LETTERS_4 = { TO_SYMBOLS, TO_ACCENTS, SPACE, DONE };
 
         // the symbols of the keyboard, each a key of its own, and the marks and signs of Latin-1 a US keyboard does not have
         constexpr std::array SYMBOLS_0 = { symbol("~"),
@@ -148,7 +150,7 @@ namespace f4cf::imgui::internal
             symbol("\xC2\xB0"),
             symbol("\xC2\xA7"),
             symbol("\xC2\xB6"),
-            DONE };
+            ENTER };
         constexpr std::array SYMBOLS_3 = { KeyboardKey{ .label = "\xC2\xBF", .shifted = "\xC2\xBF", .units = 2.25f },
             symbol("\xC2\xA1"),
             symbol("\xC2\xAB"),
@@ -160,8 +162,9 @@ namespace f4cf::imgui::internal
             symbol("\xC3\xB7"),
             symbol("\xC2\xB5"),
             symbol("\xC2\xA2"),
-            CLOSE };
-        constexpr std::array SYMBOLS_4 = { TO_LETTERS, TO_ACCENTS, SPACE, LEFT, RIGHT };
+            symbol("\xC2\xB2"),
+            KeyboardKey{ .label = "\xC2\xB3", .shifted = "\xC2\xB3", .units = 1.75f } };
+        constexpr std::array SYMBOLS_4 = { TO_LETTERS, TO_ACCENTS, SPACE, DONE };
 
         // The accented letters of Latin-1 and of the languages of Europe beside it, all in the framework's Roboto, with
         // their capitals. Escaped, as the source is read in the system's code page.
@@ -205,8 +208,8 @@ namespace f4cf::imgui::internal
             letter("\xC3\xB9", "\xC3\x99"),
             letter("\xC3\xBB", "\xC3\x9B"),
             letter("\xC3\xBC", "\xC3\x9C"),
-            DONE };
-        constexpr std::array ACCENTS_3 = { SHIFT,
+            ENTER };
+        constexpr std::array ACCENTS_3 = { SHIFT_LEFT,
             letter("\xC4\x85", "\xC4\x84"),
             letter("\xC4\x99", "\xC4\x98"),
             letter("\xC4\x87", "\xC4\x86"),
@@ -217,12 +220,14 @@ namespace f4cf::imgui::internal
             letter("\xC5\xBC", "\xC5\xBB"),
             letter("\xC4\x8D", "\xC4\x8C"),
             letter("\xC5\xA1", "\xC5\xA0"),
-            CLOSE };
-        constexpr std::array ACCENTS_4 = { TO_LETTERS, TO_SYMBOLS, SPACE, LEFT, RIGHT };
+            SHIFT_RIGHT };
+        constexpr std::array ACCENTS_4 = { TO_LETTERS, TO_SYMBOLS, SPACE, DONE };
 
-        constexpr std::array<std::span<const KeyboardKey>, 5> LETTERS = { LETTERS_0, LETTERS_1, LETTERS_2, LETTERS_3, LETTERS_4 };
-        constexpr std::array<std::span<const KeyboardKey>, 5> SYMBOLS = { SYMBOLS_0, SYMBOLS_1, SYMBOLS_2, SYMBOLS_3, SYMBOLS_4 };
-        constexpr std::array<std::span<const KeyboardKey>, 5> ACCENTS = { ACCENTS_0, ACCENTS_1, ACCENTS_2, ACCENTS_3, ACCENTS_4 };
+        constexpr std::array LINE_ROW = { LINE, LEFT, RIGHT };
+
+        constexpr std::array<std::span<const KeyboardKey>, 6> LETTERS = { LINE_ROW, LETTERS_0, LETTERS_1, LETTERS_2, LETTERS_3, LETTERS_4 };
+        constexpr std::array<std::span<const KeyboardKey>, 6> SYMBOLS = { LINE_ROW, SYMBOLS_0, SYMBOLS_1, SYMBOLS_2, SYMBOLS_3, SYMBOLS_4 };
+        constexpr std::array<std::span<const KeyboardKey>, 6> ACCENTS = { LINE_ROW, ACCENTS_0, ACCENTS_1, ACCENTS_2, ACCENTS_3, ACCENTS_4 };
 
         float rowUnits(const std::span<const KeyboardKey> row)
         {
@@ -233,7 +238,7 @@ namespace f4cf::imgui::internal
     }
 
     /**
-     * The rows of a page, from the top.
+     * The rows of a page, from the top: the line of the field's text with the caret keys, then the keys.
      */
     std::span<const std::span<const KeyboardKey>> keyboardRows(const KeyboardPage page)
     {
@@ -296,8 +301,9 @@ namespace f4cf::imgui::internal
 
     /**
      * What a press of the key gives the field, in order, and the page, Shift and Caps after it. A character or a
-     * space lets go of Shift. Clear selects the whole text and then deletes it; Done is Enter and Close is Escape,
-     * which leave a single-line field with its text or the text it had.
+     * space lets go of Shift. Clear selects the whole text and then deletes it. Enter starts a new line of a
+     * multiline field, and does nothing on a one-line field; Done leaves the field with its text. A press on the
+     * line gives nothing: the keyboard puts the caret where it was.
      */
     std::vector<KeyStroke> KeyboardTyping::press(const KeyboardKey& key)
     {
@@ -327,12 +333,29 @@ namespace f4cf::imgui::internal
         case KeyAction::ToPage:
             _page = key.page;
             return {};
+        case KeyAction::NewLine:
+            if (!_field.multiline) {
+                return {};
+            }
+            return { _field.ctrlEnterForNewLine ? KeyStroke{ .keys = { EditKey::Ctrl, EditKey::Enter } } : KeyStroke{ .keys = { EditKey::Enter } } };
         case KeyAction::Done:
-            return { KeyStroke{ .keys = { EditKey::Enter } } };
-        case KeyAction::Close:
-            return { KeyStroke{ .keys = { EditKey::Escape } } };
+            return done();
+        case KeyAction::Line:
+            return {};
         }
         return {};
+    }
+
+    /**
+     * What leaves the field with its text, as Done does: Enter on a one-line field, and on a multiline one the
+     * keys ImGui leaves it with, Ctrl+Enter, or Enter where Ctrl+Enter starts a new line.
+     */
+    std::vector<KeyStroke> KeyboardTyping::done() const
+    {
+        if (_field.multiline && !_field.ctrlEnterForNewLine) {
+            return { KeyStroke{ .keys = { EditKey::Ctrl, EditKey::Enter } } };
+        }
+        return { KeyStroke{ .keys = { EditKey::Enter } } };
     }
 
     /**
@@ -341,6 +364,14 @@ namespace f4cf::imgui::internal
     bool KeyboardTyping::isOn(const KeyboardKey& key) const
     {
         return (key.action == KeyAction::Shift && _shift) || (key.action == KeyAction::Caps && _caps);
+    }
+
+    /**
+     * Whether a press of the key does something: Enter only on a multiline field, which takes new lines.
+     */
+    bool KeyboardTyping::isEnabled(const KeyboardKey& key) const
+    {
+        return key.action != KeyAction::NewLine || _field.multiline;
     }
 
     /**
@@ -353,11 +384,13 @@ namespace f4cf::imgui::internal
     }
 
     /**
-     * Back to the letters, with Shift and Caps off, for the next field.
+     * Back to the letters, with Shift and Caps off, for the next field. The field's kind is set apart.
      */
     void KeyboardTyping::reset()
     {
-        *this = {};
+        _page = KeyboardPage::Letters;
+        _shift = false;
+        _caps = false;
     }
 
     /**

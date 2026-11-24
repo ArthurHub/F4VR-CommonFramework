@@ -40,11 +40,12 @@ namespace f4cf::imgui
         constexpr float WIDTH_UNITS = 24.0f;
         constexpr float HEIGHT_UNITS = 10.0f;
 
-        // its parts, as shares of its canvas: the margin around them and the gap between keys, of its width, and
-        // the line of the field's text, of its height
+        // its parts, as shares of its canvas's width: the margin around the keys and the gap between them
         constexpr float MARGIN_SHARE = 0.02f;
         constexpr float GAP_SHARE = 0.008f;
-        constexpr float FIELD_SHARE = 0.15f;
+
+        // the share of its full color the label of a key that does nothing now is drawn in
+        constexpr float DISABLED_TEXT_SHARE = 0.35f;
 
         // the keys' rounding and the text's size, as shares of a key's height
         constexpr float KEY_ROUNDING_SHARE = 0.15f;
@@ -88,8 +89,6 @@ namespace f4cf::imgui
                 return ImGuiKey_A;
             case EditKey::Enter:
                 return ImGuiKey_Enter;
-            case EditKey::Escape:
-                return ImGuiKey_Escape;
             case EditKey::Ctrl:
                 return ImGuiMod_Ctrl;
             }
@@ -117,10 +116,12 @@ namespace f4cf::imgui
                 return "Caps";
             case KeyAction::ToPage:
                 return "ToPage";
+            case KeyAction::NewLine:
+                return "Enter";
             case KeyAction::Done:
                 return "Done";
-            case KeyAction::Close:
-                return "Close";
+            case KeyAction::Line:
+                return "Line";
             }
             return "";
         }
@@ -225,9 +226,9 @@ namespace f4cf::imgui
     }
 
     /**
-     * The binding that closes the keyboard and gives the field back the text it had, as Close does: on the hand
-     * whose ray is on the keyboard or on the canvas of the field. Disabled by default. A mod gives its Back binding,
-     * so Back and Close mean the same.
+     * The binding that closes the keyboard and leaves the field with its text, as Done does: on the hand whose ray
+     * is on the keyboard or on the canvas of the field. Disabled by default. A mod gives its Back binding, so Back
+     * ends typing as it ends any other edit.
      */
     void Keyboard::setCloseBinding(const vrcf::InputBinding& binding)
     {
@@ -345,6 +346,8 @@ namespace f4cf::imgui
             return;
         }
 
+        _typing.setField(
+            { .multiline = (field->Flags & ImGuiInputTextFlags_Multiline) != 0, .ctrlEnterForNewLine = (field->Flags & ImGuiInputTextFlags_CtrlEnterForNewLine) != 0 });
         for (const bool primaryHand : { true, false }) {
             updateHand(primaryHand, *field, deltaSeconds);
         }
@@ -411,21 +414,13 @@ namespace f4cf::imgui
     }
 
     /**
-     * Where the parts of the keyboard are on its canvas: the line of the field's text along its top, and the keys
-     * under it, inside a margin.
+     * Where the keys are on the keyboard's canvas, the line of the field's text along their top: inside a margin.
      */
     Keyboard::Layout Keyboard::layout() const
     {
         const ImVec2 size(WIDTH_UNITS * CANVAS_PIXELS_PER_UNIT, HEIGHT_UNITS * CANVAS_PIXELS_PER_UNIT);
         const float margin = size.x * MARGIN_SHARE;
-        const float gap = size.x * GAP_SHARE;
-        const float fieldBottom = margin + size.y * FIELD_SHARE;
-        return { .size = size,
-            .fieldMin = ImVec2(margin, margin),
-            .fieldMax = ImVec2(size.x - margin, fieldBottom),
-            .keysMin = ImVec2(margin, fieldBottom + gap * 2.0f),
-            .keysMax = ImVec2(size.x - margin, size.y - margin),
-            .gap = gap };
+        return { .size = size, .keysMin = ImVec2(margin, margin), .keysMax = ImVec2(size.x - margin, size.y - margin), .gap = size.x * GAP_SHARE };
     }
 
     /**
@@ -538,7 +533,7 @@ namespace f4cf::imgui
      * A hand on the keyboard: the key its ray is on, and what its trigger does. A pull on a key presses it, and the
      * key is held until the trigger is released, wherever the ray goes; Backspace and the caret keys repeat while
      * held. A pull on the line of the field's text puts the field's caret there. Each key pressed is a tick on the
-     * hand.
+     * hand; a key that does nothing now, as Enter on a one-line field, is not pressed.
      */
     void Keyboard::updateHand(const bool primaryHand, ImGuiInputTextState& field, const float deltaSeconds)
     {
@@ -553,10 +548,11 @@ namespace f4cf::imgui
         const bool pressedNow = down && !hand.down;
         hand.down = down;
         if (pressedNow) {
-            hand.key = hand.hovered;
-            const bool onField = point.x >= parts.fieldMin.x && point.x < parts.fieldMax.x && point.y >= parts.fieldMin.y && point.y < parts.fieldMax.y;
-            if (!hand.key && onField) {
-                placeCaret(field, point.x);
+            if (rect && rect->key->action == KeyAction::Line) {
+                placeCaret(field, *rect, point.x - parts.keysMin.x);
+                hand.key = nullptr;
+            } else {
+                hand.key = hand.hovered && _typing.isEnabled(*hand.hovered) ? hand.hovered : nullptr;
             }
         } else if (!down) {
             hand.key = nullptr;
@@ -578,25 +574,24 @@ namespace f4cf::imgui
     }
 
     /**
-     * Put the field's caret at the place of its text nearest to x, in the keyboard's pixels, as the text was drawn
-     * in the last frame.
+     * Put the field's caret at the place of its text nearest to x, in the pixels of the keys' area, as the text was
+     * drawn on the line in the last frame.
      */
-    void Keyboard::placeCaret(ImGuiInputTextState& field, const float x)
+    void Keyboard::placeCaret(ImGuiInputTextState& field, const internal::KeyRect& line, const float x)
     {
         if (_boundaries.empty() || _boundaries.size() != _boundaryX.size()) {
             return;
         }
-        const Layout parts = layout();
-        const float padding = (parts.fieldMax.y - parts.fieldMin.y) * 0.25f;
-        const float fromTextStart = x - (parts.fieldMin.x + padding) + _textScroll;
+        const float padding = line.height * 0.25f;
+        const float fromTextStart = x - (line.x + padding) + _textScroll;
         const auto place = static_cast<int>((std::min)(_boundaries[internal::nearestBoundary(_boundaryX, fromTextStart)], static_cast<std::size_t>(field.TextLen)));
         field.SetSelection(place, place);
         field.CursorAnimReset();
     }
 
     /**
-     * The close binding, on a hand whose ray is on the keyboard or on the canvas of the field: Escape, which gives
-     * the field back the text it had and leaves it.
+     * The close binding, on a hand whose ray is on the keyboard or on the canvas of the field: what Done gives, which
+     * leaves the field with its text.
      */
     void Keyboard::checkCloseBinding()
     {
@@ -607,7 +602,9 @@ namespace f4cf::imgui
         for (const bool primaryHand : { true, false }) {
             const bool points = pointer().ownCanvasHand(primaryHand).on || (state.canvas && state.primaryHand == primaryHand);
             if (points && vrcf::VRControllers.check(_closeBinding, handOf(primaryHand))) {
-                _queue.push({ .keys = { EditKey::Escape } });
+                for (auto& stroke : _typing.done()) {
+                    _queue.push(std::move(stroke));
+                }
                 vrcf::VRHaptics.trigger(handOf(primaryHand), vrcf::HapticPattern::Tick);
                 return;
             }
@@ -658,7 +655,13 @@ namespace f4cf::imgui
         refreshKeys();
         ImDrawList* drawList = ImGui::GetWindowDrawList();
         drawList->PushClipRect(ImVec2(0.0f, 0.0f), parts.size, false);
-        drawField(drawList, parts);
+        const auto line = std::ranges::find_if(_keys, [](const internal::KeyRect& rect) {
+            return rect.key->action == KeyAction::Line;
+        });
+        if (line != _keys.end()) {
+            const ImVec2 fieldMin(parts.keysMin.x + line->x, parts.keysMin.y + line->y);
+            drawField(drawList, fieldMin, ImVec2(fieldMin.x + line->width, fieldMin.y + line->height));
+        }
         drawKeys(drawList, parts);
         drawList->PopClipRect();
     }
@@ -667,10 +670,10 @@ namespace f4cf::imgui
      * The line of the field's text: the text, scrolled so the caret is in view, its selection and its caret. The
      * places a caret can be are kept, for a press on the line to put the caret at.
      */
-    void Keyboard::drawField(ImDrawList* drawList, const Layout& parts)
+    void Keyboard::drawField(ImDrawList* drawList, const ImVec2 fieldMin, const ImVec2 fieldMax)
     {
-        const float height = parts.fieldMax.y - parts.fieldMin.y;
-        drawList->AddRectFilled(parts.fieldMin, parts.fieldMax, packed(_style.field), height * KEY_ROUNDING_SHARE);
+        const float height = fieldMax.y - fieldMin.y;
+        drawList->AddRectFilled(fieldMin, fieldMax, packed(_style.field), height * KEY_ROUNDING_SHARE);
 
         ImFont* font = canvasFont(FontStyle::Regular);
         if (!font) {
@@ -678,7 +681,7 @@ namespace f4cf::imgui
         }
         const float fontSize = std::round(height * 0.55f);
         const float padding = height * 0.25f;
-        const float viewWidth = parts.fieldMax.x - parts.fieldMin.x - padding * 2.0f;
+        const float viewWidth = fieldMax.x - fieldMin.x - padding * 2.0f;
         const char* text = _text.c_str();
 
         _boundaries = internal::utf8Boundaries(_text);
@@ -693,9 +696,9 @@ namespace f4cf::imgui
         const float caretX = xOf(_cursor);
         _textScroll = internal::scrollToShow(_textScroll, caretX, viewWidth, _boundaryX.back());
 
-        const float textX = parts.fieldMin.x + padding - _textScroll;
-        const float textY = parts.fieldMin.y + (height - fontSize) * 0.5f;
-        drawList->PushClipRect(ImVec2(parts.fieldMin.x + padding, parts.fieldMin.y), ImVec2(parts.fieldMax.x - padding, parts.fieldMax.y), true);
+        const float textX = fieldMin.x + padding - _textScroll;
+        const float textY = fieldMin.y + (height - fontSize) * 0.5f;
+        drawList->PushClipRect(ImVec2(fieldMin.x + padding, fieldMin.y), ImVec2(fieldMax.x - padding, fieldMax.y), true);
         if (_selectionStart != _selectionEnd) {
             const float from = xOf((std::min)(_selectionStart, _selectionEnd));
             const float to = xOf((std::max)(_selectionStart, _selectionEnd));
@@ -711,34 +714,40 @@ namespace f4cf::imgui
     }
 
     /**
-     * The keys of the page: a key held down, and Shift or Caps while on, in the accent color, Done and Close in muted
-     * colors of their own, and a key a ray is on lighter. Left and Right are arrows, as the font has none.
+     * The keys of the page: a key held down, and Shift or Caps while on, in the accent color, the keys that do not
+     * type a character darker, and a key a ray is on lighter. A key that does nothing now has a dim label and no
+     * hover. Left and Right are arrows, as the font has none. The line is drawn as the field's.
      */
     void Keyboard::drawKeys(ImDrawList* drawList, const Layout& parts)
     {
         ImFont* font = canvasFont(FontStyle::Regular);
         for (const auto& rect : _keys) {
             const KeyboardKey& key = *rect.key;
+            if (key.action == KeyAction::Line) {
+                continue;
+            }
+            const bool enabled = _typing.isEnabled(key);
             const bool held = std::ranges::any_of(_hands, [&](const Hand& hand) {
                 return hand.key == &key;
             });
-            const bool hovered = std::ranges::any_of(_hands, [&](const Hand& hand) {
+            const bool hovered = enabled && std::ranges::any_of(_hands, [&](const Hand& hand) {
                 return hand.hovered == &key;
             });
             const bool accented = held || _typing.isOn(key);
+            const bool function = key.action != KeyAction::Character && key.action != KeyAction::Space;
 
             const ImVec2 keyMin(parts.keysMin.x + rect.x, parts.keysMin.y + rect.y);
             const ImVec2 keyMax(keyMin.x + rect.width, keyMin.y + rect.height);
-            const render::Color* fill = hovered ? &_style.keyHovered : &_style.key;
-            if (accented) {
-                fill = &_style.accent;
-            } else if (key.action == KeyAction::Done) {
-                fill = hovered ? &_style.doneHovered : &_style.done;
-            } else if (key.action == KeyAction::Close) {
-                fill = hovered ? &_style.closeHovered : &_style.close;
+            const render::Color* fill = &_style.accent;
+            if (!accented) {
+                fill = function ? (hovered ? &_style.functionKeyHovered : &_style.functionKey) : (hovered ? &_style.keyHovered : &_style.key);
             }
             drawList->AddRectFilled(keyMin, keyMax, packed(*fill), rect.height * KEY_ROUNDING_SHARE);
-            const ImU32 textColor = packed(accented ? _style.accentText : _style.text);
+            render::Color labelColor = accented ? _style.accentText : _style.text;
+            if (!enabled) {
+                labelColor.a *= DISABLED_TEXT_SHARE;
+            }
+            const ImU32 textColor = packed(labelColor);
 
             const ImVec2 center((keyMin.x + keyMax.x) * 0.5f, (keyMin.y + keyMax.y) * 0.5f);
             if (key.action == KeyAction::Left || key.action == KeyAction::Right) {

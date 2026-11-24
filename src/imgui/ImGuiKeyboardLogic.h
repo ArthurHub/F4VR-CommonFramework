@@ -50,10 +50,12 @@ namespace f4cf::imgui::internal
         Caps,
         // shows another page
         ToPage,
+        // starts a new line of a multiline field; a one-line field has none
+        NewLine,
         // leaves the field with its text
         Done,
-        // leaves the field with the text it had before it was edited
-        Close,
+        // the line that shows the field's text, along the top: a press on it puts the caret there
+        Line,
     };
 
     /**
@@ -78,6 +80,16 @@ namespace f4cf::imgui::internal
     };
 
     std::span<const std::span<const KeyboardKey>> keyboardRows(KeyboardPage page);
+
+    /**
+     * The field the keyboard types into, as far as its keys care: a multiline field takes new lines, and with
+     * ctrlEnterForNewLine Ctrl+Enter starts one and Enter leaves the field, as ImGui's flag of that name has it.
+     */
+    struct KeyboardField
+    {
+        bool multiline = false;
+        bool ctrlEnterForNewLine = false;
+    };
 
     /**
      * Where a key is on the keyboard, in the pixels of the area the keys are laid out in, from its top left.
@@ -105,7 +117,6 @@ namespace f4cf::imgui::internal
         Right,
         A,
         Enter,
-        Escape,
         Ctrl,
     };
 
@@ -127,9 +138,16 @@ namespace f4cf::imgui::internal
     {
     public:
         std::vector<KeyStroke> press(const KeyboardKey& key);
+        std::vector<KeyStroke> done() const;
         bool isOn(const KeyboardKey& key) const;
+        bool isEnabled(const KeyboardKey& key) const;
         std::string_view labelOf(const KeyboardKey& key) const;
         void reset();
+
+        void setField(const KeyboardField& field)
+        {
+            _field = field;
+        }
 
         KeyboardPage page() const
         {
@@ -150,6 +168,7 @@ namespace f4cf::imgui::internal
         KeyboardPage _page = KeyboardPage::Letters;
         bool _shift = false;
         bool _caps = false;
+        KeyboardField _field;
     };
 
     /**

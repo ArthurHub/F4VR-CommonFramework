@@ -11,6 +11,7 @@
 using f4cf::imgui::internal::EditKey;
 using f4cf::imgui::internal::KeyAction;
 using f4cf::imgui::internal::keyAt;
+using f4cf::imgui::internal::KeyboardField;
 using f4cf::imgui::internal::KeyboardKey;
 using f4cf::imgui::internal::KeyboardPage;
 using f4cf::imgui::internal::keyboardRows;
@@ -74,7 +75,8 @@ namespace
 TEST_CASE("every page has the editing keys, and no row wider than the letters'", "[imgui][keyboard]")
 {
     for (const KeyboardPage page : PAGES) {
-        for (const KeyAction action : { KeyAction::Space, KeyAction::Backspace, KeyAction::Clear, KeyAction::Left, KeyAction::Right, KeyAction::Done, KeyAction::Close }) {
+        for (const KeyAction action :
+            { KeyAction::Space, KeyAction::Backspace, KeyAction::Clear, KeyAction::Left, KeyAction::Right, KeyAction::NewLine, KeyAction::Done, KeyAction::Line }) {
             CHECK(keyWith(page, action).action == action);
         }
         for (const auto row : keyboardRows(page)) {
@@ -87,12 +89,17 @@ TEST_CASE("every page has the editing keys, and no row wider than the letters'",
     }
 }
 
-TEST_CASE("Close is at the right edge of the fourth row of every page, where the right Shift is", "[imgui][keyboard]")
+TEST_CASE("every page has the line with the caret keys at its right on top, Enter where a PC keyboard has it, and Done at the bottom right", "[imgui][keyboard]")
 {
     for (const KeyboardPage page : PAGES) {
         const auto rows = keyboardRows(page);
-        REQUIRE(rows.size() == 5);
-        CHECK(rows[3].back().action == KeyAction::Close);
+        REQUIRE(rows.size() == 6);
+        REQUIRE(rows[0].size() == 3);
+        CHECK(rows[0][0].action == KeyAction::Line);
+        CHECK(rows[0][1].action == KeyAction::Left);
+        CHECK(rows[0][2].action == KeyAction::Right);
+        CHECK(rows[3].back().action == KeyAction::NewLine);
+        CHECK(rows[5].back().action == KeyAction::Done);
     }
 }
 
@@ -122,14 +129,16 @@ TEST_CASE("the keys fill the area, and a key of more units spans the gaps it cov
         CHECK(rect.x + rect.width <= width + 0.01f);
         CHECK(rect.y + rect.height <= height + 0.01f);
     }
-    // the digits' row is the widest: from one edge to the other
+    // the line's row and the digits' row are the widest: from one edge to the other
     CHECK(std::abs(keys.front().x) < 0.01f);
     const auto& backspace = *std::ranges::find_if(keys, [](const KeyRect& rect) {
         return rect.key->action == KeyAction::Backspace;
     });
     CHECK(std::abs(backspace.x + backspace.width - width) < 0.01f);
     // a key of 2 units is two keys and the gap between them wide
-    const float unit = keys.front().width;
+    const float unit = std::ranges::find_if(keys, [](const KeyRect& rect) {
+        return rect.key->label == "1";
+    })->width;
     CHECK(std::abs(backspace.width - (2.0f * unit + gap)) < 0.01f);
     // the last row reaches the bottom
     CHECK(std::abs(keys.back().y + keys.back().height - height) < 0.01f);
@@ -220,7 +229,30 @@ TEST_CASE("the editing keys are key strokes, and Clear selects all and then dele
     CHECK(typing.press(keyWith(KeyboardPage::Letters, KeyAction::Right)) == Strokes{ { .keys = { EditKey::Right } } });
     CHECK(typing.press(keyWith(KeyboardPage::Letters, KeyAction::Clear)) == Strokes{ { .keys = { EditKey::Ctrl, EditKey::A } }, { .keys = { EditKey::Backspace } } });
     CHECK(typing.press(keyWith(KeyboardPage::Letters, KeyAction::Done)) == Strokes{ { .keys = { EditKey::Enter } } });
-    CHECK(typing.press(keyWith(KeyboardPage::Letters, KeyAction::Close)) == Strokes{ { .keys = { EditKey::Escape } } });
+    CHECK(typing.press(keyWith(KeyboardPage::Letters, KeyAction::Line)).empty());
+}
+
+TEST_CASE("Enter does nothing on a one-line field, and Done leaves a field as ImGui's flags have it", "[imgui][keyboard]")
+{
+    using Strokes = std::vector<KeyStroke>;
+    const KeyboardKey& enter = keyWith(KeyboardPage::Letters, KeyAction::NewLine);
+    KeyboardTyping typing;
+    CHECK(!typing.isEnabled(enter));
+    CHECK(typing.press(enter).empty());
+    CHECK(typing.done() == Strokes{ { .keys = { EditKey::Enter } } });
+
+    typing.setField(KeyboardField{ .multiline = true });
+    CHECK(typing.isEnabled(enter));
+    CHECK(typing.press(enter) == Strokes{ { .keys = { EditKey::Enter } } });
+    CHECK(typing.done() == Strokes{ { .keys = { EditKey::Ctrl, EditKey::Enter } } });
+
+    typing.setField(KeyboardField{ .multiline = true, .ctrlEnterForNewLine = true });
+    CHECK(typing.press(enter) == Strokes{ { .keys = { EditKey::Ctrl, EditKey::Enter } } });
+    CHECK(typing.done() == Strokes{ { .keys = { EditKey::Enter } } });
+
+    // a reset for the next field keeps the field's kind, which is set for each field
+    typing.reset();
+    CHECK(typing.isEnabled(enter));
 }
 
 TEST_CASE("Backspace and the caret keys repeat, and the others do not", "[imgui][keyboard]")

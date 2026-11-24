@@ -167,15 +167,16 @@ it, the framework shows its keyboard under the field's canvas, typed with the ra
 every runtime. A physical keyboard types into it too. See [VR keyboard](../../docs/tech/vr-keyboard.md).
 
 ```cpp
-imgui::keyboard().setCloseBinding(backBinding); // Back closes it, as its Close does
+imgui::keyboard().setCloseBinding(backBinding); // Back closes it, as its Done does
 auto style = imgui::keyboard().style();
 style.accent = render::Color::rgba(255, 180, 60);
 imgui::keyboard().setStyle(style);
 if (imgui::keyboard().isOpen()) { /* a field is edited: Back is the keyboard's */ }
 ```
 
-- **Done** leaves the field with its text, **Close** gives it back the text it had. The line along the
-  keyboard's top shows the field's text; a press on it puts the caret there.
+- **Done** leaves the field with its text; **Enter** starts a new line of a multiline field. The line along
+  the keyboard's top shows the field's text, a press on it puts the caret there, and Left and Right at its
+  right move the caret.
 - **Moved** with the world-move binding, as [a panel the player moves](#a-panel-the-player-moves); it keeps
   that place beside the canvas for the session, and follows the canvas.
 - **A ray on it is the keyboard's:** what is behind it is not pointed at, and the wand is hidden from the game.
