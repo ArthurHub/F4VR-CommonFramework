@@ -50,8 +50,7 @@ namespace f4cf::render
         // Fallout 4 VR 1.2.72. The player-space pass draws the Pip-Boy and then PlayerWorldNode - the hands, the wands
         // and the quad of every menu - after the world, from Main::DrawWorld_And_UI. Hooking the call that draws its
         // first scene puts the layers under all of it, so the game's menus are drawn over them as over the world.
-        constexpr std::uintptr_t PLAYER_PASS_DRAW_CALLSITE_RVA = 0x284E68C;
-        constexpr std::uintptr_t PLAYER_PASS_DRAW_RVA = 0x27FF820;
+        const auto& PLAYER_PASS_DRAW_SITE = RE::VRHookSites::PlayerPassDraw;
         constexpr std::array<std::uint8_t, 15> PLAYER_PASS_DRAW_PROLOGUE{
             0x48,
             0x89,
@@ -478,8 +477,8 @@ namespace f4cf::render
          */
         bool installPlayerPassHook()
         {
-            const auto callsite = REL::Offset(PLAYER_PASS_DRAW_CALLSITE_RVA).address();
-            const auto draw = REL::Offset(PLAYER_PASS_DRAW_RVA).address();
+            const auto callsite = PLAYER_PASS_DRAW_SITE.address();
+            const auto draw = PLAYER_PASS_DRAW_SITE.callee();
             if (std::memcmp(reinterpret_cast<const void*>(draw), PLAYER_PASS_DRAW_PROLOGUE.data(), PLAYER_PASS_DRAW_PROLOGUE.size()) != 0) {
                 logger::warn("Player-space pass hook not installed: the draw function does not start with the expected instructions");
                 return false;

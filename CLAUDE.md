@@ -70,7 +70,7 @@ overrides `onModLoaded` (F4SE load: Papyrus, hooks), `onGameLoaded` (once), `onG
 | `src/render/` | `f4cf::render` | Overlay drawing: the shared Submit hook, primitives, text, textures, scene-depth occlusion | [src/render/README.md](src/render/README.md), [docs/tech/scene-depth-occlusion.md](docs/tech/scene-depth-occlusion.md) |
 | `src/imgui/` | `f4cf::imgui` | Dear ImGui canvases on world-space quads, the wand pointer, the VR keyboard | [src/imgui/README.md](src/imgui/README.md), [docs/tech/vr-keyboard.md](docs/tech/vr-keyboard.md) |
 | `src/debug/` | `f4cf::debug` | Immediate-mode in-world debug draw (`debug::dd()`) | [src/debug/README.md](src/debug/README.md) |
-| `src/f4vr/` | `f4cf::f4vr` | Game state: nodes, skeleton, menus, Scaleform, player rotation, activation spheres, Papyrus through CommonLibF4VR; all RVAs in `F4VROffsets.h` | [src/f4vr/README.md](src/f4vr/README.md), [docs/activation-spheres.md](docs/activation-spheres.md) |
+| `src/f4vr/` | `f4cf::f4vr` | Game state: nodes, skeleton, menus, Scaleform, player rotation, activation spheres, Papyrus through CommonLibF4VR; no addresses of its own, those are CommonLibF4VR's | [src/f4vr/README.md](src/f4vr/README.md), [docs/activation-spheres.md](docs/activation-spheres.md) |
 | `src/common/` | `f4cf::common` | Math (quaternions, matrices), utilities, `TomlEditor` | [src/common/README.md](src/common/README.md) |
 | `src/devbench/` | `f4cf::devbench` | The mod's devbench tool: actions an agent calls in the running game | [src/devbench/README.md](src/devbench/README.md) |
 | `src/modsconfig/` | `mods_config::api` | The mod's Mods Config FO4 VR client and its config previews | [src/modsconfig/README.md](src/modsconfig/README.md) |
@@ -109,6 +109,6 @@ Most bugs here come from running code on the wrong **thread** or from a **lifeti
 ## Reverse engineering
 
 Before looking up an RVA, struct offset or hook target, read the F4VR reference library's guide,
-`C:\Stuff\GitHub\Mine\Modding-Reference\F4VR\CLAUDE.md`; this framework's own addresses are in its
-`Analysis/gold/F4VR-CommonFramework_RE_REFERENCE.md`. Authority runs f4sevr 0.6.21 headers →
-CommonLibF4VR AddressLib → the `_RE_REFERENCE.md` files.
+`C:\Stuff\GitHub\Mine\Modding-Reference\F4VR\CLAUDE.md`. The framework has no addresses of its own: a
+game function, global, setting or hook site it needs goes in CommonLibF4VR, tagged `// VR: tested`,
+`// VR: checked` or `// VR: broken (why)`, and its `VRAddressCheck` run against the game before committing.

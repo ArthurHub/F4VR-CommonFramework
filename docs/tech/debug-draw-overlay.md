@@ -130,10 +130,10 @@ store (`sec > 0`), channels + config toggles + in-headset hotkey, the `watch()` 
 
 | Address | What | Where kept | Source |
 |---|---|---|---|
-| `0x6235AC8` | VR render camera globals block | `f4vr::vrRenderCameraGlobals` ([`F4VROffsets.h`](../../src/f4vr/F4VROffsets.h)) | ROCK `DebugBodyOverlay.cpp:983`, `knowledge-base/debug_draw_overlay.md` §5.3 |
-| `+0x25D0` | → camera data block pointer | `VR_RENDER_CAMERA_DATA_OFFSET` | same |
-| camera `+0xD0` / `+0x2E0` | eye 0 / eye 1 view-projection 4×4 | `VR_RENDER_CAMERA_EYE{0,1}_VIEW_PROJ_OFFSET` | same |
-| `+0x2590` / `+0x25C0` | eye 0 / eye 1 posAdjust float3 | `VR_RENDER_CAMERA_EYE{0,1}_POS_ADJUST_OFFSET` | same |
+| `0x6235AC8` | VR render camera globals block | CommonLibF4VR's `RE::VRRenderCamera` (`VRRenderCamera.h`) | ROCK `DebugBodyOverlay.cpp:983`, `knowledge-base/debug_draw_overlay.md` §5.3 |
+| `+0x25D0` | → camera data block pointer | `RE::VRRenderCamera::detail::CAMERA_DATA` | same |
+| camera `+0xD0` / `+0x2E0` | eye 0 / eye 1 view-projection 4×4 | `GetEyeViewProjection(eye)` | same |
+| `+0x2590` / `+0x25A0` | eye 0 / eye 1 posAdjust float3 | `GetEyePosAdjust(eye)` | same |
 | vtable idx 5 | `IVRCompositor::Submit` | `render/SubmitHook.cpp` | ROCK `DebugBodyOverlay.cpp:2614`, OpenVR ABI |
 
 This is the overlay's **only** version-specific game address. If overlay geometry reads as garbage

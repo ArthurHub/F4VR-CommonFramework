@@ -1,6 +1,5 @@
 #pragma once
 
-#include "BSFlattenedBoneTree.h"
 #include "F4VRUtils.h"
 
 namespace f4cf::f4vr
@@ -38,26 +37,10 @@ namespace f4cf::f4vr
         return root->children[0] ? root->children[0]->IsNode() : nullptr;
     }
 
-    // is it the 3rd-person bone tree?
-    inline BSFlattenedBoneTree* getFlattenedBoneTree()
-    {
-        const auto rootNode = getRootNode();
-        return rootNode ? reinterpret_cast<BSFlattenedBoneTree*>(rootNode) : nullptr;
-    }
-
     inline RE::NiNode* getFirstPersonSkeleton()
     {
         const auto player = getPlayer();
         return player ? player->firstPerson3D.get() : nullptr;
-    }
-
-    inline BSFlattenedBoneTree* getFirstPersonBoneTree()
-    {
-        const auto fpSkeleton = getFirstPersonSkeleton();
-        if (!fpSkeleton || fpSkeleton->children.empty()) {
-            return nullptr;
-        }
-        return fpSkeleton->children[0] ? reinterpret_cast<BSFlattenedBoneTree*>(fpSkeleton->children[0]->IsNode()) : nullptr;
     }
 
     inline RE::EquippedWeaponData* getEquippedWeaponData()
@@ -72,17 +55,17 @@ namespace f4cf::f4vr
 
     inline RE::NiNode* getCommonNode()
     {
-        return findNode(getRootNode(), "COM");
+        return RE::NiNodeUtils::FindNode(getRootNode(), "COM");
     }
 
     inline RE::NiNode* getWeaponNode()
     {
-        return findNode(getFirstPersonSkeleton(), "Weapon");
+        return RE::NiNodeUtils::FindNode(getFirstPersonSkeleton(), "Weapon");
     }
 
     inline RE::NiNode* getPrimaryWandNode()
     {
-        return findNode(getVRPlayerNodes()->primaryUIAttachNode, "world_primaryWand.nif");
+        return RE::NiNodeUtils::FindNode(getVRPlayerNodes()->primaryUIAttachNode, "world_primaryWand.nif");
     }
 
     /**
@@ -103,16 +86,6 @@ namespace f4cf::f4vr
     inline RE::NiPoint3 getCameraPosition()
     {
         return getPlayerCamera()->cameraRoot->world.translate;
-    }
-
-    inline RE::NiNode* getLeftHandNode()
-    {
-        return isLeftHandedMode() ? getVRPlayerNodes()->primaryWandNode : getVRPlayerNodes()->secondaryWandNode;
-    }
-
-    inline RE::NiNode* getRightHandNode()
-    {
-        return isLeftHandedMode() ? getVRPlayerNodes()->secondaryWandNode : getVRPlayerNodes()->primaryWandNode;
     }
 
     inline RE::NiNode* getOffhandWandNode()

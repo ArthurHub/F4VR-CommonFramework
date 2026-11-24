@@ -30,8 +30,7 @@ namespace f4cf::render::sceneDepth
         // leaves CommitGraphicsState's other callers alone. Other plugins read depth at the same seam
         // (ROCK's RPS UI Framework does), so the hook chains onto one already there rather than
         // refusing it - see inspectCallSite in CallSiteHook.cpp.
-        constexpr std::uintptr_t COMMIT_GRAPHICS_STATE_RVA = 0x1D9B5D0;
-        constexpr std::uintptr_t CAPTURE_CALLSITE_RVA = 0x1D8E84A;
+        const auto& CAPTURE_SITE = RE::VRHookSites::SceneDepthCommitGraphicsState;
 
         constexpr std::size_t CALL_REL32_LENGTH = 5;
 
@@ -797,8 +796,8 @@ namespace f4cf::render::sceneDepth
             return false;
         }
 
-        const auto callsite = REL::Offset(CAPTURE_CALLSITE_RVA).address();
-        const auto commitGraphicsState = REL::Offset(COMMIT_GRAPHICS_STATE_RVA).address();
+        const auto callsite = CAPTURE_SITE.address();
+        const auto commitGraphicsState = CAPTURE_SITE.callee();
         // the function's own first instructions prove the build and the function address
         if (std::memcmp(reinterpret_cast<const void*>(commitGraphicsState), COMMIT_PROLOGUE.data(), COMMIT_PROLOGUE.size()) != 0) {
             logger::warn("scene depth hook not installed: the target function does not start with the expected instructions");

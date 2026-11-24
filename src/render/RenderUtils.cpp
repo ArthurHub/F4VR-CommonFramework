@@ -1,7 +1,5 @@
 #include "RenderUtils.h"
 
-#include "../f4vr/F4VROffsets.h"
-
 #include "RE/Bethesda/BSGraphics.h"
 
 namespace f4cf::render
@@ -19,27 +17,21 @@ namespace f4cf::render
     }
 
     /**
-     * Read the engine's own per-eye view-projection + posAdjust for the frame being submitted.
-     * Offsets live in f4vr::F4VROffsets.h (vrRenderCameraGlobals); if overlay geometry ever reads as
-     * garbage after a runtime change, that block is the first suspect.
+     * Read the engine's own per-eye view-projection + posAdjust for the frame being submitted, from CommonLibF4VR's
+     * RE::VRRenderCamera; if overlay geometry ever reads as garbage after a runtime change, that block is the first suspect.
      */
     bool getStereoCameraConstants(StereoCameraConstants& out)
     {
-        const std::uintptr_t cameraGlobals = *f4vr::vrRenderCameraGlobals;
-        if (!cameraGlobals) {
+        const auto* viewProj0 = RE::VRRenderCamera::GetEyeViewProjection(0);
+        const auto* viewProj1 = RE::VRRenderCamera::GetEyeViewProjection(1);
+        const auto* adjust0 = RE::VRRenderCamera::GetEyePosAdjust(0);
+        const auto* adjust1 = RE::VRRenderCamera::GetEyePosAdjust(1);
+        if (!viewProj0 || !viewProj1 || !adjust0 || !adjust1) {
             return false;
         }
 
-        const auto cameraData = *reinterpret_cast<std::uintptr_t*>(cameraGlobals + f4vr::VR_RENDER_CAMERA_DATA_OFFSET);
-        if (!cameraData) {
-            return false;
-        }
-
-        out.viewProj[0] = DirectX::XMLoadFloat4x4(reinterpret_cast<const DirectX::XMFLOAT4X4*>(cameraData + f4vr::VR_RENDER_CAMERA_EYE0_VIEW_PROJ_OFFSET));
-        out.viewProj[1] = DirectX::XMLoadFloat4x4(reinterpret_cast<const DirectX::XMFLOAT4X4*>(cameraData + f4vr::VR_RENDER_CAMERA_EYE1_VIEW_PROJ_OFFSET));
-
-        const auto* adjust0 = reinterpret_cast<const float*>(cameraGlobals + f4vr::VR_RENDER_CAMERA_EYE0_POS_ADJUST_OFFSET);
-        const auto* adjust1 = reinterpret_cast<const float*>(cameraGlobals + f4vr::VR_RENDER_CAMERA_EYE1_POS_ADJUST_OFFSET);
+        out.viewProj[0] = DirectX::XMLoadFloat4x4(reinterpret_cast<const DirectX::XMFLOAT4X4*>(viewProj0));
+        out.viewProj[1] = DirectX::XMLoadFloat4x4(reinterpret_cast<const DirectX::XMFLOAT4X4*>(viewProj1));
         out.posAdjust[0] = DirectX::XMFLOAT4(adjust0[0], adjust0[1], adjust0[2], 0.0f);
         out.posAdjust[1] = DirectX::XMFLOAT4(adjust1[0], adjust1[1], adjust1[2], 0.0f);
         return true;

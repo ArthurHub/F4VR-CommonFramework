@@ -3,8 +3,6 @@
 #include <algorithm>
 #include <cmath>
 
-#include "F4VROffsets.h"
-
 namespace f4cf::f4vr
 {
     namespace
@@ -19,56 +17,33 @@ namespace f4cf::f4vr
         constexpr float MAX_FRAME_DELTA_SEC = 0.1f;
 
         /**
-         * The Fallout4Prefs.ini [VR] turn settings, read straight off the value of the static Setting objects
-         * the engine parses them into (value at Setting+0x8), exactly as isLeftHandedMode() reads
-         * bLeftHandedMode:VR — much faster than looking them up by name in INIPrefSettingCollection, and the
-         * in-game settings menu writes these very addresses, so a change there is picked up live.
-         * Raw VR 1.2.72 offsets; none of these Settings has an address-library row.
+         * A float VR setting's value, 0 off VR.
          */
-        int iniRotationType()
+        float settingFloat(const RE::Setting* setting)
         {
-            static auto setting = reinterpret_cast<int*>(REL::Offset(0x37d5e78).address()); // NOLINT(performance-no-int-to-ptr)
-            return *setting;
-        }
-
-        float iniRotationAngle()
-        {
-            static auto setting = reinterpret_cast<float*>(REL::Offset(0x37d5e90).address()); // NOLINT(performance-no-int-to-ptr)
-            return *setting;
-        }
-
-        float iniRotationSpeed()
-        {
-            static auto setting = reinterpret_cast<float*>(REL::Offset(0x37d5ea8).address()); // NOLINT(performance-no-int-to-ptr)
-            return *setting;
-        }
-
-        float iniAngleSnapSmoothingSpeed()
-        {
-            static auto setting = reinterpret_cast<float*>(REL::Offset(0x37cfd98).address()); // NOLINT(performance-no-int-to-ptr)
-            return *setting;
+            return setting ? setting->GetFloat() : 0.0f;
         }
     }
 
     VRRotationType PlayerRotation::getRotationType()
     {
-        const auto type = iniRotationType();
+        const auto type = static_cast<int>(RE::VRSettings::GetRotationType());
         return type >= static_cast<int>(VRRotationType::None) && type <= static_cast<int>(VRRotationType::Smooth) ? static_cast<VRRotationType>(type) : VRRotationType::None;
     }
 
     float PlayerRotation::getSnapAngleDegrees()
     {
-        return iniRotationAngle();
+        return settingFloat(RE::VRSettings::RotationAngle());
     }
 
     float PlayerRotation::getSmoothSpeedDegreesPerSec()
     {
-        return iniRotationSpeed();
+        return settingFloat(RE::VRSettings::RotationSpeed());
     }
 
     float PlayerRotation::getSnapSmoothingSpeedDegreesPerSec()
     {
-        return iniAngleSnapSmoothingSpeed();
+        return settingFloat(RE::VRSettings::AngleSnapSmoothingSpeed());
     }
 
     /**
@@ -135,13 +110,8 @@ namespace f4cf::f4vr
 
     float PlayerRotation::getYaw()
     {
-        const auto vrWorldData = *g_vrWorldData;
-        if (!vrWorldData) {
-            return 0;
-        }
-        float yaw = 0, unusedB = 0, unusedC = 0;
-        VRWorld_GetEulerAngles(static_cast<std::uint8_t*>(vrWorldData) + VR_WORLD_DATA_ROTATION_OFFSET, &yaw, &unusedB, &unusedC);
-        return yaw;
+        const auto vrWorldData = RE::VRWorldData::GetSingleton();
+        return vrWorldData ? vrWorldData->GetYaw() : 0;
     }
 
     /**
@@ -150,7 +120,7 @@ namespace f4cf::f4vr
      */
     void PlayerRotation::setYaw(const float yawRadians)
     {
-        const auto vrWorldData = *g_vrWorldData;
+        const auto vrWorldData = RE::VRWorldData::GetSingleton();
         if (!vrWorldData) {
             return;
         }
@@ -158,7 +128,7 @@ namespace f4cf::f4vr
         if (yaw < 0) {
             yaw += TWO_PI;
         }
-        VRWorld_SetYaw(vrWorldData, &yaw);
+        vrWorldData->SetYaw(yaw);
     }
 
     void PlayerRotation::rotateBy(const float deltaRadians)

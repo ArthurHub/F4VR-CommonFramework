@@ -236,10 +236,11 @@ records or Tracy is connected, events only while a capture tool is attached.
 
 ## Addresses
 
-- **The VR render camera globals** (`0x6235AC8` on 1.2.72, `vrRenderCameraGlobals` in
-  [`f4vr/F4VROffsets.h`](../f4vr/F4VROffsets.h)): the one address of the overlay itself. Overlay
-  geometry that reads as garbage after a runtime change, suspect it first.
-- **The scene-depth capture's two,** in [`SceneDepthCapture.cpp`](SceneDepthCapture.cpp), checked for
+- **The VR render camera globals** (`0x6235AC8` on 1.2.72, read through CommonLibF4VR's
+  `RE::VRRenderCamera`): the one address of the overlay itself. Overlay geometry that reads as garbage
+  after a runtime change, suspect it first.
+- **The scene-depth capture's two,** CommonLibF4VR's `RE::VRHookSites::SceneDepthCommitGraphicsState`,
+  used by [`SceneDepthCapture.cpp`](SceneDepthCapture.cpp), checked for
   the instructions expected there, so a bad one disables occlusion rather than misplacing anything.
 
 The Submit hook and the stereo projection come from the debug-draw overlay (a port of ROCK's

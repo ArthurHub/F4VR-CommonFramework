@@ -60,7 +60,7 @@ namespace f4cf::vrui
         std::optional<RE::NiPoint3> findIndexFingerTip(const bool primaryHand, const RE::NiPoint3& wandPosition)
         {
             const bool rightHand = primaryHand != UIUtils::isLeftHandedMode();
-            const auto handBone = f4vr::Skelly::findBoneWorldTransform(std::string(rightHand ? f4vr::SkellyBones::RArm_Hand : f4vr::SkellyBones::LArm_Hand));
+            const auto handBone = f4vr::Skelly::findBoneWorldTransform(std::string(rightHand ? RE::SkeletonBones::RArm_Hand : RE::SkeletonBones::LArm_Hand));
             if (!handBone || MatrixUtils::vec3Len(handBone->translate - wandPosition) >= HAND_TO_WAND_MAX_DISTANCE) {
                 return std::nullopt;
             }
@@ -288,7 +288,7 @@ namespace f4cf::vrui
         world.scale = FINGER_TIP_MARKER_WIDTH;
         marker.node->local = MatrixUtils::worldToLocalTransform(attachNode->world, world);
         // without this the marker is drawn where it was placed in the last frame
-        f4vr::updateTransformsDown(marker.node.get(), true);
+        RE::NiNodeUtils::UpdateTransformsDown(marker.node.get(), true);
         marker.placed = true;
     }
 
@@ -300,7 +300,7 @@ namespace f4cf::vrui
         marker.placed = false;
         if (marker.node && marker.node->parent && marker.node->local.scale != 0.0f) {
             marker.node->local.scale = 0.0f;
-            f4vr::updateTransformsDown(marker.node.get(), true);
+            RE::NiNodeUtils::UpdateTransformsDown(marker.node.get(), true);
         }
     }
 
@@ -321,12 +321,12 @@ namespace f4cf::vrui
             _bonesLeftHanded = leftHanded;
             // the skeleton is replaced on entering and leaving power armor, so this is read with the bones
             _inPowerArmor = f4vr::isInPowerArmor();
-            auto forearm = f4vr::findNode(skeletonRoot, (leftHanded ? f4vr::SkellyBones::RArm_ForeArm3 : f4vr::SkellyBones::LArm_ForeArm3).data());
+            auto forearm = RE::NiNodeUtils::FindNode(skeletonRoot, (leftHanded ? RE::SkeletonBones::RArm_ForeArm3 : RE::SkeletonBones::LArm_ForeArm3).data());
             if (!forearm) {
-                forearm = f4vr::findNode(skeletonRoot, (leftHanded ? f4vr::SkellyBones::RArm_ForeArm1 : f4vr::SkellyBones::LArm_ForeArm1).data());
+                forearm = RE::NiNodeUtils::FindNode(skeletonRoot, (leftHanded ? RE::SkeletonBones::RArm_ForeArm1 : RE::SkeletonBones::LArm_ForeArm1).data());
             }
             _offhandForearmBone.reset(forearm);
-            _offhandHandBone.reset(f4vr::findNode(skeletonRoot, (leftHanded ? f4vr::SkellyBones::RArm_Hand : f4vr::SkellyBones::LArm_Hand).data()));
+            _offhandHandBone.reset(RE::NiNodeUtils::FindNode(skeletonRoot, (leftHanded ? RE::SkeletonBones::RArm_Hand : RE::SkeletonBones::LArm_Hand).data()));
         }
         return _offhandForearmBone && _offhandHandBone;
     }

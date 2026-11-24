@@ -222,7 +222,7 @@ namespace f4cf::imgui
         if (!wand) {
             return {};
         }
-        const bool rightHand = primaryHand != f4vr::isLeftHandedMode();
+        const bool rightHand = primaryHand != RE::VRSettings::IsLeftHandedMode();
         const RE::NiTransform ray = common::MatrixUtils::localToWorldTransform(wand->world, rightHand ? _style.rayOffset : mirrorLeftToRight(_style.rayOffset));
         const vrcf::Hand hand = primaryHand ? vrcf::Hand::Primary : vrcf::Hand::Offhand;
         return {

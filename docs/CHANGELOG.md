@@ -9,6 +9,15 @@ major version is `0`, a minor bump may break the API; the **Upgrading** notes sa
 
 ## 0.6.0 — unreleased
 
+- **The game RE is CommonLibF4VR's**: the framework has no game addresses of its own. `F4VROffsets.h`,
+  `MiscStructs.h`, `BSFlattenedBoneTree.h` and `CollisionLayers.h` are gone, and the `f4vr::` helpers that were
+  engine facts are CommonLibF4VR members: the VR settings (`RE::VRSettings`: left-handed mode, the Pip-Boy's
+  placement...), the scene graph helpers (`RE::NiNodeUtils`), actor queries (`Actor::IsSwimming`,
+  `IsInActiveCombat`, `GetFacingAngleTo`...), the bone tree and its bone names, the VR room rotation and render
+  camera, and the call sites mods hook (`RE::VRHookSites`). CommonLibF4VR marks each address with how it is known
+  to work on VR. The helpers that are the framework's own (`isInPowerArmor`, `getEquippedWeapon`, `startCombat`,
+  the `.nif` loading) keep their names. **Upgrading:** replace each removed name by its row in the
+  [migration table](tech/f4vr-to-commonlib-migration.md).
 - **The framework's own VR keyboard replaces SteamVR's**: while ImGui edits a text field on an interactive canvas, the
   framework shows a keyboard under that canvas, typed with the rays of both hands at once, on every runtime
   (OpenComposite and xrizer, which have no keyboard of their own, too). It has QWERTY with digits, symbols and accented

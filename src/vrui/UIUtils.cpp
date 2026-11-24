@@ -64,7 +64,7 @@ namespace f4cf::vrui
      */
     RE::NiNode* UIUtils::getHMDAttachNode()
     {
-        return findNode(f4vr::getVRPlayerNodes()->uprightHmdNode, "world_HMD_info.nif");
+        return RE::NiNodeUtils::FindNode(f4vr::getVRPlayerNodes()->uprightHmdNode, "world_HMD_info.nif");
     }
 
     /**
@@ -72,7 +72,7 @@ namespace f4cf::vrui
      */
     bool UIUtils::isLeftHandedMode()
     {
-        return f4vr::isLeftHandedMode();
+        return RE::VRSettings::IsLeftHandedMode();
     }
 
     /**
@@ -121,6 +121,6 @@ namespace f4cf::vrui
      */
     RE::NiNode* UIUtils::findNode(RE::NiNode* node, const char* nodeName)
     {
-        return f4vr::findNode(node, nodeName);
+        return RE::NiNodeUtils::FindNode(node, nodeName);
     }
 }

@@ -10,7 +10,7 @@ namespace f4cf::main_hook
         // By overriding the address of one of the calls we can inject our own code to run
         // on every frame.
         using HookFunc = void (*)(uint64_t rcx);
-        inline REL::Relocation _hookFuncCallSite{ REL::Offset(0xd8405e) };
+        inline REL::Relocation _hookFuncCallSite{ RE::VRHookSites::MainUpdateFrameTick.address() };
         inline HookFunc _hookFuncOriginal = nullptr;
         inline uintptr_t _hookFuncThisHook = 0;
 

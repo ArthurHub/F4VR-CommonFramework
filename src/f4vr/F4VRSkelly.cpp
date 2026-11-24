@@ -10,6 +10,15 @@ namespace f4cf::f4vr
         // Would be nice to know how long the bone is instead of magic numbers, didn't find a way so far.
         constexpr float FINGER_BONE_TO_TIP = 2.0f;
         constexpr float FINGER_BONE_TO_TIP_POWER_ARMOR = 3.0f;
+
+        /**
+         * The player's third-person bone tree, null while there is no player or skeleton.
+         */
+        RE::BSFlattenedBoneTree* getBoneTree()
+        {
+            const auto player = getPlayer();
+            return player ? player->GetBoneTree() : nullptr;
+        }
     }
 
     /**
@@ -21,7 +30,7 @@ namespace f4cf::f4vr
         _boneTreeMap.clear();
         _boneTreeVec.clear();
 
-        const auto rt = getFlattenedBoneTree();
+        const auto rt = getBoneTree();
         _boneTreeMapTree = rt;
         if (!rt || !rt->transforms) {
             return;
@@ -62,7 +71,7 @@ namespace f4cf::f4vr
         if (foundBone == _boneTreeMap.end()) {
             return std::nullopt;
         }
-        return getFlattenedBoneTree()->transforms[foundBone->second].world;
+        return getBoneTree()->transforms[foundBone->second].world;
     }
 
     /**
@@ -71,7 +80,7 @@ namespace f4cf::f4vr
      */
     bool Skelly::isBoneTreeMapCurrent()
     {
-        const auto tree = getFlattenedBoneTree();
+        const auto tree = getBoneTree();
         if (tree != _boneTreeMapTree) {
             return false;
         }
@@ -87,10 +96,10 @@ namespace f4cf::f4vr
         bool rightHand = false;
         switch (hand) {
         case vrcf::Hand::Primary:
-            rightHand = !isLeftHandedMode();
+            rightHand = !RE::VRSettings::IsLeftHandedMode();
             break;
         case vrcf::Hand::Offhand:
-            rightHand = isLeftHandedMode();
+            rightHand = RE::VRSettings::IsLeftHandedMode();
             break;
         case vrcf::Hand::Right:
             rightHand = true;

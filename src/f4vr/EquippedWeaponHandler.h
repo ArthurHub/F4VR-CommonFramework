@@ -120,7 +120,7 @@ namespace f4cf::f4vr
             }
 
             auto* weaponNode = getWeaponNode();
-            if (weaponNode && isNodeVisible(weaponNode)) {
+            if (weaponNode && RE::NiNodeUtils::IsVisible(weaponNode)) {
                 auto* equippedWeapon = getEquippedWeapon();
                 if (_currentWeapon != equippedWeapon) {
                     logger::debug("Drawn weapon changed to {}", equippedWeapon ? equippedWeapon->GetFormEditorID() : "<none>");
@@ -233,7 +233,7 @@ namespace f4cf::f4vr
          */
         static std::string_view getGripStockName(RE::NiNode* weapon)
         {
-            if (const auto gripNode = getFirstChild(findNode(weapon, "P-Grip"))) {
+            if (const auto gripNode = RE::NiNodeUtils::GetFirstChild(RE::NiNodeUtils::FindNode(weapon, "P-Grip"))) {
                 return gripNode->name;
             }
             return "";
