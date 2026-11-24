@@ -22,7 +22,10 @@ code.
 | `VMObject*` (a Papyrus `ScriptObject`) | `RE::BSTSmartPointer<RE::BSScript::Object>`; its name is `obj->GetTypeInfo()->GetName()`, its handle `obj->GetHandle()` |
 | `execPapyrusGlobalFunction("Debug", "Notification", text)` | `f4vr::callPapyrusGlobalFunction("Debug", "Notification", text)` |
 | `execPapyrusFunction(handle, script, "Fn", getArgs(a, b))` | `vm->DispatchMethodCall(handle, script, "Fn", nullptr, a, b)` |
-| `VMArray<VMVariable>` / `getArgs` / `addArgument` | the arguments themselves, passed to the call |
+| `VMArray<VMVariable>` / `getArgs` / `addArgument` | the arguments themselves, passed to the call; a list built at runtime, packed into a `BSScrapArray<Variable>` for `DispatchStaticCallPacked` / `DispatchMethodCallPacked` |
+| `GetObjectIdentifier(handle, script, 1, &id, 0)` | `FindBoundObject(handle, script, true, object, false)`, the handle from `GetObjectHandlePolicy().GetHandleForObject(type, form)` |
+| `GetVMPropertyInfo(...).index`, `GetPropertyValueByIndex` | `ObjectTypeInfo::GetPropertyIndex(name)` (through `GetParent()`), `GetVariableValue(object, index, value)` |
+| `SetPropertyValue(&id, name, &value, &unk)` | `SetPropertyValue(object, name, value, nullptr)` |
 | `PapyrusGatewayBase::executePapyrusScript("Fn", arguments)` | `executePapyrusScript("Fn", a, b)` |
 
 Calls into Papyrus need the CommonLibF4VR that passes Fallout 4 VR its own argument callable

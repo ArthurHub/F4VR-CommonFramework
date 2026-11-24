@@ -106,6 +106,10 @@ callPapyrusGlobalFunction("Game", "TurnPlayerRadioOn", true);
 RE::GameVM::GetSingleton()->GetVM()->DispatchMethodCall(handle, scriptName, "OnMyEvent", nullptr, 1, 2.0f);
 ```
 
+An argument list built at runtime goes packed: `PackVariable` each value into a
+`RE::BSScrapArray<RE::BSScript::Variable>`, and pass it to `DispatchStaticCallPacked` or
+`DispatchMethodCallPacked` (by handle and script name, or on a script object).
+
 [`PapyrusGatewayBase`](PapyrusGatewayBase.h) wraps the second: a script calls the gateway's native to
 register itself, and the mod then calls functions on it with `executePapyrusScript("Fn", args...)`.
 
