@@ -144,10 +144,24 @@ float4 main(PS_INPUT input) : SV_Target {
             int height = 0;
         };
 
-        // The atlas the canvases share, and the texture of the dedicated canvas. Each is created by the first
-        // frame that draws into it, so a mod has only the one it uses.
+        // The atlas the canvases share, the texture of the dedicated canvas, and the texture of the own context's
+        // canvas. Each is created by the first frame that draws into it, so a mod has only the ones it uses.
         RenderTarget s_atlasTarget;
         RenderTarget s_dedicatedTarget;
+        RenderTarget s_ownContextTarget;
+
+        RenderTarget& targetOf(const PassTarget target)
+        {
+            switch (target) {
+            case PassTarget::Dedicated:
+                return s_dedicatedTarget;
+            case PassTarget::OwnContext:
+                return s_ownContextTarget;
+            case PassTarget::Atlas:
+                break;
+            }
+            return s_atlasTarget;
+        }
 
         // the context of the frame being drawn, for the callbacks of its draw data
         ID3D11DeviceContext* s_drawContext = nullptr;
@@ -534,56 +548,68 @@ float4 main(PS_INPUT input) : SV_Target {
         }
 
         /**
-         * The registered draw callback. Two passes: rasterize the ImGui frame flat into its texture, the
-         * atlas or the dedicated canvas's own, then place slices of that texture in the world.
+         * The distance to the viewer of a pass's farthest quad, which orders the passes' composites.
+         */
+        float farthestQuad(const FramePass& pass)
+        {
+            float farthest = 0.0f;
+            for (const auto& quad : pass.quads) {
+                farthest = (std::max)(farthest, quad.viewerDistance);
+            }
+            return farthest;
+        }
+
+        /**
+         * The registered draw callback. Two steps: rasterize each ImGui frame flat into its texture, the
+         * atlas, the dedicated canvas's own or the own context's canvas's, then place slices of those textures
+         * in the world.
          */
         void drawFrame(const render::SubmitFrame& submitFrame)
         {
             // take a reference and draw outside the lock, so publishing never waits on a draw.
-            // ImGui_ImplDX11_RenderDrawData reads its backend state off the ImGui context, which the
-            // game thread sets once at init and never changes - a stable read from here.
-            std::shared_ptr<ClonedDrawData> drawData;
-            std::vector<CanvasQuad> quads;
+            // ImGui_ImplDX11_RenderDrawData reads its backend state off the current ImGui context, which the
+            // game thread may switch between the main context and the own one, but both have the same backend
+            // data (see ensureOwnContext), which is set once at init and never changes - a stable read from here.
+            std::vector<FramePass> passes;
             std::vector<TextureWrite> textureWrites;
-            bool dedicated = false;
-            int textureWidth = 0;
-            int textureHeight = 0;
             {
                 std::scoped_lock lock(s_frameMutex);
-                drawData = s_frame.drawData;
-                quads = s_frame.quads;
+                passes = s_frame.passes;
                 // written once, also when the frame is drawn again
                 textureWrites = std::exchange(s_frame.textureWrites, {});
-                dedicated = s_frame.dedicated;
-                textureWidth = s_frame.textureWidth;
-                textureHeight = s_frame.textureHeight;
             }
             auto* context = submitFrame.context;
             writeTextures(context, textureWrites);
             readCapture(context);
-            if (!drawData || quads.empty()) {
-                return;
-            }
 
-            RenderTarget& target = dedicated ? s_dedicatedTarget : s_atlasTarget;
-            if (!ensureTarget(submitFrame.device, target, textureWidth, textureHeight)) {
-                return;
-            }
-
-            // pass 1: ImGui into the texture. ImGui_ImplDX11_RenderDrawData sets its own viewport
+            // step 1: each frame into its texture. ImGui_ImplDX11_RenderDrawData sets its own viewport
             // and projection from the draw data's display size, and backs up / restores the
             // pipeline around itself - including vertex-shader constant buffer b0, which is where
-            // the hook host put the camera matrices pass 2 needs. It does NOT touch render targets,
+            // the hook host put the camera matrices step 2 needs. It does NOT touch render targets,
             // hence the rebind below.
-            constexpr FLOAT transparent[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
-            context->OMSetRenderTargets(1, &target.rtv, nullptr);
-            context->ClearRenderTargetView(target.rtv, transparent);
-            s_drawContext = context;
-            ImGui_ImplDX11_RenderDrawData(&drawData->drawData);
-            s_drawContext = nullptr;
-            copyForCapture(submitFrame.device, context, target, dedicated);
+            // The capture is of the first frame's texture, the mod's canvases'.
+            std::vector<std::pair<const FramePass*, ID3D11ShaderResourceView*>> drawn;
+            for (const auto& pass : passes) {
+                RenderTarget& target = targetOf(pass.target);
+                if (pass.empty() || !ensureTarget(submitFrame.device, target, pass.textureWidth, pass.textureHeight)) {
+                    continue;
+                }
+                constexpr FLOAT transparent[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
+                context->OMSetRenderTargets(1, &target.rtv, nullptr);
+                context->ClearRenderTargetView(target.rtv, transparent);
+                s_drawContext = context;
+                ImGui_ImplDX11_RenderDrawData(&pass.drawData->drawData);
+                s_drawContext = nullptr;
+                if (&pass == &passes.front()) {
+                    copyForCapture(submitFrame.device, context, target, pass.target == PassTarget::Dedicated);
+                }
+                drawn.emplace_back(&pass, target.srv);
+            }
+            if (drawn.empty()) {
+                return;
+            }
 
-            // pass 2: back onto the eye texture the hook host bound for us. Rebinding it is this
+            // step 2: back onto the eye texture the hook host bound for us. Rebinding it is this
             // callback's responsibility - the host binds it once for the whole callback list, so a
             // callback that redirects the render target and does not put it back would silently
             // steal every overlay drawn after it.
@@ -599,7 +625,13 @@ float4 main(PS_INPUT input) : SV_Target {
             viewport.MaxDepth = 1.0f;
             context->RSSetViewports(1, &viewport);
 
-            drawQuads(submitFrame, quads, target.srv);
+            // no depth write, so where two frames' canvases overlap the farther frame is drawn first
+            std::ranges::stable_sort(drawn, [](const auto& lhs, const auto& rhs) {
+                return farthestQuad(*lhs.first) > farthestQuad(*rhs.first);
+            });
+            for (const auto& [pass, texture] : drawn) {
+                drawQuads(submitFrame, pass->quads, texture);
+            }
         }
     }
 
@@ -640,7 +672,9 @@ float4 main(PS_INPUT input) : SV_Target {
     {
         const bool hasContent = !frame.empty();
         // a frame of canvases that are all drawn on top needs no scene depth
-        const bool readsSceneDepth = std::ranges::any_of(frame.quads, &CanvasQuad::occluded);
+        const bool readsSceneDepth = std::ranges::any_of(frame.passes, [](const FramePass& pass) {
+            return std::ranges::any_of(pass.quads, &CanvasQuad::occluded);
+        });
         {
             std::scoped_lock lock(s_frameMutex);
             // the texture writes of a frame that was not drawn come before this frame's

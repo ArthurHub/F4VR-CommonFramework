@@ -1,5 +1,7 @@
 #pragma once
 
+#include <algorithm>
+#include <cstdint>
 #include <memory>
 #include <vector>
 
@@ -63,10 +65,23 @@ namespace f4cf::imgui::internal
     };
 
     /**
-     * One published frame: the ImGui pixels to rasterize into a texture, plus where each canvas's
-     * slice of that texture goes in the world.
+     * The texture an ImGui frame is rasterized into.
      */
-    struct RenderFrame
+    enum class PassTarget : std::uint8_t
+    {
+        // the atlas the canvases share
+        Atlas,
+        // the texture of a dedicated canvas, of that canvas's size
+        Dedicated,
+        // the texture of the canvas of the own context (Canvas::setOwnContext), of that canvas's size
+        OwnContext,
+    };
+
+    /**
+     * One ImGui frame of a published frame: the ImGui pixels to rasterize into a texture, plus where each
+     * canvas's slice of that texture goes in the world.
+     */
+    struct FramePass
     {
         // shared, not unique: the render thread takes a reference under the publish mutex and draws
         // outside it, so publishing never blocks on a draw and a frame that misses a publish redraws
@@ -74,11 +89,24 @@ namespace f4cf::imgui::internal
         std::shared_ptr<ClonedDrawData> drawData;
         std::vector<CanvasQuad> quads;
 
-        // The texture the frame is rasterized into, and its size in texture pixels: the atlas the canvases
-        // share, or the texture of a dedicated canvas, which has the size of that canvas.
-        bool dedicated = false;
+        // the texture the frame is rasterized into, and its size in texture pixels
+        PassTarget target = PassTarget::Atlas;
         int textureWidth = 0;
         int textureHeight = 0;
+
+        bool empty() const
+        {
+            return !drawData || quads.empty();
+        }
+    };
+
+    /**
+     * One published frame: the frame of the mod's canvases, then the frame of the own context's canvas when
+     * one is shown beside them.
+     */
+    struct RenderFrame
+    {
+        std::vector<FramePass> passes;
 
         // The parts of ImGui's textures to write before the frame is drawn, in order. A frame that replaces
         // another before it is drawn takes the other's first.
@@ -86,7 +114,7 @@ namespace f4cf::imgui::internal
 
         bool empty() const
         {
-            return !drawData || quads.empty();
+            return std::ranges::all_of(passes, &FramePass::empty);
         }
     };
 
@@ -96,8 +124,9 @@ namespace f4cf::imgui::internal
 
     /**
      * The per-frame pump, run after the mod's onFrameUpdate: build one ImGui frame containing every
-     * visible canvas, or the dedicated canvas alone while one is shown, clone it, and publish it with
-     * the quads to the render thread. A no-op while no canvas is visible.
+     * visible canvas, or the dedicated canvas alone while one is shown, and a frame of the own context's
+     * canvas beside it, clone them, and publish them with the quads to the render thread. A no-op while
+     * no canvas is visible.
      */
     void onFrameEnd();
 }

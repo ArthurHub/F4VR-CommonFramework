@@ -40,7 +40,8 @@ namespace f4cf::imgui::internal
         // they cannot follow a later setSupersample. The scale is taken from the whole-pixel texture
         // size rather than the requested factor, so the scaled frame lands exactly on what the quads'
         // UVs address.
-        // A dedicated canvas is rasterized at the same scale, into a texture of its own.
+        // A dedicated canvas, and the own context's canvas, are rasterized at the same scale, each into a texture
+        // of its own.
         int s_atlasTextureSize = 0;
         float s_atlasScale = 1.0f;
 
@@ -64,8 +65,8 @@ namespace f4cf::imgui::internal
             int textureWidth = 0;
             int textureHeight = 0;
 
-            // the display is one dedicated canvas, and the texture is that canvas's own
-            bool dedicated = false;
+            // the atlas, or one canvas whose texture is that canvas's own
+            PassTarget target = PassTarget::Atlas;
         };
 
         FrameDisplay atlasDisplay()
@@ -74,16 +75,16 @@ namespace f4cf::imgui::internal
         }
 
         /**
-         * The display that is the given dedicated canvas. Its texture is a whole number of pixels, so the
-         * canvas can end a part of a pixel before the texture's edge.
+         * The display that is the given canvas, dedicated or the own context's, with a texture of its own. Its
+         * texture is a whole number of pixels, so the canvas can end a part of a pixel before the texture's edge.
          */
-        FrameDisplay dedicatedDisplay(const Canvas& canvas)
+        FrameDisplay canvasDisplay(const Canvas& canvas, const PassTarget target)
         {
             return { .width = canvas.pixelWidth(),
                 .height = canvas.pixelHeight(),
                 .textureWidth = static_cast<int>(std::ceil(static_cast<float>(canvas.pixelWidth()) * s_atlasScale)),
                 .textureHeight = static_cast<int>(std::ceil(static_cast<float>(canvas.pixelHeight()) * s_atlasScale)),
-                .dedicated = true };
+                .target = target };
         }
 
         // ImGui asserts on a non-positive delta; also stops a load-hitch from animating wildly.
@@ -174,6 +175,47 @@ namespace f4cf::imgui::internal
             s_lastFrameTime = std::chrono::steady_clock::now();
             s_contextReady = true;
             logger::info("ImGui context ready ({:.2f}x supersampled)", s_atlasScale);
+            return true;
+        }
+
+        // the context of the canvas drawn beside the mod's canvases (Canvas::setOwnContext), made when first needed
+        ImGuiContext* s_ownContext = nullptr;
+
+        /**
+         * Create the own context once, after the main one, and leave the main one current. It shares the main
+         * context's font atlas, which the main context owns and updates as its frame begins, so it is drawn only
+         * in a frame the main context drew first.
+         * It shares the main context's DX11 backend data too, which is the device's and no context's: the render
+         * thread draws either context's frame with whichever one is current, as the game thread switches them.
+         */
+        bool ensureOwnContext()
+        {
+            if (s_ownContext) {
+                return true;
+            }
+
+            ImGuiContext* main = ImGui::GetCurrentContext();
+            const ImGuiIO& mainIo = ImGui::GetIO();
+            ImGuiContext* own = ImGui::CreateContext(mainIo.Fonts);
+            if (!own) {
+                return false;
+            }
+
+            ImGui::SetCurrentContext(own);
+            auto& io = ImGui::GetIO();
+            io.IniFilename = nullptr;
+            io.LogFilename = nullptr;
+            io.MouseDrawCursor = false;
+            io.DisplayFramebufferScale = mainIo.DisplayFramebufferScale;
+            // ImGui checks that the contexts that share an atlas agree on who makes its textures
+            io.BackendFlags = mainIo.BackendFlags;
+            io.BackendRendererName = mainIo.BackendRendererName;
+            io.BackendRendererUserData = mainIo.BackendRendererUserData;
+            ImGui::StyleColorsDark();
+            ImGui::SetCurrentContext(main);
+
+            s_ownContext = own;
+            logger::info("ImGui own context ready, sharing the font atlas");
             return true;
         }
 
@@ -325,6 +367,221 @@ namespace f4cf::imgui::internal
         pointer().onCanvasRemoved(canvas);
     }
 
+    namespace
+    {
+        /**
+         * A canvas placed in a frame's display: its window's corner there, its placement, and its quad.
+         */
+        struct PackedCanvas
+        {
+            Canvas* canvas;
+            int x;
+            int y;
+            CanvasPlacement placement;
+            CanvasQuad quad;
+        };
+
+        bool resolvePlacement(const Canvas* canvas, CanvasPlacement& placement)
+        {
+            return !canvas->placement() || canvas->placement()(placement);
+        }
+
+        PackedCanvas packCanvas(Canvas* canvas, const CanvasPlacement& placement, const FrameDisplay& display, const int x, const int y, const RE::NiPoint3& viewer)
+        {
+            return PackedCanvas{ .canvas = canvas,
+                .x = x,
+                .y = y,
+                .placement = placement,
+                .quad = buildQuad(placement, display, x, y, canvas->pixelWidth(), canvas->pixelHeight(), viewer, canvas->isOccluded()) };
+        }
+
+        // no scrollbar: the content child can be given more room than the window, and a scrollbar is what
+        // ImGui would otherwise answer that with
+        constexpr ImGuiWindowFlags CANVAS_FLAGS = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse |
+                                                  ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNav |
+                                                  ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoScrollbar;
+
+        /**
+         * The canvas's window in the current ImGui frame: its background and border, and its content in a child
+         * of the padded rectangle, which is measured.
+         */
+        void drawCanvasWindow(const PackedCanvas& entry)
+        {
+            const auto& textColor = entry.canvas->textColor();
+            const auto& background = entry.canvas->backgroundColor();
+            const auto& borderColor = entry.canvas->borderColor();
+            const float borderThickness = entry.canvas->borderThickness();
+
+            // A border is stroked centred on its rectangle's edge. The window is inset by half the
+            // thickness so the whole stroke lands inside the canvas's atlas slot: the border grows
+            // inward from the canvas's edge, as a vrui::UIPanel's does, and never reaches the
+            // neighbouring slot.
+            const float halfBorder = borderThickness * 0.5f;
+            const float windowX = static_cast<float>(entry.x) + halfBorder;
+            const float windowY = static_cast<float>(entry.y) + halfBorder;
+            const float windowWidth = (std::max)(1.0f, static_cast<float>(entry.canvas->pixelWidth()) - borderThickness);
+            const float windowHeight = (std::max)(1.0f, static_cast<float>(entry.canvas->pixelHeight()) - borderThickness);
+            ImGui::SetNextWindowPos(ImVec2(windowX, windowY));
+            ImGui::SetNextWindowSize(ImVec2(windowWidth, windowHeight));
+
+            // Pushed per canvas so canvases in one frame can differ, and popped whether or not Begin
+            // returned true: an unbalanced stack corrupts every canvas after this one.
+            //
+            // ImGui's WindowPadding is one number per axis, so per-side padding cannot come from it.
+            // The window gets none and the content goes in a child sized to the padded rectangle,
+            // which also gives stretch-to-fit items (a separator, a full-width progress bar) the
+            // right edge to stretch to.
+            //
+            // Begin takes the padding and the border for the canvas window, so both are popped right
+            // after it: a popup, a dialog or a bordered child the content opens has ImGui's own.
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(textColor.r, textColor.g, textColor.b, textColor.a));
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+            const bool windowOpen = ImGui::Begin(entry.canvas->name().c_str(), nullptr, CANVAS_FLAGS);
+            ImGui::PopStyleVar(2);
+            if (windowOpen) {
+                // The canvas draws the window's background and border itself. One radius rounds both, so
+                // no background shows past the border at a corner; taking off the inset puts the border's
+                // outer arc on the radius asked for. Clipped to the slot rather than the window, since half
+                // the stroke lies outside the window rect.
+                ImDrawList* drawList = ImGui::GetWindowDrawList();
+                const ImVec2 windowMin(windowX, windowY);
+                const ImVec2 windowMax(windowX + windowWidth, windowY + windowHeight);
+                const float rounding = (std::max)(0.0f, entry.canvas->cornerRadius() - halfBorder);
+                drawList->PushClipRect(ImVec2(static_cast<float>(entry.x), static_cast<float>(entry.y)),
+                    ImVec2(static_cast<float>(entry.x + entry.canvas->pixelWidth()), static_cast<float>(entry.y + entry.canvas->pixelHeight())),
+                    false);
+                drawList->AddRectFilled(windowMin, windowMax, ImGui::ColorConvertFloat4ToU32(ImVec4(background.r, background.g, background.b, background.a)), rounding);
+                if (borderThickness > 0.0f) {
+                    drawList->AddRect(windowMin,
+                        windowMax,
+                        ImGui::ColorConvertFloat4ToU32(ImVec4(borderColor.r, borderColor.g, borderColor.b, borderColor.a)),
+                        rounding,
+                        borderThickness);
+                }
+                drawList->PopClipRect();
+
+                // the window starts half a border in, so each side adds its padding plus the border's
+                // other half to clear the inner edge
+                const auto& padding = entry.canvas->padding();
+                const float contentX = windowX + padding.left + halfBorder;
+                const float contentY = windowY + padding.top + halfBorder;
+                const float contentWidth = (std::max)(1.0f, windowWidth - padding.left - padding.right - borderThickness);
+                const float contentHeight = (std::max)(1.0f, windowHeight - padding.top - padding.bottom - borderThickness);
+
+                // A canvas sized to its content lays it out in more room than it shows, so the content is
+                // measured against that room rather than against last frame's size - in which wrapped text
+                // would stay wrapped and a stretched item keep the width it had, so the canvas could never
+                // grow past the one or shrink past the other. The clip is the shown rectangle, and a child
+                // takes its clip from its parent's, so what runs past it stops at the padding instead of
+                // drawing over it. No scrollbar in that room either: one would take width from the content
+                // and change what was measured.
+                const CanvasSize& available = entry.canvas->availableContentSize();
+                const float roomWidth = available.width > 0.0f ? available.width : contentWidth;
+                const float roomHeight = available.height > 0.0f ? available.height : contentHeight;
+                const bool roomGiven = available.width > 0.0f || available.height > 0.0f;
+                ImGui::PushClipRect(ImVec2(contentX, contentY), ImVec2(contentX + contentWidth, contentY + contentHeight), true);
+                ImGui::SetCursorPos(ImVec2(padding.left + halfBorder, padding.top + halfBorder));
+                if (ImGui::BeginChild("content",
+                        ImVec2(roomWidth, roomHeight),
+                        ImGuiChildFlags_None,
+                        ImGuiWindowFlags_NoBackground | (roomGiven ? ImGuiWindowFlags_NoScrollbar : 0))) {
+                    // the group's rectangle is everything the content laid out, which is what measures it;
+                    // rounded up so the size it is given back never clips its last column of pixels
+                    ImGui::BeginGroup();
+                    {
+                        F4CF_PERF_SCOPE("content");
+                        entry.canvas->content()();
+                    }
+                    ImGui::EndGroup();
+                    const ImVec2 measured = ImGui::GetItemRectSize();
+                    entry.canvas->setMeasuredContentSize(CanvasSize{ .width = std::ceil(measured.x), .height = std::ceil(measured.y) });
+                }
+                ImGui::EndChild(); // unconditional: ImGui asserts on an unmatched BeginChild
+                ImGui::PopClipRect();
+            }
+            ImGui::End();
+            ImGui::PopStyleColor();
+        }
+
+        /**
+         * One ImGui frame of the current context, with the given canvases in it, rasterized into the display's
+         * texture. Its texture writes are added to the given ones. The main context's frame also tells the pointer
+         * whether ImGui uses the mouse, which it does as the frame begins.
+         */
+        FramePass buildPass(const std::vector<PackedCanvas>& packed, const FrameDisplay& display, const float deltaSeconds, const bool mainContext, const RE::NiPoint3& viewer,
+            std::vector<TextureWrite>& textureWrites)
+        {
+            // ImGui keeps what the content opens inside its display: a combo's list, a popup, a dialog
+            auto& io = ImGui::GetIO();
+            io.DisplaySize = ImVec2(static_cast<float>(display.width), static_cast<float>(display.height));
+            io.DeltaTime = deltaSeconds;
+
+            {
+                F4CF_PERF_SCOPE("build");
+                if (mainContext) {
+                    ImGui_ImplDX11_NewFrame();
+                }
+                ImGui::NewFrame();
+                if (mainContext) {
+                    pointer().setWanted(io.WantCaptureMouse);
+                }
+
+                // ImGui's anti-aliasing fringe is one layout pixel; scaled by this it stays one atlas pixel instead of
+                // softening every edge by the atlas scale. NewFrame sets it to 1, and each window takes it as it begins,
+                // so set here it reaches every window of the frame, the popups the content opens too.
+                ImGui::GetDrawListSharedData()->InitialFringeScale = 1.0f / s_atlasScale;
+
+                for (const auto& entry : packed) {
+                    drawCanvasWindow(entry);
+                }
+                ImGui::Render();
+            }
+
+            {
+                // the same textures in each context, as they share the atlas: a part written in the frame of one is
+                // written once, and a texture the frame of the other has made since is answered here
+                F4CF_PERF_SCOPE("textures");
+                auto writes = updateTextures(render::getDevice());
+                textureWrites.insert(textureWrites.end(), std::make_move_iterator(writes.begin()), std::make_move_iterator(writes.end()));
+            }
+
+            FramePass pass;
+            {
+                F4CF_PERF_SCOPE("drawData");
+                pass.drawData = std::make_shared<ClonedDrawData>();
+                pass.drawData->copyFrom(*ImGui::GetDrawData());
+                pass.drawData->textures = takeFrameTextures();
+                addTextureViews(pass.drawData->textures);
+            }
+            pass.target = display.target;
+            pass.textureWidth = display.textureWidth;
+            pass.textureHeight = display.textureHeight;
+            {
+                F4CF_PERF_SCOPE("quads");
+                pass.quads.reserve(packed.size());
+                for (const auto& entry : packed) {
+                    if (!entry.placement.show) {
+                        continue; // laid out to be measured, not to be seen
+                    }
+                    appendDrawnQuads(pass.quads, entry.quad, entry.placement.curveRadius, viewer);
+                }
+
+                // Occluded quads first, so each group is one contiguous run the renderer can draw with one
+                // pipeline state - and so a canvas that opted out of being hidden is not then hidden by a
+                // canvas that did not. Within a group: no depth write, so quads do not occlude each other,
+                // and far ones have to be drawn first.
+                std::ranges::sort(pass.quads, [](const CanvasQuad& lhs, const CanvasQuad& rhs) {
+                    if (lhs.occluded != rhs.occluded) {
+                        return lhs.occluded;
+                    }
+                    return lhs.viewerDistance > rhs.viewerDistance;
+                });
+            }
+            return pass;
+        }
+    }
+
     void onFrameEnd()
     {
         F4CF_PERF_SCOPE("imguiCanvases");
@@ -357,48 +614,31 @@ namespace f4cf::imgui::internal
         // render thread, which is why the quads travel as finished world coordinates.
         const RE::NiPoint3 viewer = viewerPosition();
 
-        struct PackedCanvas
-        {
-            Canvas* canvas;
-            int x;
-            int y;
-            CanvasPlacement placement;
-            CanvasQuad quad;
-        };
-
-        const auto resolvePlacement = [](const Canvas* canvas, CanvasPlacement& placement) {
-            return !canvas->placement() || canvas->placement()(placement);
-        };
-        const auto packCanvas = [&viewer](Canvas* canvas, const CanvasPlacement& placement, const FrameDisplay& display, const int x, const int y) {
-            return PackedCanvas{ .canvas = canvas,
-                .x = x,
-                .y = y,
-                .placement = placement,
-                .quad = buildQuad(placement, display, x, y, canvas->pixelWidth(), canvas->pixelHeight(), viewer, canvas->isOccluded()) };
-        };
-
         // A dedicated canvas that is shown is ImGui's display, and ImGui has one display: the frame then
         // holds that canvas alone, and the other canvases are not drawn until it is hidden. Of two that
         // are shown it is the one created first.
+        // The canvas of the own context is in a frame of its own, beside them, so it is not one of them.
         std::vector<PackedCanvas> packed;
         FrameDisplay display = atlasDisplay();
+        std::vector<PackedCanvas> ownPacked;
+        FrameDisplay ownDisplay;
         {
             F4CF_PERF_SCOPE("place");
             for (Canvas* canvas : active) {
                 CanvasPlacement placement;
-                if (canvas->isDedicated() && resolvePlacement(canvas, placement)) {
-                    display = dedicatedDisplay(*canvas);
-                    packed.push_back(packCanvas(canvas, placement, display, 0, 0));
+                if (canvas->isDedicated() && !canvas->hasOwnContext() && resolvePlacement(canvas, placement)) {
+                    display = canvasDisplay(*canvas, PassTarget::Dedicated);
+                    packed.push_back(packCanvas(canvas, placement, display, 0, 0, viewer));
                     break;
                 }
             }
 
             // with none, the display is the atlas and every canvas is packed into it
-            if (!display.dedicated) {
+            if (display.target == PassTarget::Atlas) {
                 ShelfPacker packer;
                 for (Canvas* canvas : active) {
                     CanvasPlacement placement;
-                    if (canvas->isDedicated() || !resolvePlacement(canvas, placement)) {
+                    if (canvas->isDedicated() || canvas->hasOwnContext() || !resolvePlacement(canvas, placement)) {
                         continue;
                     }
                     int x = 0;
@@ -407,10 +647,21 @@ namespace f4cf::imgui::internal
                         logger::sample(5000, "Canvas '{}' does not fit the {}x{} atlas; skipped", canvas->name(), ATLAS_WIDTH, ATLAS_HEIGHT);
                         continue;
                     }
-                    packed.push_back(packCanvas(canvas, placement, display, x, y));
+                    packed.push_back(packCanvas(canvas, placement, display, x, y, viewer));
+                }
+            }
+
+            // the own context has one display too: of two of its canvases that are shown, the one created first
+            for (Canvas* canvas : active) {
+                CanvasPlacement placement;
+                if (canvas->hasOwnContext() && resolvePlacement(canvas, placement)) {
+                    ownDisplay = canvasDisplay(*canvas, PassTarget::OwnContext);
+                    ownPacked.push_back(packCanvas(canvas, placement, ownDisplay, 0, 0, viewer));
+                    break;
                 }
             }
         }
+        // the own context's canvas is drawn beside the mod's canvases, and not alone: see ensureOwnContext
         if (packed.empty()) {
             keyboard().update(false);
             pointer().update({});
@@ -421,6 +672,7 @@ namespace f4cf::imgui::internal
         // The pointer can be on the interactive canvases that are shown. With none the vector stays empty,
         // which allocates nothing, and nothing is read from the game for the pointer. While a game menu takes the
         // controllers' input it is on none: the canvases are shown, and the game's menu has the ray and the trigger.
+        // The own context's canvas takes no pointer.
         std::vector<PointerTarget> pointerTargets;
         const bool gameMenuTakesInput = f4vr::isGameMenuTakingInput();
         for (const auto& entry : packed) {
@@ -435,11 +687,6 @@ namespace f4cf::imgui::internal
             }
         }
 
-        // ImGui keeps what the content opens inside its display: a combo's list, a popup, a dialog
-        auto& io = ImGui::GetIO();
-        io.DisplaySize = ImVec2(static_cast<float>(display.width), static_cast<float>(display.height));
-        io.DeltaTime = frameDeltaSeconds();
-
         // before the frame begins, so its widgets see where the pointer is now and what was typed. While SteamVR's
         // keyboard is shown, its own lasers type on it, and the pointer is on no canvas: a press of the ray
         // beside the field would leave it. SteamVR keeps the controllers from the game meanwhile.
@@ -449,159 +696,16 @@ namespace f4cf::imgui::internal
             pointer().update(keyboard().holdsPointer() ? std::vector<PointerTarget>() : pointerTargets);
         }
 
-        // the ImGui frame, with every canvas's content in it
-        {
-            F4CF_PERF_SCOPE("build");
-            ImGui_ImplDX11_NewFrame();
-            ImGui::NewFrame();
-            pointer().setWanted(io.WantCaptureMouse);
-
-            // ImGui's anti-aliasing fringe is one layout pixel; scaled by this it stays one atlas pixel instead of
-            // softening every edge by the atlas scale. NewFrame sets it to 1, and each window takes it as it begins,
-            // so set here it reaches every window of the frame, the popups the content opens too.
-            ImGui::GetDrawListSharedData()->InitialFringeScale = 1.0f / s_atlasScale;
-
-            // no scrollbar: the content child can be given more room than the window, and a scrollbar is what
-            // ImGui would otherwise answer that with
-            constexpr ImGuiWindowFlags CANVAS_FLAGS = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse |
-                                                      ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNav |
-                                                      ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoScrollbar;
-
-            for (const auto& entry : packed) {
-                const auto& textColor = entry.canvas->textColor();
-                const auto& background = entry.canvas->backgroundColor();
-                const auto& borderColor = entry.canvas->borderColor();
-                const float borderThickness = entry.canvas->borderThickness();
-
-                // A border is stroked centred on its rectangle's edge. The window is inset by half the
-                // thickness so the whole stroke lands inside the canvas's atlas slot: the border grows
-                // inward from the canvas's edge, as a vrui::UIPanel's does, and never reaches the
-                // neighbouring slot.
-                const float halfBorder = borderThickness * 0.5f;
-                const float windowX = static_cast<float>(entry.x) + halfBorder;
-                const float windowY = static_cast<float>(entry.y) + halfBorder;
-                const float windowWidth = (std::max)(1.0f, static_cast<float>(entry.canvas->pixelWidth()) - borderThickness);
-                const float windowHeight = (std::max)(1.0f, static_cast<float>(entry.canvas->pixelHeight()) - borderThickness);
-                ImGui::SetNextWindowPos(ImVec2(windowX, windowY));
-                ImGui::SetNextWindowSize(ImVec2(windowWidth, windowHeight));
-
-                // Pushed per canvas so canvases in one frame can differ, and popped whether or not Begin
-                // returned true: an unbalanced stack corrupts every canvas after this one.
-                //
-                // ImGui's WindowPadding is one number per axis, so per-side padding cannot come from it.
-                // The window gets none and the content goes in a child sized to the padded rectangle,
-                // which also gives stretch-to-fit items (a separator, a full-width progress bar) the
-                // right edge to stretch to.
-                //
-                // Begin takes the padding and the border for the canvas window, so both are popped right
-                // after it: a popup, a dialog or a bordered child the content opens has ImGui's own.
-                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(textColor.r, textColor.g, textColor.b, textColor.a));
-                ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
-                ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
-                const bool windowOpen = ImGui::Begin(entry.canvas->name().c_str(), nullptr, CANVAS_FLAGS);
-                ImGui::PopStyleVar(2);
-                if (windowOpen) {
-                    // The canvas draws the window's background and border itself. One radius rounds both, so
-                    // no background shows past the border at a corner; taking off the inset puts the border's
-                    // outer arc on the radius asked for. Clipped to the slot rather than the window, since half
-                    // the stroke lies outside the window rect.
-                    ImDrawList* drawList = ImGui::GetWindowDrawList();
-                    const ImVec2 windowMin(windowX, windowY);
-                    const ImVec2 windowMax(windowX + windowWidth, windowY + windowHeight);
-                    const float rounding = (std::max)(0.0f, entry.canvas->cornerRadius() - halfBorder);
-                    drawList->PushClipRect(ImVec2(static_cast<float>(entry.x), static_cast<float>(entry.y)),
-                        ImVec2(static_cast<float>(entry.x + entry.canvas->pixelWidth()), static_cast<float>(entry.y + entry.canvas->pixelHeight())),
-                        false);
-                    drawList->AddRectFilled(windowMin, windowMax, ImGui::ColorConvertFloat4ToU32(ImVec4(background.r, background.g, background.b, background.a)), rounding);
-                    if (borderThickness > 0.0f) {
-                        drawList->AddRect(windowMin,
-                            windowMax,
-                            ImGui::ColorConvertFloat4ToU32(ImVec4(borderColor.r, borderColor.g, borderColor.b, borderColor.a)),
-                            rounding,
-                            borderThickness);
-                    }
-                    drawList->PopClipRect();
-
-                    // the window starts half a border in, so each side adds its padding plus the border's
-                    // other half to clear the inner edge
-                    const auto& padding = entry.canvas->padding();
-                    const float contentX = windowX + padding.left + halfBorder;
-                    const float contentY = windowY + padding.top + halfBorder;
-                    const float contentWidth = (std::max)(1.0f, windowWidth - padding.left - padding.right - borderThickness);
-                    const float contentHeight = (std::max)(1.0f, windowHeight - padding.top - padding.bottom - borderThickness);
-
-                    // A canvas sized to its content lays it out in more room than it shows, so the content is
-                    // measured against that room rather than against last frame's size - in which wrapped text
-                    // would stay wrapped and a stretched item keep the width it had, so the canvas could never
-                    // grow past the one or shrink past the other. The clip is the shown rectangle, and a child
-                    // takes its clip from its parent's, so what runs past it stops at the padding instead of
-                    // drawing over it. No scrollbar in that room either: one would take width from the content
-                    // and change what was measured.
-                    const CanvasSize& available = entry.canvas->availableContentSize();
-                    const float roomWidth = available.width > 0.0f ? available.width : contentWidth;
-                    const float roomHeight = available.height > 0.0f ? available.height : contentHeight;
-                    const bool roomGiven = available.width > 0.0f || available.height > 0.0f;
-                    ImGui::PushClipRect(ImVec2(contentX, contentY), ImVec2(contentX + contentWidth, contentY + contentHeight), true);
-                    ImGui::SetCursorPos(ImVec2(padding.left + halfBorder, padding.top + halfBorder));
-                    if (ImGui::BeginChild("content",
-                            ImVec2(roomWidth, roomHeight),
-                            ImGuiChildFlags_None,
-                            ImGuiWindowFlags_NoBackground | (roomGiven ? ImGuiWindowFlags_NoScrollbar : 0))) {
-                        // the group's rectangle is everything the content laid out, which is what measures it;
-                        // rounded up so the size it is given back never clips its last column of pixels
-                        ImGui::BeginGroup();
-                        {
-                            F4CF_PERF_SCOPE("content");
-                            entry.canvas->content()();
-                        }
-                        ImGui::EndGroup();
-                        const ImVec2 measured = ImGui::GetItemRectSize();
-                        entry.canvas->setMeasuredContentSize(CanvasSize{ .width = std::ceil(measured.x), .height = std::ceil(measured.y) });
-                    }
-                    ImGui::EndChild(); // unconditional: ImGui asserts on an unmatched BeginChild
-                    ImGui::PopClipRect();
-                }
-                ImGui::End();
-                ImGui::PopStyleColor();
-            }
-            ImGui::Render();
-        }
-
+        // the main context's frame, with every canvas's content in it, then the own context's beside it
+        const float deltaSeconds = frameDeltaSeconds();
         RenderFrame frame;
-        {
-            F4CF_PERF_SCOPE("textures");
-            frame.textureWrites = updateTextures(render::getDevice());
-        }
-        {
-            F4CF_PERF_SCOPE("drawData");
-            frame.drawData = std::make_shared<ClonedDrawData>();
-            frame.drawData->copyFrom(*ImGui::GetDrawData());
-            frame.drawData->textures = takeFrameTextures();
-            addTextureViews(frame.drawData->textures);
-        }
-        frame.dedicated = display.dedicated;
-        frame.textureWidth = display.textureWidth;
-        frame.textureHeight = display.textureHeight;
-        {
-            F4CF_PERF_SCOPE("quads");
-            frame.quads.reserve(packed.size());
-            for (const auto& entry : packed) {
-                if (!entry.placement.show) {
-                    continue; // laid out to be measured, not to be seen
-                }
-                appendDrawnQuads(frame.quads, entry.quad, entry.placement.curveRadius, viewer);
-            }
-
-            // Occluded quads first, so each group is one contiguous run the renderer can draw with one
-            // pipeline state - and so a canvas that opted out of being hidden is not then hidden by a
-            // canvas that did not. Within a group: no depth write, so quads do not occlude each other,
-            // and far ones have to be drawn first.
-            std::ranges::sort(frame.quads, [](const CanvasQuad& lhs, const CanvasQuad& rhs) {
-                if (lhs.occluded != rhs.occluded) {
-                    return lhs.occluded;
-                }
-                return lhs.viewerDistance > rhs.viewerDistance;
-            });
+        frame.passes.push_back(buildPass(packed, display, deltaSeconds, true, viewer, frame.textureWrites));
+        if (!ownPacked.empty() && ensureOwnContext()) {
+            F4CF_PERF_SCOPE("ownContext");
+            ImGuiContext* main = ImGui::GetCurrentContext();
+            ImGui::SetCurrentContext(s_ownContext);
+            frame.passes.push_back(buildPass(ownPacked, ownDisplay, deltaSeconds, false, viewer, frame.textureWrites));
+            ImGui::SetCurrentContext(main);
         }
 
         renderer::publish(std::move(frame));

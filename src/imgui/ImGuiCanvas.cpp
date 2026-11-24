@@ -69,6 +69,24 @@ namespace f4cf::imgui
         setAvailableContentSize(_availableContentSize);
     }
 
+    /**
+     * Whether the canvas is drawn in an ImGui context of its own, the framework's, in place of the one the mod's
+     * canvases share. It is for a canvas of the framework's, shown beside the mod's dedicated canvas:
+     * - It is drawn beside a dedicated canvas, which is otherwise the only canvas shown, and only while one of
+     *   the mod's canvases is drawn too, as the contexts share the font atlas the main one updates.
+     * - Its own context is its display, with a texture of the canvas's size, as for a dedicated canvas.
+     * - Nothing it does reaches the main context, so a text field there stays edited.
+     * - It takes no pointer. Of two such canvases that are shown, the one created first is drawn.
+     */
+    void Canvas::setOwnContext(const bool ownContext)
+    {
+        _ownContext = ownContext;
+
+        // back inside what it may have now
+        setPixelSize(_pixelWidth, _pixelHeight);
+        setAvailableContentSize(_availableContentSize);
+    }
+
     void Canvas::setOccluded(const bool occluded)
     {
         _occluded = occluded;

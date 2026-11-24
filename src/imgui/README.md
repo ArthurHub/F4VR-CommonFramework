@@ -299,6 +299,12 @@ imgui::internal::onFrameEnd()                   draw callback (DRAW_ORDER_PANELS
 - **One frame, one atlas:** each canvas is a window in its own sub-rect, drawn as one quad. The quads are
   sorted by occlusion group, so all canvases take two draws at most. A dedicated canvas is a frame of
   its own, into its own texture.
+- **The framework's own canvas** (`Canvas::setOwnContext`, internal) is drawn in a second ImGui context,
+  in a second frame after the first, into a texture of its own, so it shows beside a dedicated canvas
+  and nothing it does reaches the first context: a text field there stays edited. The second context
+  shares the first's font atlas, which the first updates as its frame begins, so it is drawn only in a
+  frame the first drew, and the first's DX11 backend data, so the render thread draws either frame with
+  either context current. Where the two frames' canvases overlap, the farther frame is drawn first.
 - **Rasterized flat first,** because ImGui clips with 2D scissor rectangles (scrolling, child windows,
   tables), which have no meaning on a turned 3D quad.
 - **The draw data is cloned** (`ImDrawList::CloneOutput`): the next `NewFrame` reuses ImGui's buffers,

@@ -204,6 +204,9 @@ namespace f4cf::imgui
         // Internal: keep the canvas's resolution and chrome in step with what vrui laid out.
         virtual void onFrameUpdate(vrui::UIFrameUpdateContext* context) override;
 
+        // Internal: a panel of the framework's own, drawn beside the mod's canvases.
+        void setOwnContext(bool ownContext);
+
     protected:
         void writeDevLayoutFields(std::string& line) const override;
         void readDevLayoutFields(const DevLayoutFields& fields) override;

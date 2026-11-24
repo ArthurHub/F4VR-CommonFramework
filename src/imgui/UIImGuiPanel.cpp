@@ -256,6 +256,18 @@ namespace f4cf::imgui
     }
 
     /**
+     * Whether the panel is drawn in the framework's own ImGui context, beside the mod's canvases and a dedicated
+     * one among them, with a texture of its own. See Canvas::setOwnContext.
+     */
+    void UIImGuiPanel::setOwnContext(const bool ownContext)
+    {
+        _canvas->setOwnContext(ownContext);
+
+        // the most pixels the panel may have changed with it
+        refreshCanvas();
+    }
+
+    /**
      * Curve the panel toward the player: it is bent around a cylinder of this radius, whose axis runs along
      * the panel's height in front of its middle. 0, the default, is a flat panel.
      * - The radius is in vrui units and is scaled with the panel, as its size is. A panel that stands as far

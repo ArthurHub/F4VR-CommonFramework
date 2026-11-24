@@ -169,7 +169,7 @@ namespace f4cf::imgui
          */
         int maxPixelSize() const
         {
-            return _dedicated ? MAX_DEDICATED_CANVAS_PIXEL_SIZE : MAX_CANVAS_PIXEL_SIZE;
+            return _dedicated || _ownContext ? MAX_DEDICATED_CANVAS_PIXEL_SIZE : MAX_CANVAS_PIXEL_SIZE;
         }
 
         /**
@@ -318,6 +318,14 @@ namespace f4cf::imgui
         const PlacementProvider& placement() const;
         void setMeasuredContentSize(const CanvasSize& size);
 
+        // Internal: a canvas of the framework's own, drawn beside the mod's canvases.
+        void setOwnContext(bool ownContext);
+
+        bool hasOwnContext() const
+        {
+            return _ownContext;
+        }
+
     private:
         std::string _name;
         int _pixelWidth;
@@ -327,6 +335,9 @@ namespace f4cf::imgui
 
         // has a texture of its own, and is ImGui's display while it is shown
         bool _dedicated = false;
+
+        // drawn in the framework's own ImGui context, beside the mod's canvases
+        bool _ownContext = false;
 
         // takes the pointer, so its widgets can be hovered, pressed and dragged
         bool _interactive = false;
