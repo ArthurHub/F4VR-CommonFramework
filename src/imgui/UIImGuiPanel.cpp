@@ -144,7 +144,8 @@ namespace f4cf::imgui
      * dedicated after it is created is then not reported at the atlas's size.
      *
      * The panel says when the pointer is on it, which vrui moves a panel in the world by
-     * (vrui::UIManager::setWorldMoveBinding). The pointer is as the ImGui frame before this one had it.
+     * (vrui::UIManager::setWorldMoveBinding), and for the own context's panel, which hand is on it. The pointer is
+     * as the ImGui frame before this one had it.
      */
     void UIImGuiPanel::onFrameUpdate(vrui::UIFrameUpdateContext* context)
     {
@@ -152,6 +153,14 @@ namespace f4cf::imgui
 
         if (const PointerState& state = pointer().state(); state.canvas == _canvas.get()) {
             context->markPointedAt(state.primaryHand, this, state.hitPosition);
+        }
+        // the canvas of the own context is pointed at by each hand on its own
+        if (_canvas->hasOwnContext()) {
+            for (const bool primaryHand : { true, false }) {
+                if (const auto& hand = pointer().ownCanvasHand(primaryHand); hand.on) {
+                    context->markPointedAt(primaryHand, this, hand.hitPosition);
+                }
+            }
         }
 
         if (const float fit = pixelFitFor(_size.width, _size.height, _canvas->maxPixelSize()); fit < 1.0f) {

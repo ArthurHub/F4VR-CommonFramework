@@ -1,58 +1,98 @@
 # VR keyboard — typing into an ImGui canvas
 
 A focused `ImGui::InputText` in a canvas is typed into. While ImGui edits a text field, the framework
-shows SteamVR's keyboard, and the keys of the game's window reach ImGui too, so a physical keyboard or a
-keyboard overlay that types into the window works as well. The content calls `ImGui::InputText` as on a
-screen and has nothing else to call.
+shows its own keyboard under the field's canvas, typed with the rays, and the keys of the game's window
+reach ImGui too, so a physical keyboard or a keyboard overlay that types into the window works as well.
+The content calls `ImGui::InputText` as on a screen and has nothing else to call.
 
-Both are in [`ImGuiKeyboard.cpp`](../../src/imgui/ImGuiKeyboard.cpp), beside the pointer that is
-the canvas's mouse ([`ImGuiPointer.cpp`](../../src/imgui/ImGuiPointer.cpp)), and run in the ImGui
-frame of [`ImGuiLayer.cpp`](../../src/imgui/ImGuiLayer.cpp). What the field is sent is decided in
+The keyboard is in [`ImGuiKeyboard.cpp`](../../src/imgui/ImGuiKeyboard.cpp), beside the pointer that
+is the canvas's mouse ([`ImGuiPointer.cpp`](../../src/imgui/ImGuiPointer.cpp)), and runs in the ImGui
+frame of [`ImGuiLayer.cpp`](../../src/imgui/ImGuiLayer.cpp). Its pages, the key a point hits, Shift,
+Caps, the repeat of a held key and the strokes ImGui is given are in
 [`ImGuiKeyboardLogic.h`](../../src/imgui/ImGuiKeyboardLogic.h), which is unit tested.
 
-The framework draws no keyboard of its own. A field that takes a number is typed on the same keyboard.
-
-## Why SteamVR's keyboard
+## Why the framework's own
 
 VR has no keyboard, and Dear ImGui has none either: it raises `io.WantTextInput` while a text field is
-edited, for the platform to show one. OpenVR has one, `IVROverlay::ShowKeyboardForOverlay`, and
-Fallout 4 VR uses it for both of its own text fields. A field in a canvas is then typed in the same way
-as the game's, on SteamVR's layout for the player's language, with SteamVR's own laser pointers.
+edited, for the platform to show one. OpenVR has one, `IVROverlay::ShowKeyboardForOverlay`, which
+Fallout 4 VR names the character with, but:
 
-## What the game does
+- **Not on every runtime.** OpenComposite has none: `ShowKeyboardForOverlay` sends
+  `VREvent_KeyboardDone` at once, and `GetKeyboardText` gives a fixed text (`Adventurer`). In xrizer
+  `ShowKeyboardForOverlay` returns `VROverlayError_RequestFailed`, and `GetKeyboardText` panics.
+- **Not where the field is.** SteamVR puts it where its dashboard was last opened, and
+  `SetKeyboardTransformAbsolute` closes it or takes its handle away.
+- **Not the field's text.** It sends only its whole text, with no event when its last character is
+  deleted, so the field is brought to it by comparing the two texts.
 
-Read off `Fallout4VR.exe` **1.2.72.0**, as image-relative offsets (base `0x140000000`).
+The framework's keyboard is drawn and typed like any canvas, on every runtime, and types into the field
+with ImGui's own key and character events.
 
-| Field | Overlay key | Keyboard shown | Events read |
-| --- | --- | --- | --- |
-| SPECIAL menu, the character's name | `SPECIALOverlay` | `0xBC9DB2`, in `0xBC9C2D` | `0xBCA19D` |
-| Examine menu, an item's new name | `ExamineMenu` | `0xB3BA1B` and `0xB3BF89` | `0xB38620` |
+## What it is
 
-Each menu creates an overlay of its own, named `Input Name`, and shows the keyboard for it: input mode
-Submit, a single line, at most 26 characters, the menu's name as the description and the field's text
-as the starting text. It then reads that overlay's events. `VREvent_KeyboardDone` (1202) takes the text
-with `GetKeyboardText` and passes it to the menu's Flash `onVirtualKeyboardResult`, and
-`VREvent_KeyboardClosed` (1200) cancels. Both hide the keyboard and the overlay. The code belongs to
-those two Flash menus, so there is nothing in it to call for another field.
+- **Shown** while ImGui edits a text field (the active item with an `InputTextState` that is not
+  read-only) on an interactive canvas that is shown. It is hidden when the field is left, which Done
+  and Close do, and when no interactive canvas is shown.
+- **A canvas of its own context** (`Canvas::setOwnContext`, see the [imgui README](../../src/imgui/README.md#how-it-is-drawn)):
+  an `imgui::UIImGuiPanel` drawn in a second ImGui context into its own texture, so it shows beside a
+  dedicated canvas, and nothing done on it reaches the main context, where the field stays the active
+  item. It is 24 by 10 vrui units, 1152 by 480 pixels, scaled to its width in the world.
+- **Pages:** QWERTY with the digits above it, what a US keyboard types with Shift; the symbols (`?123`);
+  the accented letters of Latin-1 and the common ones beside it, with their capitals, and ¿ ¡ « » € £ ¥
+  ° § (`áé`). Each ends in Close, two page keys, Space, Left, Right and Done, and has Backspace and
+  Clear. Shift shifts one character; Caps shifts the letters until pressed again. Every row's keys
+  line up, and a narrower row is centered.
+- **The line of the field's text** along its top: the text, its selection and its caret, scrolled to
+  keep the caret in view. The keyboard reads them from the field's `InputTextState` before each frame,
+  as its own context does not have the field.
 
-The game gets `IVROverlay_018`, the version of the framework's
-[`external/openvr/openvr.h`](../../external/openvr/openvr.h), so `vr::VROverlay()` calls the same
-functions. In that version `ShowKeyboardForOverlay` takes `bool bUseMinimalMode`, not the flags of a
-newer SDK.
+## Typing with the rays
 
-`BSPCVirtualKeyboardDevice`, the flat game's Steam Big Picture keyboard, is only `ret` stubs in the VR
-build.
+The keyboard's canvas is a pointer target (`PointerTarget::ownContext`). A ray that meets it before any
+other canvas is on it, and the pointer handles it as on any interactive canvas: the wand is hidden from
+the game, a pull that began on it stays on it until the trigger is released, and a trigger already down
+when the ray arrives is the game's. But it is not ImGui's mouse: the pointer keeps each hand on it apart
+(`Pointer::ownCanvasHand`), and draws both hands' rays with their marks. So both hands type at once, and
+a hand on the keyboard leaves the other the mouse of the canvas behind it.
 
-## The runtimes
+- **A pull on a key** presses it, as the trigger is pulled. The key is held until the trigger is
+  released, wherever the ray goes then. Backspace, Left and Right repeat while held: after 0.5 s, every
+  50 ms. Each press is a tick on the hand. A key a ray is on is lighter, and a held key, Shift or Caps
+  while on, and Done are in the accent color.
+- **A pull on the line** puts the field's caret at the place of the text nearest to it
+  (`InputTextState::SetSelection`), from where the text was drawn in the frame before.
+- **What a key gives the field:** a character is typed (`io.AddInputCharactersUTF8`), so the field's
+  filter takes it as a typed one: a number field drops a letter. Backspace, Left and Right are their
+  keys. Clear is Ctrl+A, which selects the whole text, then Backspace. Done is Enter, which leaves a
+  single-line field with its text, and Close is Escape, which gives it back the text it had and leaves it.
+- **One stroke a frame** (`KeyStrokeQueue`): the keys of a stroke are pressed in one frame and let go of
+  in the next, and text is given in a frame of its own. The layer has ImGui take every event in the
+  frame it is given in (`ConfigInputTrickleEventQueue` off), so a key pressed and let go of in one frame
+  would not be seen as pressed, and the field takes the strokes in the order they were typed.
+- **The close binding** (`setCloseBinding`), on a hand whose ray is on the keyboard or on a canvas,
+  sends Escape as Close does. A mod gives its Back binding, so Back closes the keyboard, and skips its
+  own Back while `isOpen()`: Back would otherwise leave a page with a field still edited.
 
-| Runtime | Keyboard |
-| --- | --- |
-| SteamVR, also under Virtual Desktop or Link | Yes, the one the game names the character with |
-| OpenComposite | None. `ShowKeyboardForOverlay` sends `VREvent_KeyboardDone` at once, and `GetKeyboardText` gives a fixed text: `Adventurer`, or the `keyboardText` of a fork's config |
-| xrizer | None. `ShowKeyboardForOverlay` returns `VROverlayError_RequestFailed`, and `GetKeyboardText` panics |
+## Where it is
 
-So SteamVR's keyboard is shown only on SteamVR. On every runtime, a field is also typed with the keys
-of the game's window.
+- **Under the canvas of the field** at first: the canvas whose window holds the field (by its window's
+  name), or the first interactive canvas when a popup holds it. It is as wide as `widthShare` of that
+  canvas, its top a gap under the canvas's bottom edge, in the canvas's plane, and tilted back by
+  `tiltDegrees`, so it faces up toward the player. The canvas is taken as the flat quad it is laid out
+  as, also when it is curved. It stays as far from the player as the canvas: nearer, it comes down to
+  the hands, which then point at its back from under it, and the pointer meets a canvas from its front only.
+- **Moved by the player** with the world-move binding (`vrui::UIManager::setWorldMoveBinding`): it is a
+  root in the world (`attachPresetToWorldAtHMD`), and its panel reports the hands on it
+  (`markPointedAt`), so vrui moves it as any panel in the world, level, smoothly, from the hand that
+  holds it.
+- **Kept beside the canvas:** each frame its place is set from the canvas's
+  (`vrui::UIManager::setWorldPlace`), so it moves with the canvas. While a hand moves it, its place from
+  the canvas is taken from where it is (`getWorldPlace`), and kept for the session: the next keyboard
+  is shown there too. It is not saved.
+- **Placed a frame ahead:** vrui gives a root its place in its frame update, before the ImGui frame, so a
+  keyboard shown in one frame is drawn from the next, where it was put.
+
+`KeyboardStyle` has its size, tilt and colors; Mods Config FO4 VR gives it the colors of its panel.
 
 ## The keys of the game's window
 
@@ -63,11 +103,12 @@ events, as it does for the flat game's ImGui menus (F4SEMenuFramework, DearModdi
 `win32-binding` feature of vcpkg's `imgui` and `ImGui_ImplWin32_Init` with the window. Every message
 goes on to the game's procedure.
 
-The window is found by its class, `Fallout4VR`, which `WinMain` registers (`0xD8DF37`) and looks for
-to keep a second copy of the game from starting (`0xD80BA3`). It is hooked when the ImGui context is
-created, so only once a canvas is shown, and only when its messages come on the thread that builds the
-ImGui frame: ImGui's input queue is not thread-safe. The window is made by the thread that runs the
-game's main loop, so they do; were they not, the framework would log it and hand no keys on.
+The window is found by its class, `Fallout4VR`, which `WinMain` registers (`0xD8DF37`, image-relative
+in `Fallout4VR.exe` 1.2.72.0) and looks for to keep a second copy of the game from starting
+(`0xD80BA3`). It is hooked when the ImGui context is created, so only once a canvas is shown, and only
+when its messages come on the thread that builds the ImGui frame: ImGui's input queue is not
+thread-safe. The window is made by the thread that runs the game's main loop, so they do; were they
+not, the framework would log it and hand no keys on.
 
 When the window loses focus (`WM_KILLFOCUS`), the keys ImGui holds down are let go, as the release of a
 key then goes to another window: a Backspace that stayed down would repeat in the field. ImGui's own
@@ -80,75 +121,9 @@ A physical keyboard types into a field this way. So does any keyboard overlay th
 to the focused window, such as Virtual Desktop's, XSOverlay's, OVR Toolkit's or Desktop+'s, on any
 runtime, while the game's window has focus.
 
-## SteamVR's keyboard
-
-The bridge is like [imgui-vr-helper](https://github.com/alandtse/imgui-vr-helper)'s
-(`src/VRKeyboard.cpp`, and `PumpKeyboard()` in `api/ImGuiVRHelperClientSDK.h`), which does this for
-Skyrim VR, and edits the field in its own way. It is GPL-3.0-or-later, as the framework is GPL-3.0.
-
-Before each ImGui frame:
-
-- **Shown.** When ImGui edits a text field, the active item with an `InputTextState` that is not
-  read-only, the keyboard is shown for an overlay the framework creates, with the field's text as its
-  starting text, in single-line mode, for at least 256 characters. The overlay shows nothing and is not
-  placed: it only owns the keyboard's events. SteamVR puts the keyboard where its dashboard was last
-  opened, with the handle the player moves it by, and it does not go by the overlay, placed or shown.
-  `SetKeyboardTransformAbsolute` moves it, but before the show it is not used, right after the show the
-  keyboard closes, and a few frames later the keyboard loses its handle and sometimes closes: the
-  framework leaves it to SteamVR. Its key has the address of the mod's keyboard
-  in it, so each mod built on the framework has an overlay of its own.
-- **One keyboard at a time.** The keyboard closes itself on Done and on its close button, and sends
-  `VREvent_KeyboardClosed` after Done too. `HideKeyboard` is called only when the framework hides it: on a
-  keyboard that closed itself it would send another Closed, which can come after the next keyboard is
-  shown and close it. The events left in the queue are dropped before a keyboard is shown.
-- **The floor.** The keyboard's text starts with a no-break space, before the field's, which is not seen
-  and which the field never gets. SteamVR sends no event when the last character of its text is
-  deleted, so with nothing before the field's text the field would keep its last character.
-- **Read.** The keyboard's events are read from that overlay's own queue (`PollNextOverlayEvent`), so the
-  game's VR events are left to the game.
-- **Typed.** On each `VREvent_KeyboardCharInput` the framework reads the keyboard's whole text. When it
-  differs from the text read before, it turns the field's own text, in its `InputTextState`, into it with one edit, where it changed: the part between
-  the start and the end the two texts share. That part is selected in the field (`SetSelection`), and the
-  new characters are typed over it (`io.AddInputCharactersUTF8`), or a Backspace takes it away. So a
-  character changed in the middle is replaced there, in one frame. The texts are compared on whole UTF-8
-  characters. Only a change of the keyboard's text is made in the field, which is then left as it is
-  until the next one. So what the keys of the game's window type into the field stays, and so does what
-  the field's filter did: characters go through ImGui's input, and a filter can drop a character, as a
-  number field drops a letter, or change it, as an upper-case field does. OpenVR has no call that sets
-  the text of a keyboard that is shown, so the keyboard does not get what the keys of the window typed,
-  and its next change is made over it where the two texts differ. A Backspace is pressed in one
-  frame and let go of in the next: the layer has ImGui take every event in the frame it is given in, so a
-  press and a release given together would be lost.
-- **Done.** `VREvent_KeyboardDone` hides the keyboard. The field is sent what it was not sent yet, and is
-  then left (`ImGui::ClearActiveID`), with the text it has.
-- **Cancelled.** `VREvent_KeyboardClosed`, the keyboard's close button, hides the keyboard and sends the
-  field `ImGuiKey_Escape`: ImGui gives the field back the text it had and leaves it.
-- **Left.** When the field is left from the content, another field is focused in its place, or no
-  interactive canvas is shown, the keyboard is hidden (`HideKeyboard`). Once Done or a cancel has left
-  the field, it is not shown again until ImGui edits no field.
-
-While the keyboard is shown, the canvas's pointer is on no canvas and draws no ray: the keyboard has its
-own lasers, and a press of the ray beside the field would leave the field. SteamVR keeps the controllers
-from the game, and from every mod's reads, until the keyboard is closed: a mod's Back button does nothing
-meanwhile, and the keyboard is closed with Done or its close button. The pointer waits five frames
-more after the keyboard is hidden: the game's wands are still where they were before it was shown until
-the game has the controllers' poses again, and the ray would show there for a frame. A trigger still down when it is
-hidden is the game's until it is released, as for any ray that comes to a canvas with the trigger down,
-so the press on Done does not press the canvas behind it.
-
-Every keyboard call is made on the game thread, in the ImGui frame, and none on the render thread.
-
-### A runtime with no keyboard
-
-A runtime has no keyboard when `ShowKeyboardForOverlay` fails (xrizer), or when `VREvent_KeyboardDone`
-comes in the first frame after the show, before any key (OpenComposite). Its text is not taken, as it
-is a fixed text and not the player's, and `GetKeyboardText` is never called on it. The framework logs it
-once and does not show the keyboard again in the session. The field stays focused for the keys of the
-game's window.
-
 ## To check in the headset
 
-- That the log says the keys of the game's window reach a text field, and not that the window is on
-  another thread.
-- Whether a key typed into a field also reaches the game. F4SEMenuFramework keeps the keys from the
-  flat game by not passing the window's messages on while its menu is open.
+- That the keyboard opens under the field's canvas, facing up toward the player, and both hands type.
+- That a key typed with a ray does not also reach the game, and that a physical key typed into a field
+  does not either: F4SEMenuFramework keeps the keys from the flat game by not passing the window's
+  messages on while its menu is open.

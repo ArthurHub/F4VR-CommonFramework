@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 4.2)
 
 # >>> Project
 set(NAME "F4VRCommonFramework")
-set(VERSION 0.5.2)
+set(VERSION 0.6.0)
 
 
 # >>> Folders

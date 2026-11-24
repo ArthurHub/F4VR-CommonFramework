@@ -7,8 +7,16 @@ and tooling tweaks are left to the git history.
 Versions follow `set(VERSION ...)` in the root [`CMakeLists.txt`](../CMakeLists.txt). While the
 major version is `0`, a minor bump may break the API; the **Upgrading** notes say what to change.
 
-## 0.5.2 — unreleased
+## 0.6.0 — unreleased
 
+- **The framework's own VR keyboard replaces SteamVR's**: while ImGui edits a text field on an interactive canvas, the
+  framework shows a keyboard under that canvas, typed with the rays of both hands at once, on every runtime
+  (OpenComposite and xrizer, which have no keyboard of their own, too). It has QWERTY with digits, symbols and accented
+  letters, a line that shows the field's text, where a press puts the caret, and Done and Close. The player moves it
+  with the world-move binding, and it keeps that place beside the canvas for the session
+  ([VR keyboard](tech/vr-keyboard.md)). `imgui::keyboard()` has its style (`setStyle`), the binding that closes it as
+  Close does (`setCloseBinding`, a mod's Back) and `isOpen()`. **Upgrading:** nothing to call for typing; a mod whose
+  Back steps its menu skips that while `isOpen()`, and gives its Back as the close binding.
 - **Papyrus through CommonLibF4VR**: the framework calls scripts and binds natives through CommonLibF4VR's VM
   ([Papyrus](../src/f4vr/README.md#papyrus)), whose `DispatchStaticCall` / `DispatchMethodCall` now work on VR, and
   natives can take a `ScriptObject`. `f4vr::callPapyrusGlobalFunction(script, function, args...)` calls a global

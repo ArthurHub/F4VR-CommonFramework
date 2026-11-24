@@ -593,10 +593,10 @@ namespace f4cf::imgui::internal
             }
         }
         if (active.empty()) {
-            // no ImGui frame is built: the keyboard is hidden, the pointer is on nothing, and only a press that is
-            // still held is waited out
-            keyboard().update(false);
+            // no ImGui frame is built: the pointer is on nothing, and only a press that is still held is waited
+            // out, and the keyboard is hidden
             pointer().update({});
+            keyboard().update({}, 0.0f);
             renderer::publish({});
             return;
         }
@@ -663,8 +663,8 @@ namespace f4cf::imgui::internal
         }
         // the own context's canvas is drawn beside the mod's canvases, and not alone: see ensureOwnContext
         if (packed.empty()) {
-            keyboard().update(false);
             pointer().update({});
+            keyboard().update({}, 0.0f);
             renderer::publish({});
             return;
         }
@@ -672,7 +672,7 @@ namespace f4cf::imgui::internal
         // The pointer can be on the interactive canvases that are shown. With none the vector stays empty,
         // which allocates nothing, and nothing is read from the game for the pointer. While a game menu takes the
         // controllers' input it is on none: the canvases are shown, and the game's menu has the ray and the trigger.
-        // The own context's canvas takes no pointer.
+        // The own context's canvas is a target too, whose hands are the keyboard's and not ImGui's mouse.
         std::vector<PointerTarget> pointerTargets;
         const bool gameMenuTakesInput = f4vr::isGameMenuTakingInput();
         for (const auto& entry : packed) {
@@ -686,18 +686,27 @@ namespace f4cf::imgui::internal
                     .displayY = static_cast<float>(entry.y) });
             }
         }
+        for (const auto& entry : ownPacked) {
+            if (entry.canvas->isInteractive() && entry.placement.show && !gameMenuTakesInput) {
+                pointerTargets.push_back(PointerTarget{ .canvas = entry.canvas,
+                    .topLeft = entry.quad.topLeft,
+                    .topRight = entry.quad.topRight,
+                    .bottomLeft = entry.quad.bottomLeft,
+                    .curveRadius = entry.placement.curveRadius,
+                    .ownContext = true });
+            }
+        }
 
-        // before the frame begins, so its widgets see where the pointer is now and what was typed. While SteamVR's
-        // keyboard is shown, its own lasers type on it, and the pointer is on no canvas: a press of the ray
-        // beside the field would leave it. SteamVR keeps the controllers from the game meanwhile.
+        // before the frame begins, so its widgets see where the pointer is now and what was typed: the pointer first,
+        // then the keyboard, which reads the hands on it
+        const float deltaSeconds = frameDeltaSeconds();
         {
             F4CF_PERF_SCOPE("pointer");
-            keyboard().update(!pointerTargets.empty());
-            pointer().update(keyboard().holdsPointer() ? std::vector<PointerTarget>() : pointerTargets);
+            pointer().update(pointerTargets);
+            keyboard().update(pointerTargets, deltaSeconds);
         }
 
         // the main context's frame, with every canvas's content in it, then the own context's beside it
-        const float deltaSeconds = frameDeltaSeconds();
         RenderFrame frame;
         frame.passes.push_back(buildPass(packed, display, deltaSeconds, true, viewer, frame.textureWrites));
         if (!ownPacked.empty() && ensureOwnContext()) {

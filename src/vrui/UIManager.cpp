@@ -312,6 +312,35 @@ namespace f4cf::vrui
     }
 
     /**
+     * The place of a UI that was attached with attachPresetToWorldAtHMD, and whether a hand holds it. Nothing for a
+     * UI attached in another way.
+     */
+    std::optional<UIManager::WorldPlace> UIManager::getWorldPlace(const std::shared_ptr<UIElement>& element) const
+    {
+        const auto found = std::ranges::find(_worldElements, element, &WorldElement::element);
+        if (found == _worldElements.end()) {
+            return std::nullopt;
+        }
+        return WorldPlace{ .world = found->world, .held = found->hold.has_value() };
+    }
+
+    /**
+     * Put a UI that was attached with attachPresetToWorldAtHMD at a place in the world: its own position and
+     * rotation then apply from that transform. A hand that holds it lets go. It does nothing for a UI attached in
+     * another way.
+     * It is drawn there from the next frame update, which gives the roots their place.
+     */
+    void UIManager::setWorldPlace(const std::shared_ptr<UIElement>& element, const RE::NiTransform& world)
+    {
+        const auto found = std::ranges::find(_worldElements, element, &WorldElement::element);
+        if (found == _worldElements.end()) {
+            return;
+        }
+        letGoWorldElement(*found, "the root is put at a place");
+        found->world = world;
+    }
+
+    /**
      * The binding the player moves the UIs that stay in the world with (attachPresetToWorldAtHMD): they point at
      * such a UI and work the binding on the hand that points, and the UI follows that hand until its button is
      * released. Disabled by default, and the UIs are then not moved. See updateWorldMove.

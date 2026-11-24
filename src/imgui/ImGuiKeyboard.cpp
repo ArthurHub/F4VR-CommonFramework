@@ -1,8 +1,9 @@
 #include "ImGuiKeyboard.h"
 
 #include <algorithm>
-#include <cstring>
-#include <format>
+#include <cfloat>
+#include <cmath>
+#include <numbers>
 
 #include <imgui.h>
 #include <imgui_internal.h>
@@ -12,29 +13,52 @@
 #endif
 #include <imgui_impl_win32.h>
 
-#include "ImGuiKeyboardLogic.h"
+#include "../common/MatrixUtils.h"
+#include "../vrcf/VRControllersHaptic.h"
+#include "../vrui/UIManager.h"
+#include "ImGuiFonts.h"
+#include "UIImGuiPanel.h"
 
 // declared by imgui_impl_win32.h only in a comment, for the app to copy
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
-namespace f4cf::imgui::internal
+namespace f4cf::imgui
 {
     namespace
     {
+        using common::MatrixUtils;
+        using internal::EditKey;
+        using internal::KeyAction;
+        using internal::KeyboardKey;
+        using internal::PointerTarget;
+
         // the class of the game's window, which WinMain registers and creates it with
         constexpr auto GAME_WINDOW_CLASS = "Fallout4VR";
 
-        // the characters SteamVR's keyboard takes, unless the field has more already
-        constexpr std::uint32_t MAX_CHARACTERS = 256;
+        // the keyboard's panel, in vrui units: its canvas is 48 pixels a unit, and it is scaled to its width beside
+        // the canvas of the field
+        constexpr float WIDTH_UNITS = 24.0f;
+        constexpr float HEIGHT_UNITS = 10.0f;
 
-        // the frames the pointer still waits after the keyboard is hidden: the game's wands are where they were
-        // before it was shown until it has the controllers' poses again
-        constexpr int POINTER_WAIT_FRAMES = 5;
+        // its parts, as shares of its canvas: the margin around them and the gap between keys, of its width, and
+        // the line of the field's text, of its height
+        constexpr float MARGIN_SHARE = 0.02f;
+        constexpr float GAP_SHARE = 0.008f;
+        constexpr float FIELD_SHARE = 0.15f;
 
-        bool isKeyboardEvent(const std::uint32_t type)
-        {
-            return type == vr::VREvent_KeyboardClosed || type == vr::VREvent_KeyboardCharInput || type == vr::VREvent_KeyboardDone;
-        }
+        // the keys' rounding and the text's size, as shares of a key's height
+        constexpr float KEY_ROUNDING_SHARE = 0.15f;
+        constexpr float KEY_TEXT_SHARE = 0.45f;
+        constexpr float WORD_TEXT_SHARE = 0.32f;
+
+        // where it is put under the canvas of the field until the player moves it, as shares of that canvas's
+        // width: the gap between its top and the canvas's bottom. It stays in the canvas's plane, as far from the player
+        // as the canvas: nearer, it comes down to the hands, which point at its back from under it
+        constexpr float DEFAULT_GAP_SHARE = 0.04f;
+
+        // the keyboard's border, in vrui units
+        constexpr float BORDER_UNITS = 0.06f;
+        constexpr float CORNER_UNITS = 0.4f;
 
         /**
          * The text field ImGui edits: the active item, when it is a text field that is not read-only.
@@ -51,12 +75,163 @@ namespace f4cf::imgui::internal
             return field.TextA.Data ? std::string_view(field.TextA.Data, static_cast<std::size_t>(field.TextLen)) : std::string_view();
         }
 
+        ImGuiKey imguiKey(const EditKey key)
+        {
+            switch (key) {
+            case EditKey::Backspace:
+                return ImGuiKey_Backspace;
+            case EditKey::Left:
+                return ImGuiKey_LeftArrow;
+            case EditKey::Right:
+                return ImGuiKey_RightArrow;
+            case EditKey::A:
+                return ImGuiKey_A;
+            case EditKey::Enter:
+                return ImGuiKey_Enter;
+            case EditKey::Escape:
+                return ImGuiKey_Escape;
+            case EditKey::Ctrl:
+                return ImGuiMod_Ctrl;
+            }
+            return ImGuiKey_None;
+        }
+
+        std::string_view actionName(const KeyAction action)
+        {
+            switch (action) {
+            case KeyAction::Character:
+                return "Character";
+            case KeyAction::Space:
+                return "Space";
+            case KeyAction::Backspace:
+                return "Backspace";
+            case KeyAction::Clear:
+                return "Clear";
+            case KeyAction::Left:
+                return "Left";
+            case KeyAction::Right:
+                return "Right";
+            case KeyAction::Shift:
+                return "Shift";
+            case KeyAction::Caps:
+                return "Caps";
+            case KeyAction::ToPage:
+                return "ToPage";
+            case KeyAction::Done:
+                return "Done";
+            case KeyAction::Close:
+                return "Close";
+            }
+            return "";
+        }
+
+        std::string_view pageName(const internal::KeyboardPage page)
+        {
+            switch (page) {
+            case internal::KeyboardPage::Symbols:
+                return "symbols";
+            case internal::KeyboardPage::Accents:
+                return "accents";
+            case internal::KeyboardPage::Letters:
+                break;
+            }
+            return "letters";
+        }
+
+        ImU32 packed(const render::Color& color)
+        {
+            return ImGui::ColorConvertFloat4ToU32(ImVec4(color.r, color.g, color.b, color.a));
+        }
+
+        vrcf::Hand handOf(const bool primaryHand)
+        {
+            return primaryHand ? vrcf::Hand::Primary : vrcf::Hand::Offhand;
+        }
+
+        /**
+         * A canvas as a transform, and its size in the world: centered on its quad as it is when flat, with its
+         * right as x, the way it faces away from its front as y, and its up as z, as a canvas's placement has them.
+         */
+        struct CanvasFrame
+        {
+            RE::NiTransform transform;
+            float width = 0.0f;
+            float height = 0.0f;
+        };
+
+        CanvasFrame canvasFrame(const PointerTarget& canvas)
+        {
+            const RE::NiPoint3 across = canvas.topRight - canvas.topLeft;
+            const RE::NiPoint3 down = canvas.bottomLeft - canvas.topLeft;
+            const RE::NiPoint3 right = MatrixUtils::vec3Norm(across);
+            const RE::NiPoint3 downward = MatrixUtils::vec3Norm(down);
+            const RE::NiPoint3 forward = MatrixUtils::vec3Cross(right, downward);
+            const RE::NiPoint3 up = downward * -1.0f;
+
+            CanvasFrame frame;
+            // the rows of a rotation are its axes in the world, and getMatrix takes its values a column at a time
+            frame.transform.rotate = MatrixUtils::getMatrix(right.x, forward.x, up.x, right.y, forward.y, up.y, right.z, forward.z, up.z);
+            frame.transform.translate = canvas.topLeft + across * 0.5f + down * 0.5f;
+            frame.transform.scale = 1.0f;
+            frame.width = MatrixUtils::vec3Len(across);
+            frame.height = MatrixUtils::vec3Len(down);
+            return frame;
+        }
+
+        /**
+         * Where the keyboard is put from the canvas of the field until the player moves it: under the canvas's
+         * bottom edge, in its plane, as wide as the style's share of the canvas, with its top tilted back so
+         * it faces up toward the player.
+         */
+        RE::NiTransform defaultOffset(const CanvasFrame& canvas, const KeyboardStyle& style)
+        {
+            const float width = canvas.width * style.widthShare;
+            const float height = width * HEIGHT_UNITS / WIDTH_UNITS;
+            const float tilt = style.tiltDegrees * std::numbers::pi_v<float> / 180.0f;
+            const float sine = std::sin(tilt);
+            const float cosine = std::cos(tilt);
+
+            RE::NiTransform offset;
+            // turned around its x by the tilt: its up leans away from the player, and so does the way it faces
+            offset.rotate = MatrixUtils::getMatrix(1.0f, 0.0f, 0.0f, 0.0f, cosine, sine, 0.0f, -sine, cosine);
+            // its top edge is the gap under the canvas, and its center half its height down its tilted up from there
+            offset.translate = RE::NiPoint3(0.0f, -sine * height * 0.5f, -canvas.height * 0.5f - canvas.width * DEFAULT_GAP_SHARE - cosine * height * 0.5f);
+            offset.scale = 1.0f;
+            return offset;
+        }
     }
 
     Keyboard& Keyboard::get()
     {
         static Keyboard instance;
         return instance;
+    }
+
+    /**
+     * How the keyboard looks, all of it at once: start from style() to change one part. The size and tilt apply
+     * the next time it is shown.
+     */
+    void Keyboard::setStyle(const KeyboardStyle& style)
+    {
+        _style = style;
+        if (_panel) {
+            _panel->setStyle({ .color = _style.text,
+                .background = _style.background,
+                .borderColor = _style.border,
+                .borderThicknessUnits = BORDER_UNITS,
+                .cornerRadiusUnits = CORNER_UNITS,
+                .padding = vrui::UIPadding::all(0.0f) });
+        }
+    }
+
+    /**
+     * The binding that closes the keyboard and gives the field back the text it had, as Close does: on the hand
+     * whose ray is on the keyboard or on the canvas of the field. Disabled by default. A mod gives its Back binding,
+     * so Back and Close mean the same.
+     */
+    void Keyboard::setCloseBinding(const vrcf::InputBinding& binding)
+    {
+        _closeBinding = binding;
     }
 
     /**
@@ -76,22 +251,22 @@ namespace f4cf::imgui::internal
         DWORD process = 0;
         const DWORD windowThread = window ? GetWindowThreadProcessId(window, &process) : 0;
         if (!window || process != GetCurrentProcessId()) {
-            logger::warn("The game's window was not found; a text field takes no keys");
+            logger::warn("The game's window was not found; a text field takes no keys of a physical keyboard");
             return;
         }
         if (windowThread != GetCurrentThreadId()) {
-            logger::warn("The game's window is on thread {}, and the ImGui frame on {}; a text field takes no keys", windowThread, GetCurrentThreadId());
+            logger::warn("The game's window is on thread {}, and the ImGui frame on {}; a text field takes no keys of a physical keyboard", windowThread, GetCurrentThreadId());
             return;
         }
 
         if (!ImGui_ImplWin32_Init(window)) {
-            logger::warn("ImGui's Win32 backend did not start; a text field takes no keys");
+            logger::warn("ImGui's Win32 backend did not start; a text field takes no keys of a physical keyboard");
             return;
         }
         SetLastError(0);
         _gameWindowProc = reinterpret_cast<WNDPROC>(SetWindowLongPtrW(window, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(&windowProc)));
         if (!_gameWindowProc) {
-            logger::warn("The game's window was not hooked (error {}); a text field takes no keys", GetLastError());
+            logger::warn("The game's window was not hooked (error {}); a text field takes no keys of a physical keyboard", GetLastError());
             ImGui_ImplWin32_Shutdown();
             return;
         }
@@ -142,236 +317,439 @@ namespace f4cf::imgui::internal
     }
 
     /**
-     * SteamVR's keyboard, before each ImGui frame: it is shown while ImGui edits a text field on an interactive
-     * canvas, and what is typed on it is sent to the field. It is hidden when the field is left, or no
-     * interactive canvas is shown.
-     * A key is pressed in one frame and let go of in the next: the layer has ImGui take every event in the
-     * frame it is given in, so a press and a release given together would be lost.
+     * The keyboard, after the pointer and before each ImGui frame of the main context, which is current. It is
+     * shown while ImGui edits a text field on one of the given interactive canvases, and hidden when the field is
+     * left or no such canvas is shown. While it is shown, the hands on it press its keys, and what they type is
+     * given to ImGui, one stroke a frame.
+     * @param canvases the interactive canvases that are shown, the keyboard's own among them
      */
-    void Keyboard::update(const bool canvasShown)
+    void Keyboard::update(const std::span<const PointerTarget> canvases, const float deltaSeconds)
     {
-        if (_pointerWait > 0) {
-            --_pointerWait;
-        }
-        if (_state == State::Hidden && _heldKey == ImGuiKey_None && !canvasShown) {
+        ImGuiInputTextState* field = canvases.empty() ? nullptr : editedField();
+        const PointerTarget* canvas = field ? fieldCanvas(canvases) : nullptr;
+        if (!canvas) {
+            if (_open) {
+                close();
+            }
+            // the keys that are down are let go of
+            giveInput();
             return;
         }
 
-        const bool keyReleased = _heldKey != ImGuiKey_None;
-        if (keyReleased) {
-            ImGui::GetIO().AddKeyEvent(_heldKey, false);
-            _heldKey = ImGuiKey_None;
+        if (!_open) {
+            open(*canvas);
+        } else {
+            follow(*canvas);
         }
-
-        // a field the content focused in place of the one the keyboard was shown for hides it, to be shown again for that field
-        ImGuiInputTextState* field = canvasShown ? editedField() : nullptr;
-        if (!field || (_state != State::Hidden && field->ID != _fieldId)) {
-            hide(State::Hidden);
+        if (!_open) {
             return;
         }
 
-        switch (_state) {
-        case State::Hidden:
-            if (_available) {
-                show(*field);
-            }
-            break;
-        case State::Shown:
-            ++_shownFrames;
-            readEvents();
-            if (_state == State::Shown) {
-                type(*field, keyReleased);
-            } else if (_state == State::Done && !type(*field, keyReleased)) {
-                ImGui::ClearActiveID();
-                _state = State::Closed;
-            }
-            break;
-        case State::Done:
-            // the field is left once it has the keyboard's text: what it was sent in the last frame, it took in that frame
-            if (!type(*field, keyReleased)) {
-                ImGui::ClearActiveID();
-                _state = State::Closed;
-            }
-            break;
-        case State::Cancelled:
-            // ImGui gives the field back the text it had and leaves it
-            if (!keyReleased) {
-                pressKey(ImGuiKey_Escape);
-                _state = State::Closed;
-            }
-            break;
-        case State::Closed:
-            break;
+        for (const bool primaryHand : { true, false }) {
+            updateHand(primaryHand, *field, deltaSeconds);
         }
+        checkCloseBinding();
+        giveInput();
+        readField(*field);
     }
 
     /**
-     * Show SteamVR's keyboard for the field, with its text. SteamVR places it. A runtime that shows none is
-     * logged, and no keyboard is shown again in the session.
+     * What the keyboard shows: its page, Shift and Caps, the field's text and caret as its line has them, each hand on
+     * it, and the keys of the page with their places. The keys are laid out as of the last frame that showed it.
      */
-    void Keyboard::show(const ImGuiInputTextState& field)
+    Keyboard::Report Keyboard::report() const
     {
-        auto* overlay = vr::VROverlay();
-        if (!overlay) {
-            _available = false;
-            logger::info("No VR overlays; a text field is typed only with the keys of the game's window");
-            return;
+        const Layout parts = layout();
+        Report report{ .open = _open,
+            .page = std::string(pageName(_typing.page())),
+            .shift = _typing.shift(),
+            .caps = _typing.caps(),
+            .text = _text,
+            .cursor = _cursor,
+            .width = parts.size.x,
+            .height = parts.size.y };
+        for (const bool primaryHand : { true, false }) {
+            const auto& point = pointer().ownCanvasHand(primaryHand);
+            const Hand& hand = _hands[primaryHand ? 0 : 1];
+            report.hands[primaryHand ? 0 : 1] = { .on = point.on,
+                .x = point.x,
+                .y = point.y,
+                .down = point.down,
+                .key = hand.key ? std::string(_typing.labelOf(*hand.key)) : std::string() };
         }
-        if (_overlay == vr::k_ulOverlayHandleInvalid) {
-            // the key is unique to this mod: every mod built on the framework has a keyboard of its own
-            const auto key = std::format("f4cf.keyboard.{:x}", reinterpret_cast<std::uintptr_t>(this));
-            if (const auto error = overlay->CreateOverlay(key.c_str(), "Keyboard", &_overlay); error != vr::VROverlayError_None) {
-                _overlay = vr::k_ulOverlayHandleInvalid;
-                _available = false;
-                logger::warn("The keyboard's overlay was not created (error {}); a text field is typed only with the keys of the game's window", static_cast<int>(error));
-                return;
-            }
+        for (const auto& rect : _keys) {
+            report.keys.push_back({ .label = std::string(_typing.labelOf(*rect.key)),
+                .action = std::string(actionName(rect.key->action)),
+                .x = parts.keysMin.x + rect.x,
+                .y = parts.keysMin.y + rect.y,
+                .width = rect.width,
+                .height = rect.height });
         }
-        _text.assign(fieldText(field));
-        const auto characters = static_cast<std::uint32_t>(std::ranges::count_if(_text, [](const char c) {
-            return (static_cast<std::uint8_t>(c) & 0xC0) != 0x80;
-        }));
-        _maxCharacters = (std::max)(MAX_CHARACTERS, characters);
-
-        // the events left in the queue are of the keyboard shown before, which is not read once it is hidden
-        vr::VREvent_t stale{};
-        while (overlay->PollNextOverlayEvent(_overlay, &stale, sizeof(stale))) {
-            if (isKeyboardEvent(stale.eventType)) {
-                logger::trace("SteamVR's keyboard: event {} of the keyboard shown before is dropped", stale.eventType);
-            }
-        }
-
-        const std::string shownText = std::string(KEYBOARD_TEXT_FLOOR) + _text;
-        const auto error = overlay->ShowKeyboardForOverlay(_overlay,
-            vr::k_EGamepadTextInputModeNormal,
-            vr::k_EGamepadTextInputLineModeSingleLine,
-            "",
-            _maxCharacters + 1,
-            shownText.c_str(),
-            false,
-            0);
-        if (error != vr::VROverlayError_None) {
-            _available = false;
-            logger::info("The runtime has no keyboard (error {}); a text field is typed only with the keys of the game's window", static_cast<int>(error));
-            return;
-        }
-        logger::trace("SteamVR's keyboard is shown for a text field");
-        _state = State::Shown;
-        _fieldId = field.ID;
-        _typed = false;
-        _shownFrames = 0;
-        _changed = false;
+        return report;
     }
 
     /**
-     * Hide SteamVR's keyboard, if it is shown, and go on to the given state.
-     * @param closedItself the keyboard closed itself, on Done or its close button: HideKeyboard then would send
-     * another Closed, which could come after the next keyboard is shown and close it
+     * Press a key of the page that is shown, as a hand's pull on it does: by its label as it shows it, or by its
+     * action (Backspace, Space, Done, ...). False while the keyboard is not shown, and for a key the page does not have.
      */
-    void Keyboard::hide(const State state, const bool closedItself)
+    bool Keyboard::pressKey(const std::string_view name)
     {
-        if (_state == State::Shown) {
-            if (auto* overlay = vr::VROverlay()) {
-                if (!closedItself) {
-                    overlay->HideKeyboard();
-                }
-            }
-            _pointerWait = POINTER_WAIT_FRAMES;
-        }
-        _state = state;
-    }
-
-    /**
-     * Read the keyboard's events from its own overlay's queue, so the game's VR events are left to the game.
-     * Done that comes in the first frame after the keyboard is shown, before a key, is a runtime with no
-     * keyboard (OpenComposite): its text is a fixed one and not the player's, so it is not taken, and the field
-     * stays edited for the keys of the game's window.
-     */
-    void Keyboard::readEvents()
-    {
-        auto* overlay = vr::VROverlay();
-        if (!overlay) {
-            hide(State::Hidden);
-            return;
-        }
-        const auto readText = [this, overlay] {
-            // up to 4 bytes a character in UTF-8, the floor's character, and the zero that ends it
-            const std::uint32_t bytes = (_maxCharacters + 1) * 4;
-            std::string text(bytes + 1, char());
-            overlay->GetKeyboardText(text.data(), bytes);
-            // what the keys of the game's window typed into the field stays until the keyboard's text changes
-            const std::string_view received = withoutFloor(text.c_str());
-            if (received != _text) {
-                _text.assign(received);
-                _changed = true;
-            }
-        };
-
-        vr::VREvent_t event{};
-        while (_state == State::Shown && overlay->PollNextOverlayEvent(_overlay, &event, sizeof(event))) {
-            if (isKeyboardEvent(event.eventType)) {
-                logger::trace("SteamVR's keyboard: event {}, after {} frames", event.eventType, _shownFrames);
-            }
-            switch (event.eventType) {
-            case vr::VREvent_KeyboardCharInput:
-                readText();
-                _typed = true;
-                break;
-            case vr::VREvent_KeyboardDone:
-                if (!_typed && _shownFrames <= 1) {
-                    _available = false;
-                    logger::info("The runtime has no keyboard (Done at once); a text field is typed only with the keys of the game's window");
-                    hide(State::Closed, true);
-                } else {
-                    readText();
-                    hide(State::Done, true);
-                }
-                break;
-            case vr::VREvent_KeyboardClosed:
-                hide(State::Cancelled, true);
-                break;
-            default:
-                break;
-            }
-        }
-    }
-
-    /**
-     * Make the one edit that turns the field's text into the keyboard's, at the place it changed: the part that
-     * changed is selected, and the new characters are typed over it, through the field's filter, or Backspace
-     * takes it away. Only a change of the keyboard's text is made: the field is then left as it is, so a filter
-     * that drops or changes a character, or the keys of the game's window, are not undone in the next frame.
-     * @param keyReleased a key was let go of in this frame, so none is pressed in it
-     * @return whether an edit was sent in this frame or waits for the next one
-     */
-    bool Keyboard::type(ImGuiInputTextState& field, const bool keyReleased)
-    {
-        if (!_changed) {
+        if (!_open) {
             return false;
         }
-        const TextEdit edit = textEdit(fieldText(field), _text);
-        if (edit.empty()) {
-            _changed = false;
+        const auto found = std::ranges::find_if(_keys, [&](const internal::KeyRect& rect) {
+            return _typing.labelOf(*rect.key) == name || (rect.key->action != KeyAction::Character && actionName(rect.key->action) == name);
+        });
+        if (found == _keys.end()) {
             return false;
         }
-        if (!edit.insert.empty()) {
-            field.SetSelection(static_cast<int>(edit.from), static_cast<int>(edit.to));
-            ImGui::GetIO().AddInputCharactersUTF8(std::string(edit.insert).c_str());
-            _changed = false;
-        } else if (!keyReleased) {
-            // the change is made once the field takes the Backspace, in this frame
-            field.SetSelection(static_cast<int>(edit.from), static_cast<int>(edit.to));
-            pressKey(ImGuiKey_Backspace);
+        for (auto& stroke : _typing.press(*found->key)) {
+            _queue.push(std::move(stroke));
         }
+        refreshKeys();
         return true;
     }
 
     /**
-     * Press the key in this frame, and let go of it in the next.
+     * Where the parts of the keyboard are on its canvas: the line of the field's text along its top, and the keys
+     * under it, inside a margin.
      */
-    void Keyboard::pressKey(const ImGuiKey key)
+    Keyboard::Layout Keyboard::layout() const
     {
-        ImGui::GetIO().AddKeyEvent(key, true);
-        _heldKey = key;
+        const ImVec2 size(WIDTH_UNITS * CANVAS_PIXELS_PER_UNIT, HEIGHT_UNITS * CANVAS_PIXELS_PER_UNIT);
+        const float margin = size.x * MARGIN_SHARE;
+        const float gap = size.x * GAP_SHARE;
+        const float fieldBottom = margin + size.y * FIELD_SHARE;
+        return { .size = size,
+            .fieldMin = ImVec2(margin, margin),
+            .fieldMax = ImVec2(size.x - margin, fieldBottom),
+            .keysMin = ImVec2(margin, fieldBottom + gap * 2.0f),
+            .keysMax = ImVec2(size.x - margin, size.y - margin),
+            .gap = gap };
+    }
+
+    /**
+     * Lay the keys of the page that is shown out again, when the page changed since they were.
+     */
+    void Keyboard::refreshKeys()
+    {
+        if (_layoutPage == _typing.page() && !_keys.empty()) {
+            return;
+        }
+        const Layout parts = layout();
+        _layoutPage = _typing.page();
+        _keys = internal::layoutKeys(_layoutPage, parts.keysMax.x - parts.keysMin.x, parts.keysMax.y - parts.keysMin.y, parts.gap);
+    }
+
+    /**
+     * The canvas of the field ImGui edits: the one whose window holds the field, or the first interactive canvas
+     * when a popup holds it. Null for none.
+     */
+    const PointerTarget* Keyboard::fieldCanvas(const std::span<const PointerTarget> canvases) const
+    {
+        const ImGuiContext* context = ImGui::GetCurrentContext();
+        const ImGuiWindow* window = context && context->ActiveIdWindow ? context->ActiveIdWindow->RootWindow : nullptr;
+        const PointerTarget* first = nullptr;
+        for (const auto& canvas : canvases) {
+            if (canvas.ownContext) {
+                continue;
+            }
+            if (window && canvas.canvas->name() == window->Name) {
+                return &canvas;
+            }
+            if (!first) {
+                first = &canvas;
+            }
+        }
+        return first;
+    }
+
+    /**
+     * Show the keyboard for a field on the canvas, on the letters with Shift and Caps off. Its panel is made the
+     * first time, as a panel in the world. It is put at its place from the canvas, and is drawn there from the
+     * next frame, when vrui has placed it.
+     */
+    void Keyboard::open(const PointerTarget& canvas)
+    {
+        if (!vrui::g_uiManager) {
+            logger::sample(10000, "The keyboard is not shown: vrui is not started");
+            return;
+        }
+        if (!_panel) {
+            _panel = std::make_shared<UIImGuiPanel>("F4CF_Keyboard", WIDTH_UNITS, HEIGHT_UNITS);
+            _panel->setOwnContext(true);
+            _panel->setInteractive(true);
+            // a keyboard that is typed on stays readable whatever is in front of it
+            _panel->setOccluded(false);
+            _panel->setContent([this] {
+                draw();
+            });
+            setStyle(_style);
+            vrui::g_uiManager->attachPresetToWorldAtHMD(_panel, 0.0f);
+        }
+
+        _typing.reset();
+        _queue.clear();
+        _hands = {};
+        _textScroll = 0.0f;
+
+        const CanvasFrame frame = canvasFrame(canvas);
+        _offset = _movedOffset.value_or(defaultOffset(frame, _style));
+        _panel->setScale(frame.width * _style.widthShare / WIDTH_UNITS);
+        vrui::g_uiManager->setWorldPlace(_panel, MatrixUtils::localToWorldTransform(frame.transform, _offset));
+        _panel->setVisibility(true);
+        _open = true;
+        logger::debug("The keyboard is shown for a text field on '{}'", canvas.canvas->name());
+    }
+
+    /**
+     * Hide the keyboard. The strokes it did not give yet are dropped, and the keys that are down are let go of.
+     */
+    void Keyboard::close()
+    {
+        _panel->setVisibility(false);
+        _open = false;
+        _queue.clear();
+        _hands = {};
+        logger::debug("The keyboard is hidden");
+    }
+
+    /**
+     * Keep the keyboard at its place from the canvas of the field, so it moves with the canvas. While a hand holds
+     * it and moves it, the place it is moved to is the place from the canvas from then on, for the session.
+     */
+    void Keyboard::follow(const PointerTarget& canvas)
+    {
+        const auto place = vrui::g_uiManager->getWorldPlace(_panel);
+        if (!place) {
+            return;
+        }
+        const CanvasFrame frame = canvasFrame(canvas);
+        if (place->held) {
+            _offset = MatrixUtils::worldToLocalTransform(frame.transform, place->world);
+            _movedOffset = _offset;
+        } else {
+            vrui::g_uiManager->setWorldPlace(_panel, MatrixUtils::localToWorldTransform(frame.transform, _offset));
+        }
+    }
+
+    /**
+     * A hand on the keyboard: the key its ray is on, and what its trigger does. A pull on a key presses it, and the
+     * key is held until the trigger is released, wherever the ray goes; Backspace and the caret keys repeat while
+     * held. A pull on the line of the field's text puts the field's caret there. Each key pressed is a tick on the
+     * hand.
+     */
+    void Keyboard::updateHand(const bool primaryHand, ImGuiInputTextState& field, const float deltaSeconds)
+    {
+        Hand& hand = _hands[primaryHand ? 0 : 1];
+        const auto& point = pointer().ownCanvasHand(primaryHand);
+        const Layout parts = layout();
+        refreshKeys();
+        const auto* rect = point.on ? internal::keyAt(_keys, point.x - parts.keysMin.x, point.y - parts.keysMin.y, parts.gap) : nullptr;
+        hand.hovered = rect ? rect->key : nullptr;
+
+        const bool down = point.on && point.down;
+        const bool pressedNow = down && !hand.down;
+        hand.down = down;
+        if (pressedNow) {
+            hand.key = hand.hovered;
+            const bool onField = point.x >= parts.fieldMin.x && point.x < parts.fieldMax.x && point.y >= parts.fieldMin.y && point.y < parts.fieldMax.y;
+            if (!hand.key && onField) {
+                placeCaret(field, point.x);
+            }
+        } else if (!down) {
+            hand.key = nullptr;
+        }
+
+        int fired = 0;
+        if (hand.key && hand.key->repeats()) {
+            fired = hand.repeat.update(true, deltaSeconds);
+        } else {
+            hand.repeat.update(false, deltaSeconds);
+            fired = hand.key && pressedNow ? 1 : 0;
+        }
+        for (int i = 0; i < fired; ++i) {
+            for (auto& stroke : _typing.press(*hand.key)) {
+                _queue.push(std::move(stroke));
+            }
+            vrcf::VRHaptics.trigger(handOf(primaryHand), vrcf::HapticPattern::Tick);
+        }
+    }
+
+    /**
+     * Put the field's caret at the place of its text nearest to x, in the keyboard's pixels, as the text was drawn
+     * in the last frame.
+     */
+    void Keyboard::placeCaret(ImGuiInputTextState& field, const float x)
+    {
+        if (_boundaries.empty() || _boundaries.size() != _boundaryX.size()) {
+            return;
+        }
+        const Layout parts = layout();
+        const float padding = (parts.fieldMax.y - parts.fieldMin.y) * 0.25f;
+        const float fromTextStart = x - (parts.fieldMin.x + padding) + _textScroll;
+        const auto place = static_cast<int>((std::min)(_boundaries[internal::nearestBoundary(_boundaryX, fromTextStart)], static_cast<std::size_t>(field.TextLen)));
+        field.SetSelection(place, place);
+        field.CursorAnimReset();
+    }
+
+    /**
+     * The close binding, on a hand whose ray is on the keyboard or on the canvas of the field: Escape, which gives
+     * the field back the text it had and leaves it.
+     */
+    void Keyboard::checkCloseBinding()
+    {
+        if (!_closeBinding.isEnabled()) {
+            return;
+        }
+        const PointerState& state = pointer().state();
+        for (const bool primaryHand : { true, false }) {
+            const bool points = pointer().ownCanvasHand(primaryHand).on || (state.canvas && state.primaryHand == primaryHand);
+            if (points && vrcf::VRControllers.check(_closeBinding, handOf(primaryHand))) {
+                _queue.push({ .keys = { EditKey::Escape } });
+                vrcf::VRHaptics.trigger(handOf(primaryHand), vrcf::HapticPattern::Tick);
+                return;
+            }
+        }
+    }
+
+    /**
+     * Give ImGui this frame's stroke: characters, keys pressed, or keys let go of.
+     */
+    void Keyboard::giveInput()
+    {
+        const auto input = _queue.next();
+        if (input.empty() || !ImGui::GetCurrentContext()) {
+            return;
+        }
+        auto& io = ImGui::GetIO();
+        if (!input.text.empty()) {
+            io.AddInputCharactersUTF8(input.text.c_str());
+        }
+        for (const EditKey key : input.pressed) {
+            io.AddKeyEvent(imguiKey(key), true);
+        }
+        for (const EditKey key : input.released) {
+            io.AddKeyEvent(imguiKey(key), false);
+        }
+    }
+
+    /**
+     * Keep the field's text, caret and selection, which the keyboard's line shows: the keyboard is drawn in its own
+     * context, where the field is not.
+     */
+    void Keyboard::readField(const ImGuiInputTextState& field)
+    {
+        _text.assign(fieldText(field));
+        _cursor = field.GetCursorPos();
+        _selectionStart = field.GetSelectionStart();
+        _selectionEnd = field.GetSelectionEnd();
+    }
+
+    /**
+     * The keyboard's content, in its own context: the line of the field's text and the keys, drawn in the canvas's
+     * pixels, which are the display's, as the canvas is its context's display.
+     */
+    void Keyboard::draw()
+    {
+        const Layout parts = layout();
+        // a key that changed the page in this frame shows the new page
+        refreshKeys();
+        ImDrawList* drawList = ImGui::GetWindowDrawList();
+        drawList->PushClipRect(ImVec2(0.0f, 0.0f), parts.size, false);
+        drawField(drawList, parts);
+        drawKeys(drawList, parts);
+        drawList->PopClipRect();
+    }
+
+    /**
+     * The line of the field's text: the text, scrolled so the caret is in view, its selection and its caret. The
+     * places a caret can be are kept, for a press on the line to put the caret at.
+     */
+    void Keyboard::drawField(ImDrawList* drawList, const Layout& parts)
+    {
+        const float height = parts.fieldMax.y - parts.fieldMin.y;
+        drawList->AddRectFilled(parts.fieldMin, parts.fieldMax, packed(_style.field), height * KEY_ROUNDING_SHARE);
+
+        ImFont* font = canvasFont(FontStyle::Regular);
+        if (!font) {
+            return;
+        }
+        const float fontSize = std::round(height * 0.55f);
+        const float padding = height * 0.25f;
+        const float viewWidth = parts.fieldMax.x - parts.fieldMin.x - padding * 2.0f;
+        const char* text = _text.c_str();
+
+        _boundaries = internal::utf8Boundaries(_text);
+        _boundaryX.clear();
+        for (const std::size_t boundary : _boundaries) {
+            _boundaryX.push_back(font->CalcTextSizeA(fontSize, FLT_MAX, 0.0f, text, text + boundary).x);
+        }
+        const auto xOf = [&](const int place) {
+            const auto found = std::ranges::lower_bound(_boundaries, static_cast<std::size_t>((std::max)(place, 0)));
+            return found == _boundaries.end() ? _boundaryX.back() : _boundaryX[found - _boundaries.begin()];
+        };
+        const float caretX = xOf(_cursor);
+        _textScroll = internal::scrollToShow(_textScroll, caretX, viewWidth, _boundaryX.back());
+
+        const float textX = parts.fieldMin.x + padding - _textScroll;
+        const float textY = parts.fieldMin.y + (height - fontSize) * 0.5f;
+        drawList->PushClipRect(ImVec2(parts.fieldMin.x + padding, parts.fieldMin.y), ImVec2(parts.fieldMax.x - padding, parts.fieldMax.y), true);
+        if (_selectionStart != _selectionEnd) {
+            const float from = xOf((std::min)(_selectionStart, _selectionEnd));
+            const float to = xOf((std::max)(_selectionStart, _selectionEnd));
+            drawList->AddRectFilled(ImVec2(textX + from, textY), ImVec2(textX + to, textY + fontSize), packed(_style.selection));
+        }
+        drawList->AddText(font, fontSize, ImVec2(textX, textY), packed(_style.text), text, text + _text.size());
+        // the caret blinks as a field's does
+        if (std::fmod(ImGui::GetTime(), 1.0) < 0.6) {
+            const float caretWidth = (std::max)(2.0f, fontSize * 0.08f);
+            drawList->AddRectFilled(ImVec2(textX + caretX, textY), ImVec2(textX + caretX + caretWidth, textY + fontSize), packed(_style.accent));
+        }
+        drawList->PopClipRect();
+    }
+
+    /**
+     * The keys of the page: a key held down, Shift or Caps while on, and Done in the accent color, and a key a ray is
+     * on lighter. Left and Right are arrows, as the font has none.
+     */
+    void Keyboard::drawKeys(ImDrawList* drawList, const Layout& parts)
+    {
+        ImFont* font = canvasFont(FontStyle::Regular);
+        for (const auto& rect : _keys) {
+            const KeyboardKey& key = *rect.key;
+            const bool held = std::ranges::any_of(_hands, [&](const Hand& hand) {
+                return hand.key == &key;
+            });
+            const bool hovered = std::ranges::any_of(_hands, [&](const Hand& hand) {
+                return hand.hovered == &key;
+            });
+            const bool accented = held || _typing.isOn(key) || key.action == KeyAction::Done;
+
+            const ImVec2 keyMin(parts.keysMin.x + rect.x, parts.keysMin.y + rect.y);
+            const ImVec2 keyMax(keyMin.x + rect.width, keyMin.y + rect.height);
+            const render::Color& fill = accented ? _style.accent : hovered ? _style.keyHovered : _style.key;
+            drawList->AddRectFilled(keyMin, keyMax, packed(fill), rect.height * KEY_ROUNDING_SHARE);
+            const ImU32 textColor = packed(accented ? _style.accentText : _style.text);
+
+            const ImVec2 center((keyMin.x + keyMax.x) * 0.5f, (keyMin.y + keyMax.y) * 0.5f);
+            if (key.action == KeyAction::Left || key.action == KeyAction::Right) {
+                const float half = rect.height * 0.18f;
+                const float pointing = key.action == KeyAction::Left ? -1.0f : 1.0f;
+                drawList->AddTriangleFilled(ImVec2(center.x + half * pointing, center.y),
+                    ImVec2(center.x - half * pointing, center.y - half),
+                    ImVec2(center.x - half * pointing, center.y + half),
+                    textColor);
+                continue;
+            }
+            if (!font) {
+                continue;
+            }
+            const std::string_view label = _typing.labelOf(key);
+            const bool word = key.action != KeyAction::Character;
+            const float fontSize = std::round(rect.height * (word ? WORD_TEXT_SHARE : KEY_TEXT_SHARE));
+            const ImVec2 extent = font->CalcTextSizeA(fontSize, FLT_MAX, 0.0f, label.data(), label.data() + label.size());
+            drawList->AddText(font, fontSize, ImVec2(center.x - extent.x * 0.5f, center.y - extent.y * 0.5f), textColor, label.data(), label.data() + label.size());
+        }
     }
 }

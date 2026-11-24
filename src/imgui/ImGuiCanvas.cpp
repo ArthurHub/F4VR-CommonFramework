@@ -76,7 +76,8 @@ namespace f4cf::imgui
      *   the mod's canvases is drawn too, as the contexts share the font atlas the main one updates.
      * - Its own context is its display, with a texture of the canvas's size, as for a dedicated canvas.
      * - Nothing it does reaches the main context, so a text field there stays edited.
-     * - It takes no pointer. Of two such canvases that are shown, the one created first is drawn.
+     * - Interactive, a ray on it is not ImGui's mouse: each hand on it is told apart (Pointer::ownCanvasHand), for
+     *   the keyboard to press its keys with. Of two such canvases that are shown, the one created first is drawn.
      */
     void Canvas::setOwnContext(const bool ownContext)
     {

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <span>
 #include <vector>
 
 #include "../common/MatrixUtils.h"
@@ -137,6 +138,29 @@ namespace f4cf::imgui::internal
 
         float displayX = 0.0f;
         float displayY = 0.0f;
+
+        // the canvas of the own context (Canvas::setOwnContext): a hand on it is not ImGui's mouse, and is told
+        // apart for each hand (Pointer::ownCanvasHand)
+        bool ownContext = false;
+    };
+
+    /**
+     * A hand whose ray is on the canvas of the own context, in the ImGui frame that was built last.
+     */
+    struct OwnCanvasHand
+    {
+        bool on = false;
+
+        // where the ray is on the canvas, in its layout pixels from its top left corner; during a press it can
+        // be beside the canvas
+        float x = 0.0f;
+        float y = 0.0f;
+
+        // the hand presses the canvas: its trigger, from a pull that began on it until its release
+        bool down = false;
+
+        // where the ray meets the canvas in the world
+        RE::NiPoint3 hitPosition;
     };
 }
 
@@ -196,6 +220,12 @@ namespace f4cf::imgui
         void setWanted(bool wanted);
         void onCanvasRemoved(const Canvas* canvas);
 
+        // Internal: a hand on the canvas of the own context, which the framework's keyboard is.
+        const internal::OwnCanvasHand& ownCanvasHand(const bool primaryHand) const
+        {
+            return primaryHand ? _primaryOwnHand : _offhandOwnHand;
+        }
+
     private:
         /**
          * One hand in a frame: its pointer, the target it is on, if any, and whether it presses it.
@@ -227,7 +257,8 @@ namespace f4cf::imgui
         void suppressWands(bool primary, bool offhand);
         float wheelFromThumbstick(bool primaryHand, float deltaSeconds) const;
         void release();
-        void draw(const HandPointer* owner, const HandPointer* other);
+        static internal::OwnCanvasHand ownCanvasHandOf(const HandPointer& hand);
+        void draw(std::span<const HandPointer* const> marked, const HandPointer* faint);
         void addRay(render::PrimitiveDraw& frame, const RE::NiPoint3& head, const HandPointer& hand, float opacity) const;
         void addMark(render::PrimitiveDraw& frame, const HandPointer& hand) const;
 
@@ -237,6 +268,8 @@ namespace f4cf::imgui
         internal::PointerOwnership _ownership;
         HandHold _primaryHold;
         HandHold _offhandHold;
+        internal::OwnCanvasHand _primaryOwnHand;
+        internal::OwnCanvasHand _offhandOwnHand;
 
         // a wand is hidden from the game, and was not yet given back
         bool _suppressing = false;

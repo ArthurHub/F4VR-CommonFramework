@@ -20,8 +20,8 @@ rules, and is drawn under the game's menus. The font is the framework's, so an I
 | [`ImGuiCanvas.h`](ImGuiCanvas.h) | `Canvas`: one ImGui window, placed by a provider you write. Content, placement, curve, chrome, sizing, occlusion, dedicated. |
 | [`ImGuiPointer.h`](ImGuiPointer.h) | `imgui::pointer()`: a wand's ray as ImGui's mouse, its state and its `PointerStyle`. |
 | [`ImGuiPointerLogic.h`](ImGuiPointerLogic.h) | The pointer's logic, unit tested: ray and quad, the curved quad, which hand owns it, scrolling. |
-| [`ImGuiKeyboard.h`](ImGuiKeyboard.h) | SteamVR's keyboard while a text field is edited, and the game window's key messages to ImGui ([VR keyboard](../../docs/tech/vr-keyboard.md)). |
-| [`ImGuiKeyboardLogic.h`](ImGuiKeyboardLogic.h) | The keyboard's logic, unit tested: the one edit between a field's text and the keyboard's, on whole UTF-8 characters. |
+| [`ImGuiKeyboard.h`](ImGuiKeyboard.h) | `imgui::keyboard()`: the framework's VR keyboard while a text field is edited, and the game window's key messages to ImGui ([VR keyboard](../../docs/tech/vr-keyboard.md)). |
+| [`ImGuiKeyboardLogic.h`](ImGuiKeyboardLogic.h) | The keyboard's logic, unit tested: its pages, the key a point hits, Shift, Caps, a held key's repeat, the strokes ImGui is given. |
 | [`ImGuiImage.h`](ImGuiImage.h) | `imgui::image` and `imgui::addImage`: a `render::Texture` in a canvas, kept alive until drawn. |
 | [`ImGuiSettings.h`](ImGuiSettings.h) | `setFontSizePixels` and `setSupersample`, process-wide. |
 | [`ImGuiFonts.h`](ImGuiFonts.h) | The framework's font in ImGui, with its bold and italic faces: `imgui::canvasFont`. |
@@ -159,6 +159,27 @@ imgui::pointer().setStyle(style);
 
 The framework has no config keys for it. A mod that lets the player set them reads them itself
 (`getColorValue`, `getTransformValue`) and calls `setStyle`.
+
+## Text fields and the keyboard
+
+A focused `ImGui::InputText` on an interactive canvas is typed into, with nothing to call: while ImGui edits
+it, the framework shows its keyboard under the field's canvas, typed with the rays, both hands at once, on
+every runtime. A physical keyboard types into it too. See [VR keyboard](../../docs/tech/vr-keyboard.md).
+
+```cpp
+imgui::keyboard().setCloseBinding(backBinding); // Back closes it, as its Close does
+auto style = imgui::keyboard().style();
+style.accent = render::Color::rgba(255, 180, 60);
+imgui::keyboard().setStyle(style);
+if (imgui::keyboard().isOpen()) { /* a field is edited: Back is the keyboard's */ }
+```
+
+- **Done** leaves the field with its text, **Close** gives it back the text it had. The line along the
+  keyboard's top shows the field's text; a press on it puts the caret there.
+- **Moved** with the world-move binding, as [a panel the player moves](#a-panel-the-player-moves); it keeps
+  that place beside the canvas for the session, and follows the canvas.
+- **A ray on it is the keyboard's:** what is behind it is not pointed at, and the wand is hidden from the game.
+- **`KeyboardStyle`:** its width as a share of the field's canvas, its tilt, and its colors.
 
 ## Images
 
@@ -301,7 +322,8 @@ imgui::internal::onFrameEnd()                   draw callback (DRAW_ORDER_PANELS
   its own, into its own texture.
 - **The framework's own canvas** (`Canvas::setOwnContext`, internal) is drawn in a second ImGui context,
   in a second frame after the first, into a texture of its own, so it shows beside a dedicated canvas
-  and nothing it does reaches the first context: a text field there stays edited. The second context
+  and nothing it does reaches the first context: a text field there stays edited. It is the keyboard's: a
+  ray on it is not ImGui's mouse, and each hand on it is told apart. The second context
   shares the first's font atlas, which the first updates as its frame begins, so it is drawn only in a
   frame the first drew, and the first's DX11 backend data, so the render thread draws either frame with
   either context current. Where the two frames' canvases overlap, the farther frame is drawn first.

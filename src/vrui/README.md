@@ -284,7 +284,9 @@ it. `--texture-subpath` is required, usually the mod's name. Needs Pillow. All t
   and facing where the head faced: `root->setPosition(0, 120, -20)` is 120 units ahead and 20 below.
   `recenterWorldElement(root)` brings it back in front of the player. With a distance,
   `attachPresetToWorldAtHMD(root, 350)` does that by itself once the player walks further than that from
-  it. A hidden root is left where it is.
+  it. A hidden root is left where it is. `getWorldPlace(root)` gives the transform it is placed from and
+  whether a hand holds it, and `setWorldPlace(root, world)` puts it at another, from the next frame update:
+  the framework's keyboard keeps itself beside a canvas with them.
 
 ### Moving a world UI
 

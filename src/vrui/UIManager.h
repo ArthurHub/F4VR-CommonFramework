@@ -39,6 +39,21 @@ namespace f4cf::vrui
         void attachPresetToHMDBottom(const std::shared_ptr<UIElement>& element);
         void attachPresetToWorldAtHMD(const std::shared_ptr<UIElement>& element, float recenterDistance = 0.0f);
         void recenterWorldElement(const std::shared_ptr<UIElement>& element);
+
+        /**
+         * Where a root that stays in the world is, see getWorldPlace.
+         */
+        struct WorldPlace
+        {
+            // the root's place: the world transform its own position and rotation apply from
+            RE::NiTransform world;
+
+            // a hand holds the root and moves it
+            bool held = false;
+        };
+
+        std::optional<WorldPlace> getWorldPlace(const std::shared_ptr<UIElement>& element) const;
+        void setWorldPlace(const std::shared_ptr<UIElement>& element, const RE::NiTransform& world);
         void setWorldMoveBinding(const vrcf::InputBinding& binding);
         void setWorldMoveSmoothing(float seconds);
 
