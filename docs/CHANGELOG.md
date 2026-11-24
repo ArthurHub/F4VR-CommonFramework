@@ -17,6 +17,8 @@ major version is `0`, a minor bump may break the API; the **Upgrading** notes sa
   ([VR keyboard](tech/vr-keyboard.md)). `imgui::keyboard()` has its style (`setStyle`), the binding that closes it as
   Close does (`setCloseBinding`, a mod's Back) and `isOpen()`. **Upgrading:** nothing to call for typing; a mod whose
   Back steps its menu skips that while `isOpen()`, and gives its Back as the close binding.
+- **devbench drives the VR keyboard**: every mod's tool has a `keyboard` action, which reports the keyboard, its
+  keys and the hands on it, and presses a key as a pull does. The tool's `contract` is 6.
 - **Papyrus through CommonLibF4VR**: the framework calls scripts and binds natives through CommonLibF4VR's VM
   ([Papyrus](../src/f4vr/README.md#papyrus)), whose `DispatchStaticCall` / `DispatchMethodCall` now work on VR, and
   natives can take a `ScriptObject`. `f4vr::callPapyrusGlobalFunction(script, function, args...)` calls a global

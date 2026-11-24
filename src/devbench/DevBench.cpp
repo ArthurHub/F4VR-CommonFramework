@@ -20,6 +20,7 @@
 #include "vrcf/VRControllersSuppressor.h"
 
 #if F4CF_WITH_IMGUI_UI
+#include "imgui/ImGuiKeyboard.h"
 #include "imgui/ImGuiSnapshot.h"
 #endif
 
@@ -35,7 +36,8 @@ namespace f4cf::devbench
         // 3: set and clear act on the tool's own session overrides only, and overrides says who set each
         // 4: snapshot saves the texture of the ImGui canvases as a PNG
         // 5: input answers the controller input suppressed now, in place of the input.suppression event
-        constexpr int TOOL_CONTRACT = 5;
+        // 6: keyboard reports the framework's VR keyboard and presses its keys
+        constexpr int TOOL_CONTRACT = 6;
 
         // the owner of the session overrides that the tool's set action sets, see ConfigBase::setConfigOverride
         constexpr auto OVERRIDE_OWNER = "devbench";
@@ -648,6 +650,16 @@ namespace f4cf::devbench
                               handler(&Tool::saveCanvasSnapshot),
                               RunOn::Listener },
                     true);
+                addAction({ "keyboard",
+                              "the framework's VR keyboard, shown while a text field of an ImGui canvas is edited: open, page (letters, symbols, "
+                              "accents), shift, caps, the field's text and cursor as its line shows them, width and height of its canvas, each hand "
+                              "on it (on, x, y, down, the key it holds) and the keys of the page (label, action, x, y, width, height), places in its "
+                              "canvas's pixels from its top left. With key, presses that key of the page first, as a pull on it does: by its label as "
+                              "shown, or its action (Backspace, Clear, Left, Right, Shift, Caps, Space, Done, Close); ImGui gets what it types from "
+                              "the next frame, one stroke a frame",
+                              { { "key", argument("string", "keyboard: the key to press, by its label or action") } },
+                              handler(&Tool::keyboard) },
+                    true);
 #endif
             }
 
@@ -794,6 +806,37 @@ namespace f4cf::devbench
                     throw std::runtime_error(saved.error());
                 }
                 return { { "path", saved->path.string() }, { "width", saved->width }, { "height", saved->height }, { "dedicated", saved->dedicated } };
+            }
+
+            /**
+             * The framework's VR keyboard as it is now, after pressing the key asked for, if any: a key the page does not
+             * have, or a keyboard that is not shown, is an error and presses nothing.
+             */
+            json keyboard(const json& args) const
+            {
+                if (const std::string key = argString(args, "key"); !key.empty() && !imgui::keyboard().pressKey(key)) {
+                    throw std::invalid_argument(imgui::keyboard().isOpen() ? std::format("the keyboard's page has no key '{}'", key) : std::string("the keyboard is not shown"));
+                }
+                const auto report = imgui::keyboard().report();
+                json hands = json::object();
+                for (const bool primaryHand : { true, false }) {
+                    const auto& hand = report.hands[primaryHand ? 0 : 1];
+                    hands[primaryHand ? "primary" : "offhand"] = { { "on", hand.on }, { "x", hand.x }, { "y", hand.y }, { "down", hand.down }, { "key", hand.key } };
+                }
+                json keys = json::array();
+                for (const auto& key : report.keys) {
+                    keys.push_back({ { "label", key.label }, { "action", key.action }, { "x", key.x }, { "y", key.y }, { "width", key.width }, { "height", key.height } });
+                }
+                return { { "open", report.open },
+                    { "page", report.page },
+                    { "shift", report.shift },
+                    { "caps", report.caps },
+                    { "text", report.text },
+                    { "cursor", report.cursor },
+                    { "width", report.width },
+                    { "height", report.height },
+                    { "hands", hands },
+                    { "keys", keys } };
             }
 #endif
 
