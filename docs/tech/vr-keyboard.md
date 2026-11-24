@@ -37,11 +37,18 @@ with ImGui's own key and character events.
   an `imgui::UIImGuiPanel` drawn in a second ImGui context into its own texture, so it shows beside a
   dedicated canvas, and nothing done on it reaches the main context, where the field stays the active
   item. It is 24 by 10 vrui units, 1152 by 480 pixels, scaled to its width in the world.
-- **Pages:** QWERTY with the digits above it, what a US keyboard types with Shift; the symbols (`?123`);
-  the accented letters of Latin-1 and the common ones beside it, with their capitals, and ¿ ¡ « » € £ ¥
-  ° § (`áé`). Each ends in Close, two page keys, Space, Left, Right and Done, and has Backspace and
-  Clear. Shift shifts one character; Caps shifts the letters until pressed again. Every row's keys
-  line up, and a narrower row is centered.
+- **Hidden by the world** in front of it, as a canvas is by default (`setOccluded`): the hands, which
+  are near it as they type, are drawn over it.
+- **Pages:** the rows of a US PC keyboard, as SteamVR's keyboard has them, with what a US keyboard
+  types with Shift; Clear is where Tab is, Done where Enter is, and Close where the right Shift is: at
+  the edge, away from the keys a hand types on, as it takes back what was typed. Done and Close have
+  muted colors of their own, green and red. The symbols (`?123`), each a key of its own, with the
+  marks and signs of Latin-1 such as ¿ « € °. The accented letters of Latin-1 and of the languages of
+  Europe beside it, with their capitals (`áé`). Each page ends in two page keys, Space, Left and
+  Right, and has Backspace, Clear, Done and Close. A key shows what it types: its shifted character
+  while Shift is on. Shift shifts one character; Caps shifts the letters until pressed again. A key
+  wider than one spans the gaps it covers, so the rows are staggered as on a keyboard, and a row with
+  fewer keys is centered.
 - **The line of the field's text** along its top: the text, its selection and its caret, scrolled to
   keep the caret in view. The keyboard reads them from the field's `InputTextState` before each frame,
   as its own context does not have the field.
@@ -57,8 +64,8 @@ a hand on the keyboard leaves the other the mouse of the canvas behind it.
 
 - **A pull on a key** presses it, as the trigger is pulled. The key is held until the trigger is
   released, wherever the ray goes then. Backspace, Left and Right repeat while held: after 0.5 s, every
-  50 ms. Each press is a tick on the hand. A key a ray is on is lighter, and a held key, Shift or Caps
-  while on, and Done are in the accent color.
+  50 ms. Each press is a tick on the hand. A key a ray is on is lighter, and a held key, and Shift or
+  Caps while on, are in the accent color.
 - **A pull on the line** puts the field's caret at the place of the text nearest to it
   (`InputTextState::SetSelection`), from where the text was drawn in the frame before.
 - **What a key gives the field:** a character is typed (`io.AddInputCharactersUTF8`), so the field's
@@ -79,7 +86,8 @@ a hand on the keyboard leaves the other the mouse of the canvas behind it.
   name), or the first interactive canvas when a popup holds it. It is as wide as `widthShare` of that
   canvas, its top a gap under the canvas's bottom edge, in the canvas's plane, and tilted back by
   `tiltDegrees`, so it faces up toward the player. The canvas is taken as the flat quad it is laid out
-  as, also when it is curved. It stays as far from the player as the canvas: nearer, it comes down to
+  as, also when it is curved. It is bent as that canvas is, around a cylinder of its radius: it is
+  about as far from the player, so the two read as one surface. It stays as far from the player as the canvas: nearer, it comes down to
   the hands, which then point at its back from under it, and the pointer meets a canvas from its front only.
 - **Moved by the player** with the world-move binding (`vrui::UIManager::setWorldMoveBinding`): it is a
   root in the world (`attachPresetToWorldAtHMD`), and its panel reports the hands on it

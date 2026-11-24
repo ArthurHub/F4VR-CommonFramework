@@ -47,7 +47,13 @@ namespace f4cf::imgui
         render::Color keyHovered = render::Color::rgba(56, 74, 62);
         render::Color text = render::Color::rgba(220, 255, 230);
 
-        // a key that is held down, Shift or Caps while on, Done, and the caret
+        // Done and Close, which leave the field, apart from the keys that type: muted, so the keys stay what the eye finds
+        render::Color done = render::Color::rgba(34, 86, 62);
+        render::Color doneHovered = render::Color::rgba(46, 112, 82);
+        render::Color close = render::Color::rgba(98, 42, 38);
+        render::Color closeHovered = render::Color::rgba(128, 56, 50);
+
+        // a key that is held down, Shift or Caps while on, and the caret
         render::Color accent = render::Color::rgba(10, 250, 120);
 
         // the text of a key in the accent color

@@ -479,8 +479,6 @@ namespace f4cf::imgui
             _panel = std::make_shared<UIImGuiPanel>("F4CF_Keyboard", WIDTH_UNITS, HEIGHT_UNITS);
             _panel->setOwnContext(true);
             _panel->setInteractive(true);
-            // a keyboard that is typed on stays readable whatever is in front of it
-            _panel->setOccluded(false);
             _panel->setContent([this] {
                 draw();
             });
@@ -495,7 +493,10 @@ namespace f4cf::imgui
 
         const CanvasFrame frame = canvasFrame(canvas);
         _offset = _movedOffset.value_or(defaultOffset(frame, _style));
-        _panel->setScale(frame.width * _style.widthShare / WIDTH_UNITS);
+        const float scale = frame.width * _style.widthShare / WIDTH_UNITS;
+        _panel->setScale(scale);
+        // bent as the canvas is: it is about as far from the player, so the two read as one surface
+        _panel->setCurveRadius(canvas.curveRadius > 0.0f ? canvas.curveRadius / scale : 0.0f);
         vrui::g_uiManager->setWorldPlace(_panel, MatrixUtils::localToWorldTransform(frame.transform, _offset));
         _panel->setVisibility(true);
         _open = true;
@@ -710,8 +711,8 @@ namespace f4cf::imgui
     }
 
     /**
-     * The keys of the page: a key held down, Shift or Caps while on, and Done in the accent color, and a key a ray is
-     * on lighter. Left and Right are arrows, as the font has none.
+     * The keys of the page: a key held down, and Shift or Caps while on, in the accent color, Done and Close in muted
+     * colors of their own, and a key a ray is on lighter. Left and Right are arrows, as the font has none.
      */
     void Keyboard::drawKeys(ImDrawList* drawList, const Layout& parts)
     {
@@ -724,12 +725,19 @@ namespace f4cf::imgui
             const bool hovered = std::ranges::any_of(_hands, [&](const Hand& hand) {
                 return hand.hovered == &key;
             });
-            const bool accented = held || _typing.isOn(key) || key.action == KeyAction::Done;
+            const bool accented = held || _typing.isOn(key);
 
             const ImVec2 keyMin(parts.keysMin.x + rect.x, parts.keysMin.y + rect.y);
             const ImVec2 keyMax(keyMin.x + rect.width, keyMin.y + rect.height);
-            const render::Color& fill = accented ? _style.accent : hovered ? _style.keyHovered : _style.key;
-            drawList->AddRectFilled(keyMin, keyMax, packed(fill), rect.height * KEY_ROUNDING_SHARE);
+            const render::Color* fill = hovered ? &_style.keyHovered : &_style.key;
+            if (accented) {
+                fill = &_style.accent;
+            } else if (key.action == KeyAction::Done) {
+                fill = hovered ? &_style.doneHovered : &_style.done;
+            } else if (key.action == KeyAction::Close) {
+                fill = hovered ? &_style.closeHovered : &_style.close;
+            }
+            drawList->AddRectFilled(keyMin, keyMax, packed(*fill), rect.height * KEY_ROUNDING_SHARE);
             const ImU32 textColor = packed(accented ? _style.accentText : _style.text);
 
             const ImVec2 center((keyMin.x + keyMax.x) * 0.5f, (keyMin.y + keyMax.y) * 0.5f);

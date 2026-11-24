@@ -82,8 +82,17 @@ TEST_CASE("every page has the editing keys, and no row wider than the letters'",
             for (const KeyboardKey& key : row) {
                 units += key.units;
             }
-            CHECK(units <= 11.5f);
+            CHECK(units <= 15.0f);
         }
+    }
+}
+
+TEST_CASE("Close is at the right edge of the fourth row of every page, where the right Shift is", "[imgui][keyboard]")
+{
+    for (const KeyboardPage page : PAGES) {
+        const auto rows = keyboardRows(page);
+        REQUIRE(rows.size() == 5);
+        CHECK(rows[3].back().action == KeyAction::Close);
     }
 }
 
@@ -119,9 +128,9 @@ TEST_CASE("the keys fill the area, and a key of more units spans the gaps it cov
         return rect.key->action == KeyAction::Backspace;
     });
     CHECK(std::abs(backspace.x + backspace.width - width) < 0.01f);
-    // a key of 1.5 units is one and a half keys and half a gap wide
+    // a key of 2 units is two keys and the gap between them wide
     const float unit = keys.front().width;
-    CHECK(std::abs(backspace.width - (1.5f * unit + 0.5f * gap)) < 0.01f);
+    CHECK(std::abs(backspace.width - (2.0f * unit + gap)) < 0.01f);
     // the last row reaches the bottom
     CHECK(std::abs(keys.back().y + keys.back().height - height) < 0.01f);
 }

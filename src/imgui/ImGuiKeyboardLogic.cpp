@@ -34,21 +34,26 @@ namespace f4cf::imgui::internal
             return { .label = label, .shifted = label, .units = 1.25f, .action = KeyAction::ToPage, .page = page };
         }
 
-        // The keys every page has. The rows of a page are 11.5 units wide or less, and narrower ones are centered.
-        constexpr KeyboardKey BACKSPACE = action("Back", 1.5f, KeyAction::Backspace);
+        // The keys every page has. The pages follow a US PC keyboard, as SteamVR's does: rows 15 units wide, staggered
+        // by the widths of the keys at their ends; a row with fewer keys is centered. Done is where Enter is, Clear where
+        // Tab is, which a one-line field has no use for, and Close where the right Shift is: at the edge, away from the
+        // keys a hand types on, as it takes back what was typed.
+        constexpr KeyboardKey BACKSPACE = action("Backspace", 2.0f, KeyAction::Backspace);
         constexpr KeyboardKey CLEAR = action("Clear", 1.5f, KeyAction::Clear);
-        constexpr KeyboardKey SHIFT = action("Shift", 1.5f, KeyAction::Shift);
-        constexpr KeyboardKey CLOSE = action("Close", 1.25f, KeyAction::Close);
-        constexpr KeyboardKey SPACE = action("Space", 3.75f, KeyAction::Space);
-        constexpr KeyboardKey LEFT = action("Left", 1.0f, KeyAction::Left);
-        constexpr KeyboardKey RIGHT = action("Right", 1.0f, KeyAction::Right);
-        constexpr KeyboardKey DONE = action("Done", 2.0f, KeyAction::Done);
+        constexpr KeyboardKey CAPS = action("Caps", 1.75f, KeyAction::Caps);
+        constexpr KeyboardKey DONE = action("Done", 2.25f, KeyAction::Done);
+        constexpr KeyboardKey SHIFT = action("Shift", 2.25f, KeyAction::Shift);
+        constexpr KeyboardKey CLOSE = action("Close", 2.75f, KeyAction::Close);
+        constexpr KeyboardKey SPACE = action("Space", 9.0f, KeyAction::Space);
+        constexpr KeyboardKey LEFT = action("Left", 1.5f, KeyAction::Left);
+        constexpr KeyboardKey RIGHT = action("Right", 1.5f, KeyAction::Right);
         constexpr KeyboardKey TO_LETTERS = toPage("abc", KeyboardPage::Letters);
         constexpr KeyboardKey TO_SYMBOLS = toPage("?123", KeyboardPage::Symbols);
         constexpr KeyboardKey TO_ACCENTS = toPage("\xC3\xA1\xC3\xA9", KeyboardPage::Accents);
 
-        // QWERTY, with the digits above it and what a US keyboard types with Shift
-        constexpr std::array LETTERS_0 = { character("1", "!"),
+        // the letters, and what a US keyboard types with Shift
+        constexpr std::array LETTERS_0 = { character("`", "~"),
+            character("1", "!"),
             character("2", "@"),
             character("3", "#"),
             character("4", "$"),
@@ -58,8 +63,11 @@ namespace f4cf::imgui::internal
             character("8", "*"),
             character("9", "("),
             character("0", ")"),
+            character("-", "_"),
+            character("=", "+"),
             BACKSPACE };
-        constexpr std::array LETTERS_1 = { letter("q", "Q"),
+        constexpr std::array LETTERS_1 = { CLEAR,
+            letter("q", "Q"),
             letter("w", "W"),
             letter("e", "E"),
             letter("r", "R"),
@@ -69,8 +77,10 @@ namespace f4cf::imgui::internal
             letter("i", "I"),
             letter("o", "O"),
             letter("p", "P"),
-            CLEAR };
-        constexpr std::array LETTERS_2 = { action("Caps", 1.5f, KeyAction::Caps),
+            character("[", "{"),
+            character("]", "}"),
+            KeyboardKey{ .label = "\\", .shifted = "|", .units = 1.5f } };
+        constexpr std::array LETTERS_2 = { CAPS,
             letter("a", "A"),
             letter("s", "S"),
             letter("d", "D"),
@@ -80,7 +90,9 @@ namespace f4cf::imgui::internal
             letter("j", "J"),
             letter("k", "K"),
             letter("l", "L"),
-            character("'", "\"") };
+            character(";", ":"),
+            character("'", "\""),
+            DONE };
         constexpr std::array LETTERS_3 = { SHIFT,
             letter("z", "Z"),
             letter("x", "X"),
@@ -91,22 +103,68 @@ namespace f4cf::imgui::internal
             letter("m", "M"),
             character(",", "<"),
             character(".", ">"),
-            character("-", "_") };
-        constexpr std::array LETTERS_4 = { CLOSE, TO_SYMBOLS, TO_ACCENTS, SPACE, LEFT, RIGHT, DONE };
+            character("/", "?"),
+            CLOSE };
+        constexpr std::array LETTERS_4 = { TO_SYMBOLS, TO_ACCENTS, SPACE, LEFT, RIGHT };
 
-        constexpr std::array
-            SYMBOLS_0 = { symbol("1"), symbol("2"), symbol("3"), symbol("4"), symbol("5"), symbol("6"), symbol("7"), symbol("8"), symbol("9"), symbol("0"), BACKSPACE };
-        constexpr std::array
-            SYMBOLS_1 = { symbol("!"), symbol("@"), symbol("#"), symbol("$"), symbol("%"), symbol("^"), symbol("&"), symbol("*"), symbol("("), symbol(")"), CLEAR };
-        constexpr std::array
-            SYMBOLS_2 = { symbol("-"), symbol("_"), symbol("="), symbol("+"), symbol("["), symbol("]"), symbol("{"), symbol("}"), symbol("\\"), symbol("|"), symbol("~") };
-        constexpr std::array
-            SYMBOLS_3 = { symbol(";"), symbol(":"), symbol("'"), symbol("\""), symbol(","), symbol("."), symbol("<"), symbol(">"), symbol("/"), symbol("?"), symbol("`") };
-        constexpr std::array SYMBOLS_4 = { CLOSE, TO_LETTERS, TO_ACCENTS, SPACE, LEFT, RIGHT, DONE };
+        // the symbols of the keyboard, each a key of its own, and the marks and signs of Latin-1 a US keyboard does not have
+        constexpr std::array SYMBOLS_0 = { symbol("~"),
+            symbol("!"),
+            symbol("@"),
+            symbol("#"),
+            symbol("$"),
+            symbol("%"),
+            symbol("^"),
+            symbol("&"),
+            symbol("*"),
+            symbol("("),
+            symbol(")"),
+            symbol("_"),
+            symbol("+"),
+            BACKSPACE };
+        constexpr std::array SYMBOLS_1 = { CLEAR,
+            symbol("`"),
+            symbol("-"),
+            symbol("="),
+            symbol("["),
+            symbol("]"),
+            symbol("{"),
+            symbol("}"),
+            symbol("\\"),
+            symbol("|"),
+            symbol("<"),
+            symbol(">"),
+            symbol("/"),
+            KeyboardKey{ .label = "?", .shifted = "?", .units = 1.5f } };
+        constexpr std::array SYMBOLS_2 = { KeyboardKey{ .label = ";", .shifted = ";", .units = 1.75f },
+            symbol(":"),
+            symbol("'"),
+            symbol("\""),
+            symbol(","),
+            symbol("."),
+            symbol("\xE2\x82\xAC"),
+            symbol("\xC2\xA3"),
+            symbol("\xC2\xA5"),
+            symbol("\xC2\xB0"),
+            symbol("\xC2\xA7"),
+            symbol("\xC2\xB6"),
+            DONE };
+        constexpr std::array SYMBOLS_3 = { KeyboardKey{ .label = "\xC2\xBF", .shifted = "\xC2\xBF", .units = 2.25f },
+            symbol("\xC2\xA1"),
+            symbol("\xC2\xAB"),
+            symbol("\xC2\xBB"),
+            symbol("\xC2\xA9"),
+            symbol("\xC2\xAE"),
+            symbol("\xC2\xB1"),
+            symbol("\xC3\x97"),
+            symbol("\xC3\xB7"),
+            symbol("\xC2\xB5"),
+            symbol("\xC2\xA2"),
+            CLOSE };
+        constexpr std::array SYMBOLS_4 = { TO_LETTERS, TO_ACCENTS, SPACE, LEFT, RIGHT };
 
-        // The accented letters of Latin-1 and the common ones beside it, all in the framework's Roboto, with their
-        // capitals, and the marks and signs of Latin-1 that a US keyboard does not have. Escaped, as the source is
-        // read in the system's code page.
+        // The accented letters of Latin-1 and of the languages of Europe beside it, all in the framework's Roboto, with
+        // their capitals. Escaped, as the source is read in the system's code page.
         constexpr std::array ACCENTS_0 = { letter("\xC3\xA1", "\xC3\x81"),
             letter("\xC3\xA0", "\xC3\x80"),
             letter("\xC3\xA2", "\xC3\x82"),
@@ -117,8 +175,12 @@ namespace f4cf::imgui::internal
             letter("\xC3\xA7", "\xC3\x87"),
             letter("\xC3\xB1", "\xC3\x91"),
             letter("\xC3\x9F", "\xC3\x9F"),
+            letter("\xC5\x99", "\xC5\x98"),
+            letter("\xC5\x91", "\xC5\x90"),
+            letter("\xC5\xB1", "\xC5\xB0"),
             BACKSPACE };
-        constexpr std::array ACCENTS_1 = { letter("\xC3\xA9", "\xC3\x89"),
+        constexpr std::array ACCENTS_1 = { CLEAR,
+            letter("\xC3\xA9", "\xC3\x89"),
             letter("\xC3\xA8", "\xC3\x88"),
             letter("\xC3\xAA", "\xC3\x8A"),
             letter("\xC3\xAB", "\xC3\x8B"),
@@ -128,8 +190,10 @@ namespace f4cf::imgui::internal
             letter("\xC3\xAF", "\xC3\x8F"),
             letter("\xC3\xBD", "\xC3\x9D"),
             letter("\xC3\xBF", "\xC5\xB8"),
-            CLEAR };
-        constexpr std::array ACCENTS_2 = { SHIFT,
+            letter("\xC4\x9F", "\xC4\x9E"),
+            letter("\xC5\x9F", "\xC5\x9E"),
+            KeyboardKey{ .label = "\xC5\xBE", .shifted = "\xC5\xBD", .units = 1.5f, .letter = true } };
+        constexpr std::array ACCENTS_2 = { CAPS,
             letter("\xC3\xB3", "\xC3\x93"),
             letter("\xC3\xB2", "\xC3\x92"),
             letter("\xC3\xB4", "\xC3\x94"),
@@ -139,18 +203,22 @@ namespace f4cf::imgui::internal
             letter("\xC5\x93", "\xC5\x92"),
             letter("\xC3\xBA", "\xC3\x9A"),
             letter("\xC3\xB9", "\xC3\x99"),
-            letter("\xC3\xBB", "\xC3\x9B") };
-        constexpr std::array ACCENTS_3 = { letter("\xC3\xBC", "\xC3\x9C"),
-            symbol("\xC2\xBF"),
-            symbol("\xC2\xA1"),
-            symbol("\xC2\xAB"),
-            symbol("\xC2\xBB"),
-            symbol("\xE2\x82\xAC"),
-            symbol("\xC2\xA3"),
-            symbol("\xC2\xA5"),
-            symbol("\xC2\xB0"),
-            symbol("\xC2\xA7") };
-        constexpr std::array ACCENTS_4 = { CLOSE, TO_LETTERS, TO_SYMBOLS, SPACE, LEFT, RIGHT, DONE };
+            letter("\xC3\xBB", "\xC3\x9B"),
+            letter("\xC3\xBC", "\xC3\x9C"),
+            DONE };
+        constexpr std::array ACCENTS_3 = { SHIFT,
+            letter("\xC4\x85", "\xC4\x84"),
+            letter("\xC4\x99", "\xC4\x98"),
+            letter("\xC4\x87", "\xC4\x86"),
+            letter("\xC5\x82", "\xC5\x81"),
+            letter("\xC5\x84", "\xC5\x83"),
+            letter("\xC5\x9B", "\xC5\x9A"),
+            letter("\xC5\xBA", "\xC5\xB9"),
+            letter("\xC5\xBC", "\xC5\xBB"),
+            letter("\xC4\x8D", "\xC4\x8C"),
+            letter("\xC5\xA1", "\xC5\xA0"),
+            CLOSE };
+        constexpr std::array ACCENTS_4 = { TO_LETTERS, TO_SYMBOLS, SPACE, LEFT, RIGHT };
 
         constexpr std::array<std::span<const KeyboardKey>, 5> LETTERS = { LETTERS_0, LETTERS_1, LETTERS_2, LETTERS_3, LETTERS_4 };
         constexpr std::array<std::span<const KeyboardKey>, 5> SYMBOLS = { SYMBOLS_0, SYMBOLS_1, SYMBOLS_2, SYMBOLS_3, SYMBOLS_4 };
