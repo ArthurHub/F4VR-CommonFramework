@@ -6,7 +6,7 @@ This guide is the porting recipe.
 
 > **In scope:** every type and field declared in `src/f4sevr/Forms.h`.
 >
-> **Not in scope:** `F4SEVR::` symbols from `src/f4sevr/Common.h` (e.g. `F4SEVR::StringCache`, `F4SEVR::Heap`, `F4SEVR::tArray`) and the Papyrus headers (`F4SEVR::NativeFunction*`, `F4SEVR::VMArray`, `F4SEVR::VMVariable`, `F4SEVR::execPapyrusGlobalFunction`, `F4SEVR::getGameVM`, `F4SEVR::StaticFunctionTag`). The Papyrus headers still ship but are deprecated: [`src/f4sevr/README.md`](../../src/f4sevr/README.md) maps each of them to CommonLibF4VR.
+> The rest of `src/f4sevr/` is gone too: the Papyrus headers ([Papyrus](#papyrus) maps each call to CommonLibF4VR) and `Common.h`, whose `StringCache::Entry` is `RE::BSStringPool::Entry`, and whose `Heap`, `tArray` and `tHashSet` are CommonLibF4VR's `MemoryManager`, `BSTArray` and `BSTHashMap`.
 
 ---
 
@@ -297,10 +297,35 @@ CommonLibF4VR equivalents live under:
 
 ---
 
+## Papyrus
+
+The framework's Papyrus is CommonLibF4VR's VM ([`f4vr/` Papyrus](../../src/f4vr/README.md#papyrus)). Each `F4SEVR` call and type maps to:
+
+| `F4SEVR` | CommonLibF4VR |
+|----------|---------------|
+| `getGameVM()->m_virtualMachine` | `RE::GameVM::GetSingleton()->GetVM()` |
+| `vm->RegisterFunction(new NativeFunctionN("Fn", "Script", fn, vm))` | `vm->BindNativeMethod("Script", "Fn", fn)` |
+| `StaticFunctionTag*` first parameter | `std::monostate` |
+| `BSFixedString` parameter | `RE::BSFixedString` or `std::string` |
+| `VMArray<T>` parameter | `std::vector<T>` |
+| `VMObject*` (a Papyrus `ScriptObject`) | `RE::BSTSmartPointer<RE::BSScript::Object>`; its name is `obj->GetTypeInfo()->GetName()`, its handle `obj->GetHandle()` |
+| `execPapyrusGlobalFunction("Debug", "Notification", text)` | `f4vr::callPapyrusGlobalFunction("Debug", "Notification", text)` |
+| `execPapyrusFunction(handle, script, "Fn", getArgs(a, b))` | `vm->DispatchMethodCall(handle, script, "Fn", nullptr, a, b)` |
+| `VMArray<VMVariable>` / `getArgs` / `addArgument` | the arguments themselves, passed to the call; a list built at runtime, packed into a `BSScrapArray<Variable>` for `DispatchStaticCallPacked` / `DispatchMethodCallPacked` |
+| `GetObjectIdentifier(handle, script, 1, &id, 0)` | `FindBoundObject(handle, script, true, object, false)`, the handle from `GetObjectHandlePolicy().GetHandleForObject(type, form)` |
+| `GetVMPropertyInfo(...).index`, `GetPropertyValueByIndex` | `ObjectTypeInfo::GetPropertyIndex(name)` (through `GetParent()`), `GetVariableValue(object, index, value)` |
+| `SetPropertyValue(&id, name, &value, &unk)` | `SetPropertyValue(object, name, value, nullptr)` |
+| `PapyrusGatewayBase::executePapyrusScript("Fn", arguments)` | `executePapyrusScript("Fn", a, b)` |
+| `SendCustomEvent_Internal(vm, 0, sender, &eventName, &args)` | `vm->SendCustomEvent(sender, "MyMod:Sender_OnThing", a, b)`: the event's compiled name, the declaring script and the event joined by `_` |
+
+Calls into Papyrus need CommonLibF4VR `0db6c81` or later: before it, `DispatchStaticCall` / `DispatchMethodCall` crashed on VR.
+
+---
+
 ## Mechanical migration recipe
 
 1. Open your mod and grep for `F4SEVR::` (case-sensitive).
-2. For each match: if the type is in the rename table above, rename it. If it is from a Papyrus header, port it with the table in [`src/f4sevr/README.md`](../../src/f4sevr/README.md). If it is from `Common.h`, leave it — that header still ships.
+2. For each match: if the type is in the rename table above, rename it. If it is from a Papyrus header, port it with the [Papyrus](#papyrus) table. If it is from `Common.h`, use the CommonLibF4VR type the note at the top names.
 3. After renaming, `git grep '\->actorFlags\|\->middleProcess\|\->unk08\|\->equipData\|\->firstPersonSkeleton\|\->playerEquipData\|\->cameraNode\|\->keywordForm\.\|\->unkF0\|->rootNode'` to find member accesses that need the field-name updates.
 4. Hand-fix any equipment walks per the "Equipment access" section.
 5. Drop the `#include "f4sevr/Forms.h"` line if you have one.

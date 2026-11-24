@@ -106,7 +106,7 @@ The framework's own [CLAUDE.md](external/F4VR-CommonFramework/CLAUDE.md) maps it
 | Lines, images and text drawn over the VR view               | `src/render/README.md`             |
 | Dear ImGui content on world-space quads                     | `src/imgui/README.md`              |
 | Game state: nodes, skeleton, weapon and menu state, HUD     | `src/f4vr/README.md`               |
-| Papyrus native functions                                    | `src/f4sevr/README.md`             |
+| Papyrus: native functions, calling scripts                  | `src/f4vr/README.md` (Papyrus)     |
 | Debug draw overlay, the `[Debug]` config keys                  | `src/debug/README.md`, `docs/debug-config.md` |
 | Timing a hot path (`F4CF_PERF_SCOPE`), Tracy                | `src/perf/README.md`               |
 | The mod's devbench tool (drive and inspect the running game) | `src/devbench/README.md`           |

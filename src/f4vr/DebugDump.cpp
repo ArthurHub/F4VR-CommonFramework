@@ -3,7 +3,6 @@
 #include "Logger.h"
 #include "f4vr/PlayerNodes.h"
 
-using namespace common;
 using namespace RE::Scaleform;
 
 namespace

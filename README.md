@@ -120,7 +120,6 @@ Each source subsystem has its own README with usage details and examples:
 | [`src/`](src/README.md)           | Source-tree overview and how the subsystems fit together.                |
 | [`common/`](src/common/README.md) | Math (quaternions, matrices, transforms) and shared utilities.           |
 | [`f4vr/`](src/f4vr/README.md)     | Fallout 4 VR game-state utilities: nodes, skeleton, menus, Scaleform, Papyrus. |
-| [`f4sevr/`](src/f4sevr/README.md) | Deprecated F4SE VR SDK Papyrus layer, kept for mods not yet moved off it. |
 | [`vrcf/`](src/vrcf/README.md)     | VR Controller Framework: OpenVR input and input suppression.             |
 | [`vrui/`](src/vrui/README.md)     | VR UI widget system: panels, buttons, toggles, containers.               |
 | [`imgui/`](src/imgui/README.md)   | Dear ImGui panels as world-space quads, standalone or inside a vrui layout. |

@@ -77,8 +77,9 @@ RE::NiNode* hmd = getVRPlayerNodes()->hmdNode;
 
 ## Papyrus
 
-Papyrus goes through CommonLibF4VR's VM, `RE::GameVM::GetSingleton()->GetVM()`, both ways. The
-legacy [`f4sevr/`](../f4sevr/README.md) layer is deprecated; its page maps each of its calls to these.
+Papyrus goes through CommonLibF4VR's VM, `RE::GameVM::GetSingleton()->GetVM()`, both ways. A mod on
+the F4SE VR SDK's `F4SEVR` Papyrus calls ports them with the
+[migration table](../../docs/tech/f4sevr-to-commonlib-migration.md#papyrus).
 
 **Natives a script calls** are bound with `BindNativeMethod(script, function, fn)`, in `onGameLoaded`
 or in the callback `registerPapyrusNativeFunctions` takes in `onModLoaded`, which gets the VM. A global native's first parameter is `std::monostate`; the
@@ -109,6 +110,9 @@ RE::GameVM::GetSingleton()->GetVM()->DispatchMethodCall(handle, scriptName, "OnM
 An argument list built at runtime goes packed: `PackVariable` each value into a
 `RE::BSScrapArray<RE::BSScript::Variable>`, and pass it to `DispatchStaticCallPacked` or
 `DispatchMethodCallPacked` (by handle and script name, or on a script object).
+
+A script's `CustomEvent` is sent with `SendCustomEvent(sender, "MyMod:Sender_OnThing", args...)`, by the name the
+Papyrus compiler gives it: the declaring script and the event joined by `_`, not the bare event name.
 
 [`PapyrusGatewayBase`](PapyrusGatewayBase.h) wraps the second: a script calls the gateway's native to
 register itself, and the mod then calls functions on it with `executePapyrusScript("Fn", args...)`.

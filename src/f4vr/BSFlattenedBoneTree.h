@@ -1,7 +1,6 @@
 #pragma once
 
 #include "F4VROffsets.h"
-#include "f4sevr/Common.h"
 
 namespace f4cf::f4vr
 {
@@ -22,7 +21,7 @@ namespace f4cf::f4vr
 
         struct BoneNodePosition
         {
-            F4SEVR::StringCache::Entry* name;
+            RE::BSStringPool::Entry* name;
             int position;
             uint32_t pad;
             uintptr_t unk;
