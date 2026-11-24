@@ -108,6 +108,22 @@ namespace f4cf::f4vr
 
     void registerPapyrusNativeFunctions(F4SE::PapyrusInterface::RegisterFunctions callback);
 
+    /**
+     * Queue a call to a global Papyrus function, as Debug.Notification, without waiting for it. The arguments must match its
+     * Papyrus declaration (bool, int, float, string, arrays as std::vector). Returns false, logged, when the VM won't take it.
+     */
+    template <class... Args>
+    bool callPapyrusGlobalFunction(const char* scriptName, const char* functionName, Args... args)
+    {
+        const auto gameVM = RE::GameVM::GetSingleton();
+        const auto vm = gameVM ? gameVM->GetVM() : nullptr;
+        if (!vm || !vm->DispatchStaticCall(scriptName, functionName, nullptr, args...)) {
+            logger::error("Failed to call Papyrus function '{}.{}'", scriptName, functionName);
+            return false;
+        }
+        return true;
+    }
+
     // CommonLib migration
     std::string resolveTexturePath(std::string_view path);
     RE::NiNode* loadNifFromFile(const std::string& path);

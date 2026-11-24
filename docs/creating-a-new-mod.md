@@ -252,11 +252,11 @@ The log is `Documents\My Games\Fallout4VR\F4SE\HelloVR.log`. It has your `HelloV
 - **[Controller bindings](input-binding.md)** and **[activation spheres](activation-spheres.md):**
   rebindable inputs and reach-into-a-zone gestures, as players see them.
 - **[`vrcf/`](../src/vrcf/README.md):** controller input, haptics, and taking buttons from the game.
-- **[`f4vr/`](../src/f4vr/README.md):** nodes, skeleton, weapon and menu state, the HUD, activation spheres.
+- **[`f4vr/`](../src/f4vr/README.md):** nodes, skeleton, weapon and menu state, the HUD, activation spheres,
+  and [Papyrus](../src/f4vr/README.md#papyrus): natives a script calls, and calling scripts.
 - **[`vrui/`](../src/vrui/README.md):** in-world VR UI, from meshes or from text and images.
 - **[`imgui/`](../src/imgui/README.md):** Dear ImGui on a world-space quad.
 - **[`render/`](../src/render/README.md):** your own lines, images and text over the VR view.
 - **[`modsconfig/`](../src/modsconfig/README.md):** the mod's page in Mods Config FO4 VR.
 - **[`devbench/`](../src/devbench/README.md):** actions an agent calls in the running game.
 - **[`debug/`](../src/debug/README.md)** and **[`perf/`](../src/perf/README.md):** debug draw, and timing.
-- **[`f4sevr/`](../src/f4sevr/README.md):** Papyrus native functions.

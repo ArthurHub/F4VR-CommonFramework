@@ -12,7 +12,7 @@ comments are the detail; this page is the map and the traps.
 
 | File | What it has |
 |------|-------------|
-| [`F4VRUtils.h`](F4VRUtils.h) | The workhorse. Nodes: find (`findNode`, `findAVObject`), show and hide, update transforms (`updateDown`, `updateTransforms`), load a `.nif`. Player and weapon: `isWeaponDrawn`, `isInPowerArmor`, `isSwimming`, `getEquippedWeaponName`... Other actors: `getActorsWithinRangeOfPoint`, `getActorFacingAngleTo` / `isActorFacing`, `getDetectionLevel`, `isInActiveCombat`, `startCombat`. Settings: `isLeftHandedMode`, `getIniSetting`, the Pip-Boy's placement (`getPipboyPlacement`, `setPipboyPlacement`, which saves it as the game's menu does). UI: `showNotification`, `showMessagebox`, `isGameMenuTakingInput`. |
+| [`F4VRUtils.h`](F4VRUtils.h) | The workhorse. Nodes: find (`findNode`, `findAVObject`), show and hide, update transforms (`updateDown`, `updateTransforms`), load a `.nif`. Player and weapon: `isWeaponDrawn`, `isInPowerArmor`, `isSwimming`, `getEquippedWeaponName`... Other actors: `getActorsWithinRangeOfPoint`, `getActorFacingAngleTo` / `isActorFacing`, `getDetectionLevel`, `isInActiveCombat`, `startCombat`. Settings: `isLeftHandedMode`, `getIniSetting`, the Pip-Boy's placement (`getPipboyPlacement`, `setPipboyPlacement`, which saves it as the game's menu does). UI: `showNotification`, `showMessagebox`, `isGameMenuTakingInput`. Papyrus: `callPapyrusGlobalFunction` ([Papyrus](#papyrus)). |
 | [`EquippedWeaponHandler.h`](EquippedWeaponHandler.h) | Detects a change of the equipped weapon or of power armor: `detectChange()` each frame, then read `weaponName()`, `weaponNameExtended()` (a "Rifle" suffix for a weapon that is both), `isMelee()`... Also the throwable, which exists only mid-throw (`detectThrowableChange()`). Detection only: the caller decides what a change does. |
 | [`PlayerNodes.h`](PlayerNodes.h) | `getVRPlayerNodes()`, CommonLibF4's `RE::VRPlayerNodes` (wands, HMD, Pip-Boy, scope...), and accessors such as `getPrimaryWandNode()`. |
 | [`F4VRSkelly.h`](F4VRSkelly.h) | Bone names (`SkellyBones`), and `Skelly`: a bone's world transform by name, a hand's index fingertip. |
@@ -26,7 +26,7 @@ comments are the detail; this page is the map and the traps.
 | [`ScaleformUtils.h`](ScaleformUtils.h) | GFx menus and the HUD: read values, show and hide, drive list menus, dispatch events. |
 | [`F4VRThumbstickControls.h`](F4VRThumbstickControls.h) | Turns the player's thumbstick movement off and on, through the controls' deadzone settings. |
 | [`WandMovement.h`](WandMovement.h) | Controller-direction movement with the offhand controller held reversed: `alignTo(key, worldForward)` each frame inverts the offhand stick the game reads while the controller points more than 90° away from that forward. A call lasts through the next frame, so stopping the calls ends it. |
-| [`PapyrusGatewayBase.h`](PapyrusGatewayBase.h) | Calls Papyrus from C++, through a script that registers itself. |
+| [`PapyrusGatewayBase.h`](PapyrusGatewayBase.h) | Calls Papyrus from C++, through a script that registers itself ([Papyrus](#papyrus)). |
 | [`DebugDump.h`](DebugDump.h), [`DebugInventory.h`](DebugInventory.h) | `aDumpDataOnce` and `aAddItemsOnce` ([debug settings](../../docs/debug-config.md)). `DebugInventory` also has a typed API (`ItemFilter` with a code `predicate`, `iterateObjects`). |
 | [`F4VROffsets.h`](F4VROffsets.h) | Every RVA the framework calls into. |
 | [`MiscStructs.h`](MiscStructs.h) | Small game structs CommonLibF4VR doesn't model. |
@@ -74,6 +74,45 @@ like `getPrimaryWandNode()`):
 ```cpp
 RE::NiNode* hmd = getVRPlayerNodes()->hmdNode;
 ```
+
+## Papyrus
+
+Papyrus goes through CommonLibF4VR's VM, `RE::GameVM::GetSingleton()->GetVM()`, both ways. The
+legacy [`f4sevr/`](../f4sevr/README.md) layer is deprecated; its page maps each of its calls to these.
+
+**Natives a script calls** are bound with `BindNativeMethod(script, function, fn)`, in `onGameLoaded`
+or in the callback `registerPapyrusNativeFunctions` takes in `onModLoaded`, which gets the VM. A global native's first parameter is `std::monostate`; the
+others are `bool`, integers, `float`, a string (`std::string`, `RE::BSFixedString`), a
+`std::vector<T>` for an array, a form pointer, or a `ScriptObject` as
+`RE::BSTSmartPointer<RE::BSScript::Object>`:
+
+```cpp
+// Papyrus: int Function RegisterThing(float radius, string name, float[] pos, ScriptObject akObj) global native
+std::uint32_t registerThing(std::monostate, float radius, std::string name, std::vector<float> pos,
+    RE::BSTSmartPointer<RE::BSScript::Object> obj);
+
+RE::GameVM::GetSingleton()->GetVM()->BindNativeMethod("MyMod:MyScript", "RegisterThing", registerThing);
+```
+
+**Calling a script** queues the call and does not wait for it. The arguments must match the Papyrus
+declaration:
+
+```cpp
+// a global function
+callPapyrusGlobalFunction("Game", "TurnPlayerRadioOn", true);
+
+// a function on a script object, by the handle and name a native got from it
+// (obj->GetHandle(), obj->GetTypeInfo()->GetName())
+RE::GameVM::GetSingleton()->GetVM()->DispatchMethodCall(handle, scriptName, "OnMyEvent", nullptr, 1, 2.0f);
+```
+
+[`PapyrusGatewayBase`](PapyrusGatewayBase.h) wraps the second: a script calls the gateway's native to
+register itself, and the mod then calls functions on it with `executePapyrusScript("Fn", args...)`.
+
+- **Only the variadic calls.** `DispatchStaticCall` / `DispatchMethodCall` with the arguments listed
+  build the argument callable Fallout 4 VR expects. The overloads that take a callable themselves
+  (`SendEvent`, `ForEachBoundObject`, a dispatch given a lambda) don't compile on VR: its callable has
+  an older layout than `std::function`, which a C++ lambda can't be made into.
 
 ## Activation spheres
 

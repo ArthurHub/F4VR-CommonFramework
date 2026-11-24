@@ -162,6 +162,8 @@ The current 17 commits cover **Forms.h** only — that was the scoping decision 
 
 ### Priority B — Papyrus interop headers (~7 files, ~1500 lines)
 
+**Status: done for the framework and FRIK.** CommonLibF4VR covers all of it. Its one VR gap was calling into Papyrus: `BSTThreadScrapFunction` was `std::function`, while OG and VR take the old MSVC layout (0x20, the proxy at 0x18), so `DispatchStaticCall` / `DispatchMethodCall` crashed. CommonLibF4VR `0db6c81` fixed that, verified against `Fallout4VR.exe`, and added `ScriptObject` native parameters. The headers stay, deprecated, for mods not yet ported; [`src/f4sevr/README.md`](../../src/f4sevr/README.md) has the mapping. What follows is the original plan.
+
 **Headers:**
 - `PapyrusArgs.h/.cpp`
 - `PapyrusInterfaces.h`

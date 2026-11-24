@@ -6,7 +6,7 @@ This guide is the porting recipe.
 
 > **In scope:** every type and field declared in `src/f4sevr/Forms.h`.
 >
-> **Not in scope:** `F4SEVR::` symbols from `src/f4sevr/Common.h` (e.g. `F4SEVR::StringCache`, `F4SEVR::Heap`, `F4SEVR::tArray`) and the Papyrus headers (`F4SEVR::NativeFunction*`, `F4SEVR::VMArray`, `F4SEVR::VMVariable`, `F4SEVR::execPapyrusGlobalFunction`, `F4SEVR::getGameVM`, `F4SEVR::StaticFunctionTag`). Those headers still ship as before — only `Forms.h` was removed.
+> **Not in scope:** `F4SEVR::` symbols from `src/f4sevr/Common.h` (e.g. `F4SEVR::StringCache`, `F4SEVR::Heap`, `F4SEVR::tArray`) and the Papyrus headers (`F4SEVR::NativeFunction*`, `F4SEVR::VMArray`, `F4SEVR::VMVariable`, `F4SEVR::execPapyrusGlobalFunction`, `F4SEVR::getGameVM`, `F4SEVR::StaticFunctionTag`). The Papyrus headers still ship but are deprecated: [`src/f4sevr/README.md`](../../src/f4sevr/README.md) maps each of them to CommonLibF4VR.
 
 ---
 
@@ -300,7 +300,7 @@ CommonLibF4VR equivalents live under:
 ## Mechanical migration recipe
 
 1. Open your mod and grep for `F4SEVR::` (case-sensitive).
-2. For each match: if the type is in the rename table above, rename it. If the type is from `Common.h` or a Papyrus header, leave it alone — those headers still ship.
+2. For each match: if the type is in the rename table above, rename it. If it is from a Papyrus header, port it with the table in [`src/f4sevr/README.md`](../../src/f4sevr/README.md). If it is from `Common.h`, leave it — that header still ships.
 3. After renaming, `git grep '\->actorFlags\|\->middleProcess\|\->unk08\|\->equipData\|\->firstPersonSkeleton\|\->playerEquipData\|\->cameraNode\|\->keywordForm\.\|\->unkF0\|->rootNode'` to find member accesses that need the field-name updates.
 4. Hand-fix any equipment walks per the "Equipment access" section.
 5. Drop the `#include "f4sevr/Forms.h"` line if you have one.

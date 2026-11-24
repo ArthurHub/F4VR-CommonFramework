@@ -9,6 +9,12 @@ major version is `0`, a minor bump may break the API; the **Upgrading** notes sa
 
 ## 0.5.2 — unreleased
 
+- **Papyrus through CommonLibF4VR**: the framework calls scripts and binds natives through CommonLibF4VR's VM
+  ([Papyrus](../src/f4vr/README.md#papyrus)), whose `DispatchStaticCall` / `DispatchMethodCall` now work on VR, and
+  natives can take a `ScriptObject`. `f4vr::callPapyrusGlobalFunction(script, function, args...)` calls a global
+  function. The [`f4sevr/`](../src/f4sevr/README.md) Papyrus layer is deprecated, kept for mods not yet moved off it.
+  **Upgrading:** a `PapyrusGatewayBase` subclass passes its arguments to `executePapyrusScript("Fn", args...)` instead
+  of an `F4SEVR::VMArray`. A mod on `F4SEVR` Papyrus keeps working; its page maps each call to CommonLibF4VR.
 - **The Mods Config FO4 VR client closes the menu**: `closeMenu()` closes it as the player's Exit does, which asks
   first while the shown mod has unsaved changes, and `closeMenu(true)` drops them. The header is API version 2; on an
   older menu the call does nothing.

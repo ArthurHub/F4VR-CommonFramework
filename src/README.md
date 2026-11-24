@@ -138,8 +138,8 @@ if (logger::isDebugEnabled()) { /* skip expensive work otherwise */ }
 | [`imgui/`](imgui/README.md) | `f4cf::imgui` | Dear ImGui on world-space quads: a `Canvas`, and `UIImGuiPanel` for a vrui layout. |
 | [`render/`](render/README.md) | `f4cf::render` | Overlay drawing: lines, fills, images and text over the VR view, the Submit hook, occlusion. |
 | [`debug/`](debug/README.md) | `f4cf::debug` | Immediate-mode in-world debug draw, labels, a watch table. |
-| [`f4vr/`](f4vr/README.md) | `f4cf::f4vr` | Game state: nodes, skeleton, player nodes, menus, Scaleform, activation spheres. |
-| [`f4sevr/`](f4sevr/README.md) | `F4SEVR` | The ported F4SE VR SDK: Papyrus interop and native functions. |
+| [`f4vr/`](f4vr/README.md) | `f4cf::f4vr` | Game state: nodes, skeleton, player nodes, menus, Scaleform, activation spheres, Papyrus. |
+| [`f4sevr/`](f4sevr/README.md) | `F4SEVR` | Deprecated: the F4SE VR SDK's Papyrus layer, kept for mods not yet moved off it. |
 | [`devbench/`](devbench/README.md) | `f4cf::devbench` | The mod's devbench tool: actions an agent or script calls in the running game. |
 | [`modsconfig/`](modsconfig/README.md) | `mods_config::api` | The mod's Mods Config FO4 VR client: functions, states, quick launch, live preview. |
 | [`perf/`](perf/README.md) | `f4cf::perf` | Hot-path timing that nests into a tree, read on demand. |
@@ -169,7 +169,7 @@ if (logger::isDebugEnabled()) { /* skip expensive work otherwise */ }
 ## Conventions
 
 - **Namespaces:** the root is `f4cf`, each subsystem nested in it. [`f4sevr/`](f4sevr/README.md) is the
-  exception, the ported SDK under `F4SEVR`.
+  exception, the deprecated SDK port under `F4SEVR`.
 - **Globals,** one each by design: `f4cf::g_mod`, `vrcf::VRControllers`, `vrcf::VRControllersSuppress`,
   `vrcf::VRHaptics`, `vrui::g_uiManager`.
 - **Style:** clang-format (180 columns, 4-space indent, CRLF), applied by

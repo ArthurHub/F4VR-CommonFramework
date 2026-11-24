@@ -6,7 +6,6 @@
 #include "ModBase.h"
 #include "PlayerNodes.h"
 #include "common/MatrixUtils.h"
-#include "f4sevr/PapyrusUtils.h"
 #include "vrcf/VRControllersManager.h"
 
 namespace
@@ -69,13 +68,13 @@ namespace f4cf::f4vr
     void showMessagebox(const std::string& text)
     {
         logger::info("Show messagebox: '{}'", text.c_str());
-        F4SEVR::execPapyrusGlobalFunction("Debug", "Messagebox", text);
+        callPapyrusGlobalFunction("Debug", "Messagebox", text);
     }
 
     void showNotification(const std::string& text)
     {
         logger::info("Show notification: '{}'", text.c_str());
-        F4SEVR::execPapyrusGlobalFunction("Debug", "Notification", text);
+        callPapyrusGlobalFunction("Debug", "Notification", text);
     }
 
     /**
