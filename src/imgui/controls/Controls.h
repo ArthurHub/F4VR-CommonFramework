@@ -170,6 +170,28 @@ namespace f4cf::imgui::controls
             // the steps the thumbstick moves the slider under the ray by in this frame
             int steps = 0;
         };
+
+        /**
+         * What the steppers and the lists hold from one frame to the next.
+         */
+        struct ChoiceState
+        {
+            // the side the thumbstick is pushed to, as -1 or 1, and 0 while it is not pushed, and the step of the
+            // stepper under the ray in this frame: the side of a push that began in it
+            int pushSide = 0;
+            int step = 0;
+
+            // the list that is open, by its popup's id, 0 for none, the level of its popup among the open ones, and
+            // whether it was shown in this frame
+            ImGuiID openList = 0;
+            int openLevel = 0;
+            bool openSeen = false;
+
+            // Back or a reset closes that list, and closePopups every popup but a modal one, as the next frame begins:
+            // ImGui closes a popup inside a frame
+            bool closeList = false;
+            bool closeAll = false;
+        };
     }
 
     /**
@@ -180,7 +202,7 @@ namespace f4cf::imgui::controls
      *     controls::drawOutline(min, max, controls::get().colors().accent);
      *
      * The framework's ImGui layer gives it the thumbstick and its frames, so a mod calls none of that: it calls back()
-     * first in its Back, and reset() as its page is another.
+     * first in its Back, reset() as its page is another or an editor opens, and closePopups() as its page is another.
      */
     class Controls
     {
@@ -203,11 +225,18 @@ namespace f4cf::imgui::controls
 
         bool back();
         void reset();
+        void closePopups();
 
         // a slider is dragged: the trigger holds it since a press on its track
         bool isDragging() const
         {
             return _sliders.dragged != 0 && !_sliders.dragCancelled;
+        }
+
+        // a list of options is open, and Back has not closed it
+        bool isListOpen() const
+        {
+            return _choices.openList != 0 && !_choices.closeList;
         }
 
         // how far the pointing hand's thumbstick is pushed to a side in this frame, from -1 at the left to 1 at the right
@@ -233,6 +262,14 @@ namespace f4cf::imgui::controls
             return _sliders;
         }
 
+        // Internal: used by the steppers and the lists
+        const internal::ChoiceState& choices() const
+        {
+            return _choices;
+        }
+
+        void listShown(ImGuiID id, int level);
+
     private:
         Controls();
 
@@ -240,6 +277,7 @@ namespace f4cf::imgui::controls
         ControlsColors _colors;
         float _thumbstickSide = 0.0f;
         internal::SliderState _sliders;
+        internal::ChoiceState _choices;
     };
 
     inline Controls& get()

@@ -3,7 +3,7 @@
 Namespace: `f4cf::imgui::controls`
 
 What a panel's controls are drawn with, in one look: text cut with an ellipsis or wrapped, drawn marks and icons,
-frames and outlines, buttons, the switcher, dialogs, and the slider. A panel on a [canvas](../README.md) builds its rows and
+frames and outlines, buttons, the switcher, dialogs, the slider, the stepper, and the dropdown with its list. A panel on a [canvas](../README.md) builds its rows and
 controls from them, so two mods' panels read as one UI. They draw into the current ImGui window, inside a canvas's
 content.
 
@@ -19,6 +19,7 @@ content.
 | [`Marks.h`](Marks.h) | The warning, error and info marks, the dot, the check, the Reset and Undo icons, and the arrows. |
 | [`Buttons.h`](Buttons.h) | `button` in its `ButtonLook` (primary, secondary, quiet, danger), `iconButton`, and the switcher, which only draws. |
 | [`Dialogs.h`](Dialogs.h) | `beginDialog`, a modal dialog in the middle of the display, and `dialogButtons` along its bottom. |
+| [`Choices.h`](Choices.h) | The stepper, the dropdown's box, and the list of options a dropdown opens, with its suffixes, header line and action entry. |
 | [`Sliders.h`](Sliders.h) | The slider: a track between step arrows and the box of its value, dragged by the trigger and stepped by the arrows and the thumbstick. |
 | [`Frames.h`](Frames.h) | A control's box and frame, outlines, a button's frame and ring, the step button, the selected bar, a row's look under the ray, a section's line, a tag, and where a popup opens. |
 
@@ -122,3 +123,35 @@ controls::drawSlider(id, right, top, row, edit.value, range, controls::Tone::Nor
   begins and ends the controls' frame around every canvas's content.
 - **The value's text:** `fitValueText` gives the text with its unit in the current size, else in the detail size, else
   the number alone, with `withUnit` false so the caller can say the unit elsewhere.
+
+## The stepper and the dropdown
+
+```cpp
+#include "imgui/controls/Choices.h"
+
+const controls::ChoiceRow row{ .pointed = ImGui::IsItemHovered(), .held = ImGui::IsItemActive(), .pressed = ImGui::IsItemDeactivated() && ImGui::IsItemHovered() };
+if (const auto picked = controls::stepperEdit(right, top, row, _quality, QUALITIES.size())) { _quality = *picked; }
+controls::drawStepper(right, top, row, QUALITIES[*_quality], controls::Tone::Normal, _quality, QUALITIES.size());
+
+const auto listId = ImGui::GetID("list");
+if (row.pressed) { ImGui::OpenPopupEx(listId); }
+controls::drawDropdown(box, QUALITIES[*_quality], {}, controls::Tone::Normal, controls::get().isListOpen());
+const auto drawn = controls::drawList(listId, box, QUALITIES, _quality);
+if (drawn.picked) { _quality = *drawn.picked; }
+```
+
+- **A stepper's press:** its buttons go to the option before and after and stop at the ends; a press elsewhere on its
+  row goes to the option after, from the last to the first. With no option chosen the one after is the first, and the
+  one before is the last where `noneStepsBackToLast`. The thumbstick of the pointing hand steps the stepper whose row
+  the ray is on once for each push.
+- **A dropdown** only draws its box; the caller opens its list with `ImGui::OpenPopupEx` on a press of its row.
+- **The list** is a popup at the box, under it or over it as `popupTop` places it, showing at most
+  `LIST_MAX_OPTIONS` before it scrolls, from the chosen option as it opens. A press on an option picks it and closes
+  it. `ListExtras` gives each option a muted suffix, a line over the options that stays as they scroll, and an action
+  entry under a rule, which is the place after the options. A decoration draws more of each option.
+- **What it gives back:** `ListDrawn` has the option picked and the one under the ray, each option's box with the
+  action's last, and the scroll of the options, so the caller can record them (for devbench).
+- **Back:** `controls::get().back()` closes the open list as the next frame begins, with nothing picked, after a
+  drag in its order. It closes the list and what opened over it, and not a popup it is in, as an editor.
+  `controls::get().reset()` forgets what the controls hold and closes an open list, and `closePopups()` closes every
+  popup but a modal one, as a panel shows another page.

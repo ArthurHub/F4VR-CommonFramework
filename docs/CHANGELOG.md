@@ -13,8 +13,9 @@ major version is `0`, a minor bump may break the API; the **Upgrading** notes sa
   a panel is built from them rather than drawn by hand. It has one line of text cut with an ellipsis, underlined
   ranges, pieces of text in their own looks wrapped as one text, the warning, error and info marks, the Reset and Undo
   icons, arrows, a control's frame, outlines, a button's frame, the selected bar, a row under the ray, a tag, where
-  a popup opens, buttons in four looks, an icon button, the switcher, a dialog with its buttons, and the slider, which
-  the trigger drags and the arrows and the pointing hand's thumbstick step, read by the framework.
+  a popup opens, buttons in four looks, an icon button, the switcher, a dialog with its buttons, the slider, which
+  the trigger drags and the arrows and the pointing hand's thumbstick step, read by the framework, the stepper, and the
+  dropdown with its list of options.
   `controls::get().setStyle` sets their colors by role and their sizes; the defaults are the framework's green
   ([controls README](../src/imgui/controls/README.md)).
 

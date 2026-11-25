@@ -6,6 +6,8 @@
 #include "../ImGuiPointer.h"
 #include "Sliders.h"
 
+#include <imgui_internal.h>
+
 namespace
 {
     using namespace f4cf;
@@ -73,24 +75,52 @@ namespace f4cf::imgui::controls
     }
 
     /**
-     * Ends what a control holds open, for Back: a slider's drag, with nothing written. The trigger is still held then,
-     * and the rest of its press changes nothing. Returns whether there was one, so Back does nothing else.
+     * Ends what a control holds open, for Back, one at a time: a slider's drag, with nothing written, as the trigger is
+     * still held and the rest of its press changes nothing, or else the list that is open, with nothing picked, as the next
+     * frame begins. Returns whether there was one, so Back does nothing else.
      */
     bool Controls::back()
     {
-        if (!_sliders.dragged || _sliders.dragCancelled) {
-            return false;
+        if (_sliders.dragged && !_sliders.dragCancelled) {
+            _sliders.dragCancelled = true;
+            return true;
         }
-        _sliders.dragCancelled = true;
-        return true;
+        if (isListOpen()) {
+            _choices.closeList = true;
+            return true;
+        }
+        return false;
     }
 
     /**
-     * Forgets what the controls hold, as a panel shows another page: their ids are the rows of the page before.
+     * Forgets what the controls hold, as a panel shows another page or opens an editor: their ids are the rows of what was
+     * shown. A list that is open is closed as the next frame begins. A push of the thumbstick that is held is still not a
+     * new one.
      */
     void Controls::reset()
     {
         _sliders = {};
+        _choices.closeList = _choices.openList != 0;
+        _choices.step = 0;
+    }
+
+    /**
+     * Closes every popup but a modal one as the next frame begins, as a panel shows another page: its lists and its
+     * editors.
+     */
+    void Controls::closePopups()
+    {
+        _choices.closeAll = true;
+    }
+
+    /**
+     * A list of options is shown in this frame, by its popup's id, at a level among the open popups.
+     */
+    void Controls::listShown(const ImGuiID id, const int level)
+    {
+        _choices.openList = id;
+        _choices.openLevel = level;
+        _choices.openSeen = true;
     }
 
     /**
@@ -109,13 +139,30 @@ namespace f4cf::imgui::controls
     }
 
     /**
-     * Starts a frame, before any canvas's content: the steps the thumbstick moves the slider under the ray by.
+     * Starts a frame, before any canvas's content: the steps the thumbstick moves the slider under the ray by, and the
+     * stepper under it, which a push steps once, as it begins. The list Back closed is closed, and its popups over it,
+     * and after a reset every popup but a modal one.
      */
     void Controls::beginFrame(const float deltaSeconds)
     {
         _sliders.dragHeld = false;
         _sliders.pointedSeen = false;
         _sliders.steps = internal::stepsOfPush(_sliders, _thumbstickSide, deltaSeconds);
+
+        const int side = _thumbstickSide >= SLIDER_STEP_PUSH ? 1 : _thumbstickSide <= -SLIDER_STEP_PUSH ? -1 : 0;
+        _choices.step = side != _choices.pushSide ? side : 0;
+        _choices.pushSide = side;
+        _choices.openSeen = false;
+        if (_choices.closeAll) {
+            ImGui::ClosePopupsExceptModals();
+        } else if (_choices.closeList) {
+            const auto& stack = ImGui::GetCurrentContext()->OpenPopupStack;
+            if (_choices.openLevel < stack.Size && stack[_choices.openLevel].PopupId == _choices.openList) {
+                ImGui::ClosePopupToLevel(_choices.openLevel, true);
+            }
+        }
+        _choices.closeAll = false;
+        _choices.closeList = false;
     }
 
     /**
@@ -129,6 +176,9 @@ namespace f4cf::imgui::controls
         }
         if (!_sliders.pointedSeen) {
             _sliders.pointed = 0;
+        }
+        if (!_choices.openSeen) {
+            _choices.openList = 0;
         }
     }
 }
