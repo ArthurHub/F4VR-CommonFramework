@@ -16,7 +16,9 @@ major version is `0`, a minor bump may break the API; the **Upgrading** notes sa
   a popup opens, buttons in four looks, an icon button, the switcher, a dialog with its buttons, the slider, which
   the trigger drags and the arrows and the pointing hand's thumbstick step, read by the framework, the stepper, the
   dropdown with its list of options, and the text input, typed on the framework's keyboard, which writes as it is left
-  or, live, as it is typed, and keeps a live text through a physical keyboard's Escape.
+  or, live, as it is typed, and keeps a live text through a physical keyboard's Escape. A list is built of rows as
+  wide as its rows whether or not its scroll bar shows, with section headings and headings that fold, which show the
+  counts of what they hide.
   `controls::get().setStyle` sets their colors by role and their sizes; the defaults are the framework's green
   ([controls README](../src/imgui/controls/README.md)).
 

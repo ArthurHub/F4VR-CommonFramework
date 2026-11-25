@@ -3,10 +3,10 @@
 Namespace: `f4cf::imgui::controls`
 
 What a panel's controls are drawn with, in one look: text cut with an ellipsis or wrapped, drawn marks and icons,
-frames and outlines, buttons, the switcher, dialogs, the slider, the stepper, the dropdown with its list, and the text
-input. A panel on a [canvas](../README.md) builds its rows and
-controls from them, so two mods' panels read as one UI. They draw into the current ImGui window, inside a canvas's
-content.
+frames and outlines, buttons, the switcher, dialogs, the slider, the stepper, the dropdown with its list, the text
+input, and the rows of a list with the headings of its sections. A panel on a [canvas](../README.md) builds its rows
+and controls from them, so two mods' panels read as one UI. They draw into the current ImGui window, inside a
+canvas's content.
 
 > Part of the [F4VR Common Framework](../../README.md) source tree.
 
@@ -24,6 +24,7 @@ content.
 | [`Sliders.h`](Sliders.h) | The slider: a track between step arrows and the box of its value, dragged by the trigger and stepped by the arrows and the thumbstick. |
 | [`TextInputs.h`](TextInputs.h) | The text input: ImGui's field in a control's box, typed on the framework's keyboard, written as it is left or as it is typed. |
 | [`Frames.h`](Frames.h) | A control's box and frame, outlines, a button's frame and ring, the step button, the selected bar, a row's look under the ray, a section's line, a tag, and where a popup opens. |
+| [`Rows.h`](Rows.h) | A row as wide as the rows of its list, the row of a heading that folds, the folding heading with its counts, and a section's heading with a rule. |
 
 ## Style
 
@@ -186,3 +187,35 @@ if (!controls::get().isTextEdited(id)) { controls::drawTextInput(box, _name, con
   a list in its order; `endTextEdit()` does so for a text set by other means. `reset()` keeps the edit, as a search in
   a header outlives the page; a field that is not drawn any more ends it.
 - **`edit.pulse`** is for the press that starts it; the keyboard ticks each key itself.
+
+## Rows and headings
+
+```cpp
+#include "imgui/controls/Rows.h"
+
+controls::sectionHeading("Display", ImGui::GetCursorScreenPos().x + controls::rowWidth());
+
+const auto pos = ImGui::GetCursorScreenPos();
+const auto row = controls::addRow(true);
+if (row.shown) { controls::drawText(pos.x + controls::HEADING_TEXT_INSET, pos.x + controls::rowWidth(), pos.y, 48.0f, color, "Quality"); }
+
+const auto at = ImGui::GetCursorScreenPos();
+const auto heading = controls::addFoldingRow("Advanced", _advancedFolded);
+const std::array counts{ controls::MarkedCount{ .mark = controls::CountMark::Error, .text = "1 invalid", .color = controls::get().colors().error } };
+if (heading.shown) { controls::drawFoldingHeading("Advanced", at, controls::rowWidth(), _advancedFolded, counts); }
+```
+
+- **A row** is as high as a control and as wide as `rowWidth()`: the window's width without the room of its scroll
+  bar, so it does not change as the scroll bar shows, and without the indent of a section it is in. `addRow` adds it
+  at the cursor and gives `Row{shown, pointed, started, held, pressed}`; a pressable one has the look of a row under
+  the ray. A row that is not `shown` is scrolled out of the list: its caller draws nothing of it.
+- **A folding heading:** `addFoldingRow(id, folded)` is a pressable row whose press flips `folded`, which the caller
+  keeps, so it can fold or open a section by other means too. `drawFoldingHeading` draws the heading in it: the arrow,
+  the text in the muted color, or in a mark's color after the error or warning mark, and a rule to the right edge,
+  ended by its `MarkedCount`s in the detail size, as what a folded section hides.
+- **A section's heading:** `sectionHeading` is its muted text and a rule that ends at the edge given, where the rows
+  end, not in the room of the scroll bar. It is ImGui's separator text in the controls' look, in any ImGui style. It
+  is its text with 8 px above and below, or as high as the `height` given, as a row's height for a heading in a row's
+  place.
+- **Text** in a row and a heading starts `HEADING_TEXT_INSET` in, so the headings and the rows' texts line up. The
+  ranges `found` of a heading's text are underlined, as a search's matches.
