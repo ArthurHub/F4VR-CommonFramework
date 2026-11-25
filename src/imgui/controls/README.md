@@ -3,7 +3,7 @@
 Namespace: `f4cf::imgui::controls`
 
 What a panel's controls are drawn with, in one look: text cut with an ellipsis or wrapped, drawn marks and icons,
-frames and outlines, buttons, the switcher, and dialogs. A panel on a [canvas](../README.md) builds its rows and
+frames and outlines, buttons, the switcher, dialogs, and the slider. A panel on a [canvas](../README.md) builds its rows and
 controls from them, so two mods' panels read as one UI. They draw into the current ImGui window, inside a canvas's
 content.
 
@@ -13,12 +13,13 @@ content.
 
 | File | What it is |
 | ---- | ---------- |
-| [`Controls.h`](Controls.h) | `controls::get()`: the controls' `ControlsStyle`, its colors packed for ImGui, and the `Tone` of a value. |
+| [`Controls.h`](Controls.h) | `controls::get()`: the controls' `ControlsStyle`, its colors packed for ImGui, the `Tone` of a value, the thumbstick, Back, and what a control holds from frame to frame. |
 | [`Text.h`](Text.h) | One line of text cut with an ellipsis, a text with a suffix, underlined ranges, and `TextPiece`s wrapped as one text. |
 | [`TextRange.h`](TextRange.h) | `TextRange` and `TextAlign`, plain std, so game-free code that finds or lays out text has them without ImGui. |
 | [`Marks.h`](Marks.h) | The warning, error and info marks, the dot, the check, the Reset and Undo icons, and the arrows. |
 | [`Buttons.h`](Buttons.h) | `button` in its `ButtonLook` (primary, secondary, quiet, danger), `iconButton`, and the switcher, which only draws. |
 | [`Dialogs.h`](Dialogs.h) | `beginDialog`, a modal dialog in the middle of the display, and `dialogButtons` along its bottom. |
+| [`Sliders.h`](Sliders.h) | The slider: a track between step arrows and the box of its value, dragged by the trigger and stepped by the arrows and the thumbstick. |
 | [`Frames.h`](Frames.h) | A control's box and frame, outlines, a button's frame and ring, the step button, the selected bar, a row's look under the ray, a section's line, a tag, and where a popup opens. |
 
 ## Style
@@ -89,3 +90,35 @@ if (controls::beginDialog("Delete?", asked, controls::Tone::Error)) {
   (for devbench).
 - **The switcher** only draws: an off and an on cell with the one of its value marked in its tone. The row it is in
   takes the press.
+
+## The slider
+
+```cpp
+#include "imgui/controls/Sliders.h"
+
+const controls::SliderRange range{ .min = 0.0f, .max = 100.0f, .step = 1.0f };
+const auto id = ImGui::GetID("Volume");
+const controls::SliderRow row{ .pointed = ImGui::IsItemHovered(), .started = ImGui::IsItemActivated(), .held = ImGui::IsItemActive() };
+const auto edit = controls::sliderEdit(id, right, top, row, _volume, range);
+if (edit.write) { _volume = edit.value; }
+const auto text = controls::fitValueText(std::format("{:.0f} %", edit.value), std::format("{:.0f}", edit.value));
+controls::drawSlider(id, right, top, row, edit.value, range, controls::Tone::Normal, text);
+```
+
+- **The row is the press:** the caller's item, often its whole row, takes the trigger; the slider reads from the
+  pointer's place whether a pull is on its track or an arrow. `sliderEdit` comes first, so the caller writes the value
+  and draws it in the look that gives.
+- **A drag** follows the ray until the trigger is let go, also beside the track, and `edit.write` is true only then,
+  so a store writes once. A pull on the grab itself does not move it.
+- **A step arrow** steps as it is pulled, again after 0.4 s and then faster while it is held on the arrow.
+- **The thumbstick** of the pointing hand steps the slider whose row the ray is on, once the ray is there 0.3 s. A
+  push that began with the ray elsewhere steps nothing until it is let go. The framework's layer reads it each frame:
+  the mod passes nothing.
+- **`edit.pulse`** says the hand gets its feedback: a pull took hold of the slider, or a step changed it. The caller
+  plays it, with its own other press feedback.
+- **Back:** `controls::get().back()` ends a drag with nothing written and returns whether it did, so the caller's Back
+  does nothing else. `controls::get().reset()` forgets what the controls hold as a panel shows another page.
+- **State** is kept by the `ImGuiID` given, in `controls::get()`, from one frame to the next: the framework's layer
+  begins and ends the controls' frame around every canvas's content.
+- **The value's text:** `fitValueText` gives the text with its unit in the current size, else in the detail size, else
+  the number alone, with `withUnit` false so the caller can say the unit elsewhere.

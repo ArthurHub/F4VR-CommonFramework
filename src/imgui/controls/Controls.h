@@ -116,10 +116,71 @@ namespace f4cf::imgui::controls
     };
 
     /**
-     * The controls' state, which exists once: their style for now.
+     * When a press that is held steps a value: as it begins, and again after a delay and then faster, as a step arrow
+     * and the thumbstick step a slider.
+     */
+    struct StepRepeat
+    {
+        bool step(float seconds);
+
+        // the press stepped as it began, how long it is held since, and when it steps next
+        bool begun = false;
+        float heldSeconds = 0.0f;
+        float nextStepSeconds = 0.0f;
+    };
+
+    namespace internal
+    {
+        /**
+         * What the sliders hold from one frame to the next, by the id of the slider each is about. 0 is none.
+         */
+        struct SliderState
+        {
+            // the slider the trigger is held on since a press on its track, the value the drag gave it, which is
+            // written as the trigger is let go, and from the middle of the grab to the ray for a press on the grab
+            ImGuiID dragged = 0;
+            float dragValue = 0.0f;
+            float grabOffset = 0.0f;
+
+            // Back ended the drag: the rest of the press changes nothing
+            bool dragCancelled = false;
+
+            // the row of the dragged slider was held in this frame
+            bool dragHeld = false;
+
+            // the slider whose step arrow the trigger is held on since a press on it, that arrow's side as -1 or 1,
+            // and its steps
+            ImGuiID arrowHeld = 0;
+            int arrowSide = 0;
+            StepRepeat arrowRepeat;
+
+            // the slider whose row the ray is on, for how long, and whether a row had the ray in this frame
+            ImGuiID pointed = 0;
+            float pointedSeconds = 0.0f;
+            bool pointedSeen = false;
+
+            // the thumbstick's push: its side as -1 or 1, and 0 while it is not pushed, and its steps
+            int pushSide = 0;
+            StepRepeat pushRepeat;
+
+            // the thumbstick was pushed while the ray was on no slider, or came to another: it steps nothing until it
+            // is let go
+            bool pushIgnored = false;
+
+            // the steps the thumbstick moves the slider under the ray by in this frame
+            int steps = 0;
+        };
+    }
+
+    /**
+     * The controls' state, which exists once: their style, the input they read, and what a control holds from one
+     * frame to the next, as a slider that is dragged.
      *
      *     controls::get().setStyle(style);
      *     controls::drawOutline(min, max, controls::get().colors().accent);
+     *
+     * The framework's ImGui layer gives it the thumbstick and its frames, so a mod calls none of that: it calls back()
+     * first in its Back, and reset() as its page is another.
      */
     class Controls
     {
@@ -140,11 +201,45 @@ namespace f4cf::imgui::controls
 
         ToneColors tone(Tone tone) const;
 
+        bool back();
+        void reset();
+
+        // a slider is dragged: the trigger holds it since a press on its track
+        bool isDragging() const
+        {
+            return _sliders.dragged != 0 && !_sliders.dragCancelled;
+        }
+
+        // how far the pointing hand's thumbstick is pushed to a side in this frame, from -1 at the left to 1 at the right
+        float thumbstickSide() const
+        {
+            return _thumbstickSide;
+        }
+
+        // Internal: set by the layer from the pointing hand, or by a test, before the frame begins
+        void setThumbstickSide(const float side)
+        {
+            _thumbstickSide = side;
+        }
+
+        // Internal: used by the layer around the content of every canvas, or by a test's frame
+        void updateInput();
+        void beginFrame(float deltaSeconds);
+        void endFrame();
+
+        // Internal: used by the sliders
+        internal::SliderState& sliders()
+        {
+            return _sliders;
+        }
+
     private:
         Controls();
 
         ControlsStyle _style;
         ControlsColors _colors;
+        float _thumbstickSide = 0.0f;
+        internal::SliderState _sliders;
     };
 
     inline Controls& get()

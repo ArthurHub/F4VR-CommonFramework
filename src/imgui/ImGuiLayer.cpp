@@ -19,6 +19,7 @@
 #include "ImGuiRenderer.h"
 #include "ImGuiSettings.h"
 #include "ImGuiTextures.h"
+#include "controls/Controls.h"
 
 // the font texture's requests and the rasterizing at the framebuffer scale are ImGui 1.92's
 #if IMGUI_VERSION_NUM < 19290
@@ -525,6 +526,8 @@ namespace f4cf::imgui::internal
                 ImGui::NewFrame();
                 if (mainContext) {
                     pointer().setWanted(io.WantCaptureMouse);
+                    // the controls' state of the frame, as every canvas's content is drawn in it
+                    controls::get().beginFrame(deltaSeconds);
                 }
 
                 // ImGui's anti-aliasing fringe is one layout pixel; scaled by this it stays one atlas pixel instead of
@@ -534,6 +537,9 @@ namespace f4cf::imgui::internal
 
                 for (const auto& entry : packed) {
                     drawCanvasWindow(entry);
+                }
+                if (mainContext) {
+                    controls::get().endFrame();
                 }
                 ImGui::Render();
             }
@@ -597,6 +603,7 @@ namespace f4cf::imgui::internal
             // out, and the keyboard is hidden
             pointer().update({});
             keyboard().update({}, 0.0f);
+            controls::get().setThumbstickSide(0.0f);
             renderer::publish({});
             return;
         }
@@ -665,6 +672,7 @@ namespace f4cf::imgui::internal
         if (packed.empty()) {
             pointer().update({});
             keyboard().update({}, 0.0f);
+            controls::get().setThumbstickSide(0.0f);
             renderer::publish({});
             return;
         }
@@ -704,6 +712,7 @@ namespace f4cf::imgui::internal
             F4CF_PERF_SCOPE("pointer");
             pointer().update(pointerTargets);
             keyboard().update(pointerTargets, deltaSeconds);
+            controls::get().updateInput();
         }
 
         // the main context's frame, with every canvas's content in it, then the own context's beside it

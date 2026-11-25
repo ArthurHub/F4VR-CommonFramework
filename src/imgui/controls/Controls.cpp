@@ -1,5 +1,11 @@
 #include "Controls.h"
 
+#include <cmath>
+
+#include "../../vrcf/VRControllersManager.h"
+#include "../ImGuiPointer.h"
+#include "Sliders.h"
+
 namespace
 {
     using namespace f4cf;
@@ -64,5 +70,65 @@ namespace f4cf::imgui::controls
             break;
         }
         return { .color = _colors.accent, .onColor = _colors.onAccent };
+    }
+
+    /**
+     * Ends what a control holds open, for Back: a slider's drag, with nothing written. The trigger is still held then,
+     * and the rest of its press changes nothing. Returns whether there was one, so Back does nothing else.
+     */
+    bool Controls::back()
+    {
+        if (!_sliders.dragged || _sliders.dragCancelled) {
+            return false;
+        }
+        _sliders.dragCancelled = true;
+        return true;
+    }
+
+    /**
+     * Forgets what the controls hold, as a panel shows another page: their ids are the rows of the page before.
+     */
+    void Controls::reset()
+    {
+        _sliders = {};
+    }
+
+    /**
+     * Reads the thumbstick of the hand that points, before the frame: how far it is pushed to a side. None while no hand
+     * points, as the thumbstick is the game's then, and none for a push that is more up or down, which scrolls.
+     */
+    void Controls::updateInput()
+    {
+        const auto& state = pointer().state();
+        if (!state.canvas) {
+            _thumbstickSide = 0.0f;
+            return;
+        }
+        const auto push = vrcf::VRControllers.getThumbstickValue(state.primaryHand ? vrcf::Hand::Primary : vrcf::Hand::Offhand);
+        _thumbstickSide = std::abs(push.x) > std::abs(push.y) ? push.x : 0.0f;
+    }
+
+    /**
+     * Starts a frame, before any canvas's content: the steps the thumbstick moves the slider under the ray by.
+     */
+    void Controls::beginFrame(const float deltaSeconds)
+    {
+        _sliders.dragHeld = false;
+        _sliders.pointedSeen = false;
+        _sliders.steps = internal::stepsOfPush(_sliders, _thumbstickSide, deltaSeconds);
+    }
+
+    /**
+     * Ends a frame, after every canvas's content: a slider whose row was not held is not dragged any more, and one whose
+     * row the ray has left is not the one the thumbstick steps.
+     */
+    void Controls::endFrame()
+    {
+        if (!_sliders.dragHeld) {
+            _sliders.dragged = 0;
+        }
+        if (!_sliders.pointedSeen) {
+            _sliders.pointed = 0;
+        }
     }
 }
