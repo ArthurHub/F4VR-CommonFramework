@@ -22,6 +22,7 @@ rules, and is drawn under the game's menus. The font is the framework's, so an I
 | [`ImGuiPointerLogic.h`](ImGuiPointerLogic.h) | The pointer's logic, unit tested: ray and quad, the curved quad, which hand owns it, scrolling. |
 | [`ImGuiKeyboard.h`](ImGuiKeyboard.h) | `imgui::keyboard()`: the framework's VR keyboard while a text field is edited, and the game window's key messages to ImGui ([VR keyboard](../../docs/tech/vr-keyboard.md)). |
 | [`ImGuiKeyboardLogic.h`](ImGuiKeyboardLogic.h) | The keyboard's logic, unit tested: its pages, the key a point hits, Shift, Caps, a held key's repeat, the strokes ImGui is given. |
+| [`controls/`](controls/README.md) | The small controls of a panel, in one look: text, drawn marks and icons, frames, and their `ControlsStyle`. |
 | [`ImGuiImage.h`](ImGuiImage.h) | `imgui::image` and `imgui::addImage`: a `render::Texture` in a canvas, kept alive until drawn. |
 | [`ImGuiSettings.h`](ImGuiSettings.h) | `setFontSizePixels` and `setSupersample`, process-wide. |
 | [`ImGuiFonts.h`](ImGuiFonts.h) | The framework's font in ImGui, with its bold and italic faces: `imgui::canvasFont`. |
