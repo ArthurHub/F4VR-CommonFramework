@@ -24,7 +24,8 @@ namespace
             .onWarning = packed(style.onWarning),
             .error = packed(style.error),
             .onError = packed(style.onError),
-            .popup = packed(style.popup) };
+            .popup = packed(style.popup),
+            .scrim = packed(style.scrim) };
     }
 }
 

@@ -57,12 +57,18 @@ namespace f4cf::imgui::controls
         // the background of a list or a dialog that opens over the panel
         render::Color popup = render::Color::rgba(11, 18, 14, 245);
 
+        // what dims the panel behind a dialog
+        render::Color scrim = render::Color::rgba(5, 8, 6, 140);
+
         // every pressable control and row is this high
         float controlHeight = 48.0f;
 
         // the corner of a control's frame, and the width of its outline
         float frameRounding = 4.0f;
         float frameBorderSize = 2.0f;
+
+        // the corner of a list or a dialog that opens over the panel
+        float popupRounding = 8.0f;
 
         // the font size of a detail, as a tag's text
         float detailFontSize = 18.0f;
@@ -87,6 +93,7 @@ namespace f4cf::imgui::controls
         ImU32 error = 0;
         ImU32 onError = 0;
         ImU32 popup = 0;
+        ImU32 scrim = 0;
     };
 
     /**

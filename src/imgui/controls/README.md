@@ -3,8 +3,9 @@
 Namespace: `f4cf::imgui::controls`
 
 What a panel's controls are drawn with, in one look: text cut with an ellipsis or wrapped, drawn marks and icons,
-frames and outlines. A panel on a [canvas](../README.md) builds its rows and controls from them, so two mods' panels
-read as one UI. They draw into the current ImGui window, inside a canvas's content.
+frames and outlines, buttons, the switcher, and dialogs. A panel on a [canvas](../README.md) builds its rows and
+controls from them, so two mods' panels read as one UI. They draw into the current ImGui window, inside a canvas's
+content.
 
 > Part of the [F4VR Common Framework](../../README.md) source tree.
 
@@ -16,14 +17,16 @@ read as one UI. They draw into the current ImGui window, inside a canvas's conte
 | [`Text.h`](Text.h) | One line of text cut with an ellipsis, a text with a suffix, underlined ranges, and `TextPiece`s wrapped as one text. |
 | [`TextRange.h`](TextRange.h) | `TextRange` and `TextAlign`, plain std, so game-free code that finds or lays out text has them without ImGui. |
 | [`Marks.h`](Marks.h) | The warning, error and info marks, the dot, the check, the Reset and Undo icons, and the arrows. |
+| [`Buttons.h`](Buttons.h) | `button` in its `ButtonLook` (primary, secondary, quiet, danger), `iconButton`, and the switcher, which only draws. |
+| [`Dialogs.h`](Dialogs.h) | `beginDialog`, a modal dialog in the middle of the display, and `dialogButtons` along its bottom. |
 | [`Frames.h`](Frames.h) | A control's box and frame, outlines, a button's frame and ring, the step button, the selected bar, a row's look under the ray, a section's line, a tag, and where a popup opens. |
 
 ## Style
 
 `ControlsStyle` is the controls' colors by role (accent, muted, track, hover, pressed, glow, rule, frame border, the
-warning and error tones with the text on each, the popup) and the sizes a panel may set otherwise: the control's
-height, the frame's rounding and border, and the detail font size. Its defaults are the framework's green, the look of
-`vrui::F4VR_PANEL_STYLE`. Sizes are in the canvas's pixels.
+warning and error tones with the text on each, the popup and the scrim behind a dialog) and the sizes a panel may set
+otherwise: the control's height, the frame's rounding and border, the popup's rounding, and the detail font size.
+Its defaults are the framework's green, the look of `vrui::F4VR_PANEL_STYLE`. Sizes are in the canvas's pixels.
 
 ```cpp
 #include "imgui/controls/Controls.h"
@@ -59,3 +62,30 @@ controls::drawTextIn(box, "Medium", controls::get().colors().accent, 0.5f);
 - **Disabled:** inside `ImGui::BeginDisabled`, the frames, marks and `drawText` are faded. A `TextPiece` is drawn in
   its color as given, so a caller passes `ImGui::GetColorU32(color)` for a faded piece.
 - **Popups:** `popupTop` places a popup under its box, over it, or at the bottom of its window, never above its top.
+
+## Buttons and dialogs
+
+```cpp
+#include "imgui/controls/Dialogs.h"
+
+if (controls::button("Save", box, controls::ButtonLook::Primary)) { save(); }
+
+if (controls::beginDialog("Delete?", asked, controls::Tone::Error)) {
+    ImGui::TextUnformatted("Delete the preset?");
+    const std::array buttons{ controls::DialogButton{ .label = "Delete", .look = controls::ButtonLook::Danger },
+        controls::DialogButton{ .label = "Cancel" } };
+    std::array<ImRect, 2> boxes;
+    const int pressed = controls::dialogButtons(buttons, boxes);
+    if (pressed >= 0) { ImGui::CloseCurrentPopup(); }
+    ImGui::EndPopup();
+}
+```
+
+- **A press** is ImGui's: a button returns `true` as the trigger is released on it, and never inside `BeginDisabled`.
+  The caller gives the press its pulse.
+- **A dialog** is open while `asked` is true and closes as it turns false, as after Back. Its border is in its tone's
+  color, and it draws its own popup background, rounding and scrim, so it looks the same in a panel of any ImGui style.
+- **Boxes:** a control is given its box, or `dialogButtons` fills `boxes`, so the caller can record where each one is
+  (for devbench).
+- **The switcher** only draws: an off and an on cell with the one of its value marked in its tone. The row it is in
+  takes the press.

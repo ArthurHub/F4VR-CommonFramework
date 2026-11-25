@@ -12,9 +12,10 @@ major version is `0`, a minor bump may break the API; the **Upgrading** notes sa
 - **The small controls of an ImGui panel**: `imgui::controls` draws a panel's text, marks and frames in one look, so
   a panel is built from them rather than drawn by hand. It has one line of text cut with an ellipsis, underlined
   ranges, pieces of text in their own looks wrapped as one text, the warning, error and info marks, the Reset and Undo
-  icons, arrows, a control's frame, outlines, a button's frame, the selected bar, a row under the ray, a tag, and where
-  a popup opens. `controls::get().setStyle` sets their colors by role and their sizes; the defaults are the
-  framework's green ([controls README](../src/imgui/controls/README.md)).
+  icons, arrows, a control's frame, outlines, a button's frame, the selected bar, a row under the ray, a tag, where
+  a popup opens, buttons in four looks, an icon button, the switcher, and a dialog with its buttons.
+  `controls::get().setStyle` sets their colors by role and their sizes; the defaults are the framework's green
+  ([controls README](../src/imgui/controls/README.md)).
 
 ## 0.6.0 — unreleased
 

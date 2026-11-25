@@ -122,7 +122,8 @@ target_link_options(${PROJECT_NAME}_linked_tests PRIVATE /DELAYLOAD:openvr_api.d
 # the tests of the Dear ImGui UI layer, which a build without it does not have
 if(F4CF_WITH_IMGUI_UI)
   target_sources(${PROJECT_NAME}_linked_tests PRIVATE linked/imgui/ImGuiFontsTests.cpp linked/imgui/ImGuiImageTests.cpp linked/imgui/ImGuiTexturesTests.cpp
-    linked/imgui/controls/ControlsTests.cpp linked/imgui/controls/ControlsTextTests.cpp)
+    linked/imgui/controls/ControlsTests.cpp linked/imgui/controls/ControlsTextTests.cpp
+    linked/imgui/controls/ControlsButtonsTests.cpp)
 endif()
 
 f4cf_discover_tests_by_folder(${PROJECT_NAME}_linked_tests ${discover_prefix})
