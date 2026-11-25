@@ -76,8 +76,9 @@ namespace f4cf::imgui::controls
 
     /**
      * Ends what a control holds open, for Back, one at a time: a slider's drag, with nothing written, as the trigger is
-     * still held and the rest of its press changes nothing, or else the list that is open, with nothing picked, as the next
-     * frame begins. Returns whether there was one, so Back does nothing else.
+     * still held and the rest of its press changes nothing, or else the list that is open, with nothing picked, or else
+     * the edit of a text input, with nothing more written, as the next frame begins. Returns whether there was one, so
+     * Back does nothing else.
      */
     bool Controls::back()
     {
@@ -89,13 +90,27 @@ namespace f4cf::imgui::controls
             _choices.closeList = true;
             return true;
         }
-        return false;
+        return endTextEdit();
+    }
+
+    /**
+     * Ends the edit of a text input with nothing more written, as the next frame begins: for Back, and for a text
+     * set by other means, as devbench sets a query. Returns false while none is edited.
+     */
+    bool Controls::endTextEdit()
+    {
+        if (!isTextEdited(_text.edited)) {
+            return false;
+        }
+        _text.end = true;
+        return true;
     }
 
     /**
      * Forgets what the controls hold, as a panel shows another page or opens an editor: their ids are the rows of what was
      * shown. A list that is open is closed as the next frame begins. A push of the thumbstick that is held is still not a
-     * new one.
+     * new one. The edit of a text input is kept, as a search typed in a header outlives the page: it ends once its field
+     * is not drawn.
      */
     void Controls::reset()
     {
@@ -141,7 +156,7 @@ namespace f4cf::imgui::controls
     /**
      * Starts a frame, before any canvas's content: the steps the thumbstick moves the slider under the ray by, and the
      * stepper under it, which a push steps once, as it begins. The list Back closed is closed, and its popups over it,
-     * and after a reset every popup but a modal one.
+     * and after a reset every popup but a modal one. The text edit Back ended leaves ImGui's field.
      */
     void Controls::beginFrame(const float deltaSeconds)
     {
@@ -163,11 +178,20 @@ namespace f4cf::imgui::controls
         }
         _choices.closeAll = false;
         _choices.closeList = false;
+
+        if (_text.end) {
+            if (ImGui::GetActiveID() == _text.field) {
+                ImGui::ClearActiveID();
+            }
+            _text = {};
+        }
+        _text.seen = false;
     }
 
     /**
      * Ends a frame, after every canvas's content: a slider whose row was not held is not dragged any more, and one whose
-     * row the ray has left is not the one the thumbstick steps.
+     * row the ray has left is not the one the thumbstick steps. A text input that was not drawn is not edited any more,
+     * with nothing written, as ImGui leaves a field that is not drawn.
      */
     void Controls::endFrame()
     {
@@ -179,6 +203,9 @@ namespace f4cf::imgui::controls
         }
         if (!_choices.openSeen) {
             _choices.openList = 0;
+        }
+        if (_text.edited && !_text.seen) {
+            _text = {};
         }
     }
 }

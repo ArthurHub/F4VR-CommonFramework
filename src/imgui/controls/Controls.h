@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <string>
 
 #include <imgui.h>
 
@@ -192,11 +193,35 @@ namespace f4cf::imgui::controls
             bool closeList = false;
             bool closeAll = false;
         };
+
+        /**
+         * What the text input that is edited holds from one frame to the next. One is edited at a time, as ImGui
+         * edits one field.
+         */
+        struct TextState
+        {
+            // the text input that is edited, 0 for none, and the id of its ImGui field
+            ImGuiID edited = 0;
+            ImGuiID field = 0;
+
+            // its text as the edit started, and the text of its field
+            std::string startText;
+            std::string text;
+
+            // ImGui took the field since the edit started: the frame of the press is before it
+            bool active = false;
+
+            // the edit ends with nothing written as the next frame begins, for Back
+            bool end = false;
+
+            // the text input was drawn in this frame
+            bool seen = false;
+        };
     }
 
     /**
      * The controls' state, which exists once: their style, the input they read, and what a control holds from one
-     * frame to the next, as a slider that is dragged.
+     * frame to the next, as a slider that is dragged or a text input that is edited.
      *
      *     controls::get().setStyle(style);
      *     controls::drawOutline(min, max, controls::get().colors().accent);
@@ -239,6 +264,14 @@ namespace f4cf::imgui::controls
             return _choices.openList != 0 && !_choices.closeList;
         }
 
+        // a text input is edited, and Back has not ended its edit
+        bool isTextEdited(const ImGuiID id) const
+        {
+            return _text.edited == id && id != 0 && !_text.end;
+        }
+
+        bool endTextEdit();
+
         // how far the pointing hand's thumbstick is pushed to a side in this frame, from -1 at the left to 1 at the right
         float thumbstickSide() const
         {
@@ -270,6 +303,12 @@ namespace f4cf::imgui::controls
 
         void listShown(ImGuiID id, int level);
 
+        // Internal: used by the text inputs
+        internal::TextState& text()
+        {
+            return _text;
+        }
+
     private:
         Controls();
 
@@ -278,6 +317,7 @@ namespace f4cf::imgui::controls
         float _thumbstickSide = 0.0f;
         internal::SliderState _sliders;
         internal::ChoiceState _choices;
+        internal::TextState _text;
     };
 
     inline Controls& get()

@@ -25,6 +25,7 @@ namespace f4cf::imgui::controls
         bool underline = false;
     };
 
+    int utf8Length(std::string_view text);
     float textWidth(std::string_view text);
     void drawText(float left, float right, float top, float height, ImU32 color, std::string_view text);
     void drawTextIn(const ImRect& box, std::string_view text, ImU32 color, float align, float padding = 0.0f);

@@ -3,7 +3,8 @@
 Namespace: `f4cf::imgui::controls`
 
 What a panel's controls are drawn with, in one look: text cut with an ellipsis or wrapped, drawn marks and icons,
-frames and outlines, buttons, the switcher, dialogs, the slider, the stepper, and the dropdown with its list. A panel on a [canvas](../README.md) builds its rows and
+frames and outlines, buttons, the switcher, dialogs, the slider, the stepper, the dropdown with its list, and the text
+input. A panel on a [canvas](../README.md) builds its rows and
 controls from them, so two mods' panels read as one UI. They draw into the current ImGui window, inside a canvas's
 content.
 
@@ -21,6 +22,7 @@ content.
 | [`Dialogs.h`](Dialogs.h) | `beginDialog`, a modal dialog in the middle of the display, and `dialogButtons` along its bottom. |
 | [`Choices.h`](Choices.h) | The stepper, the dropdown's box, and the list of options a dropdown opens, with its suffixes, header line and action entry. |
 | [`Sliders.h`](Sliders.h) | The slider: a track between step arrows and the box of its value, dragged by the trigger and stepped by the arrows and the thumbstick. |
+| [`TextInputs.h`](TextInputs.h) | The text input: ImGui's field in a control's box, typed on the framework's keyboard, written as it is left or as it is typed. |
 | [`Frames.h`](Frames.h) | A control's box and frame, outlines, a button's frame and ring, the step button, the selected bar, a row's look under the ray, a section's line, a tag, and where a popup opens. |
 
 ## Style
@@ -155,3 +157,32 @@ if (drawn.picked) { _quality = *drawn.picked; }
   drag in its order. It closes the list and what opened over it, and not a popup it is in, as an editor.
   `controls::get().reset()` forgets what the controls hold and closes an open list, and `closePopups()` closes every
   popup but a modal one, as a panel shows another page.
+
+## The text input
+
+```cpp
+#include "imgui/controls/TextInputs.h"
+
+const auto id = ImGui::GetID("Name");
+const auto box = controls::controlBox(right - 392.0f, top, 392.0f);
+const auto edit = controls::textEdit(id, box, rowPressed, _name, { .maxLength = 32 });
+if (edit.write) { _name = *edit.write; }
+if (!controls::get().isTextEdited(id)) { controls::drawTextInput(box, _name, controls::Tone::Normal); }
+```
+
+- **A press starts the edit:** ImGui's field takes it from the next frame, with the caret at the end, and the
+  framework's [keyboard](../README.md#text-fields-and-the-keyboard) is shown for it. `textEdit` is called in every
+  frame, also while its box is scrolled out of sight: a frame that does not draw it ends the edit with nothing written.
+- **When it writes:** as the field is left by the keyboard's Done, Enter or a press beside it, with a text other than
+  the one it started with. A `live` one writes each change as it is typed, as a search's query. A physical keyboard's
+  Escape writes nothing; ImGui gives its field back the text it started with, which a live one does not write, so the
+  typed text stays.
+- **What it takes:** `TextChars` keeps only the characters of a whole number or of any number, and `maxLength` cuts
+  the text at that many UTF-8 characters as it is typed or pasted, with the count at the right of the box (`12 / 32`).
+- **The look:** a framed one is a control's frame with an accent outline while edited, and `drawTextInput` draws it
+  idle in a tone. A bare one (`TextLook{ .framed = false, .padding = 0.0f }`) is only the field, in a box whose look
+  its caller draws, as a search field's.
+- **Back:** `controls::get().back()` ends the edit with nothing more written as the next frame begins, after a drag and
+  a list in its order; `endTextEdit()` does so for a text set by other means. `reset()` keeps the edit, as a search in
+  a header outlives the page; a field that is not drawn any more ends it.
+- **`edit.pulse`** is for the press that starts it; the keyboard ticks each key itself.

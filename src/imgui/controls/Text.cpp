@@ -177,6 +177,16 @@ namespace
 namespace f4cf::imgui::controls
 {
     /**
+     * The count of the characters of a UTF-8 text: its bytes that start one.
+     */
+    int utf8Length(const std::string_view text)
+    {
+        return static_cast<int>(std::ranges::count_if(text, [](const char c) {
+            return (static_cast<unsigned char>(c) & 0xC0) != 0x80;
+        }));
+    }
+
+    /**
      * The width of a line of text in the current font size.
      */
     float textWidth(const std::string_view text)

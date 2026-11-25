@@ -14,8 +14,9 @@ major version is `0`, a minor bump may break the API; the **Upgrading** notes sa
   ranges, pieces of text in their own looks wrapped as one text, the warning, error and info marks, the Reset and Undo
   icons, arrows, a control's frame, outlines, a button's frame, the selected bar, a row under the ray, a tag, where
   a popup opens, buttons in four looks, an icon button, the switcher, a dialog with its buttons, the slider, which
-  the trigger drags and the arrows and the pointing hand's thumbstick step, read by the framework, the stepper, and the
-  dropdown with its list of options.
+  the trigger drags and the arrows and the pointing hand's thumbstick step, read by the framework, the stepper, the
+  dropdown with its list of options, and the text input, typed on the framework's keyboard, which writes as it is left
+  or, live, as it is typed, and keeps a live text through a physical keyboard's Escape.
   `controls::get().setStyle` sets their colors by role and their sizes; the defaults are the framework's green
   ([controls README](../src/imgui/controls/README.md)).
 

@@ -124,7 +124,8 @@ if(F4CF_WITH_IMGUI_UI)
   target_sources(${PROJECT_NAME}_linked_tests PRIVATE linked/imgui/ImGuiFontsTests.cpp linked/imgui/ImGuiImageTests.cpp linked/imgui/ImGuiTexturesTests.cpp
     linked/imgui/controls/ControlsTests.cpp linked/imgui/controls/ControlsTextTests.cpp
     linked/imgui/controls/ControlsButtonsTests.cpp linked/imgui/controls/ControlsSlidersTests.cpp
-    linked/imgui/controls/ControlsChoicesTests.cpp)
+    linked/imgui/controls/ControlsChoicesTests.cpp
+    linked/imgui/controls/ControlsTextInputsTests.cpp)
 endif()
 
 f4cf_discover_tests_by_folder(${PROJECT_NAME}_linked_tests ${discover_prefix})
