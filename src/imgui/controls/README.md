@@ -19,7 +19,8 @@ current ImGui window, inside a canvas's content.
 | [`TextRange.h`](TextRange.h) | `TextRange` and `TextAlign`, plain std, so game-free code that finds or lays out text has them without ImGui. |
 | [`Marks.h`](Marks.h) | The warning, error and info marks, the dot, the check, the Reset and Undo icons, and the arrows. |
 | [`Buttons.h`](Buttons.h) | `button` in its `ButtonLook` (primary, secondary, quiet, danger), `iconButton`, and the switcher, which only draws. |
-| [`Dialogs.h`](Dialogs.h) | `beginDialog`, a modal dialog in the middle of the display, and `dialogButtons` along its bottom. |
+| [`Dialogs.h`](Dialogs.h) | `beginDialog`, a modal dialog in the middle of the display, `dialogButtons` along its bottom, and `beginRowPopup`, the popup that opens on a row. |
+| [`Icons.h`](Icons.h) | `drawIcon`: the drawn icons as one set, a button's and the panel's, each scaled from its design box. |
 | [`Choices.h`](Choices.h) | The stepper, the dropdown's box, and the list of options a dropdown opens, with its suffixes, header line and action entry. |
 | [`Sliders.h`](Sliders.h) | The slider: a track between step arrows and the box of its value, dragged by the trigger and stepped by the arrows and the thumbstick. |
 | [`TextInputs.h`](TextInputs.h) | The text input: ImGui's field in a control's box, typed on the framework's keyboard, written as it is left or as it is typed. |
@@ -84,6 +85,24 @@ controls::drawTextIn(box, "Medium", controls::get().colors().accent, 0.5f);
   its color as given, so a caller passes `ImGui::GetColorU32(color)` for a faded piece.
 - **Popups:** `popupTop` places a popup under its box, over it, or at the bottom of its window, never above its top.
 
+## Icons
+
+```cpp
+#include "imgui/controls/Icons.h"
+
+controls::drawIcon(controls::Icon::Cross, box.GetCenter(), controls::get().colors().accent);
+controls::drawIcon(controls::Icon::Gear, ImVec2(left + 10.0f, middle), color, 20.0f);
+```
+
+- **One set:** Search, Cross (Close, Clear), Minimize and Vibrate (a haptic's Play: a dot with arcs going out), and the
+  icons of a button: Play, Stop, Bolt, Target, Check, Window, External, Link, Gear, Import, Export, Copy, Eye, Hand,
+  Sound, Pin, Refresh, Trash. `Marks.h` keeps the marks, the arrows, Reset and Undo.
+- **`size`** is the box it is drawn in, `ICON_SIZE` (24) unless given. Each icon is drawn from the box it is designed
+  in (`iconDesignBox`), strokes too: Search, Cross, Minimize and Vibrate in 24 with `ICON_THICKNESS` strokes, a
+  button's icons in 20 with strokes of 2 and round ends, so a button's icon is as designed at 20 and a fifth larger at
+  24. A sharp join, as the eye's tips, reaches a little past the box.
+- Inside `ImGui::BeginDisabled` it is faded; an opaque stroke of a button's icon has round ends, a faded one square.
+
 ## Buttons and dialogs
 
 ```cpp
@@ -110,6 +129,10 @@ if (controls::beginDialog("Delete?", asked, controls::Tone::Error)) {
   (for devbench).
 - **The switcher** only draws: an off and an on cell with the one of its value marked in its tone. The row it is in
   takes the press.
+- **A row's popup**, as an editor that opens on a row: `beginRowPopup(id, row, width, height)` places a popup of that
+  size centered on the row as far as the window lets it, under or over the row as `popupTop` places it, padded
+  `space4` and outlined in the accent. The caller opens it with `ImGui::OpenPopupEx(id)` and ends it with
+  `ImGui::EndPopup()` when it returns true.
 
 ## The slider
 

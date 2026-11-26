@@ -9,7 +9,7 @@
 #include "Buttons.h"
 #include "Controls.h"
 
-// A dialog in the middle of the panel, and the buttons along its bottom.
+// A dialog in the middle of the panel, the buttons along its bottom, and the popup that opens on a row.
 namespace f4cf::imgui::controls
 {
     /**
@@ -30,4 +30,5 @@ namespace f4cf::imgui::controls
 
     bool beginDialog(const char* id, bool asked, Tone tone, float width = DIALOG_WIDTH);
     int dialogButtons(std::span<const DialogButton> buttons, std::span<ImRect> boxes = {});
+    bool beginRowPopup(ImGuiID id, const ImRect& row, float width, float height);
 }

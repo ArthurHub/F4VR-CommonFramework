@@ -111,4 +111,27 @@ namespace f4cf::imgui::controls
         ImGui::Dummy(ImVec2(ImGui::GetContentRegionAvail().x, get().theme().controlHeight));
         return pressed;
     }
+
+    /**
+     * Begins the popup of a row, as an editor that opens on it: of a width and a height, centered on the row as far as
+     * the window it is drawn in lets it, under or over the row as `popupTop` places it, padded `space4` and outlined in
+     * the accent. The caller opens it with `ImGui::OpenPopupEx(id)`. Returns whether its content is drawn, which ends
+     * with `ImGui::EndPopup`.
+     */
+    bool beginRowPopup(const ImGuiID id, const ImRect& row, const float width, const float height)
+    {
+        const auto& window = ImGui::GetCurrentWindow()->InnerRect;
+        const float left = std::clamp(std::floor(row.GetCenter().x - width * 0.5f), window.Min.x, (std::max)(window.Min.x, window.Max.x - width));
+        const float space = get().theme().space4;
+        ImGui::SetNextWindowPos(ImVec2(left, popupTop(row, height, window)));
+        ImGui::SetNextWindowSize(ImVec2(width, height));
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(space, space));
+        ImGui::PushStyleColor(ImGuiCol_Border, get().colors().accent);
+        const bool shown = ImGui::BeginPopupEx(id,
+            ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoScrollbar |
+                ImGuiWindowFlags_NoScrollWithMouse);
+        ImGui::PopStyleColor();
+        ImGui::PopStyleVar();
+        return shown;
+    }
 }

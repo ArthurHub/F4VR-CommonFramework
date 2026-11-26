@@ -4,7 +4,7 @@
 
 #include "Controls.h"
 #include "Frames.h"
-#include "Marks.h"
+#include "Icons.h"
 #include "Targets.h"
 #include "Text.h"
 #include "TextInputs.h"
@@ -20,29 +20,6 @@ namespace
 
     // the query is written as it is typed
     constexpr TextOptions QUERY_OPTIONS{ .live = true };
-
-    /**
-     * The magnifier, in a box of its size from a corner: a circle with a handle, drawn in a box of 24 and scaled.
-     */
-    void drawMagnifier(const ImVec2& min, const ImU32 color)
-    {
-        constexpr float SCALE = MAGNIFIER_SIZE / 24.0f;
-        auto* drawList = ImGui::GetWindowDrawList();
-        drawList->AddCircle(ImVec2(min.x + 10.5f * SCALE, min.y + 10.5f * SCALE), 6.0f * SCALE, color, 0, ICON_THICKNESS * SCALE);
-        drawList->AddLine(ImVec2(min.x + 15.0f * SCALE, min.y + 15.0f * SCALE), ImVec2(min.x + 20.0f * SCALE, min.y + 20.0f * SCALE), color, ICON_THICKNESS * SCALE);
-    }
-
-    /**
-     * The cross of Clear around a point, drawn in a box of 24 and scaled.
-     */
-    void drawCross(const ImVec2& center, const ImU32 color)
-    {
-        constexpr float HALF = 6.0f * CROSS_SIZE / 24.0f;
-        constexpr float THICKNESS = ICON_THICKNESS * CROSS_SIZE / 24.0f;
-        auto* drawList = ImGui::GetWindowDrawList();
-        drawList->AddLine(ImVec2(center.x - HALF, center.y - HALF), ImVec2(center.x + HALF, center.y + HALF), color, THICKNESS);
-        drawList->AddLine(ImVec2(center.x + HALF, center.y - HALF), ImVec2(center.x - HALF, center.y + HALF), color, THICKNESS);
-    }
 }
 
 namespace f4cf::imgui::controls
@@ -78,7 +55,7 @@ namespace f4cf::imgui::controls
         auto* drawList = ImGui::GetWindowDrawList();
         drawList->AddRectFilled(box.Min, box.Max, drawn.pointed ? colors.hover : colors.track, theme.frameRounding);
         drawOutline(box.Min, box.Max, edited ? colors.accent : colors.frameBorder);
-        drawMagnifier(ImVec2(box.Min.x + theme.space2, middle - MAGNIFIER_SIZE * 0.5f), drawn.pointed ? colors.accent : colors.muted);
+        drawIcon(Icon::Search, ImVec2(box.Min.x + theme.space2 + MAGNIFIER_SIZE * 0.5f, middle), drawn.pointed ? colors.accent : colors.muted, MAGNIFIER_SIZE);
 
         // how many match, at the right of the text
         const float textLeft = box.Min.x + theme.space2 + MAGNIFIER_SIZE + theme.space2;
@@ -117,7 +94,7 @@ namespace f4cf::imgui::controls
             targets().add(target::SEARCH, "Clear", clearBox);
             drawRowState();
             drawn.clearPointed = ImGui::IsItemHovered();
-            drawCross(clearBox.GetCenter(), colors.accent);
+            drawIcon(Icon::Cross, clearBox.GetCenter(), colors.accent, CROSS_SIZE);
         }
         ImGui::PopID();
 

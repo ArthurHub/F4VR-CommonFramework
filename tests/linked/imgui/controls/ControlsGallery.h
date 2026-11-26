@@ -20,6 +20,7 @@
 #include "imgui/controls/Controls.h"
 #include "imgui/controls/Dialogs.h"
 #include "imgui/controls/Frames.h"
+#include "imgui/controls/Icons.h"
 #include "imgui/controls/Marks.h"
 #include "imgui/controls/Rows.h"
 #include "imgui/controls/SearchFields.h"
@@ -194,6 +195,12 @@ namespace controls_gallery
         drawn.tagTextWidth = ImGui::GetFont()->CalcTextSizeA(theme.detailFontSize, FLT_MAX, 0.0f, "Tag").x;
         drawn.tag = ImRect(at(LEFT + 560, top + 20 - tagHeight() * 0.5f), at(LEFT + 560 + tagWidth("Tag"), top + 20 + tagHeight() * 0.5f));
         top += theme.controlHeight + 8;
+
+        // every icon, in the accent
+        for (int icon = static_cast<int>(Icon::Search); icon <= static_cast<int>(Icon::Trash); ++icon) {
+            drawIcon(static_cast<Icon>(icon), at(LEFT + 16 + 30 * static_cast<float>(icon - 1), top + 16), colors.accent);
+        }
+        top += 40;
 
         // frames in each tone, a button's frame under the ray and held, its ring, a step button, the selected bar
         for (std::size_t i = 0; i < tones.size(); ++i) {

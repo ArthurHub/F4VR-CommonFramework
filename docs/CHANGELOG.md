@@ -40,6 +40,9 @@ major version is `0`, a minor bump may break the API; the **Upgrading** notes sa
 - **The search field**: `controls::searchField` draws a header's search, with its magnifier, a placeholder or the query
   typed live on the keyboard, how many match, and Clear; the caller keeps the query
   ([controls README](../src/imgui/controls/README.md#the-search-field)). It is a `search` target, `Field` and `Clear`.
+- **Icons and a row's popup**: `controls::drawIcon` draws the panel's icons and a button's as one set, each in a box of
+  any size from the box it is designed in ([controls README](../src/imgui/controls/README.md#icons)), and
+  `controls::beginRowPopup` opens an editor's popup on a row, under or over it, inside its window.
 
 ## 0.6.1 — unreleased
 
