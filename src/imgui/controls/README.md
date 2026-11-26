@@ -2,9 +2,9 @@
 
 Namespace: `f4cf::imgui::controls`
 
-What a panel's controls are drawn with, in one look: text cut with an ellipsis or wrapped, drawn marks and icons,
-frames and outlines, buttons, the switcher, dialogs, the slider, the stepper, the dropdown with its list, the text
-input, the search field, the title bar, the footer, the panes of a panel's body, the rows of a list with the headings of its sections, the controls with their label in a row, and the rows of a tree. A panel on a
+What a panel's controls are drawn with, in one look: text, drawn marks and icons, frames, buttons and dialogs, the
+slider, the stepper, the dropdown with its list, the text input, the search field, a list's rows and headings, the
+controls with their label in a row, a tree's rows, and a panel's title bar, panes and footer. A panel on a
 [canvas](../README.md) builds its rows and controls from them, so two mods' panels read as one UI. They draw into the
 current ImGui window, inside a canvas's content.
 

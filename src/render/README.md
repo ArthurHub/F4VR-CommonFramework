@@ -201,10 +201,11 @@ and measurements: [`docs/tech/scene-depth-occlusion.md`](../../docs/tech/scene-d
 
 ## The render-thread contract
 
-A draw callback runs inside the Submit hook, on whatever thread the game submits from. **During play
-that is the game thread,** about a millisecond after the mods' frame updates. **While a loading screen
-is up it is another thread,** the one drawing it. The hook logs each thread it's called on once. The
-game → render handoff keeps a layer correct on both.
+A draw callback runs inside the player-space pass, or inside the Submit hook for a debug layer and
+where the pass isn't hooked. **During play both are the game thread,** after the mods' frame updates.
+**While a loading screen is up, Submit is another thread,** the one drawing it, and the pass doesn't
+run. The hook logs each thread it's called on once. The game → render handoff keeps a layer correct on
+both.
 
 - **Never touch game state:** nodes, forms, config. Snapshot it game side and hand the snapshot over;
   on another thread, reading `node->world` would race the skeleton update.
@@ -243,8 +244,6 @@ records or Tracy is connected, events only while a capture tool is attached.
   used by [`SceneDepthCapture.cpp`](SceneDepthCapture.cpp), checked for
   the instructions expected there, so a bad one disables occlusion rather than misplacing anything.
 
-The Submit hook and the stereo projection come from the debug-draw overlay (a port of ROCK's
-`DebugBodyOverlay`, reference library `knowledge-base/debug_draw_overlay.md`), hardened per
-`knowledge-base/imgui_ui_overlay_architecture.md` §4-5. The scene-depth technique was studied from
-PrismaUI's FO4VR port, whose license permits study but not redistribution, so this is an independent
-implementation; the addresses are facts about `Fallout4VR.exe` 1.2.72, verified against it.
+The scene-depth technique was studied from PrismaUI's FO4VR port, whose license permits study but not
+redistribution, so this is an independent implementation; the addresses are facts about
+`Fallout4VR.exe` 1.2.72, verified against it.

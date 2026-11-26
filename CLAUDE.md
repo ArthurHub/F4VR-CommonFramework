@@ -87,10 +87,11 @@ overrides `onModLoaded` (F4SE load: Papyrus, hooks), `onGameLoaded` (once), `onG
 
 Most bugs here come from running code on the wrong **thread** or from a **lifetime** that ends too soon.
 
-- **Render thread**: a `render` draw callback runs on Submit's thread, which is the game thread
-  during play and the loading screen's thread while one is up. It never touches nodes, forms or
-  config, never calls OpenVR, and restores anything it binds beyond `ScopedPipelineState`. A producer
-  fills a `render::PrimitiveDraw` on the game thread and `publish()`es it.
+- **Render thread**: a `render` draw callback runs in the game's player-space pass, or at Submit for
+  debug draw: the game thread during play, and the loading screen's thread at Submit while one is up
+  (the pass doesn't run then). It never touches nodes, forms or config, never calls OpenVR, and
+  restores anything it binds beyond `ScopedPipelineState`. A producer fills a `render::PrimitiveDraw`
+  on the game thread and `publish()`es it.
 - **Config load thread**: `loadConfigInternal()` runs on the file watcher's thread or the override
   setter's, so it only reads values. Engine work after a load goes in a
   `subscribeForConfigChangedEvent` callback, which runs on the game thread.

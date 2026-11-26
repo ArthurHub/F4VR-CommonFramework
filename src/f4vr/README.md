@@ -59,9 +59,8 @@ if (RE::VRSettings::IsLeftHandedMode()) { /* swap hands */ }
 showNotification("Saved.");
 ```
 
-Accessing the VR player nodes (lives at `PlayerCharacter + 0x6E0`; the layout is CommonLibF4's
-`RE::VRPlayerNodes`, and [`PlayerNodes.h`](PlayerNodes.h) adds wand/weapon convenience accessors
-like `getPrimaryWandNode()`):
+The VR player nodes are CommonLibF4's `RE::VRPlayerNodes`, and [`PlayerNodes.h`](PlayerNodes.h) adds
+accessors such as `getPrimaryWandNode()`:
 
 ```cpp
 RE::NiNode* hmd = getVRPlayerNodes()->hmdNode;
@@ -74,10 +73,10 @@ the F4SE VR SDK's `F4SEVR` Papyrus calls ports them with the
 [migration table](../../docs/tech/f4sevr-to-commonlib-migration.md#papyrus).
 
 **Natives a script calls** are bound with `BindNativeMethod(script, function, fn)`, in `onGameLoaded`
-or in the callback `registerPapyrusNativeFunctions` takes in `onModLoaded`, which gets the VM. A global native's first parameter is `std::monostate`; the
-others are `bool`, integers, `float`, a string (`std::string`, `RE::BSFixedString`), a
-`std::vector<T>` for an array, a form pointer, or a `ScriptObject` as
-`RE::BSTSmartPointer<RE::BSScript::Object>`:
+or in the callback `registerPapyrusNativeFunctions` takes in `onModLoaded`, which gets the VM. A global
+native's first parameter is `std::monostate`; the others are `bool`, integers, `float`, a string
+(`std::string`, `RE::BSFixedString`), a `std::vector<T>` for an array, a form pointer, or a
+`ScriptObject` as `RE::BSTSmartPointer<RE::BSScript::Object>`:
 
 ```cpp
 // Papyrus: int Function RegisterThing(float radius, string name, float[] pos, ScriptObject akObj) global native
@@ -121,13 +120,14 @@ hand reaches into and presses a binding in. The player's side, every config key 
 [`docs/activation-spheres.md`](../../docs/activation-spheres.md).
 
 - **`WandActivationConfig`** is one config section: the zone and its power-armor variant, two bindings,
-  the entry and per-binding haptics, when the sphere, the icon and the binding icon show, and their styles. Load it with
-  `ConfigBase::loadWandActivationConfig(config, "Section", defaults)`.
+  the entry and per-binding haptics, when the sphere, the icon and the binding icon show, and their
+  styles. Load it with `ConfigBase::loadWandActivationConfig(config, "Section", defaults)`.
 - **`WandActivationSphere`** is the zone at runtime, one per gesture, constructed with an owner key.
   Each frame `onFrameUpdate(node, config, onActivated)` runs the proximity test, suppresses each
   `suppress` binding while a hand is inside (under that key), plays the haptics, applies a cooldown and
   draws the visuals. `onActivated(binding)` gets the binding that fired and returns whether it handled
-  it; the first one handled wins the frame.
+  it; the first one handled wins the frame. `isSuppressing(binding)` tells whether a hand is in the
+  zone for a `suppress` binding this frame. `mod-template/` drives one, a head gesture.
 - **Gating:** a binding with no action in the current state (no weapon drawn) is passed as disabled for
   that frame through the `Frame` overload. `whenavailable` visuals then show only what will work.
 - **Handedness:** the caller mirrors the zone transform for left-handed mode.
@@ -148,8 +148,9 @@ The icon (`ActivationIconStyle`: texture, tint, size) faces the HMD and fades in
 is drawn the same way: the `vrui::bindingIconPaths` icons of the bindings it selects, in a row placed by
 its transform in the plane facing the HMD. It is fed from the frame's bindings, the first being the
 primary and the second the secondary, and a binding of any hand shows the hand inside the zone. The
-selection and the row are `WandActivationSphere::selectIconBindings` and `layoutIconRow`. The sphere is a mesh restyled at runtime by
-a [`SphereStyle`](SphereStyle.h); a style change reloads a freshly styled clone.
+selection and the row are `WandActivationSphere::selectIconBindings` and `layoutIconRow`. The sphere is
+a mesh restyled at runtime by a [`SphereStyle`](SphereStyle.h); a style change reloads a freshly styled
+clone.
 
 Because the sphere's texture is set by code, its mesh names no mod, and every mod ships the same files
 from `mod-template`, under its own folder:

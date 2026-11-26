@@ -2,9 +2,9 @@
 
 Namespace: `f4cf::vrcf`
 
-Wraps OpenVR to give mods clean, debounced controller input — and a way to hide that input from the
-game when the mod wants a button for itself. OpenVR is resolved via vcpkg, falling back to the
-vendored headers in [`external/openvr/`](../../external/openvr/).
+Debounced controller input over OpenVR, haptics, and a way to hide a button from the game while the
+mod reads it. OpenVR is vcpkg's when installed, otherwise the vendored SDK in
+[`external/openvr/`](../../external/openvr/).
 
 > Part of the [F4VR Common Framework](../README.md) source tree.
 
@@ -16,7 +16,7 @@ vendored headers in [`external/openvr/`](../../external/openvr/).
 | [`VRControllersSuppressor`](VRControllersSuppressor.h) | `VRControllersSuppress` | Hides physical buttons/axes from the game (and other mods) while your DLL still reads the raw press. |
 | [`VRControllersHaptic`](VRControllersHaptic.h) | `VRHaptics` | Haptic feedback: sustained buzzes, a library of named patterns (double-click, ramps, heartbeat, ...), custom sequences. |
 
-All three are driven for you by `ModBase` each frame — you only call the read/suppress/trigger methods.
+`ModBase` drives all three each frame; a mod only calls the read, suppress and trigger methods.
 
 ## Hands & buttons
 
@@ -37,8 +37,8 @@ if (VRControllers.isPressed(Hand::Primary, vr::k_EButton_SteamVR_Trigger)) { /* 
 if (VRControllers.isLongPressed(Hand::Offhand, vr::k_EButton_Grip)) { /* held past threshold */ }
 if (VRControllers.isDoublePressed(Hand::Primary, vr::k_EButton_A)) { /* two taps */ }
 
-NiPoint2-like axis = VRControllers.getThumbstickValue(Hand::Primary);   // .x / .y in [-1, 1]
-float yaw = VRControllers.getControllerRelativeHeading(Hand::Primary);  // wand-directional movement
+vr::VRControllerAxis_t axis = VRControllers.getThumbstickValue(Hand::Primary); // .x / .y in [-1, 1]
+float yaw = VRControllers.getControllerRelativeHeading(Hand::Primary);         // wand-directional movement
 ```
 
 Press-state helpers (all debounced):
@@ -100,9 +100,8 @@ if (VRControllers.check(openMenu)) { /* binding triggered */ }
 `axis` + `direction` + `threshold` + `cooldown` + `accelerate` fields instead of `button`. A `direction` of
 `Direction::Any`, `UpDown` or `RightLeft` accepts a push either way it names (and draws its prompt as the
 stick moved, not pushed); the getters that report a pushed direction only ever return the four single ones.
-The optional `modifier`
-must be held down for the binding to fire — on the binding's own hand by default, or on the
-`InputModifier::hand` you specify.
+The optional `modifier` must be held down for the binding to fire, on the binding's own hand by default, or
+on the `InputModifier::hand` given.
 
 A binding of `Hand::Any` fires on either hand: `check(binding)` checks it on both, with a modifier of no hand
 on the hand that fires. For an input of the hand that does something, as the hand that points at a UI, ask
@@ -150,9 +149,8 @@ the controller icon it actually resolves to, falling back to words for the syste
 
 ## Haptic feedback
 
-`VRHaptics` plays haptic feedback on either controller — from a simple buzz to shaped patterns so
-different operations get a distinct feel. The pattern library is loosely modeled on the Apple Watch
-haptic vocabulary.
+`VRHaptics` plays a buzz or a shaped pattern on either controller, so different operations feel
+different. The pattern library is loosely modeled on the Apple Watch's.
 
 ```cpp
 #include "vrcf/VRControllersHaptic.h"
@@ -182,7 +180,7 @@ the intended use of each; `VRControllersHaptic::getPattern(p)` exposes a pattern
 want to tweak one.
 
 A new trigger on a hand replaces whatever was playing on it. Main thread only.
-`VRControllers.triggerHaptic(...)` still works and forwards to `VRHaptics.trigger(...)`.
+`VRControllers.triggerHaptic(...)` forwards to `VRHaptics.trigger(...)`.
 
 > Why patterns need a per-frame engine: the only haptic API the game's legacy `IVRSystem` exposes is
 > `TriggerHapticPulse(device, axis, microseconds)` — a one-shot pulse capped at ~4ms with a 5ms

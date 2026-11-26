@@ -336,7 +336,7 @@ Faces share a baseline only when their vertical metrics match, as one family's d
 ## How it is drawn
 
 ```
-game thread (frame end)                         render thread (Submit hook)
+game thread (frame end)                         render side (the player-space pass)
 ──────────────────────────────────              ─────────────────────────────────
 imgui::internal::onFrameEnd()                   draw callback (DRAW_ORDER_PANELS)
   ├─ resolve placements → world quads             ├─ write the glyphs ImGui added

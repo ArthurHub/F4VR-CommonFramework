@@ -234,8 +234,10 @@ which is also the DLL's name, keeps them unique; the framework logs a warning wh
 registration replaced something. The generic actions are identical in every mod, and `health`'s
 `framework` and `contract` fields say which version of them a mod has.
 
-Only `GetBuildNumber`, `RegisterTool` and `EmitEvent` are used, slots every devbench has, so a mod
-works with any devbench version. A later slot would have to be gated on `GetBuildNumber()` (see below).
+Of `IDevBenchInterface001`, only `GetBuildNumber`, `RegisterTool` and `EmitEvent` are used, slots every
+devbench has, so a mod works with any devbench version. A later slot would have to be gated on
+`GetBuildNumber()` (see below). The main-thread service is looked up on its own, and an older devbench
+without it has the actions of a mod with no frame hook run through F4SE's task interface.
 
 ## Vendored client API
 
