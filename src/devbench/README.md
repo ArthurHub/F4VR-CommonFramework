@@ -101,7 +101,8 @@ game thread 46428
 (irm http://127.0.0.1:8931/api/tool/frik -Method Post -ContentType application/json -Body '{"action":"perf","format":"text"}').text
 ```
 
-A mod adds its own actions and the opening line of the tool's description:
+A mod adds its own actions and the opening line of the tool's description (`mod-template/` sets the
+description and a state provider in `onModLoaded`):
 
 ```cpp
 #include "devbench/DevBench.h"

@@ -48,7 +48,7 @@ Behavior in the game is tested by hand, in the game.
 
 | Component  | Files                                                 | Responsibility                                                                    |
 | ---------- | ----------------------------------------------------- | --------------------------------------------------------------------------------- |
-| **MyMod**  | [src/MyMod.h](src/MyMod.h) / [.cpp](src/MyMod.cpp)    | The mod class, the F4SE entry points, the head gesture                            |
+| **MyMod**  | [src/MyMod.h](src/MyMod.h) / [.cpp](src/MyMod.cpp)    | The mod class, the F4SE entry points, the head gesture, the devbench tool's description and state |
 | **Config** | [src/Config.h](src/Config.h) / [.cpp](src/Config.cpp) | The mod's TOML config through `ConfigBase` (global `g_config`), reloaded live      |
 
 TODO: add a row for each component as the mod grows.
@@ -87,7 +87,7 @@ The framework's [CLAUDE.md](external/F4VR-CommonFramework/CLAUDE.md) maps its su
 | Papyrus: native functions, calling scripts                   | `src/f4vr/README.md` (Papyrus)                      |
 | Debug draw overlay, the `[Debug]` config keys                | `src/debug/README.md`, `docs/debug-config.md`       |
 | Timing a hot path (`F4CF_PERF_SCOPE`), Tracy                 | `src/perf/README.md`                                |
-| The mod's devbench tool (drive and inspect the running game) | `src/devbench/README.md`                            |
+| The mod's devbench tool (drive and inspect the running game): keep its description and `state` current as features land | `src/devbench/README.md` |
 | The mod's page in Mods Config FO4 VR                         | `src/modsconfig/README.md`                          |
 
 ## Dependencies

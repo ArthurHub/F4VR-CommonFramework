@@ -1,5 +1,6 @@
 #include "MyMod.h"
 
+#include "devbench/DevBench.h"
 #include "f4vr/F4VRUtils.h"
 #include "f4vr/PlayerNodes.h"
 
@@ -15,14 +16,42 @@ extern "C" DLLEXPORT bool F4SEAPI F4SEPlugin_Load(const F4SE::LoadInterface* a_f
     return g_mod->onF4SEPluginLoad(a_f4se);
 }
 
+namespace
+{
+    /**
+     * The mod's state in the devbench tool's `state` answer, copied each frame: plain values only, as a snapshot outlives
+     * its frame.
+     */
+    struct MyModState
+    {
+        bool headInZone = false;
+        std::uint32_t headTaps = 0;
+        std::uint32_t headHolds = 0;
+    };
+}
+
 namespace my_mod
 {
     /**
-     * F4SE load, before the game's data loads: register Papyrus functions and install hooks.
+     * F4SE load, before the game's data loads: register Papyrus functions and install hooks, and describe the mod to its
+     * devbench tool.
      */
     void MyMod::onModLoaded(const F4SE::LoadInterface*)
     {
-        //noop
+        // an agent picks the mod's tool by this line, so name the features someone would ask about
+        devbench::setToolDescription("MyMod: TODO what the mod does - the head gesture");
+
+        devbench::setStateProvider<MyModState>(
+            "head: whether the offhand is in the head gesture's zone (read from the trigger it takes from the game), and its taps and holds",
+            [this](MyModState& state) {
+                const auto& head = g_config.headActivation;
+                state.headInZone = _headSphere.isSuppressing(head.primary) || _headSphere.isSuppressing(head.secondary);
+                state.headTaps = _headTaps;
+                state.headHolds = _headHolds;
+            },
+            [](const MyModState& state) -> nlohmann::json {
+                return { { "head", { { "inZone", state.headInZone }, { "taps", state.headTaps }, { "holds", state.headHolds } } } };
+            });
     }
 
     /**
@@ -54,8 +83,9 @@ namespace my_mod
         }
 
         // the head gesture: reach the offhand to the face and tap or hold its trigger
-        _headSphere.onFrameUpdate(f4vr::getVRPlayerNodes()->hmdNode, g_config.headActivation, [](const vrcf::InputBinding& binding) {
+        _headSphere.onFrameUpdate(f4vr::getVRPlayerNodes()->hmdNode, g_config.headActivation, [this](const vrcf::InputBinding& binding) {
             const bool held = binding == g_config.headActivation.secondary;
+            ++(held ? _headHolds : _headTaps);
             f4vr::showNotification(held ? "My Mod: head gesture held" : "My Mod: head gesture tapped");
             return true;
         });

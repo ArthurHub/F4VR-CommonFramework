@@ -42,7 +42,8 @@ You now have a complete mod that builds. It came with:
 
 - **`src/`:** the mod class and its F4SE entry points (`MyMod.h/.cpp`), its config (`Config.h/.cpp`), the
   precompiled header. The mod drives one gesture: reach the offhand to your face and tap or hold the
-  trigger, and a notification says which.
+  trigger, and a notification says which. Its [devbench tool](../src/devbench/README.md) has a description
+  to fill in, and its `state` has the gesture.
 - **`data/config/MyMod.toml`:** the shipped config, also embedded in the DLL as the default, with the
   gesture's section, `[MyMod_HeadActivation]`.
 - **`data/mod/`:** a game `Data` tree shipped beside the DLL, with the framework's meshes and textures, and
