@@ -129,7 +129,8 @@ if(F4CF_WITH_IMGUI_UI)
     linked/imgui/controls/ControlsRowsTests.cpp
     linked/imgui/controls/ControlsTreeTests.cpp
     linked/imgui/controls/ControlsThemeTests.cpp
-    linked/imgui/controls/ControlsThemeUseTests.cpp)
+    linked/imgui/controls/ControlsThemeUseTests.cpp
+    linked/imgui/controls/ControlsTargetsTests.cpp)
 endif()
 
 f4cf_discover_tests_by_folder(${PROJECT_NAME}_linked_tests ${discover_prefix})

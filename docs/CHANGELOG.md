@@ -32,6 +32,11 @@ major version is `0`, a minor bump may break the API; the **Upgrading** notes sa
 - **A look tuned live**: devbench's `theme` action answers the theme's fields and sets them over the mod's theme,
   drawn from the next frame and kept over each `setTheme` until its `reset`
   ([devbench README](../src/devbench/README.md)). The tool's contract is 7.
+- **A panel's targets**: `controls::targets()` keeps where the last frame's buttons, an open list's options and a
+  mod's own rows were, in the canvas's pixels, and how far its lists were scrolled, and devbench's `targets` action
+  tells them, so a test with the controllers points at a button or a row by its key
+  ([controls README](../src/imgui/controls/README.md#targets)). The tool's contract is 8. **Upgrading:** a mod's own
+  devbench action named `targets` is ignored beside the built-in one: the mod records with `controls::targets().add`.
 
 ## 0.6.1 — unreleased
 

@@ -26,6 +26,7 @@ current ImGui window, inside a canvas's content.
 | [`Frames.h`](Frames.h) | A control's box and frame, outlines, a button's frame and ring, the step button, the selected bar, a row's look under the ray, a section's line, a tag, and where a popup opens. |
 | [`Rows.h`](Rows.h) | A row as wide as the rows of its list, the row of a heading that folds, the folding heading with its counts, and a section's heading with a rule. |
 | [`Tree.h`](Tree.h) | A tree's row, set in by its level, with its arrow, name, tag, dot and count, selected or disabled, and the row of a group of its nodes. |
+| [`Targets.h`](Targets.h) | `controls::targets()`: where the last frame's buttons, options and a mod's rows were, and how far its lists were scrolled, for devbench. |
 
 ## Theme
 
@@ -261,3 +262,29 @@ if (controls::treeGroupRow("Weapons", weapons.size(), _weaponsOpen, false, width
   seen to be its; it is never pressed.
 - **A group row** is muted: its arrow, its name, a rule, and the count of its nodes. A press is the caller's to open or
   close it.
+
+## Targets
+
+```cpp
+#include "imgui/controls/Targets.h"
+
+controls::targets().add("setting", setting.id, rowBox);
+controls::targets().add("tree", mod.name, rowBox, pagePath);
+controls::targets().addScroll("page");
+```
+
+Where a panel's targets were in its last frame, which devbench's [`targets` action](../../devbench/README.md) tells,
+so a test with the controllers asks for a button or a row by a key it knows and points at it.
+
+- **Recording** is off until devbench's first `targets` call, so a game with no test pays one check a target.
+- **A target** is a `kind` and a `key`, both texts, and a `path` where its key alone does not tell it, with its rect:
+  the part its window shows, in the canvas's pixels from its top left, the space `pointer().state()` is in. One its
+  window does not show, as a row scrolled away, is not kept. A **scroll** is an `area`, how far its list is scrolled
+  and how far it can be: `addScroll(area)` of the window drawn, or with the two a list in its own window gives.
+- **The controls record themselves:** `button`, and each of `dialogButtons`, as `target::BUTTON` by its label;
+  `drawList`'s options as `target::OPTION` by their text, its action entry by its own, and its scroll as
+  `target::LIST_AREA`.
+- **A mod records** a row whose key is its own, by kinds it names and documents: a setting's row by its id, a tree's
+  row by its node and path, a section by its text.
+- Each frame drops the last one's, as the controls' frame begins, and the layer gives each canvas its top left before
+  its content. With two panels at once, a target does not say which canvas it is in.

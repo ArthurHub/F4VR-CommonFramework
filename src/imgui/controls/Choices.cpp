@@ -4,6 +4,7 @@
 
 #include "Frames.h"
 #include "Marks.h"
+#include "Targets.h"
 #include "Text.h"
 
 namespace
@@ -262,7 +263,8 @@ namespace f4cf::imgui::controls
      * as it opens. A press on an option picks it and closes the list, and a press beside it closes it and does nothing
      * else. An option can have more drawn after its text, and a muted text, and the list a line over its options, which
      * stays as they scroll, and an entry after them that does something other than pick, under a rule, which is the place
-     * after the options. Back closes it (`Controls::back`). Nothing for a list that is not open.
+     * after the options. Back closes it (`Controls::back`). Nothing for a list that is not open. Each option is a target
+     * of kind `option` by its text, the action entry by its own, and its scroll is the area `list`.
      */
     ListDrawn drawList(const ImGuiID id, const ImRect& box, const std::span<const std::string_view> texts, const std::optional<std::size_t> chosen,
         const OptionDecoration& decorate, const ListExtras& extras)
@@ -346,6 +348,10 @@ namespace f4cf::imgui::controls
         // the options scroll in their child under a header, and in the popup with none
         drawn.scrollY = ImGui::GetScrollY();
         drawn.scrollMaxY = ImGui::GetScrollMaxY();
+        for (std::size_t i = 0; i < drawn.boxes.size(); ++i) {
+            targets().add(target::OPTION, i < texts.size() ? texts[i] : extras.action, drawn.boxes[i]);
+        }
+        targets().addScroll(target::LIST_AREA, drawn.scrollY, drawn.scrollMaxY);
         if (header) {
             ImGui::EndChild();
         }

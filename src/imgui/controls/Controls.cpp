@@ -9,6 +9,7 @@
 #include "../ImGuiKeyboard.h"
 #include "../ImGuiPointer.h"
 #include "Sliders.h"
+#include "Targets.h"
 
 #include <imgui_internal.h>
 
@@ -241,10 +242,12 @@ namespace f4cf::imgui::controls
     /**
      * Starts a frame, before any canvas's content: the steps the thumbstick moves the slider under the ray by, and the
      * stepper under it, which a push steps once, as it begins. The list Back closed is closed, and its popups over it,
-     * and after a reset every popup but a modal one. The text edit Back ended leaves ImGui's field.
+     * and after a reset every popup but a modal one. The text edit Back ended leaves ImGui's field. The last frame's
+     * targets are dropped.
      */
     void Controls::beginFrame(const float deltaSeconds)
     {
+        targets().beginFrame();
         _sliders.dragHeld = false;
         _sliders.pointedSeen = false;
         _sliders.steps = internal::stepsOfPush(_sliders, _thumbstickSide, deltaSeconds);

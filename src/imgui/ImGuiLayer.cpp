@@ -20,6 +20,7 @@
 #include "ImGuiSettings.h"
 #include "ImGuiTextures.h"
 #include "controls/Controls.h"
+#include "controls/Targets.h"
 
 // the font texture's requests and the rasterizing at the framebuffer scale are ImGui 1.92's
 #if IMGUI_VERSION_NUM < 19290
@@ -493,6 +494,8 @@ namespace f4cf::imgui::internal
                     ImGui::BeginGroup();
                     {
                         F4CF_PERF_SCOPE("content");
+                        // a target is kept in the canvas's pixels, the pointer's space, from the canvas's top left
+                        controls::targets().beginCanvas(ImVec2(static_cast<float>(entry.x), static_cast<float>(entry.y)));
                         entry.canvas->content()();
                     }
                     ImGui::EndGroup();

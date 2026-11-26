@@ -1,6 +1,7 @@
 #include "Buttons.h"
 
 #include "Frames.h"
+#include "Targets.h"
 #include "Text.h"
 
 namespace f4cf::imgui::controls
@@ -9,13 +10,14 @@ namespace f4cf::imgui::controls
      * A button in its box, with its label in the middle. The primary button is a solid accent fill, with its label in
      * the color on it, a glow under the ray, and an outline while it is pressed. The danger button is a solid error
      * fill, with a ring under the ray. The others have the frame of a button that is a part of a row, and a quiet one
-     * has no outline while the ray is not on it. Inside `BeginDisabled` it is faded and is not pressed. Returns whether
-     * it was pressed.
+     * has no outline while the ray is not on it. Inside `BeginDisabled` it is faded and is not pressed. A target of
+     * kind `button` by its label. Returns whether it was pressed.
      */
     bool button(const char* label, const ImRect& box, const ButtonLook look)
     {
         ImGui::SetCursorScreenPos(box.Min);
         const bool pressed = ImGui::InvisibleButton(label, box.GetSize());
+        targets().add(target::BUTTON, label, box);
         const bool pointed = ImGui::IsItemHovered();
         const bool held = ImGui::IsItemActive();
         const auto& colors = get().colors();
