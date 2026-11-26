@@ -249,7 +249,7 @@ namespace f4cf
 
         CPPTRACE_TRY
         {
-            const bool leftHanded = f4vr::isLeftHandedMode();
+            const bool leftHanded = RE::VRSettings::IsLeftHandedMode();
             vrcf::VRControllers.update(leftHanded);
             vrcf::VRControllersSuppress.update(leftHanded);
             vrcf::VRHaptics.update(leftHanded);

@@ -41,7 +41,9 @@ Settings live in a TOML file created on first run at:
 %USERPROFILE%\Documents\My Games\Fallout4VR\Mods_Config\MyMod\MyMod.toml
 ```
 
-Edits apply **live** while the game is running — no restart needed.
+Edits apply **live** while the game is running — no restart needed. With
+[Mods Config FO4 VR](https://github.com/ArthurHub/F4VR-Mods-Config) installed, the settings are also on My Mod's
+page of its in-game menu.
 
 - Controller-binding syntax: [input-binding guide](https://github.com/ArthurHub/F4VR-CommonFramework/blob/main/docs/input-binding.md)
 - Gesture zones: [activation-spheres guide](https://github.com/ArthurHub/F4VR-CommonFramework/blob/main/docs/activation-spheres.md)
@@ -51,24 +53,23 @@ TODO: document your mod's own settings here.
 
 ## Building from source
 
-This mod is built with the [F4VR Common Framework](https://github.com/ArthurHub/F4VR-CommonFramework).
-See the framework's [Creating a new mod](https://github.com/ArthurHub/F4VR-CommonFramework/blob/main/docs/creating-a-new-mod.md)
-guide for the full toolchain (VS 2022/2026, CMake 4.2+, `VCPKG_ROOT`). Quick version:
+Needs Visual Studio 2022 or 2026 (x64), CMake 4.2+ and `VCPKG_ROOT` set to a vcpkg checkout; the
+framework's [Creating a new mod](https://github.com/ArthurHub/F4VR-CommonFramework/blob/main/docs/creating-a-new-mod.md)
+guide has the full toolchain.
 
 ```sh
 git clone --recurse-submodules <your-repo-url>
 cd MyMod
-cmake --preset default      # generates build/MyMod.slnx
+cmake --preset default                  # VS 2026, the solution is build/MyMod.slnx; the vs2022 preset for VS 2022
+cmake --build --preset release          # or debug
+ctest --test-dir build -C Release       # the unit tests
+cmake --build --preset package          # a versioned .7z in build/package/, ready for a mod manager
 ```
 
-Open the solution and build. Run the unit tests with `ctest --test-dir build -C Release`. To package, build the `package_mod` target in Release; it writes a versioned `.7z` under `build/package/`.
-To profile with [Tracy](https://github.com/wolfpld/tracy), build the `Tracy` configuration (`cmake --build --preset tracy`): a Release build
-whose perf sites are also Tracy zones.
-
-Code style is enforced by clang-format for C++ and Prettier for JSON through [pre-commit](https://pre-commit.com/): run `pre-commit install` once after cloning so
-the checks run on every commit. The same checks, a Release build and the unit tests run on GitHub for every push and pull request to `main`.
-Prettier uses `.prettierrc.json` (180 columns, two-space indentation, CRLF), including for JSON specs under `data/mod/`.
-Exported JSON configs under `data/config/` keep their native layout.
+- **Profiling:** the `tracy` preset is a Release build whose perf sites are also [Tracy](https://github.com/wolfpld/tracy) zones.
+- **Code style:** [pre-commit](https://pre-commit.com/) runs clang-format for C++ and Prettier for JSON (`.prettierrc.json`;
+  JSON under `data/config/` keeps its layout). Run `pre-commit install` once after cloning.
+- **CI:** the same checks, a Release build and the unit tests run on GitHub for each push and pull request to `main`.
 
 ## Support
 

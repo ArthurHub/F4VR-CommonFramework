@@ -22,12 +22,12 @@ namespace f4cf::f4vr
      * menus) also takes turning away, while the mod can still see the stick through OpenVR.
      *
      * Turning in VR rotates the VR world (room) transform, not the actor — the actor's heading follows the
-     * HMD — so this writes the same transform the engine's own turn code writes (f4vr::VRWorld_SetYaw), and
+     * HMD — so this writes the same transform the engine's own turn code writes (RE::VRWorldData::SetYaw), and
      * reads the style / angle / speed straight off the engine's parsed Fallout4Prefs.ini [VR] settings, so a
      * change made in the in-game settings menu applies without a restart.
      *
      * The interpolation of a smoothed snap is run here rather than handed to the engine's per-frame applier,
-     * which is gated behind a latch only the vanilla input handler clears — see the note in F4VROffsets.h.
+     * which is gated behind a latch only the vanilla input handler clears — see the note on CommonLibF4VR's PlayerCharacter::UpdateVRUI.
      * The one vanilla behaviour not reproduced is the comfort fade of the instant-snap style.
      *
      * Main thread only, and `turnByThumbstick()` (or `onFrameUpdate()`) must be called every frame for a

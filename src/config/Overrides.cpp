@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cctype>
 #include <format>
+#include <ranges>
 
 namespace
 {
@@ -295,6 +296,27 @@ namespace f4cf::config
             applied.push_back({ key.section, key.key, entries.back().value, entries.back().owner });
         }
         return applied;
+    }
+
+    /**
+     * Every owner's override of a key, the one that applies first, then each one that applies when the ones before it
+     * are cleared. None when no owner overrides it.
+     */
+    std::vector<AppliedOverride> Overrides::of(const ConfigKey& key) const
+    {
+        std::lock_guard lock(_mutex);
+
+        const auto canonical = key.canonical();
+        const auto found = _entries.find(canonical);
+        if (found == _entries.end()) {
+            return {};
+        }
+        std::vector<AppliedOverride> all;
+        all.reserve(found->second.size());
+        for (const auto& entry : found->second | std::views::reverse) {
+            all.push_back({ canonical.section, canonical.key, entry.value, entry.owner });
+        }
+        return all;
     }
 
     /**

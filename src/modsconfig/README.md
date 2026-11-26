@@ -12,6 +12,7 @@ API.
 `ModBase` connects the client at F4SE's `kPostLoad`, under `Settings::name`, when Mods Config FO4 VR is
 installed; the menu matches it to the config spec whose `modName` is that name, in any case. The mod does
 nothing for it (`Settings::modsConfigClient = false` opts out). Without the menu, the mod logs one line.
+`mod-template/` ships a config spec to start from, `data/mod/ModsConfigFO4/Config/MyMod/spec.json`.
 
 - **`modVersion`,** a client state from `Settings::version`: a config spec shows it with
   `{clientState:modVersion}`, or tests it in a `clientState` condition.
@@ -117,6 +118,8 @@ modsConfig.setPendingValue("fScale:Main", 1.5f);
   `subscribeToSaves`. A state with no setter is a `readOnly` setting's.
 - **`minimizeMenu` / `restoreMenu`** move the menu aside and back, from any flow of the mod.
   `restoreMenu` does nothing unless the menu is minimized.
+- **`closeMenu`** closes the menu as the player's Exit does: with unsaved changes it asks first, or
+  drops them with `closeMenu(true)`. It needs a menu of API version 2, and does nothing on an older one.
 - **`setPendingValue`** hands an edit of the mod's own UI to the menu as a setting's pending value, in
   its valueType, so the menu's Save writes it. The menu takes it while it shows the mod, shown or
   minimized, but not from a `subscribeToChanges` or `subscribeToSaves` handler. The mod applies the value
@@ -147,6 +150,23 @@ overrides, under the owner `ModsConfigFO4VR`:
 So a value the mod reads on each load previews live; one read only at startup doesn't, and its setting
 says `restart`. A setting of another file or of the game is the mod's, through `subscribeToChanges` and
 `subscribeToSaves`. The overrides of devbench and the mod's API callers stay.
+
+## Overrides the menu shows
+
+A value another caller overrides for the session, as another mod does through the mod's API, makes a change
+of its setting in the menu do nothing until the override ends. `ConfigPreviews` answers the menu, through
+the client's `addOverrides`, with every override of a setting kept in the mod's config file
+(`getConfigOverrides(section, key)`): the owner's name, as the caller gave it, and the value in the
+setting's type, the one in effect first. It leaves none out: the menu drops its own previews, under its name.
+The menu marks the row and names the owner and the value in effect.
+
+A mod with overrides of its own, outside the config, adds a source the same way:
+
+```cpp
+modsConfig.addOverrides([](const Setting& setting) {
+    return setting.id == "fScale:Main" && g_scaleLocked ? std::vector<Override>{ { .owner = "Photo mode", .value = 1.0f } } : std::vector<Override>{};
+});
+```
 
 ## Vendored header
 

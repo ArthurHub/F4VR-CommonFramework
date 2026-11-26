@@ -11,8 +11,8 @@
 namespace f4cf::vrui
 {
     /**
-     * Image pixels per vrui unit for a panel sized to its image: nif-tools/vrui_atlas.py's
-     * PIXELS_PER_UNIT, so a 200-pixel image is as wide as the 2-unit NIF built from it.
+     * Image pixels per vrui unit for a panel sized to its image, so a 200-pixel image is as wide as a
+     * 2-unit button.
      */
     inline constexpr float IMAGE_PANEL_PIXELS_PER_UNIT = 100.0f;
 
@@ -38,8 +38,7 @@ namespace f4cf::vrui
      *
      * Built with a width alone, the panel takes its height from the image's proportions, so the image
      * fills its content area with no empty bands and the fit makes no difference. Built with no size, it
-     * takes the image's own size at IMAGE_PANEL_PIXELS_PER_UNIT - the scale the atlas tool bakes NIF
-     * sizes at, so an image and a NIF made from the same picture come out the same size - scaled down,
+     * takes the image's own size at IMAGE_PANEL_PIXELS_PER_UNIT, scaled down,
      * proportions kept, when setMaxWidth allows less. Either way the size is only known once the texture
      * has loaded, which the panel asks for during layout; until then, and for good if the image cannot
      * load, a fixed-width panel is square and a fit-content one shows only its chrome.

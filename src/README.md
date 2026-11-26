@@ -135,11 +135,11 @@ if (logger::isDebugEnabled()) { /* skip expensive work otherwise */ }
 | [`common/`](common/README.md) | `f4cf::common` | Math (quaternions, matrices, transforms) and utilities (strings, files, resources, time). |
 | [`vrcf/`](vrcf/README.md) | `f4cf::vrcf` | Controller input, taking input from the game, haptics, bindings. |
 | [`vrui/`](vrui/README.md) | `f4cf::vrui` | The in-world VR UI: panels, buttons, toggles, containers. |
-| [`imgui/`](imgui/README.md) | `f4cf::imgui` | Dear ImGui on world-space quads: a `Canvas`, and `UIImGuiPanel` for a vrui layout. |
+| [`imgui/`](imgui/README.md) | `f4cf::imgui` | Dear ImGui on world-space quads: a `Canvas`, and `UIImGuiPanel` for a vrui layout; the theme and the VR keyboard. |
+| [`imgui/controls/`](imgui/controls/README.md) | `f4cf::imgui::controls` | A panel's controls in the theme's look, and their targets for devbench. |
 | [`render/`](render/README.md) | `f4cf::render` | Overlay drawing: lines, fills, images and text over the VR view, the Submit hook, occlusion. |
 | [`debug/`](debug/README.md) | `f4cf::debug` | Immediate-mode in-world debug draw, labels, a watch table. |
-| [`f4vr/`](f4vr/README.md) | `f4cf::f4vr` | Game state: nodes, skeleton, player nodes, menus, Scaleform, activation spheres. |
-| [`f4sevr/`](f4sevr/README.md) | `F4SEVR` | The ported F4SE VR SDK: Papyrus interop and native functions. |
+| [`f4vr/`](f4vr/README.md) | `f4cf::f4vr` | Game state: nodes, skeleton, player nodes, menus, Scaleform, activation spheres, Papyrus. |
 | [`devbench/`](devbench/README.md) | `f4cf::devbench` | The mod's devbench tool: actions an agent or script calls in the running game. |
 | [`modsconfig/`](modsconfig/README.md) | `mods_config::api` | The mod's Mods Config FO4 VR client: functions, states, quick launch, live preview. |
 | [`perf/`](perf/README.md) | `f4cf::perf` | Hot-path timing that nests into a tree, read on demand. |
@@ -168,12 +168,10 @@ if (logger::isDebugEnabled()) { /* skip expensive work otherwise */ }
 
 ## Conventions
 
-- **Namespaces:** the root is `f4cf`, each subsystem nested in it. [`f4sevr/`](f4sevr/README.md) is the
-  exception, the ported SDK under `F4SEVR`.
+- **Namespaces:** the root is `f4cf`, each subsystem nested in it.
 - **Globals,** one each by design: `f4cf::g_mod`, `vrcf::VRControllers`, `vrcf::VRControllersSuppress`,
   `vrcf::VRHaptics`, `vrui::g_uiManager`.
 - **Style:** clang-format (180 columns, 4-space indent, CRLF), applied by
   `pre-commit run --files <changed files>`.
-- **Addresses:** RVAs, offsets and vtable indices are documented in the modding reference library's
-  `Analysis/gold/F4VR-CommonFramework_RE_REFERENCE.md`. The authority runs f4sevr 0.6.21 headers, then
-  CommonLibF4VR's address library, then the `_RE_REFERENCE.md` files.
+- **Addresses:** the framework has none of its own. A game function, global or hook site it needs goes
+  in CommonLibF4VR ([reverse engineering](../CLAUDE.md#reverse-engineering)).

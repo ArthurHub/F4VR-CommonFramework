@@ -362,7 +362,7 @@ namespace f4cf::vrui
     }
 
     /**
-     * One line in the NIF widgets' shape: name, state letters, position and size. A size that follows
+     * One line: name, state letters, position and size. A size that follows
      * the content is tagged with how - "auto" for both dimensions, "auto-w" or "auto-h" for one - since
      * that is what explains a size nobody set.
      */

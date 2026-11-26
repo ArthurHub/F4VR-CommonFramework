@@ -100,6 +100,8 @@ namespace f4cf::imgui
      * that builds no ImGui frame. The pointer is drawn from here too, and the wand of a hand that operates
      * the UI is hidden from the game.
      * With no target and no press held, nothing is read from the game.
+     * A hand on the canvas of the own context is not ImGui's mouse: it is kept apart for each hand
+     * (ownCanvasHand), so both hands work that canvas at once, and its ray is drawn with a mark.
      */
     void Pointer::update(const std::vector<internal::PointerTarget>& targets)
     {
@@ -116,11 +118,20 @@ namespace f4cf::imgui
         }
         suppressWands(_primaryHold.latch.operates(), _offhandHold.latch.operates());
 
-        const internal::PointerOwner owner =
-            _ownership.update({ .onCanvas = primary.target != nullptr, .down = primary.pressed }, { .onCanvas = offhand.target != nullptr, .down = offhand.pressed });
+        _primaryOwnHand = ownCanvasHandOf(primary);
+        _offhandOwnHand = ownCanvasHandOf(offhand);
+        const auto onMouseCanvas = [](const HandPointer& hand) {
+            return hand.target != nullptr && !hand.target->ownContext;
+        };
+        const HandPointer* primaryOwn = _primaryOwnHand.on ? &primary : nullptr;
+        const HandPointer* offhandOwn = _offhandOwnHand.on ? &offhand : nullptr;
+
+        const internal::PointerOwner owner = _ownership.update({ .onCanvas = onMouseCanvas(primary), .down = onMouseCanvas(primary) && primary.pressed },
+            { .onCanvas = onMouseCanvas(offhand), .down = onMouseCanvas(offhand) && offhand.pressed });
         if (owner == internal::PointerOwner::None) {
             release();
-            draw(nullptr, nullptr);
+            const std::array marked{ primaryOwn, offhandOwn };
+            draw(marked, nullptr);
             return;
         }
 
@@ -146,9 +157,28 @@ namespace f4cf::imgui
         _state.rayOrigin = hand.sample.origin;
         _state.hitPosition = hand.sample.origin + hand.sample.direction * hand.hit.distance;
 
-        // the other hand has a ray to draw while it is on a canvas too
+        // the other hand has a ray to draw while it is on a canvas too: faint on the mouse's canvases, and with its
+        // mark on the own context's
         const HandPointer& other = owner == internal::PointerOwner::Primary ? offhand : primary;
-        draw(&hand, other.target ? &other : nullptr);
+        const bool otherOwn = other.target && other.target->ownContext;
+        const std::array marked{ &hand, otherOwn ? &other : nullptr };
+        draw(marked, other.target && !otherOwn ? &other : nullptr);
+    }
+
+    /**
+     * The hand as it is on the canvas of the own context: on it, where, and whether it presses it. Not on it when
+     * its target is another canvas or none.
+     */
+    internal::OwnCanvasHand Pointer::ownCanvasHandOf(const HandPointer& hand)
+    {
+        if (!hand.target || !hand.target->ownContext) {
+            return {};
+        }
+        return { .on = true,
+            .x = std::clamp(hand.hit.u, -PRESS_REACH, 1.0f + PRESS_REACH) * static_cast<float>(hand.target->canvas->pixelWidth()),
+            .y = std::clamp(hand.hit.v, -PRESS_REACH, 1.0f + PRESS_REACH) * static_cast<float>(hand.target->canvas->pixelHeight()),
+            .down = hand.pressed,
+            .hitPosition = hand.sample.origin + hand.sample.direction * hand.hit.distance };
     }
 
     /**
@@ -192,7 +222,7 @@ namespace f4cf::imgui
         if (!wand) {
             return {};
         }
-        const bool rightHand = primaryHand != f4vr::isLeftHandedMode();
+        const bool rightHand = primaryHand != RE::VRSettings::IsLeftHandedMode();
         const RE::NiTransform ray = common::MatrixUtils::localToWorldTransform(wand->world, rightHand ? _style.rayOffset : mirrorLeftToRight(_style.rayOffset));
         const vrcf::Hand hand = primaryHand ? vrcf::Hand::Primary : vrcf::Hand::Offhand;
         return {
@@ -309,15 +339,19 @@ namespace f4cf::imgui
     }
 
     /**
-     * Draw the pointer: the ray and the mark of the hand that owns it, and the ray of the other hand while
-     * that one is on a canvas too. With no owner, or a style that is not drawn, the layer is given nothing,
-     * once.
-     * The other hand's ray is fainter and has no mark: it shows that the hand points at the UI, and that the
-     * pointer is not its own.
+     * Draw the pointer: the ray and the mark of the hand that owns it and of a hand on the canvas of the own
+     * context, and the ray of the hand that is on another canvas and does not own the pointer. With nothing to
+     * draw, or a style that is not drawn, the layer is given nothing, once.
+     * The ray of the hand that does not own the pointer is fainter and has no mark: it shows that the hand points
+     * at the UI, and that the pointer is not its own.
+     * @param marked the hands drawn with their mark, null for none
      */
-    void Pointer::draw(const HandPointer* owner, const HandPointer* other)
+    void Pointer::draw(const std::span<const HandPointer* const> marked, const HandPointer* faint)
     {
-        const auto* nodes = owner && _style.drawn ? f4vr::getVRPlayerNodes() : nullptr;
+        const bool any = std::ranges::any_of(marked, [](const HandPointer* hand) {
+            return hand != nullptr;
+        });
+        const auto* nodes = any && _style.drawn ? f4vr::getVRPlayerNodes() : nullptr;
         if (!nodes || !nodes->hmdNode) {
             // the layer is touched only to take away what it draws, so it is never built if it never draws
             if (_drawn) {
@@ -328,10 +362,14 @@ namespace f4cf::imgui
         }
         const RE::NiPoint3 head = nodes->hmdNode->world.translate;
         render::PrimitiveDraw frame;
-        addRay(frame, head, *owner, 1.0f);
-        addMark(frame, *owner);
-        if (other) {
-            addRay(frame, head, *other, OTHER_RAY_OPACITY);
+        for (const HandPointer* hand : marked) {
+            if (hand) {
+                addRay(frame, head, *hand, 1.0f);
+                addMark(frame, *hand);
+            }
+        }
+        if (faint) {
+            addRay(frame, head, *faint, OTHER_RAY_OPACITY);
         }
 
         if (frame.empty() && !_drawn) {

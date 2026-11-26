@@ -21,8 +21,8 @@ namespace f4cf::common
      * order of the keys and how every other value is written. toml++ has no writer that keeps those, so it only
      * parses here: a value is set by replacing the text of the old one where toml++ read it, and a key the text
      * does not have is added as a line of its own. Each edit is parsed back and kept only when the document then
-     * holds the new value and nothing else changed, see set. A key is removed the same way: its lines are taken out,
-     * and the document then has to be the old one less that key, see remove.
+     * holds the new value and nothing else changed, see set. A key or a table is removed the same way: its lines are
+     * taken out, and the document then has to be the old one less that key, see remove.
      */
     class TomlEditor
     {
@@ -145,6 +145,7 @@ namespace f4cf::common
 
     private:
         std::expected<std::string, std::string> insert(std::span<const std::string_view> path, std::span<const toml::node* const> chain, const Value& value) const;
+        bool setTable(std::span<const std::string_view> path, const toml::table& value);
 
         std::string _text;
         std::string _sourceName;

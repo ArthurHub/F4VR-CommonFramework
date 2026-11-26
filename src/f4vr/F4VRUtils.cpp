@@ -1,12 +1,9 @@
 #include "F4VRUtils.h"
 
-#include <cmath>
-#include <numbers>
+#include <cstring>
 
 #include "ModBase.h"
 #include "PlayerNodes.h"
-#include "common/MatrixUtils.h"
-#include "f4sevr/PapyrusUtils.h"
 #include "vrcf/VRControllersManager.h"
 
 namespace
@@ -69,13 +66,13 @@ namespace f4cf::f4vr
     void showMessagebox(const std::string& text)
     {
         logger::info("Show messagebox: '{}'", text.c_str());
-        F4SEVR::execPapyrusGlobalFunction("Debug", "Messagebox", text);
+        callPapyrusGlobalFunction("Debug", "Messagebox", text);
     }
 
     void showNotification(const std::string& text)
     {
         logger::info("Show notification: '{}'", text.c_str());
-        F4SEVR::execPapyrusGlobalFunction("Debug", "Notification", text);
+        callPapyrusGlobalFunction("Debug", "Notification", text);
     }
 
     /**
@@ -119,9 +116,9 @@ namespace f4cf::f4vr
         case vrcf::Hand::Offhand:
             return false;
         case vrcf::Hand::Right:
-            return !f4vr::isLeftHandedMode();
+            return !RE::VRSettings::IsLeftHandedMode();
         case vrcf::Hand::Left:
-            return f4vr::isLeftHandedMode();
+            return RE::VRSettings::IsLeftHandedMode();
         default:
             return true;
         }
@@ -136,13 +133,13 @@ namespace f4cf::f4vr
         for (const auto& child : node->children) {
             if (child) {
                 if (child->IsNiTriShape()) {
-                    setNodeVisibility(child.get(), show);
+                    RE::NiNodeUtils::SetVisible(child.get(), show);
                     break;
                 }
                 if (!_stricmp(child->name.c_str(), "")) {
-                    setNodeVisibility(child.get(), show);
+                    RE::NiNodeUtils::SetVisible(child.get(), show);
                     if (const auto grandChild = child->IsNode()) {
-                        setNodeVisibility(grandChild, show);
+                        RE::NiNodeUtils::SetVisible(grandChild, show);
                     }
                     break;
                 }
@@ -182,13 +179,14 @@ namespace f4cf::f4vr
     }
 
     /**
-     * Get the game name of the equipped weapon.
+     * The weapon the player has equipped, null for fists. What Papyrus's Actor.GetEquippedWeapon returns, which is
+     * Actor::GetCurrentWeapon's object.
      */
     RE::TESObjectWEAP* getEquippedWeapon()
     {
         auto* pc = getPlayer();
-        auto* vm = RE::BSScript::Internal::VirtualMachine::GetSingleton();
-        return pc && vm ? GetEquippedWeapon(vm, 0, pc, 0) : nullptr;
+        const auto weapon = pc ? pc->GetCurrentWeapon(RE::BGSEquipIndex{ 0 }).object : nullptr;
+        return weapon ? weapon->As<RE::TESObjectWEAP>() : nullptr;
     }
 
     /**
@@ -243,15 +241,17 @@ namespace f4cf::f4vr
 
     bool isJumpingOrInAir()
     {
-        return IsInAir(getPlayer());
+        return getPlayer()->IsJumping();
     }
 
     bool isPlayerSneaking()
     {
-        return IsSneaking(getPlayer());
+        return getPlayer()->IsSneaking();
     }
 
     // Thanks Shizof and SmoothMovementVR for below code
+    // TODO: compare with CommonLibF4VR's PowerArmor::ActorInPowerArmor (extra data and the power armor race, untested on VR),
+    // especially while entering and leaving the frame, and use it if it agrees.
     bool isInPowerArmor()
     {
         const auto player = getPlayer();
@@ -276,22 +276,6 @@ namespace f4cf::f4vr
     bool isInInternalCell()
     {
         return RE::PlayerCharacter::GetSingleton()->parentCell->IsInterior();
-    }
-
-    /**
-     * Is the player swimming either on the surface or underwater.
-     */
-    bool isSwimming(const RE::PlayerCharacter* player)
-    {
-        return player && static_cast<int>(player->DoGetCharacterState()) == 5;
-    }
-
-    /**
-     * Is the player is currently underwater as detected by underwater timer being non-zero.
-     */
-    bool isUnderwater(const RE::PlayerCharacter* player)
-    {
-        return player && player->underWaterTimer > 0;
     }
 
     /**
@@ -338,147 +322,6 @@ namespace f4cf::f4vr
     }
 
     /**
-     * The ProcessLists singleton. Uses the raw VR offset (g_processLists) because the bundled
-     * ProcessLists::GetSingleton() resolves a RelocationID with no entry in the shipped VR address library.
-     */
-    RE::ProcessLists* getProcessLists()
-    {
-        return *g_processLists;
-    }
-
-    /**
-     * Enumerate every loaded actor within `radius` of the world `point` into `outActors`, via the native
-     * ProcessLists::GetActorsWithinRangeOfPoint. Preferred over walking ProcessLists::highActorHandles so the
-     * desktop struct layout is never trusted on the VR runtime. No-op when the ProcessLists singleton is null.
-     */
-    void getActorsWithinRangeOfPoint(const RE::NiPoint3& point, const float radius, RE::BSScrapArray<RE::NiPointer<RE::Actor>>& outActors)
-    {
-        const auto processLists = getProcessLists();
-        if (!processLists) {
-            return;
-        }
-        RE::NiPoint3 p = point; // the native takes a non-const reference
-        ProcessLists_GetActorsWithinRangeOfPoint(processLists, p, radius, outActors);
-    }
-
-    /**
-     * The angle in degrees between the direction the actor is facing and the direction to a world point:
-     * 0 is dead ahead, +/-180 directly behind, the sign following the engine's yaw. Returns 0 for a null actor
-     * or for a point the actor is standing on.
-     *
-     * Facing comes from the actor's own heading (`data.angle.z` — the engine's yaw in radians, zero along +Y
-     * and increasing toward +X), NOT from Actor::GetEyeVector: that virtual returns unusable values on the VR
-     * runtime, filling its origin out-param with what is plainly a direction vector. Reading the member also
-     * cannot fault, and body heading is what the AI actually turns toward a target — head look-at is cosmetic
-     * on top of it.
-     *
-     * Measured horizontally (the vertical component is dropped), so an actor does not stop facing a target
-     * that stands above or below it.
-     */
-    float getActorFacingAngleTo(RE::Actor* actor, const RE::NiPoint3& point)
-    {
-        if (!actor) {
-            return 0.0f;
-        }
-        const float dx = point.x - actor->data.location.x;
-        const float dy = point.y - actor->data.location.y;
-        if (std::abs(dx) < 0.01f && std::abs(dy) < 0.01f) {
-            return 0.0f;
-        }
-        // atan2(x, y), not the usual (y, x), to match the engine's zero-along-+Y yaw
-        constexpr float TWO_PI = 2.0f * std::numbers::pi_v<float>;
-        float delta = std::atan2(dx, dy) - actor->data.angle.z;
-        // wrap into [-pi, pi] so the comparison holds across the 0 / 2pi seam
-        delta = std::fmod(delta + std::numbers::pi_v<float>, TWO_PI);
-        if (delta < 0) {
-            delta += TWO_PI;
-        }
-        return common::MatrixUtils::radsToDegrees(delta - std::numbers::pi_v<float>);
-    }
-
-    /**
-     * Whether the actor is facing the given world point, within `halfAngleDegrees` to either side of where it
-     * is pointed — see getActorFacingAngleTo for how facing is measured. 180 accepts any facing.
-     */
-    bool isActorFacing(RE::Actor* actor, const RE::NiPoint3& point, const float halfAngleDegrees)
-    {
-        if (!actor) {
-            return false;
-        }
-        return halfAngleDegrees >= 180.0f || std::abs(getActorFacingAngleTo(actor, point)) <= halfAngleDegrees;
-    }
-
-    /**
-     * How well the observer currently detects the target — the engine's own perception answer, so light,
-     * distance, facing and sneak are all already accounted for. Priority is left at kNormal, what the game's
-     * own callers use.
-     *
-     * The scale is continuous, not a flag. Measured in-game on VR 1.2.72:
-     *   < 0    unaware of the target
-     *   0..~20 aware — suspicious / investigating, but has not located the target
-     *   >= ~20 has actually seen the target, climbing to roughly 50-60 at point blank
-     * So "detected" depends on which question is being asked: >= 0 answers "does it suspect anything",
-     * while a threshold around 20 answers "has it found me".
-     *
-     * This is the bundled Actor::RequestDetectionLevel, which takes and returns plain scalars. The engine also
-     * has RequestDetectionLevels, which splits the answer into visual and sound channels — do not reach for it
-     * without first establishing its return type; it returns through a hidden pointer that the symbol does not
-     * describe, and guessing at the size overruns the caller's stack. See F4VROffsets.h.
-     *
-     * The call creates the observer's knowledge entry for the target, and that entry lives in the observer's
-     * HIGH process data — an actor that has none has nowhere to create it, and is reported as not detecting.
-     */
-    int getDetectionLevel(RE::Actor* observer, RE::Actor* target)
-    {
-        if (!observer || !target || !observer->currentProcess || !observer->currentProcess->high) {
-            return -1;
-        }
-        return observer->RequestDetectionLevel(target);
-    }
-
-    /**
-     * Whether the actor is in combat with anyone and that combat is still live. Prefer this over the
-     * Actor::IsInCombat() virtual, which does not report reliably on the VR runtime (always false in testing)
-     * and, where it does work, stays true for a combat group that has already ended.
-     *
-     * Note this says nothing about WHO the actor is fighting. `Actor::currentCombatTarget` answers that, but it
-     * is sticky — it holds the last target long after a fight ends — so it is only meaningful while this
-     * returns true.
-     */
-    /**
-     * The actor's cached illumination, as the engine's own detection maths reads it — 0 for an actor with no
-     * high process data, which is also what the native itself returns in that case.
-     */
-    float getLightLevel(RE::Actor* actor)
-    {
-        if (!actor || !actor->currentProcess || !actor->currentProcess->high) {
-            return 0.0f;
-        }
-        return AIProcess_GetLightLevel(actor->currentProcess);
-    }
-
-    /**
-     * Overwrite the actor's cached illumination. This feeds the engine's detection formula (see
-     * F4VROffsets.h), so it is a gameplay-affecting write, not a diagnostic one.
-     *
-     * The engine's lighting refresh owns the field and rewrites it on its own schedule, so a value set here
-     * survives only until then — callers wanting it to hold have to re-apply it every frame, and can read it
-     * back with getLightLevel() to see whether it did.
-     */
-    void setLightLevel(RE::Actor* actor, const float value)
-    {
-        if (!actor || !actor->currentProcess || !actor->currentProcess->high) {
-            return;
-        }
-        AIProcess_SetLightLevel(actor->currentProcess, value);
-    }
-
-    bool isInActiveCombat(RE::Actor* actor)
-    {
-        return actor && Actor_IsInActiveCombat(actor);
-    }
-
-    /**
      * Put `actor` into combat with `target`, right now. Note this creates hostility where there was none — an
      * actor with no reason to fight the target will fight it anyway, permanently — so callers should establish
      * that the two are already enemies before reaching for this.
@@ -505,14 +348,14 @@ namespace f4cf::f4vr
 
         switch (method) {
         case StartCombatMethod::EnterCombat:
-            AIProcess_EnterCombat(actor->currentProcess, actor, target, nullptr);
+            actor->currentProcess->EnterCombat(actor, target);
             break;
         case StartCombatMethod::ActorStartCombat:
-            Actor_StartCombat(actor, target, nullptr);
+            actor->StartCombat(target);
             break;
         case StartCombatMethod::TaskQueue:
             if (const auto queue = RE::TaskQueueInterface::GetSingleton()) {
-                TaskQueueInterface_QueueActorStartCombat(queue, actor, target, false);
+                queue->QueueActorStartCombat(*actor, *target, false);
             } else {
                 logger::warn("startCombat: no TaskQueueInterface singleton - combat not started");
             }
@@ -533,88 +376,6 @@ namespace f4cf::f4vr
             }
         }
         return nullptr;
-    }
-
-    /**
-     * Get the "bLeftHandedMode:VR" setting from the INI file.
-     * Direct memory access is A LOT faster than "RE::INIPrefSettingCollection::GetSingleton()->GetSetting("bLeftHandedMode:VR")->GetBinary();"
-     */
-    bool isLeftHandedMode()
-    {
-        // not sure why RE::Relocation doesn't work here, so using raw address
-        static auto iniLeftHandedMode = reinterpret_cast<bool*>(REL::Offset(0x37d5e48).address()); // NOLINT(performance-no-int-to-ptr)
-        return *iniLeftHandedMode;
-    }
-
-    /**
-     * The game's two VR settings that place the Pip-Boy, in Fallout4Prefs.ini: "bAlwaysUseProjectedPipboy:VR" and
-     * "bAttachPipboyToHMD:VR" (in front), which wins over projected; neither is the wrist.
-     */
-    static std::pair<RE::Setting*, RE::Setting*> getPipboyPlacementSettings()
-    {
-        // not sure why RE::Relocation doesn't work here, so using raw address
-        static auto projected = reinterpret_cast<RE::Setting*>(REL::Offset(0x37B4278).address()); // NOLINT(performance-no-int-to-ptr)
-        static auto inFront = reinterpret_cast<RE::Setting*>(REL::Offset(0x37B4290).address()); // NOLINT(performance-no-int-to-ptr)
-        return { projected, inFront };
-    }
-
-    /**
-     * Return true if the pipboy is on the wrist, false if it is "in-front" or projected.
-     */
-    bool isPipboyOnWrist()
-    {
-        return getPipboyPlacement() == PipboyPlacement::Wrist;
-    }
-
-    /**
-     * Where the game puts the Pip-Boy now, as the game's settings menu reads it.
-     */
-    PipboyPlacement getPipboyPlacement()
-    {
-        const auto [projected, inFront] = getPipboyPlacementSettings();
-        if (inFront->GetBinary()) {
-            return PipboyPlacement::InFront;
-        }
-        return projected->GetBinary() ? PipboyPlacement::Projected : PipboyPlacement::Wrist;
-    }
-
-    /**
-     * Set where the game puts the Pip-Boy, as the game's settings menu does: write both settings, run the handlers the game
-     * installed on each (SettingHandlerMap::SettingUpdated), and save Fallout4Prefs.ini. Game thread only.
-     */
-    void setPipboyPlacement(const PipboyPlacement placement)
-    {
-        const auto [projected, inFront] = getPipboyPlacementSettings();
-        logger::info("Set Pip-Boy placement to {}", static_cast<int>(placement));
-        projected->SetBinary(placement == PipboyPlacement::Projected);
-        SettingHandlerMap_SettingUpdated(*projected);
-        inFront->SetBinary(placement == PipboyPlacement::InFront);
-        SettingHandlerMap_SettingUpdated(*inFront);
-
-        if (const auto prefs = RE::INIPrefSettingCollection::GetSingleton(); prefs && prefs->Open(true)) {
-            prefs->WriteSettings();
-            prefs->Close();
-        }
-    }
-
-    /**
-     * Get the "bComfortSneak:VR" setting from the INI file.
-     * Direct memory access is A LOT faster than "RE::INIPrefSettingCollection::GetSingleton()->GetSetting("bComfortSneak:VR")->GetBinary();"
-     */
-    bool isComfortSneakMode()
-    {
-        // not sure why RE::Relocation doesn't work here, so using raw address
-        static auto iniComfortSneakMode = reinterpret_cast<bool*>(REL::Offset(0x37D6178).address()); // NOLINT(performance-no-int-to-ptr)
-        return *iniComfortSneakMode;
-    }
-
-    /**
-     * Get the "bUseWandDirectionalMovement" setting from the INI file.
-     */
-    bool useWandDirectionalMovement()
-    {
-        static auto iniUseWandDirectionalMovement = reinterpret_cast<bool*>(REL::Offset(0x37D6160).address()); // NOLINT(performance-no-int-to-ptr)
-        return *iniUseWandDirectionalMovement;
     }
 
     /**
@@ -644,305 +405,10 @@ namespace f4cf::f4vr
         return collection->GetSetting(name);
     }
 
-    RE::NiAVObject* getFirstChild(RE::NiAVObject* avObject)
-    {
-        if (avObject) {
-            if (const auto& node = avObject->IsNode()) {
-                if (!node->children.empty()) {
-                    return node->children[0].get();
-                }
-            }
-        }
-        return nullptr;
-    }
-
-    /**
-     * Find a node by the given name in the tree under the other given node recursively.
-     */
-    RE::NiAVObject* findAVObject(RE::NiAVObject* node, const std::string& name, const int maxDepth)
-    {
-        if (!node || maxDepth < 0) {
-            return nullptr;
-        }
-
-        if (_stricmp(name.c_str(), node->name.c_str()) == 0) {
-            return node;
-        }
-
-        if (const auto niNode = node->IsNode()) {
-            for (const auto& child : niNode->children) {
-                if (child) {
-                    if (const auto result = findAVObject(child.get(), name, maxDepth - 1)) {
-                        return result;
-                    }
-                }
-            }
-        }
-        return nullptr;
-    }
-
-    /**
-     * Find AV Object node by the given name prefix in the tree under the other given node recursively.
-     * Returns the first node found that starts with the given name.
-     */
-    RE::NiAVObject* findAVObjectStartsWith(RE::NiAVObject* node, const char* name, const int maxDepth)
-    {
-        if (!node) {
-            return nullptr;
-        }
-
-        if (_strnicmp(name, node->name.c_str(), std::strlen(name)) == 0) {
-            return node;
-        }
-
-        if (maxDepth < 1) {
-            return nullptr;
-        }
-
-        if (const auto niNode = node->IsNode()) {
-            for (const auto& child : niNode->children) {
-                if (child) {
-                    if (const auto result = findAVObjectStartsWith(child.get(), name, maxDepth - 1)) {
-                        return result;
-                    }
-                }
-            }
-        }
-        return nullptr;
-    }
-
-    /**
-     * Find a node by the given name in the tree under the other given node recursively.
-     */
-    RE::NiNode* findNode(RE::NiAVObject* node, const char* name, const int maxDepth)
-    {
-        if (!node) {
-            return nullptr;
-        }
-
-        if (_stricmp(name, node->name.c_str()) == 0) {
-            return node->IsNode();
-        }
-
-        if (maxDepth < 1) {
-            return nullptr;
-        }
-
-        if (const auto niNode = node->IsNode()) {
-            for (const auto& child : niNode->children) {
-                if (child) {
-                    if (const auto childNiNode = child->IsNode()) {
-                        if (const auto result = findNode(childNiNode, name, maxDepth - 1)) {
-                            return result;
-                        }
-                    }
-                }
-            }
-        }
-        return nullptr;
-    }
-
-    /**
-     * Find a node by the given name prefix in the tree under the other given node recursively.
-     * Returns the first node found that starts with the given name.
-     */
-    RE::NiNode* findNodeStartsWith(RE::NiAVObject* node, const char* name, const int maxDepth)
-    {
-        const auto avObj = findAVObjectStartsWith(node, name, maxDepth);
-        return avObj ? avObj->IsNode() : nullptr;
-    }
-
-    /**
-     * Get the first child node of the given node if exists.
-     */
-    RE::NiAVObject* get1StChildNode(RE::NiAVObject* node)
-    {
-        if (!node) {
-            return nullptr;
-        }
-        if (const auto niNode = node->IsNode()) {
-            if (!niNode->children.empty()) {
-                return niNode->children[0].get();
-            }
-        }
-        return nullptr;
-    }
-
-    /**
-     * Find a node by name restricted to firest level of children only.
-     */
-    RE::NiNode* find1StChildNode(RE::NiAVObject* node, const char* name)
-    {
-        return findNode(node, name, 1);
-    }
-
-    /**
-     * Return true if the node is visible, false if it is hidden or null.
-     */
-    bool isNodeVisible(const RE::NiAVObject* node)
-    {
-        return node && !(node->flags.flags & 0x1);
-    }
-
-    /**
-     * Change flags to show or hide a node
-     */
-    void setNodeVisibility(RE::NiAVObject* node, const bool show)
-    {
-        if (node) {
-            node->flags.flags = show ? (node->flags.flags & ~0x1) : (node->flags.flags | 0x1);
-        }
-    }
-
-    /**
-     * Change flags to show or hide a node and ALL of its children recursively.
-     */
-    void setNodeVisibilityDeep(RE::NiAVObject* node, const bool show, const bool updateSelf)
-    {
-        if (node && updateSelf) {
-            setNodeVisibility(node, show);
-        }
-        if (const auto niNode = node->IsNode()) {
-            for (const auto& child : niNode->children) {
-                if (child) {
-                    setNodeVisibilityDeep(child.get(), show, true);
-                }
-            }
-        }
-    }
-
     // TODO: this feels an overkill on how much it is called
     void updateDownFromRoot()
     {
-        updateDown(getRootNode(), true);
-    }
-
-    void updateDown(RE::NiAVObject* node, const bool updateSelf, const char* ignoreNode)
-    {
-        if (!node) {
-            return;
-        }
-
-        RE::NiUpdateData* ud = nullptr;
-        if (updateSelf) {
-            node->UpdateWorldData(ud);
-        }
-
-        if (const auto niNode = node->IsNode()) {
-            for (const auto& child : niNode->children) {
-                if (child) {
-                    if (ignoreNode && _stricmp(child->name.c_str(), ignoreNode) == 0) {
-                        continue; // skip this node
-                    }
-                    if (const auto childNiNode = child->IsNode()) {
-                        updateDown(childNiNode, true);
-                    } else if (const auto triNode = child->IsGeometry()) {
-                        triNode->UpdateWorldData(ud);
-                    }
-                }
-            }
-        }
-    }
-
-    void updateDownTo(RE::NiNode* toNode, RE::NiNode* fromNode, const bool updateSelf)
-    {
-        if (!toNode || !fromNode) {
-            return;
-        }
-
-        if (updateSelf) {
-            RE::NiUpdateData* ud = nullptr;
-            fromNode->UpdateWorldData(ud);
-        }
-
-        if (_stricmp(toNode->name.c_str(), fromNode->name.c_str()) == 0) {
-            return;
-        }
-
-        for (const auto& child : fromNode->children) {
-            if (child) {
-                if (const auto childNiNode = child->IsNode()) {
-                    updateDownTo(toNode, childNiNode, true);
-                }
-            }
-        }
-    }
-
-    void updateUpTo(RE::NiNode* toNode, RE::NiNode* fromNode, const bool updateSelf)
-    {
-        if (!toNode || !fromNode) {
-            return;
-        }
-
-        RE::NiUpdateData* ud = nullptr;
-
-        if (_stricmp(toNode->name.c_str(), fromNode->name.c_str()) == 0) {
-            if (updateSelf) {
-                fromNode->UpdateWorldData(ud);
-            }
-            return;
-        }
-
-        fromNode->UpdateWorldData(ud);
-        if (const auto parent = fromNode->parent ? fromNode->parent : nullptr) {
-            updateUpTo(toNode, parent, true);
-        }
-    }
-
-    /**
-     * Update the world transform data (location,rotation,scale) of the given node by the local transform of the parent node.
-     * Use to update the real position of nodes in the world after making local changes. May be better than "UpdateWorldData" call.
-     */
-    void updateTransforms(RE::NiAVObject* node)
-    {
-        if (!node->parent) {
-            return;
-        }
-
-        const auto& parentTransform = node->parent->world;
-        const auto& localTransform = node->local;
-
-        // Calculate world position
-        const RE::NiPoint3 pos = parentTransform.rotate.Transpose() * (localTransform.translate * parentTransform.scale);
-        node->world.translate = parentTransform.translate + pos;
-
-        // Calculate world rotation
-        node->world.rotate = localTransform.rotate * parentTransform.rotate;
-
-        // Calculate world scale
-        node->world.scale = parentTransform.scale * localTransform.scale;
-    }
-
-    /**
-     * Update the world transform data (location,rotation,scale) of every node in the tree by the local transform of its parent node.
-     * Use to update the real position of nodes in the world after making local changes to a node in the hierarchy. Will propagate the change
-     * to all the nodes down so a rotation of a node will affect all the child, grandchild, etc.
-     * May be better than "updateDown" call as I saw not all nodes get updated with that one.
-     */
-    void updateTransformsDown(RE::NiAVObject* node, const bool updateSelf, const char* ignoreNode)
-    {
-        if (!node) {
-            return;
-        }
-
-        if (updateSelf) {
-            updateTransforms(node);
-        }
-
-        if (const auto niNode = node->IsNode()) {
-            for (const auto& child : niNode->children) {
-                if (child) {
-                    if (ignoreNode && _stricmp(child->name.c_str(), ignoreNode) == 0) {
-                        continue; // skip this node
-                    }
-                    if (const auto childNiNode = child->IsNode()) {
-                        updateTransformsDown(childNiNode, true);
-                    } else if (const auto childTriNode = child->IsTriShape()) {
-                        updateTransforms(childTriNode);
-                    }
-                }
-            }
-        }
+        RE::NiNodeUtils::UpdateWorldDataDown(getRootNode());
     }
 
     /**
@@ -984,19 +450,27 @@ namespace f4cf::f4vr
     }
 
     /**
-     * Load .nif file from the filesystem and return the root node.
+     * Load .nif file from the filesystem and return the root node, through the game's model database
+     * (BSModelDB::Demand), which caches it by path. The caller holds one reference to the node.
      */
     RE::NiNode* loadNifFromFile(const std::string& path)
     {
-        uint64_t flags[2] = { 0x0, 0xed };
-        uint64_t mem = 0;
         const auto resolvedPath = resolveNifPath(path);
         if (!std::filesystem::exists(resolvedPath)) {
             throw std::runtime_error("Load nif file failed, file not found: " + resolvedPath);
         }
 
-        loadNif((uint64_t)resolvedPath.c_str(), (uint64_t)&mem, (uint64_t)&flags);
-        return reinterpret_cast<RE::NiNode*>(mem);
+        // prepare after load, error marker, process, load textures, and two flags past them the header leaves unnamed
+        constexpr std::uint8_t LOAD_FLAGS = 0xED;
+        RE::BSModelDB::DBTraits::ArgsType args{};
+        std::memcpy(reinterpret_cast<std::uint8_t*>(&args) + 8, &LOAD_FLAGS, 1);
+
+        RE::NiPointer<RE::NiNode> node;
+        RE::BSModelDB::Demand(resolvedPath.c_str(), &node, args);
+        if (node) {
+            node->IncRefCount(); // the caller's reference, which outlives this NiPointer
+        }
+        return node.get();
     }
 
     /**
@@ -1010,10 +484,9 @@ namespace f4cf::f4vr
             throw std::runtime_error("Load nif file failed, nullptr returned for: " + path);
         }
 
-        NiCloneProcess proc;
-        proc.unk18 = reinterpret_cast<uint64_t*>(cloneAddr1.address());
-        proc.unk48 = reinterpret_cast<uint64_t*>(cloneAddr2.address());
-        const auto uiNode = cloneNode(nifNode, &proc);
+        RE::NiCloningProcess cloning;
+        const auto clone = nifNode->Clone(cloning);
+        const auto uiNode = clone ? clone->IsNode() : nullptr;
         copyNodeNamesRecursive(nifNode, uiNode);
         return uiNode;
     }

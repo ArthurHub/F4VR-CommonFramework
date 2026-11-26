@@ -59,6 +59,7 @@ namespace f4cf::config
 
         std::optional<std::string> find(const ConfigKey& key) const;
         std::vector<AppliedOverride> applied() const;
+        std::vector<AppliedOverride> of(const ConfigKey& key) const;
         void applyTo(toml::table& table) const;
 
     private:

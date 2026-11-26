@@ -18,22 +18,18 @@
 fMyConfigValue = 3.0
 
 
-# A sphere for activating functionality when player hand/wand is inside it.
+# The head gesture: reach the offhand to your face, then tap the trigger, or hold it.
+# The zone fills the view, so nothing is drawn; sShowSphere = "always" shows it while you move it.
 # https://github.com/ArthurHub/F4VR-CommonFramework/blob/main/docs/activation-spheres.md
-[MyMod_AnActivationSphere]
-tZone = { pos = [3.91, 7.11, 0.67], scale = 20.0 }
-tZonePA = { pos = [4.01, 10.21, -4.6], scale = 24.0 }
+[MyMod_HeadActivation]
+tZone = { pos = [0.28, 6.74, 4.15], scale = 18.0 }
 kPrimaryBinding = { hand = "offhand", type = "tap", button = "trigger", suppress = true }
-kSecondaryBinding = { hand = "primary", type = "tap", button = "trigger", suppress = true }
+kSecondaryBinding = { hand = "offhand", type = "longpress", button = "trigger", suppress = true }
 sEntryHaptic = "Tick"
 sPrimaryHaptic = "DoubleClick"
 sSecondaryHaptic = "DoubleClick"
-sShowIcon = "wheninside"
-sIcon = 'Textures\MyMod\f4cf\activation-icon-hand.dds'
-fIconSize = 1.0
-sShowSphere = "wheninside"
-sSphereStyle = "white-subtle"
-fSphereScale = 0.9
+sShowIcon = "never"
+sShowSphere = "never"
 
 
 [Debug]
@@ -65,7 +61,7 @@ sAdjustTarget = "none"
 
 # Writes named game-state dumps to the mod log and removes each name after it runs.
 # Examples: ["ui_tree"]; ["skelly", "fp_skelly"]; ["geometry", "pipboy", "all_nodes"]
-# Timing: "perf_reset" starts a perf window, then "perf" logs what each part of the frame cost since
+# Timing: "perf_reset" starts a perf window, then "perf" logs what each part of the frame cost since.
 # Guide: https://github.com/ArthurHub/F4VR-CommonFramework/blob/main/docs/debug-config.md
 aDumpDataOnce = []
 

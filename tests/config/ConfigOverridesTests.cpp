@@ -293,6 +293,26 @@ TEST_CASE("ConfigOverrides: the applied overrides are one for each key, with the
     REQUIRE(applied[1].owner == PREVIEW);
 }
 
+TEST_CASE("ConfigOverrides: every owner's override of a key is told, the one that applies first")
+{
+    Overrides overrides;
+    overrides.set(OTHER_MOD, SCALE, "2");
+    overrides.set(PREVIEW, SCALE, "3");
+    overrides.set(DEVBENCH, LEVEL, "0");
+
+    // another spelling of the key's path is the same key
+    const auto all = overrides.of({ "", "Main.fScale" });
+
+    REQUIRE(all.size() == 2);
+    REQUIRE(all[0].owner == PREVIEW);
+    REQUIRE(all[0].value == "3");
+    REQUIRE(all[1].owner == OTHER_MOD);
+    REQUIRE(all[1].value == "2");
+    REQUIRE(all[1].section == "Main");
+    REQUIRE(all[1].key == "fScale");
+    REQUIRE(overrides.of(MODE).empty());
+}
+
 TEST_CASE("ConfigKey: the section and the key are TOML dotted keys, whose keys make the path from the root")
 {
     using Path = std::vector<std::string>;

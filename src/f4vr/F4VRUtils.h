@@ -1,5 +1,4 @@
 #pragma once
-#include "F4VROffsets.h"
 
 namespace f4cf::vrcf
 {
@@ -35,22 +34,12 @@ namespace f4cf::f4vr
     bool isPlayerSneaking();
     bool isInPowerArmor();
     bool isInInternalCell();
-    bool isSwimming(const RE::PlayerCharacter* player = RE::PlayerCharacter::GetSingleton());
-    bool isUnderwater(const RE::PlayerCharacter* player = RE::PlayerCharacter::GetSingleton());
     bool isMovementSafe(RE::PlayerCharacter* player, const RE::NiPoint3& currentPos, const RE::NiPoint3& targetPos);
-    RE::ProcessLists* getProcessLists();
-    void getActorsWithinRangeOfPoint(const RE::NiPoint3& point, float radius, RE::BSScrapArray<RE::NiPointer<RE::Actor>>& outActors);
-    float getActorFacingAngleTo(RE::Actor* actor, const RE::NiPoint3& point);
-    bool isActorFacing(RE::Actor* actor, const RE::NiPoint3& point, float halfAngleDegrees);
-    bool isInActiveCombat(RE::Actor* actor);
 
-    int getDetectionLevel(RE::Actor* observer, RE::Actor* target);
-    float getLightLevel(RE::Actor* actor);
-    void setLightLevel(RE::Actor* actor, float value);
     /**
      * Which engine entry point startCombat() uses. All three are verified working on VR 1.2.72; EnterCombat is
-     * the default because it is the one the engine's own Papyrus SendAssaultAlarm calls. See F4VROffsets.h for
-     * each one's provenance.
+     * the default because it is the one the engine's own Papyrus SendAssaultAlarm calls. CommonLibF4VR's
+     * AIProcess::EnterCombat, Actor::StartCombat and TaskQueueInterface::QueueActorStartCombat say where each comes from.
      *
      * Note none of them does anything to an actor already in combat with the target — that is a no-op, not a
      * failure, and is the first thing to check before concluding one of these is broken.
@@ -65,48 +54,29 @@ namespace f4cf::f4vr
     void startCombat(RE::Actor* actor, RE::Actor* target, StartCombatMethod method = StartCombatMethod::EnterCombat);
     RE::BGSProjectile* getAnyProjectile();
 
-    /**
-     * Where the game puts the Pip-Boy, by its VR settings. The values are the order of the game's own settings menu.
-     */
-    enum class PipboyPlacement : std::uint8_t
-    {
-        Wrist = 0,
-        InFront = 1,
-        Projected = 2,
-    };
-
     // settings
-    bool isLeftHandedMode();
-    bool isPipboyOnWrist();
-    PipboyPlacement getPipboyPlacement();
-    void setPipboyPlacement(PipboyPlacement placement);
-    bool isComfortSneakMode();
-    bool useWandDirectionalMovement();
     RE::Setting* getIniSetting(const char* name, bool addNew = false);
 
     // nodes
-    RE::NiAVObject* getFirstChild(RE::NiAVObject* avObject);
-    RE::NiAVObject* findAVObject(RE::NiAVObject* node, const std::string& name, int maxDepth = 999);
-    RE::NiAVObject* findAVObjectStartsWith(RE::NiAVObject* node, const char* name, const int maxDepth = 999);
-    RE::NiNode* findNode(RE::NiAVObject* node, const char* name, int maxDepth = 999);
-    RE::NiNode* findNodeStartsWith(RE::NiAVObject* node, const char* name, int maxDepth = 999);
-    RE::NiAVObject* get1StChildNode(RE::NiAVObject* node);
-    RE::NiNode* find1StChildNode(RE::NiAVObject* node, const char* name);
-
-    // visibility
-    bool isNodeVisible(const RE::NiAVObject* node);
-    void setNodeVisibility(RE::NiAVObject* node, bool show);
-    void setNodeVisibilityDeep(RE::NiAVObject* node, bool show, bool updateSelf = true);
-
-    // updates
     void updateDownFromRoot();
-    void updateDown(RE::NiAVObject* node, bool updateSelf, const char* ignoreNode = nullptr);
-    void updateDownTo(RE::NiNode* toNode, RE::NiNode* fromNode, bool updateSelf);
-    void updateUpTo(RE::NiNode* toNode, RE::NiNode* fromNode, bool updateSelf);
-    void updateTransforms(RE::NiAVObject* node);
-    void updateTransformsDown(RE::NiAVObject* node, bool updateSelf, const char* ignoreNode = nullptr);
 
     void registerPapyrusNativeFunctions(F4SE::PapyrusInterface::RegisterFunctions callback);
+
+    /**
+     * Queue a call to a global Papyrus function, as Debug.Notification, without waiting for it. The arguments must match its
+     * Papyrus declaration (bool, int, float, string, arrays as std::vector). Returns false, logged, when the VM won't take it.
+     */
+    template <class... Args>
+    bool callPapyrusGlobalFunction(const char* scriptName, const char* functionName, Args... args)
+    {
+        const auto gameVM = RE::GameVM::GetSingleton();
+        const auto vm = gameVM ? gameVM->GetVM() : nullptr;
+        if (!vm || !vm->DispatchStaticCall(scriptName, functionName, nullptr, args...)) {
+            logger::error("Failed to call Papyrus function '{}.{}'", scriptName, functionName);
+            return false;
+        }
+        return true;
+    }
 
     // CommonLib migration
     std::string resolveTexturePath(std::string_view path);

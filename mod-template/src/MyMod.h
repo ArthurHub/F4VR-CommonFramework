@@ -20,8 +20,14 @@ namespace my_mod
         virtual void onFrameUpdate() override;
 
     private:
+        // the head gesture's zone; its owner key tags the buttons it takes from the game
+        f4vr::WandActivationSphere _headSphere{ "MyMod_HeadActivation" };
+
+        // the head gesture's taps and holds this run, for the devbench tool's state
+        std::uint32_t _headTaps = 0;
+        std::uint32_t _headHolds = 0;
     };
 
-    // The ONE global to rule them ALL
+    // The mod's one instance: constructing it sets f4cf::g_mod, which the F4SE exports call
     inline MyMod g_myMod;
 }

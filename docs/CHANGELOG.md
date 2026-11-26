@@ -7,8 +7,131 @@ and tooling tweaks are left to the git history.
 Versions follow `set(VERSION ...)` in the root [`CMakeLists.txt`](../CMakeLists.txt). While the
 major version is `0`, a minor bump may break the API; the **Upgrading** notes say what to change.
 
-## 0.5.1 — unreleased
+## 0.7.0 — 2026-11-26
 
+- **One theme for a mod's look**: `imgui::Theme` holds the colors by role, the sizes, the font sizes, the spacing
+  scale and a panel's edge, and `controls::get().setTheme` sets it, at any time: the next frame is drawn in it. The
+  controls draw in it, ImGui's style of every canvas but the keyboard's is set from it, the keyboard takes its colors,
+  and `theme().panelStyle()` is a panel's look in it. Its defaults are the framework's green
+  ([imgui README](../src/imgui/README.md#theme)). **Upgrading:**
+  - `controls::ControlsStyle` is `imgui::Theme`, `controls::get().setStyle(style)` is `setTheme(theme)`, and
+    `controls::get().style()` is `theme()`. `colors()` and `tone(t)` are the same, and `colors()` has `glass`,
+    `plate` and `important` too.
+  - `imgui::setFontSizePixels` is gone: the body font size is the theme's `bodyFontSize`, 21 px where no theme is set,
+    not 24.
+  - Every canvas of the main context gets the theme's ImGui style over ImGui's dark one, where it had the dark one.
+    The theme's fields are set as the first frame begins and after each `setTheme`, over what a mod set itself: a mod
+    that styled ImGui itself sets its theme instead.
+  - The keyboard's default background is the default theme's glass, alpha 166 and not 235, and the text of a key in
+    the accent is the default `onAccent`.
+- **The controls' gaps are the theme's spacing scale**, and a slider's grab its `grabWidth` and `grabRounding`, so a
+  mod's design sets them too; the default theme's steps are the gaps of before. `imgui::themeFields()` lists the
+  theme's fields by name. **Upgrading:** `controls::HEADING_TEXT_INSET`, `SLIDER_VALUE_PADDING`,
+  `TEXT_INPUT_PADDING` and `TREE_INDENT` are the functions `headingTextInset()`, `sliderValuePadding()`,
+  `textInputPadding()` and `treeIndent()`.
+- **A look tuned live**: devbench's `theme` action answers the theme's fields and sets them over the mod's theme,
+  drawn from the next frame and kept over each `setTheme` until its `reset`; a number out of its field's range, as
+  a control height of 0, is refused ([devbench README](../src/devbench/README.md)). The tool's contract is 7.
+- **A panel's targets**: `controls::targets()` keeps where the last frame's buttons, an open list's options and a
+  mod's own rows were, in the canvas's pixels, and how far its lists were scrolled, and devbench's `targets` action
+  tells them, so a test with the controllers points at a button or a row by its key
+  ([controls README](../src/imgui/controls/README.md#targets)). The tool's contract is 8. **Upgrading:** a mod's own
+  devbench action named `targets` is ignored beside the built-in one: the mod records with `controls::targets().add`.
+- **The search field**: `controls::searchField` draws a header's search, with its magnifier, a placeholder or the query
+  typed live on the keyboard, how many match, and Clear; the caller keeps the query
+  ([controls README](../src/imgui/controls/README.md#the-search-field)). It is a `search` target, `Field` and `Clear`.
+- **Icons and a row's popup**: `controls::drawIcon` draws the panel's icons and a button's as one set, each in a box of
+  any size from the box it is designed in ([controls README](../src/imgui/controls/README.md#icons)), and
+  `controls::beginRowPopup` opens an editor's popup on a row, under or over it, inside its window.
+- **A panel body's panes**: `controls::beginNavPane` and `beginNavRows` make a navigation pane, a plate with a header
+  that stays and rows that scroll, and `beginContentPane` the pane beside it; each records its scroll for devbench
+  ([controls README](../src/imgui/controls/README.md#panes)).
+- **A panel's title bar**: `controls::titleBar` draws breadcrumbs that shorten to fit, an ellipsis for the middle ones,
+  and buttons at the right, one of which can stand out; crumbs and buttons are `crumb` and `titleButton` targets
+  ([controls README](../src/imgui/controls/README.md#the-title-bar)).
+- **A panel's footer**: `controls::footer` draws a rule and its buttons at the right, each enabled or not, and gives the
+  room at their left for a help line ([controls README](../src/imgui/controls/README.md#the-footer)).
+- **Controls with their label**: `controls::labelledSwitcher`, `labelledSlider`, `labelledStepper`, `labelledDropdown`,
+  `labelledText`, `labelledButton` and `labelledValue` add a row, edit its value and draw it with its label in one call,
+  for a plain page; each row is a `row` target ([controls README](../src/imgui/controls/README.md#controls-with-their-label)).
+- **The press pulse**: `controls::get().pulse()` asks for a press's pulse, which the ImGui layer plays once after the
+  frame on the pointing hand; `setPressPulse` sets its pattern, `Tick` by default, or none
+  ([controls README](../src/imgui/controls/README.md#the-press-pulse)).
+- **A long list's rows**: `controls::clippedRows` draws only the rows a window shows, scrolled as for all of them, and
+  a row kept while it is scrolled out ([controls README](../src/imgui/controls/README.md#rows-and-headings)).
+- **The VR UI's NIF widgets are gone**: every vrui element is a panel. **Upgrading:** `UIWidget`, `UIButton`,
+  `UIToggleButton` and `UIMultiStateToggleButton` are `UIButtonPanel`, `UIToggleButtonPanel` and
+  `UIMultiStateToggleButtonPanel`, whose face is text and an image
+  ([vrui README](../src/vrui/README.md#assets)). `UIPressable` and `UIToggleable` are folded into
+  `UIButtonPanel` and `UIToggleButtonPanel`, and a `UIToggleGroupContainer` holds `UIToggleButtonPanel`s. The `ui-common` and `ui-example` meshes and atlases, their source
+  PNGs and `nif-tools/vrui_atlas.py` are gone too: delete `Meshes\<ModName>\ui-common\`, `ui-example\` and their
+  `.DDS` from the mod's data.
+- **`mod-template/` ships a config spec and a gesture**: `data/mod/ModsConfigFO4/Config/MyMod/spec.json` gives a new
+  mod a page in Mods Config FO4 VR, and the example activation sphere section is now a head gesture the template's
+  code reads and drives ([creating a new mod](creating-a-new-mod.md)). **Upgrading:** optional; a mod without a config
+  spec copies the template's and makes it its own.
+
+## 0.6.1 — unreleased
+
+- **The small controls of an ImGui panel**: `imgui::controls` draws a panel's text, marks and frames in one look, so
+  a panel is built from them rather than drawn by hand. It has one line of text cut with an ellipsis, underlined
+  ranges, pieces of text in their own looks wrapped as one text, the warning, error and info marks, the Reset and Undo
+  icons, arrows, a control's frame, outlines, a button's frame, the selected bar, a row under the ray, a tag, where
+  a popup opens, buttons in four looks, an icon button, the switcher, a dialog with its buttons, the slider, which
+  the trigger drags and the arrows and the pointing hand's thumbstick step, read by the framework, the stepper, the
+  dropdown with its list of options, and the text input, typed on the framework's keyboard, which writes as it is left
+  or, live, as it is typed, and keeps a live text through a physical keyboard's Escape. A list is built of rows as
+  wide as its rows whether or not its scroll bar shows, with section headings and headings that fold, which show the
+  counts of what they hide, and a tree of rows set in by their levels, with their arrows, tags, counts and dots, and
+  rows of groups.
+  `controls::get().setStyle` sets their colors by role and their sizes; the defaults are the framework's green
+  ([controls README](../src/imgui/controls/README.md)).
+
+## 0.6.0 — 2026-11-26, released with 0.7.0
+
+- **The game RE is CommonLibF4VR's**: the framework has no game addresses of its own. `F4VROffsets.h`,
+  `MiscStructs.h`, `BSFlattenedBoneTree.h` and `CollisionLayers.h` are gone, and the `f4vr::` helpers that were
+  engine facts are CommonLibF4VR members: the VR settings (`RE::VRSettings`: left-handed mode, the Pip-Boy's
+  placement...), the scene graph helpers (`RE::NiNodeUtils`), actor queries (`Actor::IsSwimming`,
+  `IsInActiveCombat`, `GetFacingAngleTo`...), the bone tree and its bone names, the VR room rotation and render
+  camera, and the call sites mods hook (`RE::VRHookSites`). CommonLibF4VR marks each address with how it is known
+  to work on VR. The helpers that are the framework's own (`isInPowerArmor`, `getEquippedWeapon`, `startCombat`,
+  the `.nif` loading) keep their names. **Upgrading:** replace each removed name by its row in the
+  [migration table](tech/f4vr-to-commonlib-migration.md).
+- **The framework's own VR keyboard replaces SteamVR's**: while ImGui edits a text field on an interactive canvas, the
+  framework shows a keyboard under that canvas, typed with the rays of both hands at once, on every runtime
+  (OpenComposite and xrizer, which have no keyboard of their own, too). It has QWERTY with digits, symbols and accented
+  letters, a line that shows the field's text, where a press puts the caret, Enter for a multiline field, and Done.
+  The player moves it with the world-move binding, and it keeps that place beside the canvas for the session
+  ([VR keyboard](tech/vr-keyboard.md)). `imgui::keyboard()` has its style (`setStyle`), the binding that closes it as
+  Done does (`setCloseBinding`, a mod's Back) and `isOpen()`. **Upgrading:** nothing to call for typing; a mod whose
+  Back steps its menu skips that while `isOpen()`, and gives its Back as the close binding.
+- **devbench drives the VR keyboard**: every mod's tool has a `keyboard` action, which reports the keyboard, its
+  keys and the hands on it, and presses a key as a pull does. The tool's `contract` is 6.
+- **Papyrus through CommonLibF4VR**: the framework calls scripts and binds natives through CommonLibF4VR's VM
+  ([Papyrus](../src/f4vr/README.md#papyrus)), whose `DispatchStaticCall` / `DispatchMethodCall` now work on VR, and
+  natives can take a `ScriptObject`. `f4vr::callPapyrusGlobalFunction(script, function, args...)` calls a global
+  function. The `f4sevr/` folder, the F4SE VR SDK's Papyrus layer, is gone.
+  **Upgrading:** a `PapyrusGatewayBase` subclass passes its arguments to `executePapyrusScript("Fn", args...)` instead
+  of an `F4SEVR::VMArray`. A mod that includes an `f4sevr/` header moves to CommonLibF4VR with the
+  [migration table](tech/f4sevr-to-commonlib-migration.md#papyrus); `BSFlattenedBoneTree`'s bone names are
+  `RE::BSStringPool::Entry*`.
+- **The Mods Config FO4 VR client closes the menu**: `closeMenu()` closes it as the player's Exit does, which asks
+  first while the shown mod has unsaved changes, and `closeMenu(true)` drops them. The header is API version 2; on an
+  older menu the call does nothing.
+- **Mods Config FO4 VR shows a setting another mod overrides**: the client tells the menu every session override of
+  a setting of the mod's config file, who set it and to what, so the menu says why a change of it does nothing. No
+  code of the mod's; one with overrides of its own adds them with `addOverrides`. `ConfigBase::getConfigOverrides(section,
+  key)` gives every owner's override of one key, the one that applies first.
+- **`TomlEditor::remove` removes a table, and the sections it empties**: a path to a table takes all of its lines,
+  its values and the `[header]` of it and of the sections under it, as a key's are. A section or a table of dotted
+  keys that a removal leaves with no keys now goes too, with its `[header]`, up to the root. **Upgrading:** a caller
+  that wants an emptied section kept sets a key back in it.
+- **`TomlEditor::set` sets a table written as a section**: a `[header]` table or a table of dotted keys set to a
+  table keeps its form, its keys set in place and the ones the new table lacks removed. It was refused before, so a
+  color, a transform or a binding a file has as a section could not be saved.
+
+## 0.5.1 — 2026-11-13
 - **An activation sphere can show its bindings' icons**: a third visual, the icons of the bindings that fire the
   gesture (the binding prompt icons of `vrui`), in a row facing the player. `sShowBindingIcon` says when (the
   visibility values, `never` by default), `sBindingIcons` which bindings (`inside` by default: those whose hand is

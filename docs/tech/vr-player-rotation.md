@@ -4,12 +4,11 @@
 anywhere — including the states the game itself refuses to turn in.
 
 Files: [`PlayerRotation.h`](../../src/f4vr/PlayerRotation.h) /
-[`PlayerRotation.cpp`](../../src/f4vr/PlayerRotation.cpp), with the three engine addresses it uses in
-[`F4VROffsets.h`](../../src/f4vr/F4VROffsets.h).
+[`PlayerRotation.cpp`](../../src/f4vr/PlayerRotation.cpp). The engine side it uses is CommonLibF4VR's:
+`RE::VRWorldData` (the room rotation and its yaw), and `RE::VRSettings` for the settings below.
 
 Everything below was read off `Fallout4VR.exe` **1.2.72.0** and is quoted as image-relative offsets
-(`REL::Offset`, base `0x140000000`). None of it has an address-library row, and none of it is in
-CommonLibF4VR — the bundled headers have no VR turning surface at all.
+(base `0x140000000`). Only the yaw decomposition has an address-library row (ID 606387).
 
 ## Why a mod needs this
 
@@ -25,7 +24,7 @@ the HMD, which is why there is no `SetHeading` anywhere in this story.
 ## The settings the game turns by
 
 `Fallout4Prefs.ini` `[VR]`, read straight off the value of the static `Setting` objects the engine
-parses them into (value at `Setting+0x8`) — the same trick `isLeftHandedMode()` uses, and far cheaper
+parses them into (value at `Setting+0x8`) — the same trick `RE::VRSettings` uses for all of them, far cheaper
 than an `INIPrefSettingCollection` lookup by name. The in-game settings menu writes these very
 addresses (e.g. `0xBD9D5A` for the rotation type), so a change made in the menu is picked up live with
 no reload.
@@ -69,10 +68,10 @@ is then silently dropped forever.
 Hence `PlayerRotation` skips those entry points and drives the transform itself, through the same
 get/set pair the engine's own smooth turn uses:
 
-- `VRWorld_GetEulerAngles` (`0x1C11B00`) — Euler decomposition of the rotation matrix at
-  `g_vrWorldData` (`0x59429C0`) `+0x210`, a SIMD-padded 3×3 (three rows of four floats). The yaw comes
-  back in the first out-param, in radians.
-- `VRWorld_SetYaw` (`0x1BA7780`) — rebuilds the world rotation from a single yaw and writes it back.
+- `RE::VRWorldData::GetYaw` — `NiMatrix3::ToEulerAnglesZXY` (`0x1C11B00`) of the rotation matrix at
+  the `VRWorldData` singleton (`0x59429C0`) `+0x210`, a SIMD-padded 3×3 (three rows of four floats). The
+  yaw is in radians.
+- `RE::VRWorldData::SetYaw` (`0x1BA7780`) — rebuilds the world rotation from a single yaw and writes it back.
 
 Use that pair and only that pair: a `get → add → set` round trip through it is sign-convention safe.
 A second decomposition exists at `0x1C0FED0` (the snap path's), with a *different* Euler convention.
@@ -84,7 +83,7 @@ Two further notes on reaching into these structures:
   `vrPlayerStateFront`, `0x12A4` in `vrPlayerStateBack`), so neither collides with a named field
   any more — the `pipboyAnimSubGraph` that used to sit on `0x8C8` is at VR `0xD38`. Nothing in the
   framework reads these two; they are documented so the next person recognises them in a disassembly.
-- `g_vrWorldData` is the global other VR mods call `vrDataStruct`.
+- The `VRWorldData` singleton is the global other VR mods call `vrDataStruct`.
 
 ## Using it
 

@@ -150,6 +150,8 @@ The current 17 commits cover **Forms.h** only — that was the scoping decision 
 
 ### Priority A — Common.h (~840 lines of infrastructure)
 
+**Status: done, and `src/f4sevr/` is deleted.** Its one user, `BSFlattenedBoneTree::BoneNodePosition::name`, is `RE::BSStringPool::Entry*`.
+
 **Headers:** `src/f4sevr/Common.h`
 
 **Contents:** `Heap`, `NiPointer`, `tArray`, `tHashSet`, `StringCache`, `BSReadWriteLock`. CommonLibF4VR has full equivalents for all of these, widely used.
@@ -161,6 +163,8 @@ The current 17 commits cover **Forms.h** only — that was the scoping decision 
 **Why low priority:** Existing F4VR-CommonFramework code that uses `F4SEVR::Heap` etc. already works fine; CommonLib hasn't *broken* the f4sevr versions.
 
 ### Priority B — Papyrus interop headers (~7 files, ~1500 lines)
+
+**Status: done for the framework and FRIK.** CommonLibF4VR covers all of it. Its one VR gap was calling into Papyrus: `BSTThreadScrapFunction` was `std::function`, while OG and VR take the old MSVC layout (0x20, the proxy at 0x18), so `DispatchStaticCall` / `DispatchMethodCall` crashed. CommonLibF4VR `0db6c81` fixed that, verified against `Fallout4VR.exe`, and added `ScriptObject` native parameters. The headers are deleted; [the migration guide](f4sevr-to-commonlib-migration.md#papyrus) has the mapping. What follows is the original plan.
 
 **Headers:**
 - `PapyrusArgs.h/.cpp`

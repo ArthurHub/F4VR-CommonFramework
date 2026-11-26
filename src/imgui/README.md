@@ -20,10 +20,12 @@ rules, and is drawn under the game's menus. The font is the framework's, so an I
 | [`ImGuiCanvas.h`](ImGuiCanvas.h) | `Canvas`: one ImGui window, placed by a provider you write. Content, placement, curve, chrome, sizing, occlusion, dedicated. |
 | [`ImGuiPointer.h`](ImGuiPointer.h) | `imgui::pointer()`: a wand's ray as ImGui's mouse, its state and its `PointerStyle`. |
 | [`ImGuiPointerLogic.h`](ImGuiPointerLogic.h) | The pointer's logic, unit tested: ray and quad, the curved quad, which hand owns it, scrolling. |
-| [`ImGuiKeyboard.h`](ImGuiKeyboard.h) | SteamVR's keyboard while a text field is edited, and the game window's key messages to ImGui ([VR keyboard](../../docs/tech/vr-keyboard.md)). |
-| [`ImGuiKeyboardLogic.h`](ImGuiKeyboardLogic.h) | The keyboard's logic, unit tested: the one edit between a field's text and the keyboard's, on whole UTF-8 characters. |
+| [`ImGuiKeyboard.h`](ImGuiKeyboard.h) | `imgui::keyboard()`: the framework's VR keyboard while a text field is edited, and the game window's key messages to ImGui ([VR keyboard](../../docs/tech/vr-keyboard.md)). |
+| [`ImGuiKeyboardLogic.h`](ImGuiKeyboardLogic.h) | The keyboard's logic, unit tested: its pages, the key a point hits, Shift, Caps, a held key's repeat, the strokes ImGui is given. |
+| [`ImGuiTheme.h`](ImGuiTheme.h) | `Theme`: a mod's look in one value, for the controls, ImGui's style, the keyboard and a panel's edge. |
+| [`controls/`](controls/README.md) | The small controls of a panel, in one look: text, drawn marks and icons, frames, and the theme they are drawn in. |
 | [`ImGuiImage.h`](ImGuiImage.h) | `imgui::image` and `imgui::addImage`: a `render::Texture` in a canvas, kept alive until drawn. |
-| [`ImGuiSettings.h`](ImGuiSettings.h) | `setFontSizePixels` and `setSupersample`, process-wide. |
+| [`ImGuiSettings.h`](ImGuiSettings.h) | `setSupersample`, process-wide, and the range of the body font size. |
 | [`ImGuiFonts.h`](ImGuiFonts.h) | The framework's font in ImGui, with its bold and italic faces: `imgui::canvasFont`. |
 | [`ImGuiLayer.h`](ImGuiLayer.h) | Game thread: one ImGui frame for every visible canvas, cloned and published with their quads. |
 | [`ImGuiRenderer.h`](ImGuiRenderer.h) | Render thread: rasterizes the frame into the atlas, then draws each canvas's slice as a world quad. |
@@ -160,6 +162,62 @@ imgui::pointer().setStyle(style);
 The framework has no config keys for it. A mod that lets the player set them reads them itself
 (`getColorValue`, `getTransformValue`) and calls `setStyle`.
 
+## Text fields and the keyboard
+
+A focused `ImGui::InputText` on an interactive canvas is typed into, with nothing to call: while ImGui edits
+it, the framework shows its keyboard under the field's canvas, typed with the rays, both hands at once, on
+every runtime. A physical keyboard types into it too. See [VR keyboard](../../docs/tech/vr-keyboard.md).
+
+```cpp
+imgui::keyboard().setCloseBinding(backBinding); // Back closes it, as its Done does
+auto style = imgui::keyboard().style();
+style.accent = render::Color::rgba(255, 180, 60);
+imgui::keyboard().setStyle(style);
+if (imgui::keyboard().isOpen()) { /* a field is edited: Back is the keyboard's */ }
+```
+
+- **Done** leaves the field with its text; **Enter** starts a new line of a multiline field. The line along
+  the keyboard's top shows the field's text, a press on it puts the caret there, and Left and Right at its
+  right move the caret.
+- **Moved** with the world-move binding, as [a panel the player moves](#a-panel-the-player-moves); it keeps
+  that place beside the canvas for the session, and follows the canvas.
+- **A ray on it is the keyboard's:** what is behind it is not pointed at, and the wand is hidden from the game.
+- **`KeyboardStyle`:** its width as a share of the field's canvas, its tilt, and its colors. The [theme](#theme)
+  gives it its colors; a mod that wants its own sets them after `setTheme`.
+
+## Theme
+
+`imgui::Theme` ([`ImGuiTheme.h`](ImGuiTheme.h)) is a mod's look in one value: the colors by role, the sizes, the
+font sizes, the spacing scale, and a panel's edge, corner and padding in vrui units. Its defaults are the
+framework's green, the look of `vrui::F4VR_PANEL_STYLE`. A mod with a design sets every field from it, so a
+default that changes later does not change that mod.
+
+```cpp
+controls::get().setTheme(myDesignTheme()); // nothing to call for the default theme
+panel->setStyle(controls::get().theme().panelStyle());
+```
+
+- **The controls** draw in it ([controls](controls/README.md#theme)).
+- **ImGui's style** of the main context, every canvas but the keyboard's, is set from it (`applyTo`) over
+  ImGui's dark style: its paddings and spacings are steps of the spacing scale, its colors the theme's roles,
+  its font size the theme's `bodyFontSize`. Only those fields: one a mod sets by hand outside them stays.
+- **The keyboard** takes its colors (`keyboardStyle`) as `setTheme` is called: its background is the glass, its
+  edge, held keys and caret the accent, their text the color on the accent. Its key grays, width and tilt stay.
+- **A panel's look** is `panelStyle()`, which the mod gives its panel: the content and edge in the accent,
+  the background the glass.
+- **The pointer** is not the theme's: a ray is the player's to set, in `PointerStyle`.
+- **`themeFields()`** lists every field by its name and member, with a number's range, for code that reads or sets
+  a theme field by field. `themeJson(theme)` is a theme as JSON, each field by its name, a color as `[r, g, b, a]`
+  from 0 to 255 and a size as a number, and `themeWithFields(theme, fields)` sets such fields on a theme, or names
+  the first that is no field, not in its shape, or out of its range: no size below 0, a control height or font size
+  below 1, an opacity above 1, which ImGui cannot draw with.
+- **Tuned live** with devbench's [`theme` action](../devbench/README.md): the fields it sets are drawn over the
+  mod's theme, and stay over each theme the mod sets until its `reset`. `theme()` is the theme drawn, with them.
+
+`setTheme` is called at any time, as a mod's config changes, and the next frame is drawn in it: the controls
+read it as they draw, ImGui's style is set again before the frame begins, and the keyboard in the call. A
+panel's edge follows as the mod gives the panel `panelStyle()` again.
+
 ## Images
 
 A [`render::Texture`](../render/README.md#images) in a canvas, loaded through the engine or made from
@@ -248,11 +306,10 @@ g_uiManager->attachPresetToWorldAtHMD(panel, 350.0f);
 | Knob | Scope | What it changes |
 | ---- | ----- | --------------- |
 | pixel size (`Canvas`) / vrui size (`UIImGuiPanel`) | per canvas | its pixels and its size in the world: how legible it is |
-| `setFontSizePixels` (24, 16 to 128) | process | how big text looks, not the layout |
+| the theme's `bodyFontSize` (21, 16 to 128) | process | how big text looks, not the layout; follows a new theme |
 | `setSupersample` (1.5, 1 to 4) | process | how finely it is rasterized; layout is always 1x |
 
-- **Set the process-wide two before the first canvas draws:** they are read then, and later calls do
-  nothing.
+- **Set the supersample before the first canvas draws:** it is read then, and later calls do nothing.
 - **Other text sizes:** `ImGui::PushFont(nullptr, size)`. ImGui rasterizes each size at the supersample,
   so every size is sharp.
 - **Memory:** the atlas is 1024 times the supersample on each side, ~9 MB at 1.5, 16 MB at 2, made when
@@ -279,7 +336,7 @@ Faces share a baseline only when their vertical metrics match, as one family's d
 ## How it is drawn
 
 ```
-game thread (frame end)                         render thread (Submit hook)
+game thread (frame end)                         render side (the player-space pass)
 ──────────────────────────────────              ─────────────────────────────────
 imgui::internal::onFrameEnd()                   draw callback (DRAW_ORDER_PANELS)
   ├─ resolve placements → world quads             ├─ write the glyphs ImGui added
@@ -299,6 +356,13 @@ imgui::internal::onFrameEnd()                   draw callback (DRAW_ORDER_PANELS
 - **One frame, one atlas:** each canvas is a window in its own sub-rect, drawn as one quad. The quads are
   sorted by occlusion group, so all canvases take two draws at most. A dedicated canvas is a frame of
   its own, into its own texture.
+- **The framework's own canvas** (`Canvas::setOwnContext`, internal) is drawn in a second ImGui context,
+  in a second frame after the first, into a texture of its own, so it shows beside a dedicated canvas
+  and nothing it does reaches the first context: a text field there stays edited. It is the keyboard's: a
+  ray on it is not ImGui's mouse, and each hand on it is told apart. The second context
+  shares the first's font atlas, which the first updates as its frame begins, so it is drawn only in a
+  frame the first drew, and the first's DX11 backend data, so the render thread draws either frame with
+  either context current. Where the two frames' canvases overlap, the farther frame is drawn first.
 - **Rasterized flat first,** because ImGui clips with 2D scissor rectangles (scrolling, child windows,
   tables), which have no meaning on a turned 3D quad.
 - **The draw data is cloned** (`ImDrawList::CloneOutput`): the next `NewFrame` reuses ImGui's buffers,

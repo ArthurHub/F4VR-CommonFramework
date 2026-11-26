@@ -3,7 +3,6 @@
 #include "Logger.h"
 #include "f4vr/PlayerNodes.h"
 
-using namespace common;
 using namespace RE::Scaleform;
 
 namespace
@@ -260,7 +259,7 @@ namespace f4cf::f4vr
         //}
 
         //_playerNodes->ScopeParentNode->flags &= 0xfffffffffffffffe;
-        //updateDown(dynamic_cast<RE::NiNode*>(_playerNodes->ScopeParentNode), true);
+        //RE::NiNodeUtils::UpdateWorldDataDown(dynamic_cast<RE::NiNode*>(_playerNodes->ScopeParentNode), true);
 
         //	RE::BSFixedString name("LArm_Hand");
         ////	RE::NiAVObject* node = (*g_player)->firstPersonSkeleton->GetObjectByName(&name);

@@ -20,7 +20,7 @@
 //
 // Two layers. What passes between the DLLs is two interfaces of virtual functions: ModsConfigFO4ApiV1, which Mods
 // Config VR implements, and IClient, which a client implements and registers once. The menu asks the client by name
-// for its functions, states and options. Their arguments are plain: whole numbers, float, bool, enums, UTF-8 texts
+// for its functions, states, options and the content of its pages. Their arguments are plain: whole numbers, float, bool, enums, UTF-8 texts
 // that end with a zero, and pointers. No std:: type crosses: each DLL has its own heap, and its own layout of them.
 // What the host passes is valid during the call, so copy what you keep. What you pass the host copies before the
 // call returns.
@@ -42,6 +42,8 @@
 //     });
 //     modsConfig.addState("calibrating", [] { return std::optional<Value>(isCalibrating()); });
 //     modsConfig.addState("pipboyType", [] { return std::optional<Value>(pipboyType()); }, [](const Value& value) { setPipboyType(std::get<int>(value)); });
+//     // the rows of the page with "id": "wheelItems" and "contentFromClientCallback": true, as the JSON of a `content`
+//     modsConfig.addPageContent("wheelItems", [] { return std::optional<std::string>(wheelItemsJson()); });
 //     modsConfig.subscribeToChanges([](const Change& change) { previewOrRestore(change.path, change.value, change.discard); });
 //     modsConfig.subscribeToSaves([](const Saved&) { endPreviewsAndReload(); });
 //     // each frame: light the zone of a group of the config spec with "id": "grabZone" while the ray is on its rows
@@ -55,9 +57,9 @@ namespace mods_config::api
 {
 #define MODS_CONFIG_FO4_CALL __cdecl
 
-    // The version of this header: what V1 has. A method is only added at the end of an interface, and a struct only
-    // grows at its end, so a host of a later version takes a client of this one.
-    inline constexpr std::uint32_t MODS_CONFIG_FO4_API_VERSION = 1;
+    // The version of this header: 2 adds closeMenu, giveOverrides and giveContent to what 1 has. A method is only added at the end of an interface,
+    // and a struct only grows at its end, so a host of a later version takes a client of this one.
+    inline constexpr std::uint32_t MODS_CONFIG_FO4_API_VERSION = 2;
 
     // the host's DLL, and the function it exports that gives the API
     inline constexpr auto MODS_CONFIG_FO4_DLL = "ModsConfigFO4VR.dll";
@@ -278,6 +280,34 @@ namespace mods_config::api
     };
 
     /**
+     * Where the client gives the overrides of a setting, which the host passes it.
+     */
+    class IOverrides
+    {
+    public:
+        // Adds an override: who set it, by the name they gave, and its value, in the setting's valueType, or as a
+        // String of its text when it is not one. The one in effect first, then each one under it.
+        virtual void add(const char* owner, const SettingValue* value) = 0;
+
+    protected:
+        ~IOverrides() = default;
+    };
+
+    /**
+     * Where the client gives the content of a page, which the host passes it.
+     */
+    class IContent
+    {
+    public:
+        // Sets the page's `content`: a JSON array of its rows, as the config spec has them. The host copies the text,
+        // and reads it after the call returns. A second call replaces the first, and a null text is no content.
+        virtual void set(const char* json) = 0;
+
+    protected:
+        ~IContent() = default;
+    };
+
+    /**
      * What a client implements, which the menu asks by name. It is registered once, and lives for the whole run of the
      * game. Each method answers at once.
      */
@@ -312,6 +342,17 @@ namespace mods_config::api
         // what a Save of its config spec wrote, once a Save
         virtual void onSaved(const SaveBatch* batch) = 0;
 
+        // Since version 2. Gives the overrides of a setting, as the menu reads the mod's values: values set in place of
+        // the setting's own for the game session, as by another mod, so a change of it is saved but does nothing while
+        // one is there. Give every override the client knows: the menu leaves out its own previews, those under its
+        // name, MODS_CONFIG_FO4_F4SE_NAME. Nothing for a setting with none
+        virtual void giveOverrides(const SettingView* setting, IOverrides* overrides) = 0;
+
+        // Since version 2. Gives the content of a page of its config spec with `contentFromClientCallback`, by the
+        // page's `id`, as the page is shown: false, or true with no content set, while it has none, and the page is
+        // not available. The rows are read as the config spec's own, and inherit the page's defaults
+        virtual bool giveContent(const char* pageId, IContent* content) = 0;
+
     protected:
         ~IClient() = default;
     };
@@ -323,7 +364,7 @@ namespace mods_config::api
     {
     public:
         /**
-         * The version of the host's API: what V1 has. Check it before you call what a later version added.
+         * The version of the host's API. Check it before you call what a later version added: closeMenu needs 2.
          */
         virtual std::uint32_t getVersion() const = 0;
 
@@ -387,6 +428,13 @@ namespace mods_config::api
          * read-only setting, of another type, or no value of the setting, as one outside its limits.
          */
         virtual bool setPendingValue(IClient* client, const char* settingId, const SettingValue* value) const = 0;
+
+        /**
+         * Closes the menu, shown or minimized, as the player's Exit does: one that shows a mod with unsaved changes asks
+         * first, shown again for it, unless discardChanges, which drops them, with a `live` setting's Discard told.
+         * Nothing while it is closed. Since version 2: check getVersion before you call it.
+         */
+        virtual void closeMenu(bool discardChanges) const = 0;
 
         /**
          * Finds Mods Config FO4 VR's DLL and gets its API. Returns 0 when the API is there, and else:
@@ -572,6 +620,34 @@ namespace mods_config::api
     };
 
     /**
+     * A setting of the config spec, as the C++ client hands it to the mod: its id, its valueType and where it is kept,
+     * as a Change has it. Its texts are valid during the call: copy what you keep.
+     */
+    struct Setting
+    {
+        std::string_view id;
+        ValueType valueType = ValueType::String;
+        std::string_view fileName;
+        FileFormat format = FileFormat::Toml;
+        std::string_view filePath;
+        std::vector<std::string_view> path;
+        std::string_view form;
+        std::string_view scriptName;
+        std::string_view propertyName;
+        std::string_view clientState;
+    };
+
+    /**
+     * An override of a setting: who set it, by the name they gave, and the value it sets in place of the setting's own,
+     * in the setting's valueType, or a string of its text when it is not one.
+     */
+    struct Override
+    {
+        std::string owner;
+        Value value;
+    };
+
+    /**
      * A file a Save wrote: its name in the config spec's `files`, its format and its absolute path.
      */
     struct SavedFile
@@ -598,6 +674,8 @@ namespace mods_config::api
     using ClientState = std::function<std::optional<Value>()>;
     using StateSetter = std::function<void(const Value& value)>;
     using ClientOptions = std::function<std::vector<Option>()>;
+    using ClientOverrides = std::function<std::vector<Override>(const Setting& setting)>;
+    using ClientContent = std::function<std::optional<std::string>()>;
     using MenuEventHandler = std::function<void(MenuEventType event, std::string_view pageId)>;
     using PointingHandler = std::function<void(const std::vector<std::string>& ids)>;
     using ChangeHandler = std::function<void(const Change& change)>;
@@ -606,7 +684,7 @@ namespace mods_config::api
     /**
      * The client of the mod's DLL, one in the DLL: an IClient over the mod's lambdas. It connects under the mod's name,
      * which is matched to the config spec whose `modName` it is, and answers the menu with what the mod adds, at any
-     * time: its functions, states, options of choices, quick launch entries and handlers of the menu's events. While
+     * time: its functions, states, options of choices, content of pages, quick launch entries and handlers of the menu's events. While
      * Mods Config FO4 VR is not installed nothing is called.
      */
     class ModsConfigFO4Client final : public IClient
@@ -703,6 +781,26 @@ namespace mods_config::api
         }
 
         /**
+         * Adds the content of a page with `contentFromClientCallback`, by the page's `id`, which the menu asks as the
+         * page is shown: the JSON array of its rows, as the config spec's `content`, or none while it has none, and the
+         * page is not available. False for a page it has already, which keeps the first.
+         */
+        bool addPageContent(std::string pageId, ClientContent content)
+        {
+            return _pageContent.try_emplace(std::move(pageId), std::move(content)).second;
+        }
+
+        /**
+         * Adds what gives the overrides of a setting, which the menu asks for each setting as it reads the mod's values:
+         * values set in place of the setting's own for the game session, the one in effect first, so the menu says why a
+         * change of it does nothing. The menu leaves out its own previews. Each one added is asked, in the order added.
+         */
+        void addOverrides(ClientOverrides overrides)
+        {
+            _overrides.push_back(std::move(overrides));
+        }
+
+        /**
          * Adds an entry of the quick launch section of the menu's front page and the function a press on it runs, by
          * its name, which a `CallNativeFunction` of the config spec can run too. The function's message is told in the
          * help line, in red when it failed. A function that opens a UI of the mod's own minimizes the menu, and the mod
@@ -739,6 +837,17 @@ namespace mods_config::api
         {
             if (_api) {
                 _api->restoreMenu();
+            }
+        }
+
+        /**
+         * Closes the menu as the player's Exit does, which asks first while the shown mod has unsaved changes, or drops
+         * them with discardChanges. Nothing while it is not connected, or the menu's API is older than version 2.
+         */
+        void closeMenu(const bool discardChanges = false) const
+        {
+            if (_api && _api->getVersion() >= 2) {
+                _api->closeMenu(discardChanges);
             }
         }
 
@@ -994,13 +1103,14 @@ namespace mods_config::api
         }
 
         /**
-         * A change of a setting as the C++ client has it, whose texts point into the setting's view.
+         * A setting as the C++ client has it, whose texts point into the setting's view.
          */
-        static Change toChange(const SettingView& setting, const SettingValue& previous, const SettingValue& value, const bool discard)
+        static Setting toSetting(const SettingView& view)
         {
-            const auto& storage = setting.storage;
+            const auto& storage = view.storage;
             const auto* file = storage.file;
-            Change change{ .id = setting.id ? setting.id : "",
+            Setting setting{ .id = view.id ? view.id : "",
+                .valueType = view.valueType,
                 .fileName = file && file->name ? file->name : "",
                 .format = file ? file->format : FileFormat::Toml,
                 .filePath = file && file->path ? file->path : "",
@@ -1008,14 +1118,31 @@ namespace mods_config::api
                 .form = storage.form ? storage.form : "",
                 .scriptName = storage.scriptName ? storage.scriptName : "",
                 .propertyName = storage.propertyName ? storage.propertyName : "",
-                .clientState = storage.clientState ? storage.clientState : "",
+                .clientState = storage.clientState ? storage.clientState : "" };
+            for (std::uint32_t i = 0; i < storage.pathCount; ++i) {
+                setting.path.emplace_back(storage.path[i] ? storage.path[i] : "");
+            }
+            return setting;
+        }
+
+        /**
+         * A change of a setting as the C++ client has it, whose texts point into the setting's view.
+         */
+        static Change toChange(const SettingView& view, const SettingValue& previous, const SettingValue& value, const bool discard)
+        {
+            auto setting = toSetting(view);
+            return Change{ .id = setting.id,
+                .fileName = setting.fileName,
+                .format = setting.format,
+                .filePath = setting.filePath,
+                .path = std::move(setting.path),
+                .form = setting.form,
+                .scriptName = setting.scriptName,
+                .propertyName = setting.propertyName,
+                .clientState = setting.clientState,
                 .previous = fromSettingValue(previous),
                 .value = fromSettingValue(value),
                 .discard = discard };
-            for (std::uint32_t i = 0; i < storage.pathCount; ++i) {
-                change.path.emplace_back(storage.path[i] ? storage.path[i] : "");
-            }
-            return change;
         }
 
         /**
@@ -1067,6 +1194,35 @@ namespace mods_config::api
             }
         }
 
+        /**
+         * Gives the menu the overrides of a setting that each added source answers, in the order they were added.
+         */
+        void giveOverrides(const SettingView* view, IOverrides* overrides) override
+        {
+            if (_overrides.empty()) {
+                return;
+            }
+            const auto setting = toSetting(*view);
+            for (const auto& source : _overrides) {
+                for (const auto& found : source(setting)) {
+                    std::string text;
+                    const auto value = toSettingValue(found.value, text);
+                    overrides->add(found.owner.c_str(), &value);
+                }
+            }
+        }
+
+        bool giveContent(const char* pageId, IContent* content) override
+        {
+            const auto found = _pageContent.find(std::string_view(pageId));
+            const auto json = found != _pageContent.end() ? found->second() : std::nullopt;
+            if (!json) {
+                return false;
+            }
+            content->set(json->c_str());
+            return true;
+        }
+
         const ModsConfigFO4ApiV1* _api = nullptr;
 
         // the name it connected under, the mod's
@@ -1077,6 +1233,10 @@ namespace mods_config::api
         std::map<std::string, ClientState, std::less<>> _states;
         std::map<std::string, StateSetter, std::less<>> _stateSetters;
         std::map<std::string, ClientOptions, std::less<>> _options;
+        std::map<std::string, ClientContent, std::less<>> _pageContent;
+
+        // what gives the overrides of a setting, in the order added
+        std::vector<ClientOverrides> _overrides;
 
         // the quick launch entries added before it connected, by their functions
         std::vector<std::pair<std::string, QuickLaunch>> _quickLaunch;

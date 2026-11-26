@@ -144,7 +144,8 @@ namespace f4cf::imgui
      * dedicated after it is created is then not reported at the atlas's size.
      *
      * The panel says when the pointer is on it, which vrui moves a panel in the world by
-     * (vrui::UIManager::setWorldMoveBinding). The pointer is as the ImGui frame before this one had it.
+     * (vrui::UIManager::setWorldMoveBinding), and for the own context's panel, which hand is on it. The pointer is
+     * as the ImGui frame before this one had it.
      */
     void UIImGuiPanel::onFrameUpdate(vrui::UIFrameUpdateContext* context)
     {
@@ -152,6 +153,14 @@ namespace f4cf::imgui
 
         if (const PointerState& state = pointer().state(); state.canvas == _canvas.get()) {
             context->markPointedAt(state.primaryHand, this, state.hitPosition);
+        }
+        // the canvas of the own context is pointed at by each hand on its own
+        if (_canvas->hasOwnContext()) {
+            for (const bool primaryHand : { true, false }) {
+                if (const auto& hand = pointer().ownCanvasHand(primaryHand); hand.on) {
+                    context->markPointedAt(primaryHand, this, hand.hitPosition);
+                }
+            }
         }
 
         if (const float fit = pixelFitFor(_size.width, _size.height, _canvas->maxPixelSize()); fit < 1.0f) {
@@ -250,6 +259,18 @@ namespace f4cf::imgui
     void UIImGuiPanel::setDedicated(const bool dedicated)
     {
         _canvas->setDedicated(dedicated);
+
+        // the most pixels the panel may have changed with it
+        refreshCanvas();
+    }
+
+    /**
+     * Whether the panel is drawn in the framework's own ImGui context, beside the mod's canvases and a dedicated
+     * one among them, with a texture of its own. See Canvas::setOwnContext.
+     */
+    void UIImGuiPanel::setOwnContext(const bool ownContext)
+    {
+        _canvas->setOwnContext(ownContext);
 
         // the most pixels the panel may have changed with it
         refreshCanvas();

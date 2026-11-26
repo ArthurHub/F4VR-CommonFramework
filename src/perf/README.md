@@ -83,7 +83,7 @@ Every mod gets these sites without code of its own:
 | `internal::sampleFrame`, `Tool::publishState`, `Tool::runQueuedCommands` | under the frame | what measuring and the devbench tool cost the frame, on the frames they do work |
 | `VRControllersManager::update`, `VRControllersSuppressor::update`, `VRControllersHaptic::update`, `DebugDraw::onFrameStart` / `onFrameEnd`, `DebugAdjuster::onFrameUpdate`, `frameEndCallbacks` | under the frame | the framework's per-frame work; debug draw only once something has drawn |
 | `GetControllerState`, `GetControllerStateWithPose` | under the site that polls | the mod's own controller-state polls (`SelfControllerReadScope`) through the suppressor's vtable hooks; `/frame` is how often the mod reads. Everyone else's polls are not timed: every mod's hook sees the same ones, so each mod's table would show the whole game's |
-| `render::drawToSubmittedTexture`, each draw callback under it by its registered name | a root on the game thread, after the frame | overlay drawing in the Submit hook, which FO4VR calls on the game thread about a millisecond after the mod's frame (on the loading screen's own thread during a load); CPU time only; absent while nothing draws |
+| `render::drawToSubmittedTexture`, each draw callback under it by its registered name | a root on the game thread, after the frame | overlay drawing in the game's player-space pass and at Submit, both on the game thread after the mod's frame (Submit on the loading screen's own thread during a load); CPU time only; absent while nothing draws |
 | `UIManager::onFrameUpdate` | where the mod calls it | vrui, while a UI is attached |
 | `vruiPanels` | under `frameEndCallbacks` | collecting the drawn vrui panels into this frame's layers, once a panel was built |
 | `imguiCanvases`, and under it `place`, `pointer`, `build` (with each canvas's `content`), `textures`, `drawData` and `quads` | under `frameEndCallbacks` | the ImGui canvases' frame, once a canvas was created: placing and packing them, the pointer's ray and the keyboard, the ImGui frame with the mod's content in it, the font atlas's new glyphs, the copy of the draw data, and the quads; only `imguiCanvases` while no canvas is visible |
@@ -124,7 +124,7 @@ gpuFrame.mark(blurSite, "gpu.myLayer.blurMs");
   overlap at its edges, so a very short span is mostly its edges. A lightly loaded GPU also clocks
   down, which inflates short times.
 - **Only the mod's own work.** What the engine renders because of the mod (a body, a light and its
-  shadow map, NIF widgets) is part of the frame context's GPU time and can't be timed from here.
+  shadow map, a mesh it attaches) is part of the frame context's GPU time and can't be timed from here.
 
 ## Tracy
 
@@ -147,8 +147,8 @@ buffered before. A capture holds:
 - **Frames**: one per call of `ModBase::onFrameUpdateSafe`. The first frame of a capture spans from
   the plugin loading to the connection; skip it.
 - **Threads**: the game thread shows as *Main thread*, since Tracy names the thread that started it
-  so, whatever it is called later. The Submit hook's drawing is on it too during play, after the
-  mod's frame; during a loading screen it comes from the loading screen's own thread.
+  so, whatever it is called later. The overlay drawing is on it too during play, after the mod's
+  frame; during a loading screen it comes from the loading screen's own thread.
 - **Plots**: `frame.intervalMs` every frame, and one point per compositor frame for `vr.gpuMs`,
   `vr.gameGpuMs`, `vr.lateStartMs`, `vr.headroomMs`, `vr.reprojectedCpu`, `vr.reprojectedGpu` and
   `vr.dropped` (the frame context's numbers), whether perf recording is on or not. Each GPU site

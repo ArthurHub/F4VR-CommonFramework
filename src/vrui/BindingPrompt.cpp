@@ -22,11 +22,11 @@ namespace f4cf::vrui
             case vrcf::Hand::Right:
                 return true;
             case vrcf::Hand::Offhand:
-                return f4vr::isLeftHandedMode();
+                return RE::VRSettings::IsLeftHandedMode();
             case vrcf::Hand::Primary:
             case vrcf::Hand::Any:
             default:
-                return !f4vr::isLeftHandedMode();
+                return !RE::VRSettings::IsLeftHandedMode();
             }
         }
 

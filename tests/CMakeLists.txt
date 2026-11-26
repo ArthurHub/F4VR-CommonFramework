@@ -46,6 +46,7 @@ add_executable(${PROJECT_NAME}_tests
   ${SOURCE_DIR}/config/Overrides.cpp
   ${SOURCE_DIR}/config/ReloadSubscribers.cpp
   ${SOURCE_DIR}/config/ValueParsers.cpp
+  ${SOURCE_DIR}/imgui/ImGuiKeyboardLogic.cpp
   ${SOURCE_DIR}/perf/FrameContext.cpp
   ${SOURCE_DIR}/perf/Perf.cpp
   ${SOURCE_DIR}/perf/Report.cpp
@@ -120,7 +121,22 @@ target_link_options(${PROJECT_NAME}_linked_tests PRIVATE /DELAYLOAD:openvr_api.d
 
 # the tests of the Dear ImGui UI layer, which a build without it does not have
 if(F4CF_WITH_IMGUI_UI)
-  target_sources(${PROJECT_NAME}_linked_tests PRIVATE linked/imgui/ImGuiFontsTests.cpp linked/imgui/ImGuiImageTests.cpp linked/imgui/ImGuiTexturesTests.cpp)
+  target_sources(${PROJECT_NAME}_linked_tests PRIVATE linked/imgui/ImGuiFontsTests.cpp linked/imgui/ImGuiImageTests.cpp linked/imgui/ImGuiTexturesTests.cpp linked/imgui/ImGuiThemeTests.cpp
+    linked/imgui/controls/ControlsTests.cpp linked/imgui/controls/ControlsTextTests.cpp
+    linked/imgui/controls/ControlsButtonsTests.cpp linked/imgui/controls/ControlsSlidersTests.cpp
+    linked/imgui/controls/ControlsChoicesTests.cpp
+    linked/imgui/controls/ControlsTextInputsTests.cpp
+    linked/imgui/controls/ControlsRowsTests.cpp
+    linked/imgui/controls/ControlsTreeTests.cpp
+    linked/imgui/controls/ControlsThemeTests.cpp
+    linked/imgui/controls/ControlsThemeUseTests.cpp
+    linked/imgui/controls/ControlsTargetsTests.cpp
+    linked/imgui/controls/ControlsSearchFieldsTests.cpp
+    linked/imgui/controls/ControlsIconsTests.cpp
+    linked/imgui/controls/ControlsPanesTests.cpp
+    linked/imgui/controls/ControlsTitleBarsTests.cpp
+    linked/imgui/controls/ControlsFootersTests.cpp
+    linked/imgui/controls/ControlsLabelledTests.cpp)
 endif()
 
 f4cf_discover_tests_by_folder(${PROJECT_NAME}_linked_tests ${discover_prefix})

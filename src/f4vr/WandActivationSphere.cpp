@@ -505,7 +505,7 @@ namespace f4cf::f4vr
 
         // Push the placement to world ourselves rather than relying on the parent's subtree update to pick it up
         // (under the skeleton, FRIK's per-frame skeleton update did); this also avoids a frame of lag.
-        updateTransformsDown(_sphereNode.get(), true);
+        RE::NiNodeUtils::UpdateTransformsDown(_sphereNode.get(), true);
     }
 
     /**

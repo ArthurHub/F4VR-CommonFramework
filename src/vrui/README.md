@@ -6,12 +6,8 @@ An in-world UI: panels and buttons attached to game nodes (a wand, the wrist, th
 pressed by the player's fingertip. One `UIManager`, `g_uiManager`, owns the tree and runs input and
 drawing each frame.
 
-An element is drawn one of two ways, and the two mix in one layout:
-
-- **NIF widgets:** a `.nif` mesh per button, its face in a texture atlas that
-  [`vrui_atlas.py`](../../nif-tools/vrui_atlas.py) builds. Part of the game's scene graph.
-- **Panels:** no mesh. Text, images and chrome composed at runtime and drawn by
-  [`render/`](../render/README.md). They can size to their content and change their text every frame.
+Every element is a panel: no mesh, but text, images and chrome composed at runtime and drawn by
+[`render/`](../render/README.md). Panels can size to their content and change their text every frame.
 
 > Part of the [F4VR Common Framework](../README.md) source tree.
 
@@ -23,19 +19,10 @@ An element is drawn one of two ways, and the two mix in one layout:
 |-------|---------|------------|
 | [`UIElement`](UIElement.h) | | The base: position, rotation, scale, visibility, size, children, layout and frame hooks. Also [`UIPadding`](UIElement.h). |
 | [`UIContainer`](UIContainer.h) | `UIElement` | Lays its children out in a row or column, centered or one way. `setBoxStyle` draws a box around them. |
-| [`UIToggleGroupContainer`](UIToggleGroupContainer.h) | `UIContainer` | Radio buttons, over [`UIToggleable`](UIToggleable.h), so NIF and panel toggles share a group. |
+| [`UIToggleGroupContainer`](UIToggleGroupContainer.h) | `UIContainer` | Radio buttons: one `UIToggleButtonPanel` on at a time. |
 | [`UIManager`](UIManager.h) | | `g_uiManager`: attach and detach, the placement presets, input, drawing. |
 | [`UISkeletonHandler`](UISkeletonHandler.h) | | Reads the skeleton: the index fingertips that press, and the wrist preset's place. |
 | [`setFRIKHandPointing`](UIHandPointing.h) | | Points the pressing hand through FRIK's API. |
-
-**NIF widgets**
-
-| Class | Extends | What it is |
-|-------|---------|------------|
-| [`UIWidget`](UIWidget.h) | `UIElement` | A `.nif` with collision. `setDisabled` blocks presses and draws a disabled overlay. |
-| [`UIButton`](UIButton.h) | `UIWidget` | Pressable: `setOnPressHandler`. |
-| [`UIToggleButton`](UIToggleButton.h) | `UIWidget` | On and off, with `btn-border.nif` around it while on. |
-| [`UIMultiStateToggleButton`](UIMultiStateToggleButton.h) | `UIWidget` | Cycles N states, a NIF each. |
 
 **Panels**
 
@@ -44,14 +31,12 @@ An element is drawn one of two ways, and the two mix in one layout:
 | [`UIPanel`](UIPanel.h) | `UIElement` | The base: background, border, rounding and padding; the content is the subclass's. Hidden behind the world by default. Sizes to its content when the subclass can measure it ([`UIPanelSizing`](UIPanel.h)). |
 | [`UITextPanel`](UITextPanel.h) | `UIPanel` | Rows of wrapping text: per-row color, height, underline, tab stops, and [`TextSpan`](UITextPanel.h)s for colors or an image inside a line. |
 | [`UIImagePanel`](UIImagePanel.h) | `UIPanel` | One image (loose or BA2), tinted, contained or stretched. |
-| [`UIButtonPanel`](UIButtonPanel.h) | `UIPanel` | A button of up to three lines of text and/or an image, pressed like `UIButton`. |
+| [`UIButtonPanel`](UIButtonPanel.h) | `UIPanel` | A button of up to three lines of text and/or an image: `setOnPressHandler`, `setDisabled`. |
 | [`UIToggleButtonPanel`](UIToggleButtonPanel.h) | `UIButtonPanel` | On and off, with a ring outside its border while on. |
 | [`UIMultiStateToggleButtonPanel<State>`](UIMultiStateToggleButtonPanel.h) | `UIButtonPanel` | Cycles a `std::map<State, UIButtonPanelContent>` in key order. |
 | [`UIPanelStyle`](UIPanelStyle.h) | | The look in one value: content color, background, border, rounding, padding. `F4VR_PANEL_STYLE` and `F4VR_BUTTON_STYLE` are the house looks; `imgui::UIImGuiPanel` takes it too. |
 
-**Shared:** [`UIPressable`](UIPressable.h) (the disabled state of both kinds of button),
-[`UIToggleable`](UIToggleable.h) (the on state of both kinds of toggle),
-[`BindingPrompt`](BindingPrompt.h) (a controller binding as a text span), and the helpers in
+**Shared:** [`BindingPrompt`](BindingPrompt.h) (a controller binding as a text span), and the helpers in
 [`UIUtils.h`](UIUtils.h).
 
 ## Quick start
@@ -65,14 +50,20 @@ void MyMod::openPanel()
 {
     using namespace vrui;
 
-    _modeTgl = std::make_shared<UIToggleButton>("ui-example\\btn-example-1.nif");
-    _modeTgl->setOnToggleHandler([this](UIToggleButton*, bool on) { setMode(on); });
+    _modeTgl = std::make_shared<UIToggleButtonPanel>("Mode");
+    _modeTgl->setTopText("MODE");
+    _modeTgl->setBottomText("FAST");
+    _modeTgl->setOnToggleHandler([this](UIToggleButtonPanel*, bool on) { setMode(on); });
 
-    auto saveBtn = std::make_shared<UIButton>("ui-common\\btn-save.nif");
-    saveBtn->setOnPressHandler([this](UIWidget*) { save(); });
+    auto saveBtn = std::make_shared<UIButtonPanel>("Save");
+    saveBtn->setImage("f4cf\\vrui\\save.DDS");
+    saveBtn->setBottomText("SAVE");
+    saveBtn->setOnPressHandler([this](UIButtonPanel*) { save(); });
 
-    auto exitBtn = std::make_shared<UIButton>("ui-common\\btn-exit.nif");
-    exitBtn->setOnPressHandler([this](UIWidget*) { closePanel(); });
+    auto exitBtn = std::make_shared<UIButtonPanel>("Exit");
+    exitBtn->setImage("f4cf\\vrui\\exit.DDS");
+    exitBtn->setBottomText("EXIT");
+    exitBtn->setOnPressHandler([this](UIButtonPanel*) { closePanel(); });
 
     // a centered row, 0.3 between the buttons
     auto row = std::make_shared<UIContainer>("Row", UIContainerLayout::HorizontalCenter, 0.3f);
@@ -97,15 +88,14 @@ void MyMod::closePanel()
 }
 ```
 
-A NIF path is under the mod's `Meshes\<ModName>\`. For panels instead of meshes, swap in the panel
-classes: their handlers have the same names, taking the panel.
+An image path is under the mod's `Textures\<ModName>\` ([Assets](#assets)).
 
 - **Each frame:** the framework updates the UI after the mod's `onFrameUpdate()` returns, while the
   player is loaded. So a press handler runs after the mod's frame, and the mod sees its effect the next
   one. A mod that needs the UI updated at a point of its own frame calls `g_uiManager->onFrameUpdate()`
   there, and the framework skips it that frame.
 - **Detaching** mid-frame can be unsafe: `detachElement(element, true)` releases it next frame.
-- **Radio buttons:** put the toggles in a `UIToggleGroupContainer`. A panel toggle that is on draws a
+- **Radio buttons:** put the toggles in a `UIToggleGroupContainer`. A toggle that is on draws a
   ring 0.1 units outside its border (`setToggleFrame(color, thickness, gap)`), so leave that much
   padding.
 
@@ -201,14 +191,12 @@ box->addElement(button);
 
 ## Assets
 
-- **A panel** needs no mesh, only a texture if it shows an image: `setImage("Data\\Textures\\MyMod\\icon.dds")`,
-  or a path under the mod's `Textures\<ModName>\`. `mod-template` ships icons in
-  `Textures\<ModName>\f4cf\vrui\` (save, reset, exit, config, wiki, debug spheres) and the binding
-  prompts' in `f4cf\bindings\`, drawn by [`tools/gen_binding_icons.py`](../../tools/gen_binding_icons.py).
-  Text uses the framework's font, or the mod's TTF at `Data\Interface\<ModName>\<ModName>.ttf`
-  ([`render/`](../render/README.md#text)).
-- **A NIF widget** needs a mesh and an atlas. `mod-template` ships two: `ui-common` (back, exit, save,
-  reset, the toggle frames and the disabled overlay, which the NIF classes use) and `ui-example`, a demo.
+A panel needs no mesh, only a texture if it shows an image: `setImage("Data\\Textures\\MyMod\\icon.dds")`,
+or a path under the mod's `Textures\<ModName>\`. `mod-template` ships icons in
+`Textures\<ModName>\f4cf\vrui\` (save, reset, exit, config, wiki, debug spheres) and the binding
+prompts' in `f4cf\bindings\`, drawn by [`tools/gen_binding_icons.py`](../../tools/gen_binding_icons.py).
+Text uses the framework's font, or the mod's TTF at `Data\Interface\<ModName>\<ModName>.ttf`
+([`render/`](../render/README.md#text)).
 
 ### Making a texture
 
@@ -217,23 +205,10 @@ are 140x100, the activation icons 256x256).
 
 - **No compression for loose icons.** An icon is mostly its alpha edge, which block compression is worst
   at, and there is nothing to win: all the loose UI textures of the framework and a mod come to ~3 MB
-  against 0.7 MB as BC3. BC3 is for the atlases, where a 1024x1024 sheet makes it worth it.
+  against 0.7 MB as BC3.
 - **Mipmaps by use, not size.** A panel icon, read at about one size near the hand, has none. The
   activation icons, seen in the world from any distance, have a full chain, since minifying a texture
   without them shimmers. Give one mips if it is seen from across a room.
-
-### Making an atlas
-
-Draw each button as a PNG in a folder (the file name is the NIF name), then:
-
-```
-python nif-tools/vrui_atlas.py pack my_buttons --texture-subpath MyMod --name ui-common --output data/mod
-```
-
-It packs the images into `Textures\MyMod\ui-common.DDS` and writes `Meshes\MyMod\ui-common\<image>.nif`
-for each, with its UV rectangle, its size (`W:<w> H:<h>` in the root name) and the texture path inside
-it. `--texture-subpath` is required, usually the mod's name. Needs Pillow. All the options, and
-`unpack`: [nif-tools](../../nif-tools/README.md).
 
 ## Pressing
 
@@ -284,7 +259,9 @@ it. `--texture-subpath` is required, usually the mod's name. Needs Pillow. All t
   and facing where the head faced: `root->setPosition(0, 120, -20)` is 120 units ahead and 20 below.
   `recenterWorldElement(root)` brings it back in front of the player. With a distance,
   `attachPresetToWorldAtHMD(root, 350)` does that by itself once the player walks further than that from
-  it. A hidden root is left where it is.
+  it. A hidden root is left where it is. `getWorldPlace(root)` gives the transform it is placed from and
+  whether a hand holds it, and `setWorldPlace(root, world)` puts it at another, from the next frame update:
+  the framework's keyboard keeps itself beside a canvas with them.
 
 ### Moving a world UI
 

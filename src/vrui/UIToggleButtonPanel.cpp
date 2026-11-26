@@ -9,6 +9,10 @@ namespace f4cf::vrui
         : UIButtonPanel(name, width, height)
     {}
 
+    /**
+     * Set the state without calling the toggle handler, for showing a state that changed elsewhere. A
+     * change is still reported up the tree, which is how a group turns its other toggles off.
+     */
     void UIToggleButtonPanel::setToggleState(const bool isToggleOn)
     {
         if (_isToggleOn != isToggleOn) {
@@ -44,7 +48,7 @@ namespace f4cf::vrui
     }
 
     /**
-     * The button's letters, then T while toggled on - UIToggleButton's letters.
+     * The button's letters, then T while toggled on.
      */
     std::string UIToggleButtonPanel::stateFlags() const
     {

@@ -8,7 +8,6 @@
 #include <unordered_map>
 #include <unordered_set>
 
-#include "../f4vr/F4VROffsets.h"
 #include "../f4vr/F4VRUtils.h"
 #include "DdsHeader.h"
 #include "RE/Bethesda/BSGraphics.h"
@@ -188,14 +187,11 @@ namespace f4cf::render
                 logger::warn("Texture '{}' is not loaded: {}; images using it draw nothing", _path, _error);
                 return {};
             }
-            RE::NiTexture* loaded = nullptr;
-            f4vr::LoadTextureByPath(_path.c_str(), true, loaded, 0, 0, 0);
-            // The loader's reference belongs to the caller - each call adds one - so it is adopted
-            // rather than added to, or every load would keep the texture alive for good.
-            _texture.reset(loaded);
-            if (loaded) {
-                loaded->DecRefCount();
-            } else {
+            // the loader assigns into the NiPointer, so the texture is held by this one reference
+            RE::NiPointer<RE::NiTexture> loaded;
+            RE::BSShaderManager::GetTexture(_path.c_str(), true, loaded, false, false, false);
+            _texture = std::move(loaded);
+            if (!_texture) {
                 _error = "the game did not load it";
                 logger::warn("Texture '{}' did not load; images using it draw nothing", _path);
             }

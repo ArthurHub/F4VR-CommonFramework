@@ -453,24 +453,78 @@ namespace
     }
 
     /**
-     * Remove the key at a path from a document, which has it, and the tables over it that are left with no keys and
-     * are not sections of the text, as a table of dotted keys: the text has nothing of them once their keys are gone.
-     * `chain` is the nodes along the path, from the root.
+     * Remove the key at a path from a document, which has it, and the tables over it that are left with no keys. The
+     * [header] line of each of those that is a section of the text is added to `lines`, to be taken out with the key:
+     * a table of dotted keys has no line of its own. `chain` is the nodes along the path, from the root.
      */
     void erase(toml::table& root, const std::string_view text, const toml::table& original, const std::span<const std::string_view> path,
-        const std::span<const toml::node* const> chain)
+        const std::span<const toml::node* const> chain, std::vector<std::size_t>& lines)
     {
         std::vector<toml::table*> tables{ &root };
         for (const auto key : path.first(path.size() - 1)) {
             tables.push_back(tables.back()->get(key)->as_table());
         }
         tables.back()->erase(path.back());
-        for (auto depth = path.size() - 1; depth > 0; --depth) {
-            if (!tables[depth]->empty() || isSection(text, original, *chain[depth]->as_table(), depth)) {
-                break;
+        for (auto depth = path.size() - 1; depth > 0 && tables[depth]->empty(); --depth) {
+            if (const auto& table = *chain[depth]->as_table(); isSection(text, original, table, depth)) {
+                lines.push_back(table.source().begin.line);
             }
             tables[depth - 1]->erase(path[depth - 1]);
         }
+    }
+
+    /**
+     * Add the lines, counted from 1, that a node `depth` keys below the root is written on: a value's lines, and for a
+     * table that is not inline, the lines of each of its values and the [header] of each section in it, its own too.
+     * Why not for a node with an array of tables in it, or with no position in the text.
+     */
+    std::expected<void, std::string> collectLines(const std::string_view text, const toml::table& root, const toml::node& node, const std::size_t depth,
+        std::vector<std::size_t>& lines)
+    {
+        if (isArrayOfSections(node)) {
+            return std::unexpected("holds an array of tables");
+        }
+        const auto* table = node.as_table();
+        if (!table || table->is_inline()) {
+            const auto& source = node.source();
+            if (source.begin.line == 0) {
+                return std::unexpected("has no position in the text");
+            }
+            for (auto line = source.begin.line; line <= source.end.line; ++line) {
+                lines.push_back(line);
+            }
+            return {};
+        }
+        if (isSection(text, root, *table, depth)) {
+            lines.push_back(table->source().begin.line);
+        }
+        for (const auto& [key, child] : *table) {
+            if (auto collected = collectLines(text, root, child, depth + 1, lines); !collected) {
+                return collected;
+            }
+        }
+        return {};
+    }
+
+    /**
+     * The text with lines taken out, each counted from 1 with its line ending. A line it does not have is skipped.
+     */
+    std::string withoutLines(const std::string_view text, std::vector<std::size_t> lines)
+    {
+        // from the last line up, so each line is still at its number
+        std::ranges::sort(lines, std::greater{});
+        const auto repeated = std::ranges::unique(lines);
+        lines.erase(repeated.begin(), repeated.end());
+        std::string edited(text);
+        for (const auto line : lines) {
+            const auto begin = lineStart(edited, line);
+            if (!begin || *begin >= edited.size()) {
+                continue;
+            }
+            const auto end = lineStart(edited, line + 1).value_or(edited.size());
+            edited.erase(*begin, end - *begin);
+        }
+        return edited;
     }
 
     /**
@@ -613,10 +667,12 @@ namespace f4cf::common
      * is replaced where it is written, and nothing else in the text changes; one that already holds the value stays as
      * it is written, so a save of unchanged values changes nothing. A key it does not have is added as a
      * line after the last value of its section, as a dotted key when its table is not a section of its own, and a
-     * section it does not have is added at the end with a [header].
+     * section it does not have is added at the end with a [header]. A table written on lines of its own, a section or
+     * a table of dotted keys, set to a table keeps its form, see setTable.
      * The edit is parsed back, and kept only when the document then holds the value and is otherwise the same.
-     * Returns false and leaves the text as it was when it is not: for a path that is a table or goes through a value
-     * that is not a table, and for a text that did not parse. error() then says why.
+     * Returns false and leaves the text as it was when it is not: for a path that is such a table and a value that is
+     * not a table, or that goes through a value that is not a table, and for a text that did not parse. error() then
+     * says why.
      */
     bool TomlEditor::set(const std::span<const std::string_view> path, const Value& value)
     {
@@ -638,6 +694,10 @@ namespace f4cf::common
 
         std::expected<std::string, std::string> edited;
         if (const auto chain = chainOf(_table, path); chain.size() == path.size() + 1) {
+            const auto* existing = chain.back()->as_table();
+            if (const auto* table = parsedValue->get("v")->as_table(); table && existing && !existing->is_inline()) {
+                return setTable(path, *table);
+            }
             const auto splice = spliceFor(_text, *chain.back(), value);
             if (splice && holdsValue(*chain.back(), *parsedValue->get("v"))) {
                 // already holds it: the text stays as it is written
@@ -668,13 +728,61 @@ namespace f4cf::common
     }
 
     /**
+     * Set a table written on lines of its own, a section or a table of dotted keys, to a table in place: each key of the
+     * new table is set in it (see set, so a table under it is set the same way), and each key the new table does not
+     * have is removed (see remove). Its [header], its comments and the order of its keys stay, and a key it already
+     * holds is not touched. An empty table is refused, as it would take the table out. Returns false and leaves the
+     * text as it was when any of the edits cannot be made, and error() then says why.
+     */
+    bool TomlEditor::setTable(const std::span<const std::string_view> path, const toml::table& value)
+    {
+        if (value.empty()) {
+            _error = std::format("{}: is a table on lines of its own, which an empty table is not written over", pathText(path));
+            return false;
+        }
+        // the keys it has now, as the edits change the document they are read from
+        std::vector<std::string> before;
+        for (const auto& [key, child] : *chainOf(_table, path).back()->as_table()) {
+            before.emplace_back(key.str());
+        }
+
+        const auto text = _text;
+        const auto table = _table;
+        const auto undo = [&]() {
+            auto error = std::move(_error);
+            _text = text;
+            _table = table;
+            _error = std::move(error);
+            return false;
+        };
+        std::vector<std::string_view> keyPath(path.begin(), path.end());
+        keyPath.emplace_back();
+        for (const auto& [key, child] : keysInTextOrder(value)) {
+            keyPath.back() = key;
+            if (!set(keyPath, Value(*child))) {
+                return undo();
+            }
+        }
+        for (const auto& key : before) {
+            if (!value.contains(key)) {
+                keyPath.back() = key;
+                if (!remove(keyPath)) {
+                    return undo();
+                }
+            }
+        }
+        return true;
+    }
+
+    /**
      * Remove the key at a path of keys, such as {"Section", "key"}, with its value: the lines the value is written on
-     * are taken out, the key's line first, with a comment at the end of the last of them. Every other byte stays,
-     * also a comment on a line above the key and a section left with no keys. A key the text does not have is
+     * are taken out, with a comment at the end of the last of them. A table goes with all of its lines: its values,
+     * and its [header] and those of the sections under it. A section or a table of dotted keys left with no keys goes
+     * too, up to the root. Every other byte stays, also comments and blank lines. A key the text does not have is
      * already removed, and nothing changes.
      * The edit is parsed back, and kept only when the document is then the old one less that key. Returns false and
      * leaves the text as it was when it is not: for a key that shares its lines with another, as in an inline table,
-     * for a path that is a section or an array of tables, and for a text that did not parse. error() then says why.
+     * for a path that is or holds an array of tables, and for a text that did not parse. error() then says why.
      */
     bool TomlEditor::remove(const std::span<const std::string_view> path)
     {
@@ -691,26 +799,19 @@ namespace f4cf::common
         if (chain.size() != path.size() + 1) {
             return true;
         }
-        const auto& node = *chain.back();
-        if (const auto* table = node.as_table(); table && !table->is_inline()) {
-            _error = std::format("{}: is a table, not a value", pathText(path));
+        if (isArrayOfSections(*chain.back())) {
+            _error = std::format("{}: is an array of tables", pathText(path));
             return false;
         }
-        if (isArrayOfSections(node)) {
-            _error = std::format("{}: is an array of tables, not a value", pathText(path));
+        std::vector<std::size_t> lines;
+        if (const auto collected = collectLines(_text, _table, *chain.back(), path.size(), lines); !collected) {
+            _error = std::format("{}: {}", pathText(path), collected.error());
             return false;
         }
-        const auto& source = node.source();
-        const auto begin = source.begin.line == 0 ? std::nullopt : lineStart(_text, source.begin.line);
-        if (!begin) {
-            _error = std::format("{}: has no position in the text", pathText(path));
-            return false;
-        }
-        const auto end = lineStart(_text, static_cast<std::size_t>(source.end.line) + 1).value_or(_text.size());
-        auto edited = std::format("{}{}", std::string_view(_text).substr(0, *begin), std::string_view(_text).substr(end));
 
         auto expected = _table;
-        erase(expected, _text, _table, path, chain);
+        erase(expected, _text, _table, path, chain, lines);
+        auto edited = withoutLines(_text, std::move(lines));
         auto result = verify(_text, edited, expected, _sourceName);
         if (!result) {
             _error = std::format("{}: is not on lines of its own: {}", pathText(path), result.error());

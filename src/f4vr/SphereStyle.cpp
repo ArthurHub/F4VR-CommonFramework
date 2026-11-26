@@ -1,7 +1,6 @@
 #include "SphereStyle.h"
 
 #include "EffectShaderMaterials.h"
-#include "F4VROffsets.h"
 #include "F4VRUtils.h"
 #include "common/CommonUtils.h"
 
@@ -67,17 +66,13 @@ namespace f4cf::f4vr
         }
 
         /**
-         * Load a texture through the engine's texture cache. The loader's reference belongs to the caller, so it is
-         * adopted rather than added to — or every load would keep the texture alive for good.
+         * Load a texture through the engine's texture cache. The loader assigns into the NiPointer, so the texture is
+         * held by that one reference.
          */
         RE::NiPointer<RE::NiTexture> loadTexture(const std::string& path)
         {
-            RE::NiTexture* loaded = nullptr;
-            LoadTextureByPath(path.c_str(), true, loaded, 0, 0, 0);
-            RE::NiPointer<RE::NiTexture> texture(loaded);
-            if (loaded) {
-                loaded->DecRefCount();
-            }
+            RE::NiPointer<RE::NiTexture> texture;
+            RE::BSShaderManager::GetTexture(path.c_str(), true, texture, false, false, false);
             return texture;
         }
     }

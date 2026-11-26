@@ -427,11 +427,52 @@ TEST_CASE("TomlEditor: a value the text already holds stays as it is written")
         CHECK(editor.error().empty());
     }
 
-    SECTION("a section is still refused")
+    SECTION("a section set to a table it holds stays as it is written")
     {
         TomlEditor editor("[M]\nx = 1\n");
-        CHECK_FALSE(editor.set({ "M" }, toml::table{ { "x", 1 } }));
+        CHECK(editor.set({ "M" }, toml::table{ { "x", 1 } }));
+        CHECK(editor.text() == "[M]\nx = 1\n");
     }
+}
+
+TEST_CASE("TomlEditor: a table on lines of its own set to a table keeps its form: its keys are set, and the ones it no longer has removed")
+{
+    const auto color = toml::parse("v = { rgb = [1, 2, 3], alpha = 200 }");
+    const auto& value = *color.get("v");
+
+    // a section of its own, with its comments
+    CHECK(setOne("[Debug]\nx = 1\n\n[Debug.color]  # tint\n# red\nrgb = [255, 107, 107]\nalpha = 255\n", { "Debug", "color" }, value) ==
+          "[Debug]\nx = 1\n\n[Debug.color]  # tint\n# red\nrgb = [1, 2, 3]\nalpha = 200\n");
+
+    // a table of dotted keys, among other keys
+    CHECK(setOne("[Debug]\ncolor.rgb = [255, 107, 107]\nx = 1\ncolor.alpha = 255\n", { "Debug", "color" }, value) == "[Debug]\ncolor.rgb = [1, 2, 3]\nx = 1\ncolor.alpha = 200\n");
+
+    // a key it does not have is added, one the new table does not have removed, and a table under it set the same way
+    const auto binding = toml::parse("v = { hand = \"left\", modifier = { button = \"grip\" } }");
+    CHECK(setOne("[K]\nhand = \"right\"\nduration = 1.0\n\n[K.modifier]\nhand = \"any\"\nbutton = \"a\"\n", { "K" }, *binding.get("v")) ==
+          "[K]\nhand = \"left\"\n\n[K.modifier]\nbutton = \"grip\"\n");
+
+    // through several sets, as a Save writes it
+    TomlEditor editor("[Debug.color]\nrgb = [255, 107, 107]\nalpha = 255\n[Main]\nf = 1.0\n");
+    CHECK(editor.set({ { { "Main", "f" }, 2.0f }, { { "Debug", "color" }, value } }));
+    CHECK(editor.text() == "[Debug.color]\nrgb = [1, 2, 3]\nalpha = 200\n[Main]\nf = 2.0\n");
+}
+
+TEST_CASE("TomlEditor: a table on lines of its own set to an empty table, or with a key it cannot set, is refused and the text stays")
+{
+    const std::string text = "[Debug.color]\nrgb = [255, 107, 107]\nalpha = 255\n";
+    TomlEditor empty(text);
+    CHECK_FALSE(empty.set({ "Debug", "color" }, toml::table{}));
+    CHECK(empty.text() == text);
+    CHECK(empty.error().contains("Debug.color: is a table on lines of its own"));
+
+    // its first key is set, and the second cannot be: the first is put back
+    const std::string items = "[T]\na = 1\n[[T.items]]\nname = 'n'\n";
+    TomlEditor arrays(items);
+    CHECK_FALSE(arrays.set({ "T" }, toml::table{ { "a", 2 }, { "items", 3 } }));
+    CHECK(arrays.text() == items);
+    INFO(arrays.error());
+    CHECK(arrays.error().contains("T.items"));
 }
 
 TEST_CASE("TomlEditor: a set after a refused one works")
@@ -464,19 +505,55 @@ TEST_CASE("TomlEditor: a removed key takes its lines out, with its inline commen
     CHECK(root.text() == "SS2 = \"Gameplay\"\n");
 }
 
-TEST_CASE("TomlEditor: a removed key leaves its section, and takes a table of dotted keys with its last key")
+TEST_CASE("TomlEditor: a removed key takes the sections and tables of dotted keys it leaves empty")
 {
-    TomlEditor section("[Main]\nkey = 1\n\n[Debug]\niVersion = 1\n");
+    // a section left with a comment and a blank line keeps them, and loses its header
+    TomlEditor section("[Main]\n# about\nkey = 1\n\n[Debug]\niVersion = 1\n");
     REQUIRE(section.remove({ "Main", "key" }));
-    CHECK(section.text() == "[Main]\n\n[Debug]\niVersion = 1\n");
-    CHECK(section.table()["Main"].is_table());
+    CHECK(section.text() == "# about\n\n[Debug]\niVersion = 1\n");
+    CHECK(!section.table()["Main"]);
 
-    TomlEditor dotted("[Main]\nhand.x = 1\nhand.y = 2\n");
+    TomlEditor dotted("[Main]\nhand.x = 1\nhand.y = 2\nkeep = 1\n");
     REQUIRE(dotted.remove({ "Main", "hand", "x" }));
-    CHECK(dotted.text() == "[Main]\nhand.y = 2\n");
+    CHECK(dotted.text() == "[Main]\nhand.y = 2\nkeep = 1\n");
     REQUIRE(dotted.remove({ "Main", "hand", "y" }));
-    CHECK(dotted.text() == "[Main]\n");
+    CHECK(dotted.text() == "[Main]\nkeep = 1\n");
     CHECK(!dotted.table()["Main"]["hand"]);
+
+    // up to the root: a section only made by the header under it, and one of its own
+    TomlEditor nested("[A.B]\nx = 1\n[C]\n[C.D]\ny = 1\n[Empty]\n");
+    REQUIRE(nested.remove({ "A", "B", "x" }));
+    CHECK(nested.text() == "[C]\n[C.D]\ny = 1\n[Empty]\n");
+    REQUIRE(nested.remove({ "C", "D", "y" }));
+    CHECK(nested.text() == "[Empty]\n");
+
+    // the root stays, and so does a section that was empty before
+    TomlEditor root("top = 1\n[Empty]\n");
+    REQUIRE(root.remove({ "top" }));
+    CHECK(root.text() == "[Empty]\n");
+}
+
+TEST_CASE("TomlEditor: a removed table takes its header, its values and the sections under it")
+{
+    const std::string text = "[Main]\nfScale = 1.0\n\n[Main.color]  # tint\nrgb = [1, 2, 3]\nalpha = 255\n\n[Main.color.extra]\nx = 1\n\n[Debug]\nx = 1\n";
+    TomlEditor color(text);
+    REQUIRE(color.remove({ "Main", "color" }));
+    CHECK(color.text() == "[Main]\nfScale = 1.0\n\n\n\n[Debug]\nx = 1\n");
+    CHECK(color.table()["Main"]["fScale"]);
+
+    TomlEditor main(text);
+    REQUIRE(main.remove({ "Main" }));
+    CHECK(main.text() == "\n\n\n[Debug]\nx = 1\n");
+
+    // a table of dotted keys, whose lines are among others
+    TomlEditor dotted("[Main]\ncolor.rgb = [1, 2, 3]\nkeep = 1\ncolor.alpha = 255\n");
+    REQUIRE(dotted.remove({ "Main", "color" }));
+    CHECK(dotted.text() == "[Main]\nkeep = 1\n");
+
+    // an inline table is a value
+    TomlEditor inlined("[Main]\ncolor = { rgb = [1, 2, 3], alpha = 255 }\nkeep = 1\n");
+    REQUIRE(inlined.remove({ "Main", "color" }));
+    CHECK(inlined.text() == "[Main]\nkeep = 1\n");
 }
 
 TEST_CASE("TomlEditor: a key the text does not have is already removed")
@@ -499,8 +576,8 @@ TEST_CASE("TomlEditor: a key it cannot remove is refused and the text stays")
     };
     // a key of an inline table shares its line with the others
     refused("hand = { x = 1, y = 2 }\n", { "hand", "x" }, "hand.x: is not on lines of its own");
-    refused(SHIPPED, { "Main" }, "Main: is a table, not a value");
-    refused("[[item]]\nname = 'a'\n", { "item" }, "item: is an array of tables, not a value");
+    refused("[[item]]\nname = 'a'\n", { "item" }, "item: is an array of tables");
+    refused("[a]\nx = 1\n[[a.items]]\nname = 'n'\n", { "a" }, "a: holds an array of tables");
     refused(SHIPPED, {}, "no key to remove");
 }
 

@@ -55,6 +55,12 @@ change there reaches every mod.
 Each subsystem's README is canonical for its API and behavior. Update it with the code, and add a
 `docs/CHANGELOG.md` entry for anything a mod sees. Keep this file to the map and the traps.
 
+- `mod-template/` is what a new mod copies, and an existing mod copies again from it: a change to its
+  files, its `f4cf\` assets or its `[Debug]` keys updates
+  [`docs/creating-a-new-mod.md`](docs/creating-a-new-mod.md) and the template's own `README.md` and
+  `CLAUDE.md`, and the CHANGELOG's **Upgrading** says what an existing mod copies.
+- `docs/tech/` holds design notes and investigations, not API docs: a README wins where they differ.
+
 ## Map
 
 `PCH.h` does `using namespace f4cf;`. A mod derives from `ModBase` (global `f4cf::g_mod`) and
@@ -66,12 +72,12 @@ overrides `onModLoaded` (F4SE load: Papyrus, hooks), `onGameLoaded` (once), `onG
 | `src/ModBase.*`, `Logger.h` | `f4cf`, `f4cf::logger` | Lifecycle, `ModBase::Settings`, spdlog logging | [src/README.md](src/README.md) |
 | `src/config/` | `f4cf`, `f4cf::config` | `ConfigBase`: TOML load/save, hot-reload, overrides, migration | [src/config/README.md](src/config/README.md), [docs/debug-config.md](docs/debug-config.md) |
 | `src/vrcf/` | `f4cf::vrcf` | Controller input (`VRControllers`), suppression (`VRControllersSuppress`), haptics (`VRHaptics`), bindings | [src/vrcf/README.md](src/vrcf/README.md), [docs/input-binding.md](docs/input-binding.md) |
-| `src/vrui/` | `f4cf::vrui` | VR UI: NIF widgets and drawn panels, layout, `g_uiManager`, binding prompts | [src/vrui/README.md](src/vrui/README.md) |
+| `src/vrui/` | `f4cf::vrui` | VR UI: drawn panels and buttons, layout, `g_uiManager`, binding prompts | [src/vrui/README.md](src/vrui/README.md) |
 | `src/render/` | `f4cf::render` | Overlay drawing: the shared Submit hook, primitives, text, textures, scene-depth occlusion | [src/render/README.md](src/render/README.md), [docs/tech/scene-depth-occlusion.md](docs/tech/scene-depth-occlusion.md) |
 | `src/imgui/` | `f4cf::imgui` | Dear ImGui canvases on world-space quads, the wand pointer, the VR keyboard | [src/imgui/README.md](src/imgui/README.md), [docs/tech/vr-keyboard.md](docs/tech/vr-keyboard.md) |
+| `src/imgui/controls/` | `f4cf::imgui::controls` | A panel's small controls in one look: text, marks and icons, frames, in the `imgui::Theme`; their targets for devbench | [src/imgui/controls/README.md](src/imgui/controls/README.md) |
 | `src/debug/` | `f4cf::debug` | Immediate-mode in-world debug draw (`debug::dd()`) | [src/debug/README.md](src/debug/README.md) |
-| `src/f4vr/` | `f4cf::f4vr` | Game state: nodes, skeleton, menus, Scaleform, player rotation, activation spheres; all RVAs in `F4VROffsets.h` | [src/f4vr/README.md](src/f4vr/README.md), [docs/activation-spheres.md](docs/activation-spheres.md) |
-| `src/f4sevr/` | `F4SEVR` | Ported F4SE VR SDK: Papyrus interop and native functions | [src/f4sevr/README.md](src/f4sevr/README.md) |
+| `src/f4vr/` | `f4cf::f4vr` | Game state: nodes, skeleton, menus, Scaleform, player rotation, activation spheres, Papyrus through CommonLibF4VR; no addresses of its own, those are CommonLibF4VR's | [src/f4vr/README.md](src/f4vr/README.md), [docs/activation-spheres.md](docs/activation-spheres.md) |
 | `src/common/` | `f4cf::common` | Math (quaternions, matrices), utilities, `TomlEditor` | [src/common/README.md](src/common/README.md) |
 | `src/devbench/` | `f4cf::devbench` | The mod's devbench tool: actions an agent calls in the running game | [src/devbench/README.md](src/devbench/README.md) |
 | `src/modsconfig/` | `mods_config::api` | The mod's Mods Config FO4 VR client and its config previews | [src/modsconfig/README.md](src/modsconfig/README.md) |
@@ -81,10 +87,11 @@ overrides `onModLoaded` (F4SE load: Papyrus, hooks), `onGameLoaded` (once), `onG
 
 Most bugs here come from running code on the wrong **thread** or from a **lifetime** that ends too soon.
 
-- **Render thread**: a `render` draw callback runs on Submit's thread, which is the game thread
-  during play and the loading screen's thread while one is up. It never touches nodes, forms or
-  config, never calls OpenVR, and restores anything it binds beyond `ScopedPipelineState`. A producer
-  fills a `render::PrimitiveDraw` on the game thread and `publish()`es it.
+- **Render thread**: a `render` draw callback runs in the game's player-space pass, or at Submit for
+  debug draw: the game thread during play, and the loading screen's thread at Submit while one is up
+  (the pass doesn't run then). It never touches nodes, forms or config, never calls OpenVR, and
+  restores anything it binds beyond `ScopedPipelineState`. A producer fills a `render::PrimitiveDraw`
+  on the game thread and `publish()`es it.
 - **Config load thread**: `loadConfigInternal()` runs on the file watcher's thread or the override
   setter's, so it only reads values. Engine work after a load goes in a
   `subscribeForConfigChangedEvent` callback, which runs on the game thread.
@@ -110,6 +117,6 @@ Most bugs here come from running code on the wrong **thread** or from a **lifeti
 ## Reverse engineering
 
 Before looking up an RVA, struct offset or hook target, read the F4VR reference library's guide,
-`C:\Stuff\GitHub\Mine\Modding-Reference\F4VR\CLAUDE.md`; this framework's own addresses are in its
-`Analysis/gold/F4VR-CommonFramework_RE_REFERENCE.md`. Authority runs f4sevr 0.6.21 headers →
-CommonLibF4VR AddressLib → the `_RE_REFERENCE.md` files.
+`C:\Stuff\GitHub\Mine\Modding-Reference\F4VR\CLAUDE.md`. The framework has no addresses of its own: a
+game function, global, setting or hook site it needs goes in CommonLibF4VR, tagged `// VR: tested`,
+`// VR: checked` or `// VR: broken (why)`, and its `VRAddressCheck` run against the game before committing.

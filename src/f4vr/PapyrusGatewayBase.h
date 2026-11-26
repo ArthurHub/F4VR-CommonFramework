@@ -1,10 +1,5 @@
 #pragma once
 
-#include "f4sevr/PapyrusArgs.h"
-#include "f4sevr/PapyrusNativeFunctions.h"
-#include "f4sevr/PapyrusUtils.h"
-#include "f4sevr/PapyrusVM.h"
-
 namespace f4cf::f4vr
 {
     /**
@@ -29,8 +24,8 @@ namespace f4cf::f4vr
 
             // Register a native papyrus function that is called from a papyrus script to register for gateway access.
             // I couldn't find a way to get the script object handle so this is a workaround for the papyrus script to send its handle.
-            const auto vm = F4SEVR::getGameVM()->m_virtualMachine;
-            vm->RegisterFunction(new F4SEVR::NativeFunction1("RegisterPapyrusGatewayScript", _instance->_registerScriptClassName.c_str(), onRegisterGatewayScript, vm));
+            const auto vm = RE::GameVM::GetSingleton()->GetVM();
+            vm->BindNativeMethod(_registerScriptClassName, "RegisterPapyrusGatewayScript", onRegisterGatewayScript);
         }
 
         virtual ~PapyrusGatewayBase()
@@ -42,46 +37,43 @@ namespace f4cf::f4vr
         /**
          * On receiving a papyrus script registration call, we store the script handle and name for later to call scripts in it.
          */
-        static void onRegisterGatewayScript(F4SEVR::StaticFunctionTag*, F4SEVR::VMObject* scriptObj)
+        static void onRegisterGatewayScript(std::monostate, const RE::BSTSmartPointer<RE::BSScript::Object> scriptObj)
         {
-            if (scriptObj && _instance) {
-                const auto scriptName = scriptObj->GetObjectType();
-                uint64_t scriptHandle = scriptObj->GetHandle();
-                logger::info("Register for Papyrus gateway by Script:'{}' Handle:({})", scriptName.c_str(), scriptHandle);
+            const auto typeInfo = scriptObj ? scriptObj->GetTypeInfo() : nullptr;
+            if (typeInfo && _instance) {
+                const std::string scriptName = typeInfo->GetName();
+                const std::uint64_t scriptHandle = scriptObj->GetHandle();
+                logger::info("Register for Papyrus gateway by Script:'{}' Handle:({})", scriptName, scriptHandle);
                 _instance->_scriptHandle = scriptHandle;
-                _instance->_scriptName = scriptName.c_str();
+                _instance->_scriptName = scriptName;
             } else {
                 logger::error("Papyrus Gateway instance is not set or scriptObj is null");
             }
         }
 
         /**
-         * No args papyrus function call.
+         * Execute the given papyrus function on the registered script object with the given arguments, which must match its
+         * Papyrus declaration (bool, int, float, string, arrays as std::vector). The call is queued, not waited on.
          */
-        void executePapyrusScript(const char* functionName) const
-        {
-            F4SEVR::VMArray<F4SEVR::VMVariable> arguments;
-            executePapyrusScript(functionName, arguments);
-        }
-
-        /**
-         * Execute the given papyrus function on the registered script object with the given arguments.
-         */
-        void executePapyrusScript(const char* functionName, F4SEVR::VMArray<F4SEVR::VMVariable>& arguments) const
+        template <class... Args>
+        void executePapyrusScript(const char* functionName, Args... args) const
         {
             if (_scriptHandle == 0) {
                 logger::error("No registered gateway script handle found, Papyrus script missing?");
                 return;
             }
 
-            logger::debug("Calling papyrus function '{}' on script '{}'", functionName, _scriptName.c_str());
-            F4SEVR::execPapyrusFunction(_scriptHandle, _scriptName, functionName, arguments);
+            logger::debug("Calling papyrus function '{}' on script '{}'", functionName, _scriptName);
+            const auto vm = RE::GameVM::GetSingleton()->GetVM();
+            if (!vm->DispatchMethodCall(_scriptHandle, _scriptName.c_str(), functionName, nullptr, args...)) {
+                logger::error("Failed to call papyrus function '{}' on script '{}' ({})", functionName, _scriptName, _scriptHandle);
+            }
         }
 
         std::string _registerScriptClassName;
 
         // the handle to the script object to call its papyrus functions
-        UINT64 _scriptHandle = 0;
+        std::uint64_t _scriptHandle = 0;
 
         // the script name (object type) as received from registration call
         std::string _scriptName;

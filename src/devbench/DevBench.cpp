@@ -20,7 +20,10 @@
 #include "vrcf/VRControllersSuppressor.h"
 
 #if F4CF_WITH_IMGUI_UI
+#include "imgui/ImGuiKeyboard.h"
 #include "imgui/ImGuiSnapshot.h"
+#include "imgui/controls/Controls.h"
+#include "imgui/controls/Targets.h"
 #endif
 
 namespace f4cf::devbench
@@ -35,7 +38,10 @@ namespace f4cf::devbench
         // 3: set and clear act on the tool's own session overrides only, and overrides says who set each
         // 4: snapshot saves the texture of the ImGui canvases as a PNG
         // 5: input answers the controller input suppressed now, in place of the input.suppression event
-        constexpr int TOOL_CONTRACT = 5;
+        // 6: keyboard reports the framework's VR keyboard and presses its keys
+        // 7: theme reports the controls' theme and sets its fields live
+        // 8: targets reports where the ImGui controls' targets were drawn
+        constexpr int TOOL_CONTRACT = 8;
 
         // the owner of the session overrides that the tool's set action sets, see ConfigBase::setConfigOverride
         constexpr auto OVERRIDE_OWNER = "devbench";
@@ -648,6 +654,43 @@ namespace f4cf::devbench
                               handler(&Tool::saveCanvasSnapshot),
                               RunOn::Listener },
                     true);
+                addAction({ "keyboard",
+                              "the framework's VR keyboard, shown while a text field of an ImGui canvas is edited: open, page (letters, symbols, "
+                              "accents), shift, caps, the field's text and cursor as its line shows them, width and height of its canvas, each hand "
+                              "on it (on, x, y, down, the key it holds) and the keys of the page (label, action, x, y, width, height), places in its "
+                              "canvas's pixels from its top left. With key, presses that key of the page first, as a pull on it does: by its label as "
+                              "shown, or its action (Backspace, Clear, Left, Right, Shift, Caps, Space, Enter, Done); ImGui gets what it types from "
+                              "the next frame, one stroke a frame",
+                              { { "key", argument("string", "keyboard: the key to press, by its label or action") } },
+                              handler(&Tool::keyboard) },
+                    true);
+                addAction({ "theme",
+                              "the theme the framework's ImGui controls are drawn in, which tunes a look live: fields, each field by its name, a color "
+                              "as [r, g, b, a] from 0 to 255 and a size as a number, and overridden, the names of the fields set here. reset drops "
+                              "them first; set sets fields over the mod's theme, which stay over each theme the mod sets until a reset. The controls, "
+                              "ImGui's style and the keyboard follow from the next frame; a panel's edge and background as the mod gives the panel "
+                              "its style again",
+                              { { "set",
+                                    argument("object",
+                                        "theme: the fields to set and their values, as fields answers them, e.g. {\"accent\": [255, 180, 60, 255], "
+                                        "\"space2\": 6}; a name that is no field, a value of the wrong shape or a number out of its range (no size below 0, "
+                                        "a control height or font size below 1, an opacity above 1) is an error, and nothing is set") },
+                                  { "reset", argument("boolean", "theme: drop the fields set here first, so the mod's theme is drawn as it set it") } },
+                              handler(&Tool::theme) },
+                    true);
+                addAction({ "targets",
+                              "where the targets of the mod's ImGui panel were in its last frame, for a test that points the controllers at them: each "
+                              "with its kind and key, x, y, width and height, the part of it that was shown, in the canvas's pixels from its top left, "
+                              "the space the ImGui pointer's place on a canvas is in, and path where it has one. The framework's controls record button (a button by its label), "
+                              "option (an option of the open list by its text, and the action under them), search (a search field, Field while it is "
+                              "not edited and Clear while it has a query), crumb (a title bar's crumb by its text), titleButton (a title bar's button "
+                              "by its name) and row (a labelled control's row by its label); the mod's own kinds are in its docs. "
+                              "scrolls has each list that was drawn with its area (list for an open list's, tree and page for a navigation pane's rows "
+                              "and the content's pane), y (how far it is scrolled) and max (how "
+                              "far it can be). The first call starts keeping them and answers recording false with none; ask again after a frame",
+                              json::object(),
+                              handler(&Tool::readTargets) },
+                    true);
 #endif
             }
 
@@ -794,6 +837,97 @@ namespace f4cf::devbench
                     throw std::runtime_error(saved.error());
                 }
                 return { { "path", saved->path.string() }, { "width", saved->width }, { "height", saved->height }, { "dedicated", saved->dedicated } };
+            }
+
+            /**
+             * The framework's VR keyboard as it is now, after pressing the key asked for, if any: a key the page does not
+             * have, or a keyboard that is not shown, is an error and presses nothing.
+             */
+            json keyboard(const json& args) const
+            {
+                if (const std::string key = argString(args, "key"); !key.empty() && !imgui::keyboard().pressKey(key)) {
+                    throw std::invalid_argument(imgui::keyboard().isOpen() ? std::format("the keyboard's page has no key '{}'", key) : std::string("the keyboard is not shown"));
+                }
+                const auto report = imgui::keyboard().report();
+                json hands = json::object();
+                for (const bool primaryHand : { true, false }) {
+                    const auto& hand = report.hands[primaryHand ? 0 : 1];
+                    hands[primaryHand ? "primary" : "offhand"] = { { "on", hand.on }, { "x", hand.x }, { "y", hand.y }, { "down", hand.down }, { "key", hand.key } };
+                }
+                json keys = json::array();
+                for (const auto& key : report.keys) {
+                    keys.push_back({ { "label", key.label }, { "action", key.action }, { "x", key.x }, { "y", key.y }, { "width", key.width }, { "height", key.height } });
+                }
+                return { { "open", report.open },
+                    { "page", report.page },
+                    { "shift", report.shift },
+                    { "caps", report.caps },
+                    { "text", report.text },
+                    { "cursor", report.cursor },
+                    { "width", report.width },
+                    { "height", report.height },
+                    { "hands", hands },
+                    { "keys", keys } };
+            }
+
+            /**
+             * Game thread, as the frames read the theme: drops the fields set here with reset, then sets those of set, and
+             * answers the theme drawn. A set that is not valid is an error before anything, the reset too, is done.
+             */
+            json theme(const json& args) const
+            {
+                auto& controls = imgui::controls::get();
+                const auto set = args.find("set");
+                const bool hasSet = set != args.end() && !set->is_null();
+                if (hasSet) {
+                    if (const auto valid = imgui::themeWithFields({}, *set); !valid) {
+                        throw std::invalid_argument(valid.error() + ": nothing is set");
+                    }
+                }
+                if (argBool(args, "reset")) {
+                    controls.clearThemeOverride();
+                }
+                if (hasSet) {
+                    if (const auto overridden = controls.overrideTheme(*set); !overridden) {
+                        throw std::invalid_argument(overridden.error() + ": nothing is set");
+                    }
+                }
+                json overridden = json::array();
+                for (const auto name : controls.overriddenThemeFields()) {
+                    overridden.push_back(std::string(name));
+                }
+                return { { "fields", imgui::themeJson(controls.theme()) }, { "overridden", overridden } };
+            }
+
+            /**
+             * Game thread, as the frames record them: the targets and scrolls of the last frame. The first call starts the
+             * recording, for the rest of the session, so it answers none; a frame later there are.
+             */
+            json readTargets(const json&) const
+            {
+                auto& recorder = imgui::controls::targets();
+                const bool recording = recorder.isRecording();
+                recorder.setRecording(true);
+                auto targets = json::array();
+                auto scrolls = json::array();
+                if (recording) {
+                    for (const auto& target : recorder.targets()) {
+                        json entry = { { "kind", target.kind },
+                            { "key", target.key },
+                            { "x", target.rect.Min.x },
+                            { "y", target.rect.Min.y },
+                            { "width", target.rect.GetWidth() },
+                            { "height", target.rect.GetHeight() } };
+                        if (!target.path.empty()) {
+                            entry["path"] = target.path;
+                        }
+                        targets.push_back(std::move(entry));
+                    }
+                    for (const auto& scroll : recorder.scrolls()) {
+                        scrolls.push_back({ { "area", scroll.area }, { "y", scroll.y }, { "max", scroll.max } });
+                    }
+                }
+                return { { "recording", recording }, { "targets", std::move(targets) }, { "scrolls", std::move(scrolls) } };
             }
 #endif
 

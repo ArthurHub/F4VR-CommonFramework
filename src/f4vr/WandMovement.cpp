@@ -22,7 +22,7 @@ namespace f4cf::f4vr
         }
 
         bool invert = false;
-        if (const auto wand = getOffhandWandNode(); wand && useWandDirectionalMovement()) {
+        if (const auto wand = getOffhandWandNode(); wand && RE::VRSettings::IsWandDirectionalMovement()) {
             // this codebase keeps world rotations transposed: row 1 of `rotate` is where local +Y points
             const auto& rotation = wand->world.rotate;
             invert = rotation.entry[1][0] * worldForward.x + rotation.entry[1][1] * worldForward.y < 0.0f;
