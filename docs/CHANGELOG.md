@@ -7,7 +7,7 @@ and tooling tweaks are left to the git history.
 Versions follow `set(VERSION ...)` in the root [`CMakeLists.txt`](../CMakeLists.txt). While the
 major version is `0`, a minor bump may break the API; the **Upgrading** notes say what to change.
 
-## 0.7.0 — unreleased
+## 0.7.0 — 2026-11-26
 
 - **One theme for a mod's look**: `imgui::Theme` holds the colors by role, the sizes, the font sizes, the spacing
   scale and a panel's edge, and `controls::get().setTheme` sets it, at any time: the next frame is drawn in it. The
@@ -87,7 +87,7 @@ major version is `0`, a minor bump may break the API; the **Upgrading** notes sa
   `controls::get().setStyle` sets their colors by role and their sizes; the defaults are the framework's green
   ([controls README](../src/imgui/controls/README.md)).
 
-## 0.6.0 — unreleased
+## 0.6.0 — 2026-11-26, released with 0.7.0
 
 - **The game RE is CommonLibF4VR's**: the framework has no game addresses of its own. `F4VROffsets.h`,
   `MiscStructs.h`, `BSFlattenedBoneTree.h` and `CollisionLayers.h` are gone, and the `f4vr::` helpers that were
