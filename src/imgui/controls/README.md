@@ -4,7 +4,7 @@ Namespace: `f4cf::imgui::controls`
 
 What a panel's controls are drawn with, in one look: text cut with an ellipsis or wrapped, drawn marks and icons,
 frames and outlines, buttons, the switcher, dialogs, the slider, the stepper, the dropdown with its list, the text
-input, the search field, the title bar, the panes of a panel's body, the rows of a list with the headings of its sections, and the rows of a tree. A panel on a
+input, the search field, the title bar, the footer, the panes of a panel's body, the rows of a list with the headings of its sections, and the rows of a tree. A panel on a
 [canvas](../README.md) builds its rows and controls from them, so two mods' panels read as one UI. They draw into the
 current ImGui window, inside a canvas's content.
 
@@ -29,6 +29,7 @@ current ImGui window, inside a canvas's content.
 | [`Rows.h`](Rows.h) | A row as wide as the rows of its list, the row of a heading that folds, the folding heading with its counts, and a section's heading with a rule. |
 | [`Tree.h`](Tree.h) | A tree's row, set in by its level, with its arrow, name, tag, dot and count, selected or disabled, and the row of a group of its nodes. |
 | [`TitleBars.h`](TitleBars.h) | A panel's title bar: breadcrumbs that shorten to fit, and buttons at the right. |
+| [`Footers.h`](Footers.h) | A panel's footer: a rule, its buttons at the right, and the room of a help line at their left. |
 | [`Panes.h`](Panes.h) | A panel body's panes: the navigation pane, a plate with a header that stays and rows that scroll, and the content's pane beside it. |
 | [`Targets.h`](Targets.h) | `controls::targets()`: where the last frame's buttons, options and a mod's rows were, and how far its lists were scrolled, for devbench. |
 
@@ -334,6 +335,24 @@ if (drawn.pressedCrumb) { goTo(*drawn.pressedCrumb); }
 - A rule in the theme's `rule` ends the bar, which takes its `height`. It returns the places of a pressed crumb, a
   pressed button and the button the ray is on; crumbs and buttons are targets, `crumb` by their text and `titleButton`
   by their name.
+
+## The footer
+
+```cpp
+#include "imgui/controls/Footers.h"
+
+const std::array buttons{ controls::FooterButton{ .label = "Discard", .disabled = !dirty },
+    controls::FooterButton{ .label = "Save", .look = controls::ButtonLook::Primary, .disabled = !dirty || invalid } };
+const auto drawn = controls::footer(pos, buttons);
+if (drawn.pressed == 1) { save(); }
+helpLine.draw(drawn.left);
+```
+
+- **The buttons** are `button`s at the footer's right in their order, the last `space2` inside the right edge, `space3`
+  apart, `buttonWidth` wide and in the middle of its `height`. A disabled one is drawn so and is not pressed.
+- A rule in the theme's `rule` is over the footer, which is as wide as the room left and takes its `height` from `pos`.
+  It returns the place of the pressed button, -1 for none, and `left`, the room from `space4` in to `space3` before the
+  first button, as high as the footer, for the caller's help line.
 
 ## Panes
 

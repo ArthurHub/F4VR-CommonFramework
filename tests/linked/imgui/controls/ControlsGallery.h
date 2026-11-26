@@ -19,6 +19,7 @@
 #include "imgui/controls/Choices.h"
 #include "imgui/controls/Controls.h"
 #include "imgui/controls/Dialogs.h"
+#include "imgui/controls/Footers.h"
 #include "imgui/controls/Frames.h"
 #include "imgui/controls/Icons.h"
 #include "imgui/controls/Marks.h"
@@ -343,6 +344,10 @@ namespace controls_gallery
         const std::array crumbs{ Crumb{ .text = "Menu", .look = CrumbLook::Selected }, Crumb{ .text = "Mod" }, Crumb{ .text = "Page", .look = CrumbLook::Current } };
         const std::array titleButtons{ TitleButton{ .name = "Close", .icon = Icon::Cross }, TitleButton{ .name = "Help", .text = "?", .highlightText = "Help" } };
         titleBar(TitleBar{ .crumbs = crumbs, .buttons = titleButtons, .suffix = " (filtered)" });
+
+        // a footer with a button of each look, one of them disabled
+        const std::array footerButtons{ FooterButton{ .label = "Discard", .disabled = true }, FooterButton{ .label = "Save", .look = ButtonLook::Primary } };
+        footer(ImGui::GetCursorScreenPos(), footerButtons);
         ImGui::EndChild();
 
         // the list, over the rows, last but the dialog
