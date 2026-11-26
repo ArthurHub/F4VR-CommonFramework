@@ -1,0 +1,101 @@
+{
+  "minSchemaVersion": 1,
+  "modName": "MyMod",
+  "displayName": "My Mod",
+  "help": "TODO: what My Mod is, in one line.",
+  "category": "VR",
+  "specVersion": 1,
+  "f4sePluginRequirements": ["MyMod"],
+  "files": {
+    "config": {
+      "format": "toml",
+      "root": "myGames",
+      "path": "Mods_Config/MyMod/MyMod.toml",
+      "pathFromClientState": "configFile"
+    }
+  },
+  "defaultFile": "config",
+  "applies": "live",
+  "content": [
+    {
+      "type": "text",
+      "text": "<font color='#AAAAAA' size=13>Version: {clientState:modVersion}</font>",
+      "html": true
+    },
+    {
+      "type": "section",
+      "text": "About",
+      "content": [
+        {
+          "type": "text",
+          "text": "TODO: what My Mod does, in a few lines."
+        }
+      ]
+    },
+    { "type": "spacer" },
+    {
+      "type": "section",
+      "text": "Developer",
+      "isCollapsible": true,
+      "collapsed": true,
+      "content": [
+        {
+          "type": "stepper",
+          "valueType": "int",
+          "text": "Log level",
+          "help": "How much the mod writes to its log.",
+          "default": 2,
+          "valueOptions": {
+            "options": [
+              { "value": 2, "text": "Info", "help": "The basic log." },
+              { "value": 1, "text": "Debug", "help": "More logs, to find a problem." },
+              { "value": 0, "text": "Trace", "help": "A lot of logs, every frame. Slows the game." }
+            ]
+          },
+          "storage": { "path": ["Debug", "iLogLevel"] }
+        },
+        {
+          "type": "switcher",
+          "valueType": "bool",
+          "text": "Debug draw",
+          "help": "Draws the mod's debug overlay in the world.",
+          "default": true,
+          "storage": { "path": ["Debug", "bDebugDrawEnabled"] }
+        }
+      ]
+    }
+  ],
+  "pages": [
+    {
+      "pageDisplayName": "General",
+      "help": "TODO: what this page sets.",
+      "content": [
+        {
+          "type": "slider",
+          "valueType": "float",
+          "text": "My value",
+          "help": "TODO: what this value does.",
+          "default": 3.0,
+          "valueOptions": { "min": 0.0, "max": 10.0, "step": 0.5 },
+          "storage": { "path": ["MyMod", "fMyConfigValue"] }
+        },
+        {
+          "type": "cf.activationSphere",
+          "text": "Head gesture",
+          "help": "Reach the offhand to your face, then tap the trigger, or hold it.",
+          "storage": { "path": ["MyMod_HeadActivation"] },
+          "keys": {
+            "kPrimaryBinding": { "text": "Tap", "default": { "hand": "offhand", "type": "tap", "button": "trigger", "suppress": true } },
+            "kSecondaryBinding": { "text": "Hold", "default": { "hand": "offhand", "type": "longpress", "button": "trigger", "suppress": true } },
+            "tZone": {
+              "default": { "pos": [0.28, 6.74, 4.15], "scale": 18.0 },
+              "valueOptions": { "position": { "step": 0.1 }, "rotation": false, "scale": { "min": 1, "max": 40, "step": 0.5 } }
+            },
+            "sShowIcon": false,
+            "sShowBindingIcon": false
+          }
+        }
+      ]
+    }
+  ]
+}

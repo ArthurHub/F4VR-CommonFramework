@@ -55,6 +55,12 @@ change there reaches every mod.
 Each subsystem's README is canonical for its API and behavior. Update it with the code, and add a
 `docs/CHANGELOG.md` entry for anything a mod sees. Keep this file to the map and the traps.
 
+- `mod-template/` is what a new mod copies, and an existing mod copies again from it: a change to its
+  files, its `f4cf\` assets or its `[Debug]` keys updates
+  [`docs/creating-a-new-mod.md`](docs/creating-a-new-mod.md) and the template's own `README.md` and
+  `CLAUDE.md`, and the CHANGELOG's **Upgrading** says what an existing mod copies.
+- `docs/tech/` holds design notes and investigations, not API docs: a README wins where they differ.
+
 ## Map
 
 `PCH.h` does `using namespace f4cf;`. A mod derives from `ModBase` (global `f4cf::g_mod`) and

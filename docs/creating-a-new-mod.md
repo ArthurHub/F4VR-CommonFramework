@@ -41,18 +41,19 @@ pre-commit install
 You now have a complete mod that builds. It came with:
 
 - **`src/`:** the mod class and its F4SE entry points (`MyMod.h/.cpp`), its config (`Config.h/.cpp`), the
-  precompiled header.
-- **`data/config/MyMod.toml`:** the shipped config, also embedded in the DLL as the default.
-- **`data/mod/`:** a game `Data` tree shipped beside the DLL, with the framework's meshes and textures.
+  precompiled header. The mod drives one gesture: reach the offhand to your face and tap or hold the
+  trigger, and a notification says which.
+- **`data/config/MyMod.toml`:** the shipped config, also embedded in the DLL as the default, with the
+  gesture's section, `[MyMod_HeadActivation]`.
+- **`data/mod/`:** a game `Data` tree shipped beside the DLL, with the framework's meshes and textures, and
+  `ModsConfigFO4\Config\MyMod\spec.json`, the mod's page in [Mods Config FO4 VR](../src/modsconfig/README.md).
 - **`data/resources/`:** the reference sheet of the framework's UI look, not shipped.
 - **`CMakeLists.txt`:** `NAME`, `FRIENDLY_NAME` and `VERSION` at the top. The version flows into the DLL
   and the package name, so bump it there and nowhere else.
 - **`CMakeUserPresets.json`:** your machine's paths, git-ignored.
-- **Code style and CI:** `.pre-commit-config.yaml` runs clang-format for C++ and Prettier for JSON,
-  plus basic checks, on each commit. Prettier uses `.prettierrc.json`, includes JSON specs under
-  `data/mod/`, and excludes exported configs under `data/config/`.
-  `.github/workflows/` runs them on GitHub and commits the fixes, and builds Release, on each push and
-  pull request to `main`.
+- **Code style and CI:** `.pre-commit-config.yaml` runs clang-format for C++, Prettier for JSON outside
+  `data/config/`, and basic checks, on each commit. `.github/workflows/` runs them on GitHub and commits
+  the fixes, and builds and tests Release, on each push and pull request to `main`.
 - **`CLAUDE.md`:** guidance for Claude Code. Fill in its TODOs as the mod grows, or delete it.
 
 ## 3. Rename `MyMod`
@@ -74,6 +75,7 @@ mv src/MyMod.cpp src/HelloVR.cpp
 mv data/config/MyMod.toml data/config/HelloVR.toml
 mv data/mod/Meshes/MyMod data/mod/Meshes/HelloVR
 mv data/mod/Textures/MyMod data/mod/Textures/HelloVR
+mv data/mod/ModsConfigFO4/Config/MyMod data/mod/ModsConfigFO4/Config/HelloVR
 ```
 
 > **The config section is the CMake `NAME`.** `NAME` is both the config file's name and its default
@@ -130,12 +132,10 @@ The mod now loads, and does nothing.
 
 ## 6. Add the feature
 
-In `src/HelloVR.cpp`, add the includes and fill in two of the hooks:
+In `src/HelloVR.cpp`, add the include, a log line in `onGameLoaded`, and a trigger check at the end of
+`onFrameUpdate`:
 
 ```cpp
-#include "HelloVR.h"
-
-#include "f4vr/F4VRUtils.h"
 #include "vrcf/VRControllersManager.h"
 
 // ... the F4SE entry points stay as they are ...
@@ -149,11 +149,7 @@ namespace hello_vr
 
     void HelloVR::onFrameUpdate()
     {
-        const auto player = RE::PlayerCharacter::GetSingleton();
-        if (!player || !player->loadedData) {
-            logger::sample(3000, "no player data yet - noop");
-            return;
-        }
+        // ... the player check and the head gesture stay as they are ...
 
         if (vrcf::VRControllers.isPressed(vrcf::Hand::Primary, vr::k_EButton_SteamVR_Trigger)) {
             f4vr::showNotification("Hello from HelloVR!");
@@ -167,6 +163,8 @@ namespace hello_vr
 - **`Hand::Primary`** is the weapon hand, and follows left-handed mode.
 - **`showNotification`** is the corner message; `showMessagebox` is a modal box.
 - **`logger::sample(3000, ...)`** logs at most once every 3 s.
+- **The head gesture** is a [`WandActivationSphere`](../src/f4vr/README.md#activation-spheres) read from the
+  config's `[HelloVR_HeadActivation]`: it takes the offhand trigger from the game only while that hand is at your face.
 
 The trigger also fires your weapon, which is fine for a test. To take a button from the game, see
 [suppressing the game input](input-binding.md#suppressing-the-game-input).
@@ -203,6 +201,22 @@ Rebuild, start the game, and edit the live config while it runs:
 the first run. Save it, pull the trigger, and the new text shows. `loadConfigInternal()` runs again on
 each save, on the file watcher's thread, so it only reads values. Every way to read a value, and what
 runs after a load: [config README](../src/config/README.md).
+
+**Show it in the menu**, for players with Mods Config FO4 VR: add a row to the General page's `content` in
+`data/mod/ModsConfigFO4/Config/HelloVR/spec.json`, where a change applies at once, as a file edit does:
+
+```json
+{
+  "type": "textinput",
+  "valueType": "string",
+  "text": "Greeting",
+  "help": "The text shown when you pull the trigger.",
+  "default": "Hello from HelloVR!",
+  "storage": { "path": ["HelloVR", "sGreeting"] }
+}
+```
+
+Every row type is in [the config spec guide](https://github.com/ArthurHub/F4VR-Mods-Config/blob/main/docs/for-mod-authors/README.md).
 
 To make the button configurable too, read an `InputBinding` with `getInputBindingValue` and check it with
 `VRControllers.check(binding)`. Players then rebind it in the config:
@@ -241,8 +255,9 @@ The log is `Documents\My Games\Fallout4VR\F4SE\HelloVR.log`. It has your `HelloV
 - **[`vrcf/`](../src/vrcf/README.md):** controller input, haptics, and taking buttons from the game.
 - **[`f4vr/`](../src/f4vr/README.md):** nodes, skeleton, weapon and menu state, the HUD, activation spheres,
   and [Papyrus](../src/f4vr/README.md#papyrus): natives a script calls, and calling scripts.
-- **[`vrui/`](../src/vrui/README.md):** in-world VR UI, from meshes or from text and images.
-- **[`imgui/`](../src/imgui/README.md):** Dear ImGui on a world-space quad.
+- **[`vrui/`](../src/vrui/README.md):** in-world VR UI: panels and buttons drawn from text and images.
+- **[`imgui/`](../src/imgui/README.md):** Dear ImGui on a world-space quad, and its
+  [controls](../src/imgui/controls/README.md) in one themed look.
 - **[`render/`](../src/render/README.md):** your own lines, images and text over the VR view.
 - **[`modsconfig/`](../src/modsconfig/README.md):** the mod's page in Mods Config FO4 VR.
 - **[`devbench/`](../src/devbench/README.md):** actions an agent calls in the running game.

@@ -26,18 +26,20 @@ game-state utilities. Mods link it as a static library and start from the includ
 Writing a Fallout 4 VR F4SE plugin means re-solving the same problems every time: hooking the game
 main loop, registering Papyrus functions, reading OpenVR controllers, drawing UI in 3D space, and
 loading config that can change at runtime. This framework packages those into one reusable library
-(v0.5.0, see the [changelog](docs/CHANGELOG.md)) that wraps [CommonLibF4VR](https://github.com/ArthurHub/CommonLibF4VR).
+on [CommonLibF4VR](https://github.com/ArthurHub/CommonLibF4VR). Its version and every change a mod
+sees are in the [changelog](docs/CHANGELOG.md).
 
 What it provides:
 
 - **Plugin lifecycle** — a `ModBase` class with `onModLoaded` / `onGameLoaded` / `onGameSessionLoaded` / `onFrameUpdate` hooks.
 - **Config** — `ConfigBase`: TOML loading, saves that keep the file's comments and layout, embedded defaults, version migration, and file-watch hot-reload.
-- **VR controller input** — debounced button/trigger/thumbstick reads, plus owner-keyed input suppression.
-- **VR UI** — a widget/button/container hierarchy with finger-collision interaction, rendered as in-world meshes or drawn from text and images at runtime.
+- **VR controller input** — debounced button/trigger/thumbstick reads, rebindable bindings, haptics, and owner-keyed input suppression.
+- **VR UI** — panels, buttons and containers drawn from text and images at runtime, pressed by the fingertip.
 - **Overlay rendering** — world-space lines, panels, images and text drawn over the VR view through one shared compositor hook, hidden behind the world where you want them to be.
-- **Dear ImGui in VR** — the full immediate-mode widget set on world-space quads, standalone or as an element in a VR UI layout.
+- **Dear ImGui in VR** — the full immediate-mode widget set on world-space quads, standalone or as an element in a VR UI layout, with a themed set of controls and a VR keyboard.
 - **Debug draw** — immediate-mode wire primitives, world labels and a watch table, at zero cost until the first call.
-- **Game utilities** — node/skeleton manipulation, player/weapon/menu state, Scaleform/HUD access, and math.
+- **Game utilities** — node/skeleton manipulation, player/weapon/menu state, Scaleform/HUD access, activation spheres, Papyrus, and math.
+- **Tooling** — a devbench tool per mod for agents driving the running game, a [Mods Config FO4 VR](https://github.com/ArthurHub/F4VR-Mods-Config) client, perf timing with Tracy, and the pieces of a mod's unit tests.
 
 ### Mods built on the framework
 
@@ -76,31 +78,32 @@ To build or hack on the framework by itself:
 git clone https://github.com/ArthurHub/F4VR-CommonFramework.git
 cd F4VR-CommonFramework
 git submodule update --init --recursive
-cmake --preset default          # or: cmake --preset vs2026
+cmake --preset default          # VS 2026; or: cmake --preset vs2022
 ```
 
 This generates a Visual Studio solution in `build/`. Open `build/F4VRCommonFramework.slnx`, then build
-and debug as usual. All project configuration changes go in `CMakeLists.txt`, not the VS project.
+and debug as usual. All project configuration changes go in `CMakeLists.txt`, not the VS project. The
+unit tests run with `ctest --test-dir build -C Release`.
 
-Build options: `F4VR_BUILD_SHARED=ON` builds a DLL instead of a static lib (default `OFF`);
-`F4CF_WITH_IMGUI_UI=OFF` drops the Dear ImGui UI layer and its vcpkg port (default `ON`);
-`F4CF_BUILD_TESTS` builds the unit tests in `tests/` (default `ON` for a standalone build, `OFF` in a
-mod's), which `ctest --test-dir build -C Release` runs; `COMMON_LIB_F4VR_PATH` overrides the path to
-CommonLibF4VR.
+Build options:
+
+- `F4CF_WITH_IMGUI_UI` (`ON`): `OFF` drops the Dear ImGui UI layer and its vcpkg port.
+- `F4CF_WITH_TRACY` (`ON`): adds the `Tracy` configuration, a Release build with the Tracy profiler client.
+- `F4CF_BUILD_TESTS`: builds the unit tests in `tests/`, `ON` for a standalone build and `OFF` in a mod's.
+- `F4VR_BUILD_SHARED` (`OFF`): builds a DLL instead of a static lib.
+- `COMMON_LIB_F4VR_PATH`: overrides the path to CommonLibF4VR.
 
 ## Usage
 
-The fastest path to a working plugin is the bundled `mod-template/`, which produces a DLL (F4SE
-plugin) linked against this framework.
+A mod starts from the bundled `mod-template/`, a complete F4SE plugin linked against this framework:
 
 1. [Add the framework as a submodule](#add-to-your-mod) to your mod's repo.
-2. Copy the relevant files from the `mod-template/` folder into your repo.
-3. Replace every occurrence of `MyMod` (and `My Mod`) in the template files with your mod's name.
-4. Generate and build: `cmake --preset default`.
+2. Copy `mod-template/` into the repo's root.
+3. Rename `MyMod`, `My Mod`, `my_mod` and `myMod` to your mod's names, in the files and in the file names.
+4. Configure and build: `cmake --preset default`, then `cmake --build --preset release`.
 
-**New to the framework?** The [Creating a new mod](docs/creating-a-new-mod.md) guide walks through all
-of this step by step and ends with a complete, running example mod that shows a notification on a
-button press.
+The [Creating a new mod](docs/creating-a-new-mod.md) guide walks through each step and ends with a
+running example mod that shows a notification on a button press.
 
 Your mod class derives from `ModBase` and overrides the lifecycle hooks:
 
@@ -115,18 +118,25 @@ void onFrameUpdate();        // every frame while the player is initialized
 
 Each source subsystem has its own README with usage details and examples:
 
-| Module                            | Description                                                              |
-| --------------------------------- | ------------------------------------------------------------------------ |
-| [`src/`](src/README.md)           | Source-tree overview and how the subsystems fit together.                |
-| [`common/`](src/common/README.md) | Math (quaternions, matrices, transforms) and shared utilities.           |
-| [`f4vr/`](src/f4vr/README.md)     | Fallout 4 VR game-state utilities: nodes, skeleton, menus, Scaleform, Papyrus. |
-| [`vrcf/`](src/vrcf/README.md)     | VR Controller Framework: OpenVR input and input suppression.             |
-| [`vrui/`](src/vrui/README.md)     | VR UI widget system: panels, buttons, toggles, containers.               |
-| [`imgui/`](src/imgui/README.md)   | Dear ImGui panels as world-space quads, standalone or inside a vrui layout. |
-| [`render/`](src/render/README.md) | Overlay rendering: lines, fills, images and text over the VR view; scene-depth occlusion. |
-| [`debug/`](src/debug/README.md)   | In-world debug draw: wire primitives, HUD text, world labels, watch table. |
-| [`perf/`](src/perf/README.md)     | Hot-path CPU timing: a periodic log summary per site, readable on demand. |
-| [`devbench/`](src/devbench/README.md) | Each mod's devbench tool, for agents and scripts driving the running game. |
+| Module                                       | Description                                                                               |
+| -------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| [`src/`](src/README.md)                      | Source-tree overview: `ModBase`, logging, and how the subsystems fit together.            |
+| [`config/`](src/config/README.md)            | `ConfigBase`: TOML load and save, hot-reload, session overrides, migration.               |
+| [`common/`](src/common/README.md)            | Math (quaternions, matrices, transforms), shared utilities, `TomlEditor`.                 |
+| [`f4vr/`](src/f4vr/README.md)                | Game state: nodes, skeleton, menus, Scaleform, activation spheres, Papyrus.               |
+| [`vrcf/`](src/vrcf/README.md)                | VR Controller Framework: OpenVR input, bindings, haptics and input suppression.           |
+| [`vrui/`](src/vrui/README.md)                | VR UI: panels, buttons, toggles, containers.                                              |
+| [`imgui/`](src/imgui/README.md)              | Dear ImGui panels as world-space quads, standalone or inside a vrui layout; the keyboard. |
+| [`imgui/controls/`](src/imgui/controls/README.md) | A panel's controls in one themed look.                                               |
+| [`render/`](src/render/README.md)            | Overlay rendering: lines, fills, images and text over the VR view; scene-depth occlusion. |
+| [`debug/`](src/debug/README.md)              | In-world debug draw: wire primitives, HUD text, world labels, watch table.                |
+| [`perf/`](src/perf/README.md)                | Hot-path CPU and GPU timing, read on demand; Tracy.                                       |
+| [`devbench/`](src/devbench/README.md)        | Each mod's devbench tool, for agents and scripts driving the running game.                |
+| [`modsconfig/`](src/modsconfig/README.md)    | The mod's Mods Config FO4 VR client: functions, states, live preview.                     |
+
+Player-facing guides a mod links from its own docs: [controller bindings](docs/input-binding.md),
+[activation spheres](docs/activation-spheres.md) and [debug settings](docs/debug-config.md). A mod's
+unit tests: [docs/mod-tests.md](docs/mod-tests.md).
 
 ## Maintainers
 

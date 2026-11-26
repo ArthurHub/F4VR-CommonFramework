@@ -66,7 +66,7 @@ set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_DEBUG OFF)
 # >>> Bring in the framework (it brings CommonLibF4 transitively)
 add_subdirectory(${F4VR_COMMON_FRAMEWORK_PATH_SELECTED} "F4VR-CommonFramework" EXCLUDE_FROM_ALL)
 # >>> IMPORTANT:
-# For CommonLibF4 to build successfully you must satisfy it's vcpkg dependencies
+# For CommonLibF4 to build successfully you must satisfy its vcpkg dependencies
 # AND specify <"builtin-baseline": "5cd4931b18d49c77074703cf293a7837ac7506fa">, the baseline the framework is built and tested against
 
 
@@ -130,35 +130,35 @@ target_precompile_headers(${PROJECT_NAME} PRIVATE src/PCH.h)
 target_compile_options(${PROJECT_NAME}
   PRIVATE
     /sdl # Enable Additional Security Checks
-	/utf-8 # Set Source and Executable character sets to UTF-8
-	/Zi # Debug Information Format
+    /utf-8 # Set Source and Executable character sets to UTF-8
+    /Zi # Debug Information Format
 
-	/permissive- # Standards conformance
+    /permissive- # Standards conformance
 
-	/Zc:alignedNew # C++17 over-aligned allocation
-	/Zc:auto # Deduce Variable Type
-	/Zc:char8_t
-	/Zc:__cplusplus # Enable updated __cplusplus macro
-	/Zc:externC
-	/Zc:externConstexpr # Enable extern constexpr variables
-	/Zc:forScope # Force Conformance in for Loop Scope
-	/Zc:hiddenFriend
-	/Zc:implicitNoexcept # Implicit Exception Specifiers
-	/Zc:lambda
-	/Zc:noexceptTypes # C++17 noexcept rules
-	/Zc:preprocessor # Enable preprocessor conformance mode
-	/Zc:referenceBinding # Enforce reference binding rules
-	/Zc:rvalueCast # Enforce type conversion rules
-	/Zc:sizedDealloc # Enable Global Sized Deallocation Functions
-	/Zc:strictStrings # Disable string literal type conversion
-	/Zc:ternary # Enforce conditional operator rules
-	/Zc:threadSafeInit # Thread-safe Local Static Initialization
-	/Zc:tlsGuards
-	/Zc:trigraphs # Trigraphs Substitution
-	/Zc:wchar_t # wchar_t Is Native Type
+    /Zc:alignedNew # C++17 over-aligned allocation
+    /Zc:auto # Deduce Variable Type
+    /Zc:char8_t
+    /Zc:__cplusplus # Enable updated __cplusplus macro
+    /Zc:externC
+    /Zc:externConstexpr # Enable extern constexpr variables
+    /Zc:forScope # Force Conformance in for Loop Scope
+    /Zc:hiddenFriend
+    /Zc:implicitNoexcept # Implicit Exception Specifiers
+    /Zc:lambda
+    /Zc:noexceptTypes # C++17 noexcept rules
+    /Zc:preprocessor # Enable preprocessor conformance mode
+    /Zc:referenceBinding # Enforce reference binding rules
+    /Zc:rvalueCast # Enforce type conversion rules
+    /Zc:sizedDealloc # Enable Global Sized Deallocation Functions
+    /Zc:strictStrings # Disable string literal type conversion
+    /Zc:ternary # Enforce conditional operator rules
+    /Zc:threadSafeInit # Thread-safe Local Static Initialization
+    /Zc:tlsGuards
+    /Zc:trigraphs # Trigraphs Substitution
+    /Zc:wchar_t # wchar_t Is Native Type
 
-	/external:anglebrackets
-	/external:W0
+    /external:anglebrackets
+    /external:W0
 
     /W4 # Warning level
     # Tracy: the framework's profiling configuration, a Release build with the Tracy client

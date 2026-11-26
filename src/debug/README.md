@@ -90,8 +90,5 @@ Every mod has them, reloaded live. The defaults are the code's, for a key that i
 ## Files
 
 `DebugDraw.h/.cpp`: the API and the game-thread producer (primitives into lines, the watch table,
-channels, timed shapes, the publish). The drawing itself is [`render/`](../render/README.md)'s.
-
-Generalized from ROCK's `DebugBodyOverlay` per the reference library's
-`knowledge-base/debug_draw_overlay.md`. Its one address, the VR camera globals, is
-[`render/`](../render/README.md#addresses)'s.
+channels, timed shapes, the publish). The drawing itself is [`render/`](../render/README.md)'s, and so
+is its one address, the VR camera globals ([addresses](../render/README.md#addresses)).

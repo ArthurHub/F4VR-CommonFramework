@@ -66,6 +66,10 @@ major version is `0`, a minor bump may break the API; the **Upgrading** notes sa
   `UIButtonPanel` and `UIToggleButtonPanel`, and a `UIToggleGroupContainer` holds `UIToggleButtonPanel`s. The `ui-common` and `ui-example` meshes and atlases, their source
   PNGs and `nif-tools/vrui_atlas.py` are gone too: delete `Meshes\<ModName>\ui-common\`, `ui-example\` and their
   `.DDS` from the mod's data.
+- **`mod-template/` ships a config spec and a gesture**: `data/mod/ModsConfigFO4/Config/MyMod/spec.json` gives a new
+  mod a page in Mods Config FO4 VR, and the example activation sphere section is now a head gesture the template's
+  code reads and drives ([creating a new mod](creating-a-new-mod.md)). **Upgrading:** optional; a mod without a config
+  spec copies the template's and makes it its own.
 
 ## 0.6.1 — unreleased
 

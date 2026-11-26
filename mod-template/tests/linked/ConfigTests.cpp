@@ -13,4 +13,9 @@ TEST_CASE("Config: the shipped config loads with its values")
     config.loadEmbeddedDefaultOnly();
 
     REQUIRE(f4cf::common::fEqual(config.myConfigValue, 3.0f));
+
+    // the head gesture's section, read as the framework reads an activation sphere
+    CHECK(config.headActivation.section == "MyMod_HeadActivation");
+    CHECK(f4cf::common::fEqual(config.headActivation.zone.scale, 18.0f));
+    CHECK(config.headActivation.secondary.type == f4cf::vrcf::ActivationType::LongPress);
 }

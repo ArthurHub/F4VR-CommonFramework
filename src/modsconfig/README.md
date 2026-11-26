@@ -12,6 +12,7 @@ API.
 `ModBase` connects the client at F4SE's `kPostLoad`, under `Settings::name`, when Mods Config FO4 VR is
 installed; the menu matches it to the config spec whose `modName` is that name, in any case. The mod does
 nothing for it (`Settings::modsConfigClient = false` opts out). Without the menu, the mod logs one line.
+`mod-template/` ships a config spec to start from, `data/mod/ModsConfigFO4/Config/MyMod/spec.json`.
 
 - **`modVersion`,** a client state from `Settings::version`: a config spec shows it with
   `{clientState:modVersion}`, or tests it in a `clientState` condition.
