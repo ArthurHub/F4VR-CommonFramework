@@ -5,6 +5,7 @@
 
 #include <nlohmann/json.hpp>
 
+#include "../../vrcf/VRControllersHaptic.h"
 #include "../../vrcf/VRControllersManager.h"
 #include "../ImGuiKeyboard.h"
 #include "../ImGuiPointer.h"
@@ -54,8 +55,27 @@ namespace f4cf::imgui::controls
     }
 
     Controls::Controls()
-        : _colors(packedColors(_theme))
+        : _colors(packedColors(_theme)),
+          _pressPulse(vrcf::HapticPattern::Tick)
     {}
+
+    /**
+     * Sets the pattern a press plays on the pointing hand, none for no pulse. It is the lightest, Tick, until a mod sets
+     * another.
+     */
+    void Controls::setPressPulse(const std::optional<vrcf::HapticPattern> pattern)
+    {
+        _pressPulse = pattern;
+    }
+
+    /**
+     * Asks for the pulse of a press in this frame. The layer plays it on the pointing hand after the frame, once however
+     * often it was asked, so the controls call no game: the labelled controls ask for it, and a mod for its own presses.
+     */
+    void Controls::pulse()
+    {
+        _pulsed = true;
+    }
 
     /**
      * Sets the whole theme, which the next frame is drawn in: packs its colors once for drawing, gives the keyboard its
@@ -248,6 +268,7 @@ namespace f4cf::imgui::controls
     void Controls::beginFrame(const float deltaSeconds)
     {
         targets().beginFrame();
+        _pulsed = false;
         _sliders.dragHeld = false;
         _sliders.pointedSeen = false;
         _sliders.steps = internal::stepsOfPush(_sliders, _thumbstickSide, deltaSeconds);

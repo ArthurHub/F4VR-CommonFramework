@@ -12,6 +12,7 @@
 #include "../f4vr/PlayerNodes.h"
 #include "../perf/Perf.h"
 #include "../render/RenderUtils.h"
+#include "../vrcf/VRControllersHaptic.h"
 #include "ImGuiFonts.h"
 #include "ImGuiImage.h"
 #include "ImGuiKeyboard.h"
@@ -724,6 +725,10 @@ namespace f4cf::imgui::internal
         // the main context's frame, with every canvas's content in it, then the own context's beside it
         RenderFrame frame;
         frame.passes.push_back(buildPass(packed, display, deltaSeconds, true, viewer, frame.textureWrites));
+        // a press of the frame asked for its pulse: once, on the hand that points
+        if (const auto pattern = controls::get().pressPulse(); pattern && controls::get().pulsed()) {
+            vrcf::VRHaptics.trigger(pointer().state().primaryHand ? vrcf::Hand::Primary : vrcf::Hand::Offhand, *pattern);
+        }
         if (!ownPacked.empty() && ensureOwnContext()) {
             F4CF_PERF_SCOPE("ownContext");
             ImGuiContext* main = ImGui::GetCurrentContext();

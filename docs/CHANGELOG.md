@@ -51,6 +51,12 @@ major version is `0`, a minor bump may break the API; the **Upgrading** notes sa
   ([controls README](../src/imgui/controls/README.md#the-title-bar)).
 - **A panel's footer**: `controls::footer` draws a rule and its buttons at the right, each enabled or not, and gives the
   room at their left for a help line ([controls README](../src/imgui/controls/README.md#the-footer)).
+- **Controls with their label**: `controls::labelledSwitcher`, `labelledSlider`, `labelledStepper`, `labelledDropdown`,
+  `labelledText`, `labelledButton` and `labelledValue` add a row, edit its value and draw it with its label in one call,
+  for a plain page; each row is a `row` target ([controls README](../src/imgui/controls/README.md#controls-with-their-label)).
+- **The press pulse**: `controls::get().pulse()` asks for a press's pulse, which the ImGui layer plays once after the
+  frame on the pointing hand; `setPressPulse` sets its pattern, `Tick` by default, or none
+  ([controls README](../src/imgui/controls/README.md#the-press-pulse)).
 
 ## 0.6.1 — unreleased
 

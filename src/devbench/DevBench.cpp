@@ -682,8 +682,8 @@ namespace f4cf::devbench
                               "with its kind and key, x, y, width and height, the part of it that was shown, in the canvas's pixels from its top left, "
                               "the space the ImGui pointer's place on a canvas is in, and path where it has one. The framework's controls record button (a button by its label), "
                               "option (an option of the open list by its text, and the action under them), search (a search field, Field while it is "
-                              "not edited and Clear while it has a query), crumb (a title bar's crumb by its text) and titleButton (a title bar's button "
-                              "by its name); the mod's own kinds are in its docs. "
+                              "not edited and Clear while it has a query), crumb (a title bar's crumb by its text), titleButton (a title bar's button "
+                              "by its name) and row (a labelled control's row by its label); the mod's own kinds are in its docs. "
                               "scrolls has each list that was drawn with its area (list for an open list's, tree and page for a navigation pane's rows "
                               "and the content's pane), y (how far it is scrolled) and max (how "
                               "far it can be). The first call starts keeping them and answers recording false with none; ask again after a frame",

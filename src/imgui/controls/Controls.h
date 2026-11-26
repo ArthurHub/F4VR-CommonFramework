@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <expected>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -10,6 +11,11 @@
 
 #include "../../render/Color.h"
 #include "../ImGuiTheme.h"
+
+namespace f4cf::vrcf
+{
+    enum class HapticPattern : std::uint8_t;
+}
 
 namespace f4cf::imgui::controls
 {
@@ -225,6 +231,21 @@ namespace f4cf::imgui::controls
             _thumbstickSide = side;
         }
 
+        void setPressPulse(std::optional<vrcf::HapticPattern> pattern);
+        void pulse();
+
+        // the pattern a press plays, none for no pulse
+        std::optional<vrcf::HapticPattern> pressPulse() const
+        {
+            return _pressPulse;
+        }
+
+        // a press asked for its pulse in this frame
+        bool pulsed() const
+        {
+            return _pulsed;
+        }
+
         void applyImGuiStyle() const;
 
         // Internal: used by the layer before the main context's frame begins
@@ -281,6 +302,10 @@ namespace f4cf::imgui::controls
         bool _imGuiStyleApplied = false;
 
         float _thumbstickSide = 0.0f;
+
+        // the pattern of a press, and whether one asked for it in this frame
+        std::optional<vrcf::HapticPattern> _pressPulse;
+        bool _pulsed = false;
         internal::SliderState _sliders;
         internal::ChoiceState _choices;
         internal::TextState _text;

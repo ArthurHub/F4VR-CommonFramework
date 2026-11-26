@@ -4,7 +4,7 @@ Namespace: `f4cf::imgui::controls`
 
 What a panel's controls are drawn with, in one look: text cut with an ellipsis or wrapped, drawn marks and icons,
 frames and outlines, buttons, the switcher, dialogs, the slider, the stepper, the dropdown with its list, the text
-input, the search field, the title bar, the footer, the panes of a panel's body, the rows of a list with the headings of its sections, and the rows of a tree. A panel on a
+input, the search field, the title bar, the footer, the panes of a panel's body, the rows of a list with the headings of its sections, the controls with their label in a row, and the rows of a tree. A panel on a
 [canvas](../README.md) builds its rows and controls from them, so two mods' panels read as one UI. They draw into the
 current ImGui window, inside a canvas's content.
 
@@ -14,7 +14,7 @@ current ImGui window, inside a canvas's content.
 
 | File | What it is |
 | ---- | ---------- |
-| [`Controls.h`](Controls.h) | `controls::get()`: the theme, its colors packed for ImGui, the `Tone` of a value, the thumbstick, Back, and what a control holds from frame to frame. |
+| [`Controls.h`](Controls.h) | `controls::get()`: the theme, its colors packed for ImGui, the `Tone` of a value, the thumbstick, Back, the press pulse, and what a control holds from frame to frame. |
 | [`Text.h`](Text.h) | One line of text cut with an ellipsis, a text with a suffix, underlined ranges, and `TextPiece`s wrapped as one text. |
 | [`TextRange.h`](TextRange.h) | `TextRange` and `TextAlign`, plain std, so game-free code that finds or lays out text has them without ImGui. |
 | [`Marks.h`](Marks.h) | The warning, error and info marks, the dot, the check, the Reset and Undo icons, and the arrows. |
@@ -27,6 +27,7 @@ current ImGui window, inside a canvas's content.
 | [`SearchFields.h`](SearchFields.h) | The search field: the magnifier, a placeholder or the query typed live, how many match, and Clear. |
 | [`Frames.h`](Frames.h) | A control's box and frame, outlines, a button's frame and ring, the step button, the selected bar, a row's look under the ray, a section's line, a tag, and where a popup opens. |
 | [`Rows.h`](Rows.h) | A row as wide as the rows of its list, the row of a heading that folds, the folding heading with its counts, and a section's heading with a rule. |
+| [`Labelled.h`](Labelled.h) | A control with its label in a row, in one call: the switcher, slider, stepper, dropdown, text input, button and a shown value, and the label alone. |
 | [`Tree.h`](Tree.h) | A tree's row, set in by its level, with its arrow, name, tag, dot and count, selected or disabled, and the row of a group of its nodes. |
 | [`TitleBars.h`](TitleBars.h) | A panel's title bar: breadcrumbs that shorten to fit, and buttons at the right. |
 | [`Footers.h`](Footers.h) | A panel's footer: a rule, its buttons at the right, and the room of a help line at their left. |
@@ -283,6 +284,45 @@ if (heading.shown) { controls::drawFoldingHeading("Advanced", at, controls::rowW
 - **Text** in a row and a heading starts `headingTextInset()` in, so the headings and the rows' texts line up. The
   ranges `found` of a heading's text are underlined, as a search's matches.
 
+## Controls with their label
+
+```cpp
+#include "imgui/controls/Labelled.h"
+
+controls::labelledSwitcher("Enabled", _enabled);
+if (controls::labelledSlider("Distance", _distance, { .min = 0.0f, .max = 10.0f, .step = 0.5f }, { .decimals = 1, .unit = " m" })) { save(); }
+controls::labelledDropdown("Quality", _quality, qualityNames, { .mark = controls::Mark::Warning, .tone = controls::Tone::Warning });
+if (ImGui::IsItemHovered()) { helpLine = "How fine the shadows are."; }
+if (controls::labelledButton("Cache", "Clear", {}, controls::Icon::Trash)) { clearCache(); }
+controls::labelledValue("Version", version);
+```
+
+For a plain page, one call adds a row, edits its value and draws it with its label. A page whose rows draw a look of
+their own between the edit and the draw, as a pending value, builds them from the controls under these instead.
+
+- **A row** is `addRow(true)`: the label `headingTextInset()` in, cut with an ellipsis before its `mark`, and the
+  control at the row's right in `CONTROL_COLUMN_WIDTH`, which a slider with its value's box, a stepper, a dropdown and
+  a text input each fill; a switcher, a button and a value are as wide as they are. `Labelled` gives the row its
+  mark, the `tone` of its value, `disabled`, and the ranges of its label a search `found`, which are underlined.
+- **It returns whether the value changed** in this frame, and has written it: a switcher and a stepper as they are
+  pressed, a slider as its drag is let go or a step moves it, a dropdown as an option is picked, a text as its edit
+  ends (or as it is typed, `live`). `labelledButton` returns its press: the whole row presses it.
+- **The ID** is the label's, in ImGui's ID stack, so two rows of one label need `ImGui::PushID`. The row is the last
+  item: `ImGui::IsItemHovered()` says the ray is on it, as for a help line.
+- **`labelledText`** is called for a row scrolled out too, as `textEdit` needs; a dropdown's list is drawn while it is
+  open, also with its row scrolled out.
+- **`drawRowLabel`** is the label alone, for a mod's own row. It returns the width it drew.
+- **The pulse:** each asks for the press pulse where the control under it reports one (see below), and a disabled row
+  is not pressed. Each row that is shown is a `target::ROW` by its label.
+
+### The press pulse
+
+A labelled control returns only its change, so it asks `controls::get().pulse()` for its press's pulse instead. The
+layer plays it on the pointing hand after the frame, once however often it was asked, so the controls call no game and
+a test reads `pulsed()`. `setPressPulse(pattern)` sets it, `Tick`, the lightest, until a mod sets another, or none.
+A mod calls `pulse()` for its own presses too. The controls that report `pulse` to their caller still do, and play
+nothing themselves: which press gets a pulse there stays the caller's rule.
+
 ## The tree's rows
 
 ```cpp
@@ -404,6 +444,7 @@ so a test with the controllers asks for a button or a row by a key it knows and 
   `drawList`'s options as `target::OPTION` by their text, its action entry by its own, and its scroll as
   `target::LIST_AREA`; `searchField` as `target::SEARCH`, `Field` while it is not edited and `Clear` while there is a
   query; `titleBar`'s crumbs as `target::CRUMB` by their text and its buttons as `target::TITLE_BUTTON` by their name;
+  the [controls with their label](#controls-with-their-label) their rows as `target::ROW` by their label;
   the [panes](#panes) their scrolls, as `target::TREE_AREA` and `target::PAGE_AREA` or the areas they are given.
 - **A mod records** a row whose key is its own, by kinds it names and documents: a setting's row by its id, a tree's
   row by its node and path, a section by its text.

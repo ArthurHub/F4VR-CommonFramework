@@ -21,6 +21,8 @@ namespace f4cf::imgui::controls
         // a crumb of a title bar by its text, and a button of it by its name: `titleBar`
         inline constexpr std::string_view CRUMB = "crumb";
         inline constexpr std::string_view TITLE_BUTTON = "titleButton";
+        // the row of a labelled control by its label: `labelledSlider` and the others of `Labelled.h`
+        inline constexpr std::string_view ROW = "row";
         // the scroll of the list that is open
         inline constexpr std::string_view LIST_AREA = "list";
         // the scroll of a navigation pane's rows, and of the content's pane, unless they are given other areas
