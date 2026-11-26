@@ -18,7 +18,8 @@ major version is `0`, a minor bump may break the API; the **Upgrading** notes sa
   dropdown with its list of options, and the text input, typed on the framework's keyboard, which writes as it is left
   or, live, as it is typed, and keeps a live text through a physical keyboard's Escape. A list is built of rows as
   wide as its rows whether or not its scroll bar shows, with section headings and headings that fold, which show the
-  counts of what they hide.
+  counts of what they hide, and a tree of rows set in by their levels, with their arrows, tags, counts and dots, and
+  rows of groups.
   `controls::get().setStyle` sets their colors by role and their sizes; the defaults are the framework's green
   ([controls README](../src/imgui/controls/README.md)).
 

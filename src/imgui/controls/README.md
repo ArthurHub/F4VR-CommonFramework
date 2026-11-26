@@ -4,9 +4,9 @@ Namespace: `f4cf::imgui::controls`
 
 What a panel's controls are drawn with, in one look: text cut with an ellipsis or wrapped, drawn marks and icons,
 frames and outlines, buttons, the switcher, dialogs, the slider, the stepper, the dropdown with its list, the text
-input, and the rows of a list with the headings of its sections. A panel on a [canvas](../README.md) builds its rows
-and controls from them, so two mods' panels read as one UI. They draw into the current ImGui window, inside a
-canvas's content.
+input, the rows of a list with the headings of its sections, and the rows of a tree. A panel on a
+[canvas](../README.md) builds its rows and controls from them, so two mods' panels read as one UI. They draw into the
+current ImGui window, inside a canvas's content.
 
 > Part of the [F4VR Common Framework](../../README.md) source tree.
 
@@ -25,6 +25,7 @@ canvas's content.
 | [`TextInputs.h`](TextInputs.h) | The text input: ImGui's field in a control's box, typed on the framework's keyboard, written as it is left or as it is typed. |
 | [`Frames.h`](Frames.h) | A control's box and frame, outlines, a button's frame and ring, the step button, the selected bar, a row's look under the ray, a section's line, a tag, and where a popup opens. |
 | [`Rows.h`](Rows.h) | A row as wide as the rows of its list, the row of a heading that folds, the folding heading with its counts, and a section's heading with a rule. |
+| [`Tree.h`](Tree.h) | A tree's row, set in by its level, with its arrow, name, tag, dot and count, selected or disabled, and the row of a group of its nodes. |
 
 ## Style
 
@@ -219,3 +220,31 @@ if (heading.shown) { controls::drawFoldingHeading("Advanced", at, controls::rowW
   place.
 - **Text** in a row and a heading starts `HEADING_TEXT_INSET` in, so the headings and the rows' texts line up. The
   ranges `found` of a heading's text are underlined, as a search's matches.
+
+## The tree's rows
+
+```cpp
+#include "imgui/controls/Tree.h"
+
+ImGui::PushID(index);
+const auto drawn = controls::treeRow({ .name = node.name, .level = level, .arrow = node.children.empty() ? controls::TreeArrow::None
+    : open ? controls::TreeArrow::Open : controls::TreeArrow::Closed, .selected = index == _selected }, width);
+if (drawn.pressed) { _selected = index; }
+ImGui::PopID();
+
+if (controls::treeGroupRow("Weapons", weapons.size(), _weaponsOpen, false, width).pressed) { _weaponsOpen = !_weaponsOpen; }
+```
+
+- **Only the row:** the caller walks its nodes, keeps which are open and selected, and gives each row its level and
+  arrow; a row is the last item, so the caller takes its rect (for devbench). Each row needs its own ID, as
+  `ImGui::PushID` of its node gives.
+- **The look:** the name is set in `TREE_INDENT` for each level, up to `TREE_MAX_INDENT_LEVEL`, after an arrow column
+  every row keeps, so the names of a level line up. The selected row is the selected bar, any other a row under the
+  ray. A `tag` is a small outlined word at the row's right, a `count` in the detail size before it, and the `dot`
+  follows the name, which ends in an ellipsis before all of them. The ranges `found` of the name are underlined.
+- **`show`** scrolls a selected row into view where it is not whole in the shown rows, as after it is selected by
+  other means.
+- **A disabled row** is faded, with its arrow right, and has the look of a row under the ray, so a help shown for it is
+  seen to be its; it is never pressed.
+- **A group row** is muted: its arrow, its name, a rule, and the count of its nodes. A press is the caller's to open or
+  close it.
