@@ -4,7 +4,7 @@ Namespace: `f4cf::imgui::controls`
 
 What a panel's controls are drawn with, in one look: text cut with an ellipsis or wrapped, drawn marks and icons,
 frames and outlines, buttons, the switcher, dialogs, the slider, the stepper, the dropdown with its list, the text
-input, the rows of a list with the headings of its sections, and the rows of a tree. A panel on a
+input, the search field, the rows of a list with the headings of its sections, and the rows of a tree. A panel on a
 [canvas](../README.md) builds its rows and controls from them, so two mods' panels read as one UI. They draw into the
 current ImGui window, inside a canvas's content.
 
@@ -23,6 +23,7 @@ current ImGui window, inside a canvas's content.
 | [`Choices.h`](Choices.h) | The stepper, the dropdown's box, and the list of options a dropdown opens, with its suffixes, header line and action entry. |
 | [`Sliders.h`](Sliders.h) | The slider: a track between step arrows and the box of its value, dragged by the trigger and stepped by the arrows and the thumbstick. |
 | [`TextInputs.h`](TextInputs.h) | The text input: ImGui's field in a control's box, typed on the framework's keyboard, written as it is left or as it is typed. |
+| [`SearchFields.h`](SearchFields.h) | The search field: the magnifier, a placeholder or the query typed live, how many match, and Clear. |
 | [`Frames.h`](Frames.h) | A control's box and frame, outlines, a button's frame and ring, the step button, the selected bar, a row's look under the ray, a section's line, a tag, and where a popup opens. |
 | [`Rows.h`](Rows.h) | A row as wide as the rows of its list, the row of a heading that folds, the folding heading with its counts, and a section's heading with a rule. |
 | [`Tree.h`](Tree.h) | A tree's row, set in by its level, with its arrow, name, tag, dot and count, selected or disabled, and the row of a group of its nodes. |
@@ -203,6 +204,27 @@ if (!controls::get().isTextEdited(id)) { controls::drawTextInput(box, _name, con
   a header outlives the page; a field that is not drawn any more ends it.
 - **`edit.pulse`** is for the press that starts it; the keyboard ticks each key itself.
 
+## The search field
+
+```cpp
+#include "imgui/controls/SearchFields.h"
+
+const auto drawn = controls::searchField("search", pos, width, _query, { .placeholder = "Search 11 mods", .count = _matches });
+if (drawn.write) { _query = *drawn.write; }
+if (drawn.cleared) { _query.clear(); }
+```
+
+- **The look:** `SEARCH_FIELD_HEIGHT` high, a control's track and outline, the magnifier, then the `placeholder` in the
+  detail size while the query is empty and not edited, or the query, then the `count` in the detail size and Clear
+  with its cross while there is a query. Under the ray it has a row's hover, and its magnifier and placeholder the
+  accent; edited, its outline is the accent.
+- **The caller keeps the query:** a press edits it on a live, bare [text input](#the-text-input), whose id is
+  `ImGui::GetID(id)`, so `get().isTextEdited(ImGui::GetID(id))` says it is edited. `write` is the query as it is typed;
+  `cleared` is Clear, after which the caller empties it, and which ends an edit. Back ends the edit and keeps the
+  query, as does a physical keyboard's Escape.
+- **`pointed`** and **`clearPointed`** say where the ray is, for a help line; **`pulse`** is for a press that started
+  the edit or cleared.
+
 ## Rows and headings
 
 ```cpp
@@ -283,7 +305,8 @@ so a test with the controllers asks for a button or a row by a key it knows and 
   and how far it can be: `addScroll(area)` of the window drawn, or with the two a list in its own window gives.
 - **The controls record themselves:** `button`, and each of `dialogButtons`, as `target::BUTTON` by its label;
   `drawList`'s options as `target::OPTION` by their text, its action entry by its own, and its scroll as
-  `target::LIST_AREA`.
+  `target::LIST_AREA`; `searchField` as `target::SEARCH`, `Field` while it is not edited and `Clear` while there is a
+  query.
 - **A mod records** a row whose key is its own, by kinds it names and documents: a setting's row by its id, a tree's
   row by its node and path, a section by its text.
 - Each frame drops the last one's, as the controls' frame begins, and the layer gives each canvas its top left before

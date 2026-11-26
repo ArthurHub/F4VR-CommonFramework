@@ -37,6 +37,9 @@ major version is `0`, a minor bump may break the API; the **Upgrading** notes sa
   tells them, so a test with the controllers points at a button or a row by its key
   ([controls README](../src/imgui/controls/README.md#targets)). The tool's contract is 8. **Upgrading:** a mod's own
   devbench action named `targets` is ignored beside the built-in one: the mod records with `controls::targets().add`.
+- **The search field**: `controls::searchField` draws a header's search, with its magnifier, a placeholder or the query
+  typed live on the keyboard, how many match, and Clear; the caller keeps the query
+  ([controls README](../src/imgui/controls/README.md#the-search-field)). It is a `search` target, `Field` and `Clear`.
 
 ## 0.6.1 — unreleased
 

@@ -22,6 +22,7 @@
 #include "imgui/controls/Frames.h"
 #include "imgui/controls/Marks.h"
 #include "imgui/controls/Rows.h"
+#include "imgui/controls/SearchFields.h"
 #include "imgui/controls/Sliders.h"
 #include "imgui/controls/Text.h"
 #include "imgui/controls/TextInputs.h"
@@ -151,7 +152,8 @@ namespace controls_gallery
 
     /**
      * Draws every control: text and marks, frames in each tone, buttons in each look, switchers, steppers, dropdowns and a
-     * list, sliders, text inputs, rows, headings, a tree's rows and a dialog. Called inside the gallery's window.
+     * list, sliders, text inputs, search fields, rows, headings, a tree's rows and a dialog. Called inside the gallery's
+     * window.
      */
     inline GalleryDrawn drawGallery(const GalleryState& state)
     {
@@ -268,6 +270,10 @@ namespace controls_gallery
         if (get().isTextEdited(TEXT_ID) || state.textEdited) {
             textEdit(TEXT_ID, editBox, state.textEdited && !get().isTextEdited(TEXT_ID), "Edited", TextOptions{ .maxLength = 20 });
         }
+
+        // search fields beside it: one empty with its placeholder, and one with a query, its count and Clear
+        searchField("searchIdle", at(LEFT + 260, top), 240, "", SearchField{ .placeholder = "Search 11 mods" });
+        searchField("searchQuery", at(LEFT + 510, top), 240, "query", SearchField{ .count = 3 });
 
         // the rows' column: a plain row, a folding heading with its counts, a section heading, and a tree's rows
         ImGui::SetCursorScreenPos(at(ROWS_LEFT, 20));

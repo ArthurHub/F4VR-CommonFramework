@@ -16,6 +16,8 @@ namespace f4cf::imgui::controls
         inline constexpr std::string_view BUTTON = "button";
         // an option of the list that is open by its text, and the action entry under them by its own: `drawList`
         inline constexpr std::string_view OPTION = "option";
+        // a search field while it is not edited, Field, and its Clear while it has a query: `searchField`
+        inline constexpr std::string_view SEARCH = "search";
         // the scroll of the list that is open
         inline constexpr std::string_view LIST_AREA = "list";
     }

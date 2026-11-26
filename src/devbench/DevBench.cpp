@@ -680,8 +680,9 @@ namespace f4cf::devbench
                 addAction({ "targets",
                               "where the targets of the mod's ImGui panel were in its last frame, for a test that points the controllers at them: each "
                               "with its kind and key, x, y, width and height, the part of it that was shown, in the canvas's pixels from its top left, "
-                              "the space the ImGui pointer's place on a canvas is in, and path where it has one. The framework's controls record button (a button by its label) "
-                              "and option (an option of the open list by its text, and the action under them); the mod's own kinds are in its docs. "
+                              "the space the ImGui pointer's place on a canvas is in, and path where it has one. The framework's controls record button (a button by its label), "
+                              "option (an option of the open list by its text, and the action under them) and search (a search field, Field while it is "
+                              "not edited and Clear while it has a query); the mod's own kinds are in its docs. "
                               "scrolls has each list that was drawn with its area (list for an open list's), y (how far it is scrolled) and max (how "
                               "far it can be). The first call starts keeping them and answers recording false with none; ask again after a frame",
                               json::object(),
