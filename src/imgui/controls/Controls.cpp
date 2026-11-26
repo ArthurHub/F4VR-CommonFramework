@@ -92,7 +92,7 @@ namespace f4cf::imgui::controls
     /**
      * Sets the given fields over the mod's theme, in themeJson's shapes, which the next frame is drawn in: devbench's
      * theme action, tuning a look live. They stay over every theme the mod sets until clearThemeOverride. A field that is
-     * no field or a value of the wrong shape is an error, and nothing is set.
+     * no field, a value of the wrong shape or a number out of its range is an error, and nothing is set.
      */
     std::expected<void, std::string> Controls::overrideTheme(const nlohmann::json& fields)
     {

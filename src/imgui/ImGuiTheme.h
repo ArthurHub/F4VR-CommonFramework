@@ -1,6 +1,7 @@
 #pragma once
 
 #include <expected>
+#include <limits>
 #include <span>
 #include <string>
 #include <string_view>
@@ -125,13 +126,17 @@ namespace f4cf::imgui
     };
 
     /**
-     * A field of Theme by its name as in the struct: a color or a number, by its member, of which the other is null.
+     * A field of Theme by its name as in the struct: a color or a number, by its member, of which the other is null. A
+     * number set by name is in its range: no size is negative, a control and a font are at least a pixel, and an
+     * opacity is at most 1, so a value ImGui cannot draw with is refused before it is drawn.
      */
     struct ThemeField
     {
         std::string_view name;
         render::Color Theme::* color = nullptr;
         float Theme::* number = nullptr;
+        float least = 0.0f;
+        float most = (std::numeric_limits<float>::max)();
     };
 
     std::span<const ThemeField> themeFields();

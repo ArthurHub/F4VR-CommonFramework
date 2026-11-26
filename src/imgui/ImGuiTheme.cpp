@@ -2,9 +2,11 @@
 
 #include <algorithm>
 #include <array>
+#include <charconv>
 #include <cmath>
 #include <cstdint>
 #include <format>
+#include <limits>
 #include <optional>
 
 #include <nlohmann/json.hpp>
@@ -30,10 +32,13 @@ namespace
         return { .name = name, .color = color };
     }
 
-    constexpr ThemeField numberField(const std::string_view name, float Theme::* number)
+    constexpr ThemeField numberField(const std::string_view name, float Theme::* number, const float least = 0.0f, const float most = (std::numeric_limits<float>::max)())
     {
-        return { .name = name, .number = number };
+        return { .name = name, .number = number, .least = least, .most = most };
     }
+
+    // the least height of a control and size of a font, of which ImGui cannot draw 0
+    constexpr float LEAST_PIXEL = 1.0f;
 
     // every field of Theme, in its order
     constexpr std::array THEME_FIELDS{
@@ -55,17 +60,17 @@ namespace
         colorField("glass", &Theme::glass),
         colorField("plate", &Theme::plate),
         colorField("important", &Theme::important),
-        numberField("controlHeight", &Theme::controlHeight),
+        numberField("controlHeight", &Theme::controlHeight, LEAST_PIXEL),
         numberField("frameRounding", &Theme::frameRounding),
         numberField("frameBorderSize", &Theme::frameBorderSize),
         numberField("popupRounding", &Theme::popupRounding),
-        numberField("titleFontSize", &Theme::titleFontSize),
-        numberField("bodyFontSize", &Theme::bodyFontSize),
-        numberField("detailFontSize", &Theme::detailFontSize),
+        numberField("titleFontSize", &Theme::titleFontSize, LEAST_PIXEL),
+        numberField("bodyFontSize", &Theme::bodyFontSize, LEAST_PIXEL),
+        numberField("detailFontSize", &Theme::detailFontSize, LEAST_PIXEL),
         numberField("scrollbarSize", &Theme::scrollbarSize),
         numberField("grabWidth", &Theme::grabWidth),
         numberField("grabRounding", &Theme::grabRounding),
-        numberField("disabledOpacity", &Theme::disabledOpacity),
+        numberField("disabledOpacity", &Theme::disabledOpacity, 0.0f, 1.0f),
         numberField("space1", &Theme::space1),
         numberField("space2", &Theme::space2),
         numberField("space3", &Theme::space3),
@@ -227,7 +232,8 @@ namespace f4cf::imgui
 
     /**
      * The theme as JSON, each field by its name: a color as [r, g, b, a] from 0 to 255, a number as the shortest text
-     * that reads back as its float, so 0.05 is not 0.0500000007.
+     * that reads back as its float, so 0.05 is not 0.0500000007. That text is read with from_chars, which, unlike stod,
+     * does not follow the C locale's decimal mark.
      */
     nlohmann::json themeJson(const Theme& theme)
     {
@@ -236,7 +242,10 @@ namespace f4cf::imgui
             if (field.color) {
                 fields[std::string(field.name)] = (theme.*field.color).bytes();
             } else {
-                fields[std::string(field.name)] = std::stod(std::format("{}", theme.*field.number));
+                const auto text = std::format("{}", theme.*field.number);
+                double number = 0.0;
+                std::from_chars(text.data(), text.data() + text.size(), number);
+                fields[std::string(field.name)] = number;
             }
         }
         return fields;
@@ -244,7 +253,8 @@ namespace f4cf::imgui
 
     /**
      * The theme with the given fields set, an object of names and values in themeJson's shapes. A name that is no field,
-     * a value of the wrong shape, or no object of fields is an error that names it, and no field is set.
+     * a value of the wrong shape, a number out of its field's range, or no object of fields is an error that names it,
+     * and no field is set.
      */
     std::expected<Theme, std::string> themeWithFields(const Theme& theme, const nlohmann::json& fields)
     {
@@ -264,10 +274,17 @@ namespace f4cf::imgui
                 }
                 result.*field->color = *color;
             } else {
-                if (!value.is_number() || !std::isfinite(value.get<double>())) {
+                if (!value.is_number()) {
                     return std::unexpected(std::format("field '{}' must be a number", name));
                 }
-                result.*field->number = value.get<float>();
+                // compared as a double, so a number past a float's range is out of it too, not infinite
+                const double number = value.get<double>();
+                if (!std::isfinite(number) || number < field->least || number > field->most) {
+                    return std::unexpected(field->most < (std::numeric_limits<float>::max)()
+                                               ? std::format("field '{}' must be a number from {} to {}", name, field->least, field->most)
+                                               : std::format("field '{}' must be a number of at least {}", name, field->least));
+                }
+                result.*field->number = static_cast<float>(number);
             }
         }
         return result;

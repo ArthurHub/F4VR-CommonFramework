@@ -673,7 +673,8 @@ namespace f4cf::devbench
                               { { "set",
                                     argument("object",
                                         "theme: the fields to set and their values, as fields answers them, e.g. {\"accent\": [255, 180, 60, 255], "
-                                        "\"space2\": 6}; a name that is no field or a value of the wrong shape is an error, and nothing is set") },
+                                        "\"space2\": 6}; a name that is no field, a value of the wrong shape or a number out of its range (no size below 0, "
+                                        "a control height or font size below 1, an opacity above 1) is an error, and nothing is set") },
                                   { "reset", argument("boolean", "theme: drop the fields set here first, so the mod's theme is drawn as it set it") } },
                               handler(&Tool::theme) },
                     true);

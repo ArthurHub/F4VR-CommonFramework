@@ -315,6 +315,11 @@ TEST_CASE("Theme: an unknown field or a value of the wrong shape sets nothing an
         { { { "space2", true } }, "'space2'" },
         { { { "space2", nlohmann::json::array({ 6 }) } }, "'space2'" },
         { { { "space2", 6 }, { "glass", 3 } }, "'glass'" },
+        { { { "space2", -1 } }, "'space2'" },
+        { { { "space2", 1e39 } }, "'space2'" },
+        { { { "controlHeight", 0 } }, "'controlHeight'" },
+        { { { "bodyFontSize", 0.5 } }, "'bodyFontSize'" },
+        { { { "disabledOpacity", 1.5 } }, "'disabledOpacity'" },
         { nlohmann::json::object(), "object" },
         { nlohmann::json::array({ 1 }), "object" },
     };
@@ -324,6 +329,16 @@ TEST_CASE("Theme: an unknown field or a value of the wrong shape sets nothing an
         REQUIRE_FALSE(set.has_value());
         CHECK(set.error().find(named) != std::string::npos);
     }
+}
+
+TEST_CASE("Theme: a number at the edge of its field's range is set")
+{
+    const auto set = themeWithFields(Theme{}, { { "frameRounding", 0 }, { "controlHeight", 1 }, { "disabledOpacity", 1 }, { "panelBorderUnits", 0 } });
+    REQUIRE(set.has_value());
+    CHECK(common::fEqual(set->frameRounding, 0.0f));
+    CHECK(common::fEqual(set->controlHeight, 1.0f));
+    CHECK(common::fEqual(set->disabledOpacity, 1.0f));
+    CHECK(common::fEqual(set->panelBorderUnits, 0.0f));
 }
 
 TEST_CASE("Theme: the body font size is clamped")
