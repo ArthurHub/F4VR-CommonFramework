@@ -7,6 +7,24 @@ and tooling tweaks are left to the git history.
 Versions follow `set(VERSION ...)` in the root [`CMakeLists.txt`](../CMakeLists.txt). While the
 major version is `0`, a minor bump may break the API; the **Upgrading** notes say what to change.
 
+## 0.7.0 — unreleased
+
+- **One theme for a mod's look**: `imgui::Theme` holds the colors by role, the sizes, the font sizes, the spacing
+  scale and a panel's edge, and `controls::get().setTheme` sets it, at any time: the next frame is drawn in it. The
+  controls draw in it, ImGui's style of every canvas but the keyboard's is set from it, the keyboard takes its colors,
+  and `theme().panelStyle()` is a panel's look in it. Its defaults are the framework's green
+  ([imgui README](../src/imgui/README.md#theme)). **Upgrading:**
+  - `controls::ControlsStyle` is `imgui::Theme`, `controls::get().setStyle(style)` is `setTheme(theme)`, and
+    `controls::get().style()` is `theme()`. `colors()` and `tone(t)` are the same, and `colors()` has `glass`,
+    `plate` and `important` too.
+  - `imgui::setFontSizePixels` is gone: the body font size is the theme's `bodyFontSize`, 21 px where no theme is set,
+    not 24.
+  - Every canvas of the main context gets the theme's ImGui style over ImGui's dark one, where it had the dark one.
+    The theme's fields are set as the first frame begins and after each `setTheme`, over what a mod set itself: a mod
+    that styled ImGui itself sets its theme instead.
+  - The keyboard's default background is the default theme's glass, alpha 166 and not 235, and the text of a key in
+    the accent is the default `onAccent`.
+
 ## 0.6.1 — unreleased
 
 - **The small controls of an ImGui panel**: `imgui::controls` draws a panel's text, marks and frames in one look, so

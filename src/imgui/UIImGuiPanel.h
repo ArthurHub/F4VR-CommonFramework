@@ -20,10 +20,10 @@ namespace f4cf::imgui
      * font has one fixed pixel size, so this ratio decides how much of the panel a line of text
      * covers: raising it does not draw the same text more finely, it draws it SMALLER. Held fixed,
      * it gives every panel the same relation between its size and its text: 48px of font is one
-     * vrui unit to the em, so at the default 24px a row of text takes about 0.6 of a unit.
+     * vrui unit to the em, so at the default 21px a row of text takes about 0.44 of a unit.
      *
-     * The knob for how big the text looks is the font size (setFontSizePixels), which moves the
-     * text without touching the layout.
+     * The knob for how big the text looks is the theme's body font size (Theme::bodyFontSize),
+     * which moves the text without touching the layout.
      */
     inline constexpr float CANVAS_PIXELS_PER_UNIT = 48.0f;
 

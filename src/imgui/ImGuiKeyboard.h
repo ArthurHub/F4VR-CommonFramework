@@ -26,8 +26,9 @@ namespace f4cf::imgui
     /**
      * How the keyboard looks, and how big it is beside the canvas whose field it types into.
      *
-     * Its own defaults are the default keyboard, the framework's green: a mod changes a part by starting from them,
-     * as for the pointer's style.
+     * Its own defaults are the default keyboard, the framework's green: its colors are what the default Theme gives it.
+     * controls::get().setTheme gives it the theme's colors; a mod changes a part after that by starting from them, as
+     * for the pointer's style.
      *
      *     auto style = imgui::keyboard().style();
      *     style.accent = render::Color::rgba(255, 180, 60);
@@ -41,7 +42,7 @@ namespace f4cf::imgui
         // how far its top is tilted back from the canvas, in degrees, so it faces up toward the player
         float tiltDegrees = 20.0f;
 
-        render::Color background = render::Color::rgba(15, 15, 15, 235);
+        render::Color background = render::Color::rgba(15, 15, 15, 166);
         render::Color border = render::Color::rgba(10, 250, 120);
         render::Color key = render::Color::rgba(38, 42, 40);
         render::Color keyHovered = render::Color::rgba(56, 74, 62);
@@ -55,7 +56,7 @@ namespace f4cf::imgui
         render::Color accent = render::Color::rgba(10, 250, 120);
 
         // the text of a key in the accent color
-        render::Color accentText = render::Color::rgba(15, 15, 15);
+        render::Color accentText = render::Color::rgba(4, 23, 12);
 
         // the line that shows the field's text
         render::Color field = render::Color::rgba(0, 0, 0, 255);

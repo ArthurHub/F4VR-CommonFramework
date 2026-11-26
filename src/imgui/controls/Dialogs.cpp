@@ -26,7 +26,7 @@ namespace f4cf::imgui::controls
 {
     /**
      * Begins a dialog: a modal popup of ImGui in the middle of the display, which dims what is behind it and takes every
-     * press, with a border in its tone's color, in the style's popup look. It is opened while it is asked, and closed as
+     * press, with a border in its tone's color, in the theme's popup look. It is opened while it is asked, and closed as
      * it is not, as after Back: ImGui opens and closes a popup inside a frame. Returns whether its content is drawn,
      * which ends with `ImGui::EndPopup`.
      */
@@ -40,14 +40,14 @@ namespace f4cf::imgui::controls
             return false;
         }
 
-        const auto& style = get().style();
+        const auto& theme = get().theme();
         const auto& colors = get().colors();
         ImGui::SetNextWindowPos(ImGui::GetMainViewport()->GetCenter(), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
         ImGui::SetNextWindowSize(ImVec2(width, 0.0f));
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(DIALOG_PADDING, DIALOG_PADDING));
         ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, DIALOG_ITEM_SPACING);
-        ImGui::PushStyleVar(ImGuiStyleVar_PopupRounding, style.popupRounding);
-        ImGui::PushStyleVar(ImGuiStyleVar_PopupBorderSize, style.frameBorderSize);
+        ImGui::PushStyleVar(ImGuiStyleVar_PopupRounding, theme.popupRounding);
+        ImGui::PushStyleVar(ImGuiStyleVar_PopupBorderSize, theme.frameBorderSize);
         ImGui::PushStyleColor(ImGuiCol_Border, get().tone(tone).color);
         ImGui::PushStyleColor(ImGuiCol_PopupBg, colors.popup);
         ImGui::PushStyleColor(ImGuiCol_ModalWindowDimBg, colors.scrim);
@@ -93,7 +93,7 @@ namespace f4cf::imgui::controls
             ImGui::EndDisabled();
         }
         ImGui::SetCursorScreenPos(pos);
-        ImGui::Dummy(ImVec2(ImGui::GetContentRegionAvail().x, get().style().controlHeight));
+        ImGui::Dummy(ImVec2(ImGui::GetContentRegionAvail().x, get().theme().controlHeight));
         return pressed;
     }
 }

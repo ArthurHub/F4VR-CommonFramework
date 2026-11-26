@@ -80,8 +80,9 @@ namespace f4cf::imgui::internal
     /**
      * Loads the canvas font into the current ImGui context's atlas: its regular face from the bytes the
      * primitive renderer draws with, so a UIImGuiPanel and a UITextPanel share a typeface, then its bold
-     * and italic, in the order of FontStyle. sizePixels, clamped as setFontSizePixels clamps it, is the
-     * size text is drawn at by default; ImGui rasterizes each size it draws as it is first drawn.
+     * and italic, in the order of FontStyle. sizePixels, clamped to MIN_FONT_SIZE_PIXELS..MAX_FONT_SIZE_PIXELS,
+     * is the size text is drawn at until a style's FontSizeBase sets it, as the theme's does; ImGui rasterizes each
+     * size it draws as it is first drawn.
      * Returns the regular face, which is ImGui's default font.
      */
     ImFont* loadCanvasFont(const float sizePixels)

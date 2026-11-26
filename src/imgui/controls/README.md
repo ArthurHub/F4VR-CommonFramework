@@ -14,7 +14,7 @@ current ImGui window, inside a canvas's content.
 
 | File | What it is |
 | ---- | ---------- |
-| [`Controls.h`](Controls.h) | `controls::get()`: the controls' `ControlsStyle`, its colors packed for ImGui, the `Tone` of a value, the thumbstick, Back, and what a control holds from frame to frame. |
+| [`Controls.h`](Controls.h) | `controls::get()`: the theme, its colors packed for ImGui, the `Tone` of a value, the thumbstick, Back, and what a control holds from frame to frame. |
 | [`Text.h`](Text.h) | One line of text cut with an ellipsis, a text with a suffix, underlined ranges, and `TextPiece`s wrapped as one text. |
 | [`TextRange.h`](TextRange.h) | `TextRange` and `TextAlign`, plain std, so game-free code that finds or lays out text has them without ImGui. |
 | [`Marks.h`](Marks.h) | The warning, error and info marks, the dot, the check, the Reset and Undo icons, and the arrows. |
@@ -27,24 +27,28 @@ current ImGui window, inside a canvas's content.
 | [`Rows.h`](Rows.h) | A row as wide as the rows of its list, the row of a heading that folds, the folding heading with its counts, and a section's heading with a rule. |
 | [`Tree.h`](Tree.h) | A tree's row, set in by its level, with its arrow, name, tag, dot and count, selected or disabled, and the row of a group of its nodes. |
 
-## Style
+## Theme
 
-`ControlsStyle` is the controls' colors by role (accent, muted, track, hover, pressed, glow, rule, frame border, the
-warning and error tones with the text on each, the popup and the scrim behind a dialog) and the sizes a panel may set
-otherwise: the control's height, the frame's rounding and border, the popup's rounding, and the detail font size.
-Its defaults are the framework's green, the look of `vrui::F4VR_PANEL_STYLE`. Sizes are in the canvas's pixels.
+The controls draw in the [`imgui::Theme`](../README.md#theme): its colors by role (accent, muted, track, hover,
+pressed, glow, rule, frame border, the warning and error tones with the text on each, the popup and the scrim behind
+a dialog, the glass, the plate of a navigation pane, an important button), the control's height, the frame's rounding
+and border, the popup's rounding, and the detail font size. Its defaults are the framework's green, the look of
+`vrui::F4VR_PANEL_STYLE`. Sizes are in the canvas's pixels.
 
 ```cpp
 #include "imgui/controls/Controls.h"
 
 namespace controls = imgui::controls;
 
-auto style = controls::get().style();
-style.accent = render::Color::rgba(255, 180, 60);
-controls::get().setStyle(style);
+auto theme = controls::get().theme();
+theme.accent = render::Color::rgba(255, 180, 60);
+controls::get().setTheme(theme);
 ```
 
-- `setStyle` replaces all of it and packs its colors once; `colors()` has them as ImGui's `ImU32`.
+- `setTheme` replaces all of it, packs its colors once, gives the keyboard its colors, and has ImGui's style set from
+  it as the next frame begins. `colors()` has the colors as ImGui's `ImU32`. The controls read both as they draw, so
+  the next frame is in a new theme, with a slider's drag or an open list kept.
+- A test's own ImGui context gets the theme's style with `applyImGuiStyle()`, before its first frame.
 - A `Tone` picks a value's colors: `Normal` the accent, `Warning` and `Error` their own. `tone(t)` gives the color and
   the color of a text on its fill. A frame of the `Error` tone has an outline in the error color.
 - The marks, icons and arrows have the sizes of their design (`MARK_WIDTH`, `ARROW_SIZE`, ...), and the color of their

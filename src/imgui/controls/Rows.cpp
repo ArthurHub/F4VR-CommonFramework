@@ -57,7 +57,7 @@ namespace f4cf::imgui::controls
      */
     Row addRow(const bool pressable)
     {
-        const ImVec2 size(rowWidth(), get().style().controlHeight);
+        const ImVec2 size(rowWidth(), get().theme().controlHeight);
         Row row;
         if (pressable) {
             row.pressed = ImGui::InvisibleButton("row", size);
@@ -102,7 +102,7 @@ namespace f4cf::imgui::controls
             width += (width > 0.0f ? MARK_GAP * 2.0f : 0.0f) + countMarkWidth(count.mark) + MARK_GAP + textWidth(count.text);
         }
         const float left = std::floor(right - width);
-        const float middle = top + get().style().controlHeight * 0.5f;
+        const float middle = top + get().theme().controlHeight * 0.5f;
         float x = left;
         for (const auto& count : counts) {
             const ImVec2 center(x + countMarkWidth(count.mark) * 0.5f, middle);
@@ -118,7 +118,7 @@ namespace f4cf::imgui::controls
                 break;
             }
             x += countMarkWidth(count.mark) + MARK_GAP;
-            drawText(x, right, top, get().style().controlHeight, count.color, count.text);
+            drawText(x, right, top, get().theme().controlHeight, count.color, count.text);
             x += textWidth(count.text) + MARK_GAP * 2.0f;
         }
         return left;
@@ -133,7 +133,7 @@ namespace f4cf::imgui::controls
     void drawFoldingHeading(const std::string_view text, const ImVec2& pos, const float width, const bool folded, const std::span<const MarkedCount> counts, const Mark mark,
         const std::span<const TextRange> found)
     {
-        const auto& style = get().style();
+        const auto& theme = get().theme();
         const auto& colors = get().colors();
         auto color = colors.muted;
         if (mark == Mark::Error) {
@@ -142,25 +142,25 @@ namespace f4cf::imgui::controls
             color = colors.warning;
         }
         const float arrowLeft = pos.x + HEADING_TEXT_INSET;
-        drawFoldArrow(ImVec2(arrowLeft, pos.y + (style.controlHeight - FOLD_ARROW_SIZE) * 0.5f), !folded, color);
+        drawFoldArrow(ImVec2(arrowLeft, pos.y + (theme.controlHeight - FOLD_ARROW_SIZE) * 0.5f), !folded, color);
         float ruleRight = pos.x + width;
         if (!counts.empty()) {
-            ImGui::PushFont(nullptr, style.detailFontSize);
+            ImGui::PushFont(nullptr, theme.detailFontSize);
             ruleRight = drawMarkedCounts(ruleRight - RULE_GAP, pos.y, counts) - MARK_GAP;
             ImGui::PopFont();
         }
         float textLeft = arrowLeft + FOLD_ARROW_SIZE + MARK_GAP;
         if (mark != Mark::None) {
-            drawMark(mark, ImVec2(textLeft + MARK_WIDTH * 0.5f, pos.y + style.controlHeight * 0.5f));
+            drawMark(mark, ImVec2(textLeft + MARK_WIDTH * 0.5f, pos.y + theme.controlHeight * 0.5f));
             textLeft += MARK_WIDTH + MARK_GAP;
         }
         const float textRight = (std::min)(textLeft + textWidth(text), ruleRight - RULE_MIN_WIDTH - RULE_GAP);
-        drawText(textLeft, textRight, pos.y, style.controlHeight, color, text);
-        drawUnderlines(textLeft, textRight, pos.y, style.controlHeight, color, text, found);
+        drawText(textLeft, textRight, pos.y, theme.controlHeight, color, text);
+        drawUnderlines(textLeft, textRight, pos.y, theme.controlHeight, color, text, found);
         const float ruleLeft = std::ceil(textRight) + RULE_GAP;
         if (ruleLeft < ruleRight) {
-            const float ruleTop = std::floor(pos.y + (style.controlHeight - style.frameBorderSize) * 0.5f);
-            ImGui::GetWindowDrawList()->AddRectFilled(ImVec2(ruleLeft, ruleTop), ImVec2(ruleRight, ruleTop + style.frameBorderSize), ImGui::GetColorU32(colors.rule));
+            const float ruleTop = std::floor(pos.y + (theme.controlHeight - theme.frameBorderSize) * 0.5f);
+            ImGui::GetWindowDrawList()->AddRectFilled(ImVec2(ruleLeft, ruleTop), ImVec2(ruleRight, ruleTop + theme.frameBorderSize), ImGui::GetColorU32(colors.rule));
         }
     }
 
@@ -173,7 +173,7 @@ namespace f4cf::imgui::controls
      */
     void sectionHeading(const std::string_view text, const float right, const std::span<const TextRange> found, const float height)
     {
-        const auto& style = get().style();
+        const auto& theme = get().theme();
         const auto& colors = get().colors();
         auto* window = ImGui::GetCurrentWindow();
         const float workRight = window->WorkRect.Max.x;
@@ -181,7 +181,7 @@ namespace f4cf::imgui::controls
         // the heading's own look, whatever the panel's ImGui style
         const float padding = height > 0.0f ? (std::max)((height - ImGui::GetFontSize()) * 0.5f, 0.0f) : HEADING_PADDING;
         ImGui::PushStyleVar(ImGuiStyleVar_SeparatorTextPadding, ImVec2(HEADING_TEXT_INSET, padding));
-        ImGui::PushStyleVar(ImGuiStyleVar_SeparatorTextBorderSize, style.frameBorderSize);
+        ImGui::PushStyleVar(ImGuiStyleVar_SeparatorTextBorderSize, theme.frameBorderSize);
         ImGui::PushStyleVar(ImGuiStyleVar_SeparatorTextAlign, ImVec2(0.0f, 0.5f));
         ImGui::PushStyleColor(ImGuiCol_Separator, colors.rule);
         ImGui::PushStyleColor(ImGuiCol_Text, colors.muted);

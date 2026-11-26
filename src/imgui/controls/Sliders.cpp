@@ -47,8 +47,8 @@ namespace
               track(controlBox(previous.Max.x + ARROW_GAP, top, layout.trackWidth - (STEP_ARROW_WIDTH + ARROW_GAP) * 2.0f)),
               next(controlBox(track.Max.x + ARROW_GAP, top, STEP_ARROW_WIDTH)),
               valueBox(controlBox(right - layout.valueWidth, top, layout.valueWidth)),
-              grabLeast(track.Min.x + get().style().frameBorderSize + GRAB_WIDTH * 0.5f),
-              grabMost(track.Max.x - get().style().frameBorderSize - GRAB_WIDTH * 0.5f)
+              grabLeast(track.Min.x + get().theme().frameBorderSize + GRAB_WIDTH * 0.5f),
+              grabMost(track.Max.x - get().theme().frameBorderSize - GRAB_WIDTH * 0.5f)
         {}
 
         /**
@@ -134,7 +134,7 @@ namespace f4cf::imgui::controls
     ValueText fitValueText(std::string withUnit, std::string numberOnly, const SliderLayout& layout)
     {
         const float room = layout.valueWidth - SLIDER_VALUE_PADDING * 2.0f;
-        const float detailSize = get().style().detailFontSize;
+        const float detailSize = get().theme().detailFontSize;
         const auto widthAt = [](const std::string& text, const float size) {
             ImGui::PushFont(nullptr, size);
             const float width = textWidth(text);

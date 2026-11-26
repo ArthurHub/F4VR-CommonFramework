@@ -41,6 +41,7 @@ namespace
             io.DeltaTime = 1.0f / 90.0f;
             io.BackendFlags |= ImGuiBackendFlags_RendererHasTextures;
             imgui::internal::loadCanvasFont(FONT_SIZE);
+            get().applyImGuiStyle();
             get().reset();
             get().setThumbstickSide(0.0f);
         }

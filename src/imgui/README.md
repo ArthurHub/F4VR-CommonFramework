@@ -22,9 +22,10 @@ rules, and is drawn under the game's menus. The font is the framework's, so an I
 | [`ImGuiPointerLogic.h`](ImGuiPointerLogic.h) | The pointer's logic, unit tested: ray and quad, the curved quad, which hand owns it, scrolling. |
 | [`ImGuiKeyboard.h`](ImGuiKeyboard.h) | `imgui::keyboard()`: the framework's VR keyboard while a text field is edited, and the game window's key messages to ImGui ([VR keyboard](../../docs/tech/vr-keyboard.md)). |
 | [`ImGuiKeyboardLogic.h`](ImGuiKeyboardLogic.h) | The keyboard's logic, unit tested: its pages, the key a point hits, Shift, Caps, a held key's repeat, the strokes ImGui is given. |
-| [`controls/`](controls/README.md) | The small controls of a panel, in one look: text, drawn marks and icons, frames, and their `ControlsStyle`. |
+| [`ImGuiTheme.h`](ImGuiTheme.h) | `Theme`: a mod's look in one value, for the controls, ImGui's style, the keyboard and a panel's edge. |
+| [`controls/`](controls/README.md) | The small controls of a panel, in one look: text, drawn marks and icons, frames, and the theme they are drawn in. |
 | [`ImGuiImage.h`](ImGuiImage.h) | `imgui::image` and `imgui::addImage`: a `render::Texture` in a canvas, kept alive until drawn. |
-| [`ImGuiSettings.h`](ImGuiSettings.h) | `setFontSizePixels` and `setSupersample`, process-wide. |
+| [`ImGuiSettings.h`](ImGuiSettings.h) | `setSupersample`, process-wide, and the range of the body font size. |
 | [`ImGuiFonts.h`](ImGuiFonts.h) | The framework's font in ImGui, with its bold and italic faces: `imgui::canvasFont`. |
 | [`ImGuiLayer.h`](ImGuiLayer.h) | Game thread: one ImGui frame for every visible canvas, cloned and published with their quads. |
 | [`ImGuiRenderer.h`](ImGuiRenderer.h) | Render thread: rasterizes the frame into the atlas, then draws each canvas's slice as a world quad. |
@@ -181,7 +182,34 @@ if (imgui::keyboard().isOpen()) { /* a field is edited: Back is the keyboard's *
 - **Moved** with the world-move binding, as [a panel the player moves](#a-panel-the-player-moves); it keeps
   that place beside the canvas for the session, and follows the canvas.
 - **A ray on it is the keyboard's:** what is behind it is not pointed at, and the wand is hidden from the game.
-- **`KeyboardStyle`:** its width as a share of the field's canvas, its tilt, and its colors.
+- **`KeyboardStyle`:** its width as a share of the field's canvas, its tilt, and its colors. The [theme](#theme)
+  gives it its colors; a mod that wants its own sets them after `setTheme`.
+
+## Theme
+
+`imgui::Theme` ([`ImGuiTheme.h`](ImGuiTheme.h)) is a mod's look in one value: the colors by role, the sizes, the
+font sizes, the spacing scale, and a panel's edge, corner and padding in vrui units. Its defaults are the
+framework's green, the look of `vrui::F4VR_PANEL_STYLE`. A mod with a design sets every field from it, so a
+default that changes later does not change that mod.
+
+```cpp
+controls::get().setTheme(myDesignTheme()); // nothing to call for the default theme
+panel->setStyle(controls::get().theme().panelStyle());
+```
+
+- **The controls** draw in it ([controls](controls/README.md#theme)).
+- **ImGui's style** of the main context, every canvas but the keyboard's, is set from it (`applyTo`) over
+  ImGui's dark style: its paddings and spacings are steps of the spacing scale, its colors the theme's roles,
+  its font size the theme's `bodyFontSize`. Only those fields: one a mod sets by hand outside them stays.
+- **The keyboard** takes its colors (`keyboardStyle`) as `setTheme` is called: its background is the glass, its
+  edge, held keys and caret the accent, their text the color on the accent. Its key grays, width and tilt stay.
+- **A panel's look** is `panelStyle()`, which the mod gives its panel: the content and edge in the accent,
+  the background the glass.
+- **The pointer** is not the theme's: a ray is the player's to set, in `PointerStyle`.
+
+`setTheme` is called at any time, as a mod's config changes, and the next frame is drawn in it: the controls
+read it as they draw, ImGui's style is set again before the frame begins, and the keyboard in the call. A
+panel's edge follows as the mod gives the panel `panelStyle()` again.
 
 ## Images
 
@@ -271,11 +299,10 @@ g_uiManager->attachPresetToWorldAtHMD(panel, 350.0f);
 | Knob | Scope | What it changes |
 | ---- | ----- | --------------- |
 | pixel size (`Canvas`) / vrui size (`UIImGuiPanel`) | per canvas | its pixels and its size in the world: how legible it is |
-| `setFontSizePixels` (24, 16 to 128) | process | how big text looks, not the layout |
+| the theme's `bodyFontSize` (21, 16 to 128) | process | how big text looks, not the layout; follows a new theme |
 | `setSupersample` (1.5, 1 to 4) | process | how finely it is rasterized; layout is always 1x |
 
-- **Set the process-wide two before the first canvas draws:** they are read then, and later calls do
-  nothing.
+- **Set the supersample before the first canvas draws:** it is read then, and later calls do nothing.
 - **Other text sizes:** `ImGui::PushFont(nullptr, size)`. ImGui rasterizes each size at the supersample,
   so every size is sharp.
 - **Memory:** the atlas is 1024 times the supersample on each side, ~9 MB at 1.5, 16 MB at 2, made when

@@ -41,7 +41,7 @@ namespace
 
     float headerHeight()
     {
-        return HEADER_ABOVE + get().style().detailFontSize + HEADER_UNDER;
+        return HEADER_ABOVE + get().theme().detailFontSize + HEADER_UNDER;
     }
 
     /**
@@ -55,9 +55,9 @@ namespace
         ImRect previous;
 
         StepperBoxes(const float right, const float top, const StepperLayout& layout)
-            : next(controlBox(right - get().style().controlHeight, top, get().style().controlHeight)),
+            : next(controlBox(right - get().theme().controlHeight, top, get().theme().controlHeight)),
               option(controlBox(next.Min.x - STEPPER_GAP - layout.optionWidth, top, layout.optionWidth)),
-              previous(controlBox(option.Min.x - STEPPER_GAP - get().style().controlHeight, top, get().style().controlHeight))
+              previous(controlBox(option.Min.x - STEPPER_GAP - get().theme().controlHeight, top, get().theme().controlHeight))
         {}
 
         /**
@@ -82,12 +82,12 @@ namespace
      */
     ImRect listBox(const ImRect& box, const std::size_t entries, const bool header, const bool action)
     {
-        const auto& style = get().style();
+        const auto& theme = get().theme();
         const auto& window = ImGui::GetCurrentWindow()->InnerRect;
         const auto shown = static_cast<float>((std::min)(entries, LIST_MAX_OPTIONS));
-        const float headerRoom = header ? headerHeight() + style.frameBorderSize + LIST_GAP : 0.0f;
+        const float headerRoom = header ? headerHeight() + theme.frameBorderSize + LIST_GAP : 0.0f;
         const float actionRoom = action ? ACTION_GAP : 0.0f;
-        const float height = (std::min)(shown * (style.controlHeight + LIST_GAP) - LIST_GAP + LIST_PADDING * 2.0f + headerRoom + actionRoom, window.GetHeight());
+        const float height = (std::min)(shown * (theme.controlHeight + LIST_GAP) - LIST_GAP + LIST_PADDING * 2.0f + headerRoom + actionRoom, window.GetHeight());
         const float top = popupTop(box, height, window);
         return { box.Min.x, top, box.Max.x, top + height };
     }
@@ -170,22 +170,22 @@ namespace f4cf::imgui::controls
      */
     bool listOption(const std::string_view text, const bool chosen, const float width, const std::string_view suffix)
     {
-        const auto& style = get().style();
+        const auto& theme = get().theme();
         const auto& colors = get().colors();
         const auto pos = ImGui::GetCursorScreenPos();
-        const ImVec2 max(pos.x + width, pos.y + style.controlHeight);
-        const bool pressed = ImGui::InvisibleButton("option", ImVec2(width, style.controlHeight));
+        const ImVec2 max(pos.x + width, pos.y + theme.controlHeight);
+        const bool pressed = ImGui::InvisibleButton("option", ImVec2(width, theme.controlHeight));
         auto color = colors.accent;
         auto muted = colors.muted;
         if (chosen) {
-            ImGui::GetWindowDrawList()->AddRectFilled(pos, max, ImGui::GetColorU32(colors.accent), style.frameRounding);
-            drawCheck(ImVec2(pos.x + OPTION_PADDING, pos.y + (style.controlHeight - CHECK_SIZE) * 0.5f), colors.onAccent);
+            ImGui::GetWindowDrawList()->AddRectFilled(pos, max, ImGui::GetColorU32(colors.accent), theme.frameRounding);
+            drawCheck(ImVec2(pos.x + OPTION_PADDING, pos.y + (theme.controlHeight - CHECK_SIZE) * 0.5f), colors.onAccent);
             color = colors.onAccent;
             muted = (colors.onAccent & ~IM_COL32_A_MASK) | (MUTED_ON_ACCENT_ALPHA << IM_COL32_A_SHIFT);
         } else {
             drawRowState();
         }
-        drawTextWithSuffix(pos.x + OPTION_PADDING + CHECK_SIZE + OPTION_PADDING, max.x - OPTION_END_PADDING, pos.y, style.controlHeight, color, text, muted, suffix);
+        drawTextWithSuffix(pos.x + OPTION_PADDING + CHECK_SIZE + OPTION_PADDING, max.x - OPTION_END_PADDING, pos.y, theme.controlHeight, color, text, muted, suffix);
         return pressed;
     }
 
@@ -196,13 +196,13 @@ namespace f4cf::imgui::controls
      */
     bool listAction(const std::string_view text, const float width)
     {
-        const auto& style = get().style();
+        const auto& theme = get().theme();
         const auto& colors = get().colors();
         const auto pos = ImGui::GetCursorScreenPos();
-        const bool pressed = ImGui::InvisibleButton("action", ImVec2(width, style.controlHeight));
+        const bool pressed = ImGui::InvisibleButton("action", ImVec2(width, theme.controlHeight));
         drawRowState();
         const auto color = ImGui::IsItemHovered() || ImGui::IsItemActive() ? colors.accent : colors.muted;
-        drawText(pos.x + OPTION_PADDING + CHECK_SIZE + OPTION_PADDING, pos.x + width - OPTION_END_PADDING, pos.y, style.controlHeight, color, text);
+        drawText(pos.x + OPTION_PADDING + CHECK_SIZE + OPTION_PADDING, pos.x + width - OPTION_END_PADDING, pos.y, theme.controlHeight, color, text);
         return pressed;
     }
 
@@ -220,7 +220,7 @@ namespace f4cf::imgui::controls
         if (!ImGui::IsPopupOpen(id, ImGuiPopupFlags_None)) {
             return {};
         }
-        const auto& style = get().style();
+        const auto& theme = get().theme();
         const auto& colors = get().colors();
         const bool header = !extras.headerLeft.empty() || !extras.headerRight.empty();
         const bool action = !extras.action.empty();
@@ -246,16 +246,16 @@ namespace f4cf::imgui::controls
         if (header) {
             const auto pos = ImGui::GetCursorScreenPos();
             const float headerWidth = ImGui::GetContentRegionAvail().x;
-            ImGui::Dummy(ImVec2(headerWidth, headerHeight() + style.frameBorderSize));
-            ImGui::PushFont(nullptr, style.detailFontSize);
+            ImGui::Dummy(ImVec2(headerWidth, headerHeight() + theme.frameBorderSize));
+            ImGui::PushFont(nullptr, theme.detailFontSize);
             const float rightWidth = textWidth(extras.headerRight);
             const float textTop = pos.y + HEADER_ABOVE;
             const float textRight = pos.x + headerWidth - HEADER_INSET;
-            drawText(pos.x + HEADER_INSET, textRight - rightWidth - HEADER_GAP, textTop, style.detailFontSize, colors.muted, extras.headerLeft);
-            drawText(textRight - rightWidth, textRight, textTop, style.detailFontSize, colors.muted, extras.headerRight);
+            drawText(pos.x + HEADER_INSET, textRight - rightWidth - HEADER_GAP, textTop, theme.detailFontSize, colors.muted, extras.headerLeft);
+            drawText(textRight - rightWidth, textRight, textTop, theme.detailFontSize, colors.muted, extras.headerRight);
             ImGui::PopFont();
-            const float ruleY = pos.y + headerHeight() + style.frameBorderSize * 0.5f;
-            ImGui::GetWindowDrawList()->AddLine(ImVec2(pos.x, ruleY), ImVec2(pos.x + headerWidth, ruleY), colors.rule, style.frameBorderSize);
+            const float ruleY = pos.y + headerHeight() + theme.frameBorderSize * 0.5f;
+            ImGui::GetWindowDrawList()->AddLine(ImVec2(pos.x, ruleY), ImVec2(pos.x + headerWidth, ruleY), colors.rule, theme.frameBorderSize);
             ImGui::BeginChild("options");
         }
         // the options end a little before a scroll bar
@@ -283,7 +283,7 @@ namespace f4cf::imgui::controls
             ImGui::Dummy(ImVec2(0.0f, ACTION_GAP - LIST_GAP));
             const auto pos = ImGui::GetCursorScreenPos();
             const float ruleY = pos.y - (LIST_GAP + ACTION_GAP) * 0.5f;
-            ImGui::GetWindowDrawList()->AddLine(ImVec2(pos.x, ruleY), ImVec2(pos.x + width, ruleY), colors.rule, style.frameBorderSize);
+            ImGui::GetWindowDrawList()->AddLine(ImVec2(pos.x, ruleY), ImVec2(pos.x + width, ruleY), colors.rule, theme.frameBorderSize);
             if (listAction(extras.action, width)) {
                 drawn.picked = texts.size();
                 ImGui::CloseCurrentPopup();

@@ -50,7 +50,7 @@ namespace
      */
     void drawArrow(const float left, const float rowTop, const bool open, const ImU32 color)
     {
-        const float height = get().style().controlHeight;
+        const float height = get().theme().controlHeight;
         const ImVec2 box(left + (ARROW_COLUMN - FOLD_ARROW_SIZE) * 0.5f, rowTop + (height - FOLD_ARROW_SIZE) * 0.5f);
         drawFoldArrow(box, open, color);
     }
@@ -61,13 +61,13 @@ namespace
      */
     float drawRowTag(const float right, const float rowTop, const std::string_view tag, const bool onFill)
     {
-        const auto& style = get().style();
+        const auto& theme = get().theme();
         const auto& colors = get().colors();
         ImGui::PushFont(nullptr, TAG_FONT_SIZE);
-        const float inside = TAG_PADDING + style.frameBorderSize;
+        const float inside = TAG_PADDING + theme.frameBorderSize;
         const float height = TAG_FONT_SIZE + inside * 2.0f;
         const float width = std::ceil(textWidth(tag) + inside * 2.0f);
-        const ImVec2 min(std::floor(right - width), std::floor(rowTop + (style.controlHeight - height) * 0.5f));
+        const ImVec2 min(std::floor(right - width), std::floor(rowTop + (theme.controlHeight - height) * 0.5f));
         const ImVec2 max(min.x + width, min.y + height);
         drawOutline(min, max, onFill ? colors.onAccent : colors.rule);
         drawText(min.x + inside, max.x, min.y, height, onFill ? colors.onAccent : colors.accent, tag);
@@ -82,7 +82,7 @@ namespace
      */
     float drawNameWithDot(const float left, const float right, const float top, const ImU32 color, const std::string_view name, const bool dot, const bool onFill)
     {
-        const float height = get().style().controlHeight;
+        const float height = get().theme().controlHeight;
         if (!dot) {
             drawText(left, right, top, height, color, name);
             return (std::min)(left + textWidth(name), right);
@@ -101,22 +101,22 @@ namespace
      */
     void drawName(const float left, const ImVec2& min, const ImVec2& max, const ImU32 color, const TreeRow& row, const bool onFill)
     {
-        const auto& style = get().style();
+        const auto& theme = get().theme();
         float right = max.x - ROW_RIGHT_INSET;
         if (!row.tag.empty()) {
             right = drawRowTag(max.x - TAG_GAP, min.y, row.tag, onFill) - NAME_GAP;
         }
         if (row.count > 0) {
-            ImGui::PushFont(nullptr, style.detailFontSize);
+            ImGui::PushFont(nullptr, theme.detailFontSize);
             const auto count = std::to_string(row.count);
             const float countLeft = right - textWidth(count);
-            drawText(countLeft, right, min.y, style.controlHeight, onFill ? get().colors().onAccent : get().colors().muted, count);
+            drawText(countLeft, right, min.y, theme.controlHeight, onFill ? get().colors().onAccent : get().colors().muted, count);
             ImGui::PopFont();
             right = countLeft - NAME_GAP;
         }
         const float nameLeft = left + ARROW_COLUMN + ARROW_GAP;
         drawNameWithDot(nameLeft, right, min.y, color, row.name, row.dot, onFill);
-        drawUnderlines(nameLeft, right, min.y, style.controlHeight, color, row.name, row.found);
+        drawUnderlines(nameLeft, right, min.y, theme.controlHeight, color, row.name, row.found);
     }
 
     /**
@@ -125,7 +125,7 @@ namespace
      */
     bool disabledRow(const TreeRow& row, const float width)
     {
-        const float height = get().style().controlHeight;
+        const float height = get().theme().controlHeight;
         const auto min = ImGui::GetCursorScreenPos();
         ImGui::Dummy(ImVec2(width, height));
         if (!ImGui::IsItemVisible()) {
@@ -158,7 +158,7 @@ namespace f4cf::imgui::controls
         if (row.disabled) {
             return { .pointed = disabledRow(row, width) };
         }
-        const float height = get().style().controlHeight;
+        const float height = get().theme().controlHeight;
         const auto min = ImGui::GetCursorScreenPos();
         const auto max = ImVec2(min.x + width, min.y + height);
         TreeRowDrawn drawn;
@@ -195,12 +195,12 @@ namespace f4cf::imgui::controls
      */
     TreeRowDrawn treeGroupRow(const std::string_view name, const std::size_t count, const bool open, const bool dot, const float width)
     {
-        const auto& style = get().style();
+        const auto& theme = get().theme();
         const auto& colors = get().colors();
         const auto min = ImGui::GetCursorScreenPos();
-        const auto max = ImVec2(min.x + width, min.y + style.controlHeight);
+        const auto max = ImVec2(min.x + width, min.y + theme.controlHeight);
         TreeRowDrawn drawn;
-        drawn.pressed = ImGui::InvisibleButton("group", ImVec2(width, style.controlHeight));
+        drawn.pressed = ImGui::InvisibleButton("group", ImVec2(width, theme.controlHeight));
         drawn.pointed = ImGui::IsItemHovered();
         if (!ImGui::IsItemVisible()) {
             return drawn;
@@ -210,11 +210,11 @@ namespace f4cf::imgui::controls
         const float left = min.x + ROW_INSET;
         drawArrow(left, min.y, open, color);
 
-        ImGui::PushFont(nullptr, style.detailFontSize);
+        ImGui::PushFont(nullptr, theme.detailFontSize);
         const auto countText = std::to_string(count);
         const float countRight = max.x - ROW_RIGHT_INSET;
         const float countLeft = countRight - textWidth(countText);
-        drawText(countLeft, countRight, min.y, style.controlHeight, color, countText);
+        drawText(countLeft, countRight, min.y, theme.controlHeight, color, countText);
         ImGui::PopFont();
 
         const float ruleRight = countLeft - NAME_GAP;
@@ -224,8 +224,8 @@ namespace f4cf::imgui::controls
         const float drawnRight = drawNameWithDot(nameLeft, nameRight, min.y, color, name, dot, false);
         const float ruleLeft = std::ceil(drawnRight) + GROUP_RULE_GAP;
         if (ruleLeft < ruleRight) {
-            const float ruleTop = std::floor(min.y + (style.controlHeight - style.frameBorderSize) * 0.5f);
-            ImGui::GetWindowDrawList()->AddRectFilled(ImVec2(ruleLeft, ruleTop), ImVec2(ruleRight, ruleTop + style.frameBorderSize), ImGui::GetColorU32(colors.rule));
+            const float ruleTop = std::floor(min.y + (theme.controlHeight - theme.frameBorderSize) * 0.5f);
+            ImGui::GetWindowDrawList()->AddRectFilled(ImVec2(ruleLeft, ruleTop), ImVec2(ruleRight, ruleTop + theme.frameBorderSize), ImGui::GetColorU32(colors.rule));
         }
         return drawn;
     }

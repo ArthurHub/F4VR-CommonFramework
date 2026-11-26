@@ -39,6 +39,7 @@ namespace
             io.DisplaySize = ImVec2(800.0f, 600.0f);
             io.BackendFlags |= ImGuiBackendFlags_RendererHasTextures;
             imgui::internal::loadCanvasFont(FONT_SIZE);
+            get().applyImGuiStyle();
             get().reset();
             get().setThumbstickSide(0.0f);
         }
@@ -209,7 +210,7 @@ TEST_CASE("Controls sliders: a value's text fits its box with its unit, smaller,
     const std::string withUnit = "100 m";
     const std::string number = "100";
     const float bodyWidth = textWidth(withUnit);
-    ImGui::PushFont(nullptr, get().style().detailFontSize);
+    ImGui::PushFont(nullptr, get().theme().detailFontSize);
     const float detailWidth = textWidth(withUnit);
     ImGui::PopFont();
     REQUIRE(detailWidth < bodyWidth);
@@ -224,7 +225,7 @@ TEST_CASE("Controls sliders: a value's text fits its box with its unit, smaller,
 
     text = fitValueText(withUnit, number, boxFor((bodyWidth + detailWidth) * 0.5f));
     CHECK(text.text == withUnit);
-    CHECK(common::fEqual(text.fontSize, get().style().detailFontSize));
+    CHECK(common::fEqual(text.fontSize, get().theme().detailFontSize));
 
     text = fitValueText(withUnit, number, boxFor(detailWidth - 1.0f));
     CHECK(text.text == number);

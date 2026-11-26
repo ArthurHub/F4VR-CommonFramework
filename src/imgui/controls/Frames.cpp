@@ -25,7 +25,7 @@ namespace f4cf::imgui::controls
      */
     ImRect controlBox(const float left, const float top, const float width)
     {
-        return { left, top, left + width, top + get().style().controlHeight };
+        return { left, top, left + width, top + get().theme().controlHeight };
     }
 
     /**
@@ -49,13 +49,13 @@ namespace f4cf::imgui::controls
      */
     void drawOutline(const ImVec2& min, const ImVec2& max, const ImU32 color)
     {
-        const auto& style = get().style();
-        const float inset = style.frameBorderSize * 0.5f;
+        const auto& theme = get().theme();
+        const float inset = theme.frameBorderSize * 0.5f;
         ImGui::GetWindowDrawList()->AddRect(ImVec2(min.x + inset, min.y + inset),
             ImVec2(max.x - inset, max.y - inset),
             ImGui::GetColorU32(color),
-            style.frameRounding,
-            style.frameBorderSize);
+            theme.frameRounding,
+            theme.frameBorderSize);
     }
 
     /**
@@ -64,7 +64,7 @@ namespace f4cf::imgui::controls
      */
     void drawDashedOutline(const ImVec2& min, const ImVec2& max, const ImU32 color)
     {
-        const float thickness = get().style().frameBorderSize;
+        const float thickness = get().theme().frameBorderSize;
         const float inset = thickness * 0.5f;
         const std::array corners{ ImVec2(min.x + inset, min.y + inset),
             ImVec2(max.x - inset, min.y + inset),
@@ -91,7 +91,7 @@ namespace f4cf::imgui::controls
     void drawFrame(const ImRect& box, const Tone tone)
     {
         const auto& colors = get().colors();
-        ImGui::GetWindowDrawList()->AddRectFilled(box.Min, box.Max, ImGui::GetColorU32(colors.track), get().style().frameRounding);
+        ImGui::GetWindowDrawList()->AddRectFilled(box.Min, box.Max, ImGui::GetColorU32(colors.track), get().theme().frameRounding);
         drawOutline(box.Min, box.Max, tone == Tone::Error ? colors.error : colors.frameBorder);
     }
 
@@ -103,7 +103,7 @@ namespace f4cf::imgui::controls
     {
         const auto& colors = get().colors();
         if (pointed || held) {
-            ImGui::GetWindowDrawList()->AddRectFilled(box.Min, box.Max, ImGui::GetColorU32(held ? colors.pressed : colors.hover), get().style().frameRounding);
+            ImGui::GetWindowDrawList()->AddRectFilled(box.Min, box.Max, ImGui::GetColorU32(held ? colors.pressed : colors.hover), get().theme().frameRounding);
             drawOutline(box.Min, box.Max, held ? colors.glow : colors.accent);
         } else {
             drawOutline(box.Min, box.Max, colors.frameBorder);
@@ -118,7 +118,7 @@ namespace f4cf::imgui::controls
         ImGui::GetWindowDrawList()->AddRect(ImVec2(box.Min.x - BUTTON_RING, box.Min.y - BUTTON_RING),
             ImVec2(box.Max.x + BUTTON_RING, box.Max.y + BUTTON_RING),
             ImGui::GetColorU32(color),
-            get().style().frameRounding + BUTTON_RING,
+            get().theme().frameRounding + BUTTON_RING,
             0,
             BUTTON_RING);
     }
@@ -142,7 +142,7 @@ namespace f4cf::imgui::controls
      */
     void drawSelectedBar(const ImVec2& min, const ImVec2& max)
     {
-        const float rounding = get().style().frameRounding;
+        const float rounding = get().theme().frameRounding;
         auto* drawList = ImGui::GetWindowDrawList();
         drawList->PathArcToFast(ImVec2(min.x + rounding, min.y + rounding), rounding, 6, 9);
         drawList->PathLineTo(ImVec2(max.x - SELECTED_BAR_TIP_DEPTH, min.y));
@@ -165,7 +165,7 @@ namespace f4cf::imgui::controls
         const auto& colors = get().colors();
         const auto min = ImGui::GetItemRectMin();
         const auto max = ImGui::GetItemRectMax();
-        ImGui::GetWindowDrawList()->AddRectFilled(min, max, ImGui::GetColorU32(pressed ? colors.pressed : colors.hover), get().style().frameRounding);
+        ImGui::GetWindowDrawList()->AddRectFilled(min, max, ImGui::GetColorU32(pressed ? colors.pressed : colors.hover), get().theme().frameRounding);
         drawOutline(min, max, pressed ? colors.glow : colors.frameBorder);
     }
 
@@ -176,15 +176,15 @@ namespace f4cf::imgui::controls
      */
     void drawSectionLine(const float left, const float top, const float bottom, const float right)
     {
-        const auto& style = get().style();
-        const float x = left + style.frameBorderSize * 0.5f;
-        const float y = bottom - style.frameBorderSize * 0.5f;
-        const float radius = std::clamp(right - x, 0.0f, style.frameRounding);
+        const auto& theme = get().theme();
+        const float x = left + theme.frameBorderSize * 0.5f;
+        const float y = bottom - theme.frameBorderSize * 0.5f;
+        const float radius = std::clamp(right - x, 0.0f, theme.frameRounding);
         auto* drawList = ImGui::GetWindowDrawList();
         drawList->PathLineTo(ImVec2(x, top));
         drawList->PathArcTo(ImVec2(x + radius, y - radius), radius, IM_PI, IM_PI * 0.5f);
         drawList->PathLineTo(ImVec2(right, y));
-        drawList->PathStroke(ImGui::GetColorU32(get().colors().rule), ImDrawFlags_None, style.frameBorderSize);
+        drawList->PathStroke(ImGui::GetColorU32(get().colors().rule), ImDrawFlags_None, theme.frameBorderSize);
     }
 
     /**
@@ -192,7 +192,7 @@ namespace f4cf::imgui::controls
      */
     float tagHeight()
     {
-        return TAG_LINE_HEIGHT + get().style().frameBorderSize * 2.0f;
+        return TAG_LINE_HEIGHT + get().theme().frameBorderSize * 2.0f;
     }
 
     /**
@@ -200,11 +200,11 @@ namespace f4cf::imgui::controls
      */
     float tagWidth(const std::string_view text)
     {
-        const auto& style = get().style();
-        ImGui::PushFont(nullptr, style.detailFontSize);
+        const auto& theme = get().theme();
+        ImGui::PushFont(nullptr, theme.detailFontSize);
         const float width = textWidth(text);
         ImGui::PopFont();
-        return std::ceil(width + (TAG_PADDING + style.frameBorderSize) * 2.0f);
+        return std::ceil(width + (TAG_PADDING + theme.frameBorderSize) * 2.0f);
     }
 
     /**
@@ -213,13 +213,13 @@ namespace f4cf::imgui::controls
      */
     void drawTag(const float left, const float middle, const std::string_view text)
     {
-        const auto& style = get().style();
+        const auto& theme = get().theme();
         const float height = tagHeight();
         const ImVec2 min(std::floor(left), std::floor(middle - height * 0.5f));
         const ImVec2 max(min.x + tagWidth(text), min.y + height);
         drawOutline(min, max, get().colors().frameBorder);
-        ImGui::PushFont(nullptr, style.detailFontSize);
-        drawText(min.x + style.frameBorderSize + TAG_PADDING, max.x, min.y, height, get().colors().muted, text);
+        ImGui::PushFont(nullptr, theme.detailFontSize);
+        drawText(min.x + theme.frameBorderSize + TAG_PADDING, max.x, min.y, height, get().colors().muted, text);
         ImGui::PopFont();
     }
 }

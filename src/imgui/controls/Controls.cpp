@@ -3,6 +3,7 @@
 #include <cmath>
 
 #include "../../vrcf/VRControllersManager.h"
+#include "../ImGuiKeyboard.h"
 #include "../ImGuiPointer.h"
 #include "Sliders.h"
 
@@ -17,23 +18,26 @@ namespace
         return ImGui::ColorConvertFloat4ToU32(ImVec4(color.r, color.g, color.b, color.a));
     }
 
-    imgui::controls::ControlsColors packedColors(const imgui::controls::ControlsStyle& style)
+    imgui::controls::ControlsColors packedColors(const imgui::Theme& theme)
     {
-        return { .accent = packed(style.accent),
-            .muted = packed(style.muted),
-            .track = packed(style.track),
-            .hover = packed(style.hover),
-            .pressed = packed(style.pressed),
-            .glow = packed(style.glow),
-            .rule = packed(style.rule),
-            .frameBorder = packed(style.frameBorder),
-            .onAccent = packed(style.onAccent),
-            .warning = packed(style.warning),
-            .onWarning = packed(style.onWarning),
-            .error = packed(style.error),
-            .onError = packed(style.onError),
-            .popup = packed(style.popup),
-            .scrim = packed(style.scrim) };
+        return { .accent = packed(theme.accent),
+            .muted = packed(theme.muted),
+            .track = packed(theme.track),
+            .hover = packed(theme.hover),
+            .pressed = packed(theme.pressed),
+            .glow = packed(theme.glow),
+            .rule = packed(theme.rule),
+            .frameBorder = packed(theme.frameBorder),
+            .onAccent = packed(theme.onAccent),
+            .warning = packed(theme.warning),
+            .onWarning = packed(theme.onWarning),
+            .error = packed(theme.error),
+            .onError = packed(theme.onError),
+            .popup = packed(theme.popup),
+            .scrim = packed(theme.scrim),
+            .glass = packed(theme.glass),
+            .plate = packed(theme.plate),
+            .important = packed(theme.important) };
     }
 }
 
@@ -46,16 +50,41 @@ namespace f4cf::imgui::controls
     }
 
     Controls::Controls()
-        : _colors(packedColors(_style))
+        : _colors(packedColors(_theme))
     {}
 
     /**
-     * Sets the whole style, and packs its colors once for drawing.
+     * Sets the whole theme, which the next frame is drawn in: packs its colors once for drawing, gives the keyboard its
+     * colors, and marks ImGui's style to be set from it as the next frame begins. A mod that wants its own keyboard look
+     * sets it after this. Game thread, as the frames are built there.
      */
-    void Controls::setStyle(const ControlsStyle& style)
+    void Controls::setTheme(const Theme& theme)
     {
-        _style = style;
-        _colors = packedColors(_style);
+        _theme = theme;
+        _colors = packedColors(_theme);
+        _imGuiStyleApplied = false;
+        keyboard().setStyle(_theme.keyboardStyle(keyboard().style()));
+    }
+
+    /**
+     * Sets the current ImGui context's style from the theme, before its frame begins: a test's own context. The layer's
+     * main context is set by updateImGuiStyle.
+     */
+    void Controls::applyImGuiStyle() const
+    {
+        _theme.applyTo(ImGui::GetStyle());
+    }
+
+    /**
+     * Sets the main context's style from the theme before its frame begins, in the first frame and after a new theme:
+     * ImGui reads the body font size as the frame begins, and a size set later in the frame is lost.
+     */
+    void Controls::updateImGuiStyle()
+    {
+        if (!_imGuiStyleApplied) {
+            applyImGuiStyle();
+            _imGuiStyleApplied = true;
+        }
     }
 
     /**

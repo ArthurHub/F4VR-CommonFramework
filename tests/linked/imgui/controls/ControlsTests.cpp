@@ -13,21 +13,21 @@ using namespace f4cf::imgui::controls;
 namespace
 {
     /**
-     * Sets the default style back as a test ends, so one test's style does not reach the next.
+     * Sets the default theme back as a test ends, so one test's theme does not reach the next.
      */
-    struct DefaultStyle
+    struct DefaultTheme
     {
-        ~DefaultStyle()
+        ~DefaultTheme()
         {
-            get().setStyle({});
+            get().setTheme({});
         }
     };
 }
 
-TEST_CASE("Controls: the default style packs the framework's green")
+TEST_CASE("Controls: the default theme packs the framework's green")
 {
-    const DefaultStyle restore;
-    get().setStyle({});
+    const DefaultTheme restore;
+    get().setTheme({});
     const auto& colors = get().colors();
     CHECK(colors.accent == IM_COL32(10, 250, 120, 255));
     CHECK(colors.track == IM_COL32(10, 250, 120, 26));
@@ -35,22 +35,22 @@ TEST_CASE("Controls: the default style packs the framework's green")
     CHECK(colors.popup == IM_COL32(11, 18, 14, 245));
 }
 
-TEST_CASE("Controls: setStyle packs the colors it is given")
+TEST_CASE("Controls: setTheme packs the colors it is given")
 {
-    const DefaultStyle restore;
-    auto style = get().style();
-    style.accent = render::Color::rgba(255, 180, 60);
-    style.error = render::Color::rgba(200, 10, 20, 128);
-    get().setStyle(style);
+    const DefaultTheme restore;
+    auto theme = get().theme();
+    theme.accent = render::Color::rgba(255, 180, 60);
+    theme.error = render::Color::rgba(200, 10, 20, 128);
+    get().setTheme(theme);
 
     CHECK(get().colors().accent == IM_COL32(255, 180, 60, 255));
     CHECK(get().colors().error == IM_COL32(200, 10, 20, 128));
-    CHECK(get().style().accent == style.accent);
+    CHECK(get().theme().accent.bytes() == theme.accent.bytes());
 }
 
 TEST_CASE("Controls: a tone has its color and the color on it")
 {
-    const DefaultStyle restore;
+    const DefaultTheme restore;
     const auto& colors = get().colors();
 
     const auto normal = get().tone(Tone::Normal);
@@ -66,12 +66,12 @@ TEST_CASE("Controls: a tone has its color and the color on it")
     CHECK(error.onColor == colors.onError);
 }
 
-TEST_CASE("Controls: a control's box is as high as the style's control")
+TEST_CASE("Controls: a control's box is as high as the theme's control")
 {
-    const DefaultStyle restore;
-    auto style = get().style();
-    style.controlHeight = 40.0f;
-    get().setStyle(style);
+    const DefaultTheme restore;
+    auto theme = get().theme();
+    theme.controlHeight = 40.0f;
+    get().setTheme(theme);
 
     const auto box = controlBox(10.0f, 20.0f, 100.0f);
     CHECK(common::fEqual(box.Min.x, 10.0f));

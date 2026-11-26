@@ -19,7 +19,7 @@ namespace f4cf::imgui::controls
         const bool pointed = ImGui::IsItemHovered();
         const bool held = ImGui::IsItemActive();
         const auto& colors = get().colors();
-        const float rounding = get().style().frameRounding;
+        const float rounding = get().theme().frameRounding;
         auto* drawList = ImGui::GetWindowDrawList();
         if (look == ButtonLook::Primary) {
             drawList->AddRectFilled(box.Min, box.Max, ImGui::GetColorU32(pointed && !held ? colors.glow : colors.accent), rounding);
@@ -63,7 +63,7 @@ namespace f4cf::imgui::controls
         const auto offCell = controlBox(box.Min.x, top, SWITCHER_CELL_WIDTH);
         const auto onCell = controlBox(offCell.Max.x, top, SWITCHER_CELL_WIDTH);
         const auto& colors = get().colors();
-        const float rounding = get().style().frameRounding;
+        const float rounding = get().theme().frameRounding;
         const auto toneColors = get().tone(tone);
         drawFrame(box);
         if (on == true) {

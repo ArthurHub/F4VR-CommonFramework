@@ -77,7 +77,7 @@ namespace f4cf::imgui::controls
         }
         state.seen = true;
 
-        const auto& style = get().style();
+        const auto& theme = get().theme();
         const auto& colors = get().colors();
         if (look.framed) {
             drawFrame(box);
@@ -88,7 +88,7 @@ namespace f4cf::imgui::controls
         // the room of the widest count
         float countWidth = 0.0f;
         if (look.framed && options.maxLength > 0) {
-            ImGui::PushFont(nullptr, style.detailFontSize);
+            ImGui::PushFont(nullptr, theme.detailFontSize);
             countWidth = textWidth(countText(options.maxLength, options.maxLength)) + look.padding;
             ImGui::PopFont();
         }
@@ -116,7 +116,7 @@ namespace f4cf::imgui::controls
         ImGui::PopStyleVar(2);
         ImGui::PopStyleColor(2);
         if (look.framed && options.maxLength > 0) {
-            ImGui::PushFont(nullptr, style.detailFontSize);
+            ImGui::PushFont(nullptr, theme.detailFontSize);
             drawTextIn(box, countText(utf8Length(state.text), options.maxLength), colors.muted, 1.0f, look.padding);
             ImGui::PopFont();
         }

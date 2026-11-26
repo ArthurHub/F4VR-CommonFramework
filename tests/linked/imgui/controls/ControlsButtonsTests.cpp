@@ -37,6 +37,7 @@ namespace
             io.DeltaTime = 1.0f / 90.0f;
             io.BackendFlags |= ImGuiBackendFlags_RendererHasTextures;
             imgui::internal::loadCanvasFont(FONT_SIZE);
+            get().applyImGuiStyle();
         }
 
         ~TestContext()
@@ -122,7 +123,7 @@ TEST_CASE("Controls buttons: a dialog's buttons are from its right, each as wide
     CHECK(boxes[1].GetWidth() > DIALOG_BUTTON_MIN_WIDTH);
     CHECK(common::fEqual(boxes[2].Max.x, boxes[1].Min.x - 8.0f));
     CHECK(common::fEqual(boxes[2].GetWidth(), DIALOG_BUTTON_MIN_WIDTH));
-    CHECK(common::fEqual(boxes[0].GetHeight(), get().style().controlHeight));
+    CHECK(common::fEqual(boxes[0].GetHeight(), get().theme().controlHeight));
 }
 
 TEST_CASE("Controls buttons: a switcher ends at the right with its two cells")

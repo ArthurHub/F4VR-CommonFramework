@@ -164,8 +164,9 @@ namespace f4cf::imgui::internal
             // and its DX11 backend sets its viewport and clip rects from it
             io.DisplayFramebufferScale = ImVec2(s_atlasScale, s_atlasScale);
 
+            // the theme's style is set over ImGui's dark one as the first frame begins
             ImGui::StyleColorsDark();
-            loadCanvasFont(fontSizePixels());
+            loadCanvasFont(controls::get().theme().bodyFontSize);
 
             if (!ImGui_ImplDX11_Init(device, context)) {
                 ImGui::DestroyContext();
@@ -521,6 +522,8 @@ namespace f4cf::imgui::internal
             {
                 F4CF_PERF_SCOPE("build");
                 if (mainContext) {
+                    // the theme's style before the frame begins, as ImGui reads its font size then
+                    controls::get().updateImGuiStyle();
                     ImGui_ImplDX11_NewFrame();
                 }
                 ImGui::NewFrame();

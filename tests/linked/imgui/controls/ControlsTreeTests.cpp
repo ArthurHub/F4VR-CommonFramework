@@ -39,6 +39,7 @@ namespace
             io.DeltaTime = 1.0f / 90.0f;
             io.BackendFlags |= ImGuiBackendFlags_RendererHasTextures;
             imgui::internal::loadCanvasFont(FONT_SIZE);
+            get().applyImGuiStyle();
         }
 
         ~TestContext()
@@ -119,7 +120,7 @@ TEST_CASE("Controls tree: a row is pointed, and pressed as the trigger is let go
     CHECK(rows[2].pressed);
     CHECK(common::fEqual(item.Min.x, ROWS_AT.x));
     CHECK(common::fEqual(item.GetWidth(), ROW_WIDTH));
-    CHECK(common::fEqual(item.GetHeight(), get().style().controlHeight));
+    CHECK(common::fEqual(item.GetHeight(), get().theme().controlHeight));
 }
 
 TEST_CASE("Controls tree: a disabled row is pointed and never pressed")

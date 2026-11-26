@@ -7,6 +7,7 @@
 
 #include "common/CommonUtils.h"
 #include "imgui/ImGuiFonts.h"
+#include "imgui/controls/Controls.h"
 #include "imgui/controls/Text.h"
 
 using namespace f4cf;
@@ -32,6 +33,7 @@ namespace
             io.DeltaTime = 1.0f / 90.0f;
             io.BackendFlags |= ImGuiBackendFlags_RendererHasTextures;
             imgui::internal::loadCanvasFont(FONT_SIZE);
+            get().applyImGuiStyle();
             ImGui::NewFrame();
             ImGui::SetNextWindowPos(ImVec2(0.0f, 0.0f));
             ImGui::SetNextWindowSize(io.DisplaySize);
