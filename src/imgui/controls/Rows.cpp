@@ -215,4 +215,26 @@ namespace f4cf::imgui::controls
         const float textLeft = min.x + headingTextInset();
         drawUnderlines(textLeft, textLeft + textWidth(text), min.y, ImGui::GetItemRectSize().y, colors.muted, text, found);
     }
+
+    /**
+     * Rows at the cursor of which only those the window shows are drawn, for a list too long to add every row of, as
+     * every item of the game: ImGui's list clipper over rows of a control's height with the spacing between them, so
+     * the window scrolls as for all of them. `drawRow` adds exactly one row, as `addRow` or a labelled control does.
+     * `keep` is a row drawn while it is scrolled out too, in its place, as one whose text is edited.
+     */
+    void clippedRows(const std::size_t count, const std::function<void(std::size_t index)>& drawRow, const std::optional<std::size_t> keep)
+    {
+        const float pitch = get().theme().controlHeight + ImGui::GetStyle().ItemSpacing.y;
+        ImGuiListClipper clipper;
+        clipper.Begin(static_cast<int>(count), pitch);
+        if (keep && *keep < count) {
+            clipper.IncludeItemByIndex(static_cast<int>(*keep));
+        }
+        while (clipper.Step()) {
+            for (int index = clipper.DisplayStart; index < clipper.DisplayEnd; ++index) {
+                drawRow(static_cast<std::size_t>(index));
+            }
+        }
+        clipper.End();
+    }
 }

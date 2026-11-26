@@ -1,6 +1,9 @@
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
+#include <functional>
+#include <optional>
 #include <span>
 #include <string>
 #include <string_view>
@@ -61,4 +64,7 @@ namespace f4cf::imgui::controls
     void drawFoldingHeading(std::string_view text, const ImVec2& pos, float width, bool folded, std::span<const MarkedCount> counts = {}, Mark mark = Mark::None,
         std::span<const TextRange> found = {});
     void sectionHeading(std::string_view text, float right, std::span<const TextRange> found = {}, float height = 0.0f);
+
+    // calls drawRow for the rows that are shown, and `keep` too where it is one: each call adds one row
+    void clippedRows(std::size_t count, const std::function<void(std::size_t index)>& drawRow, std::optional<std::size_t> keep = {});
 }

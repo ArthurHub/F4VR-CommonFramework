@@ -26,7 +26,7 @@ current ImGui window, inside a canvas's content.
 | [`TextInputs.h`](TextInputs.h) | The text input: ImGui's field in a control's box, typed on the framework's keyboard, written as it is left or as it is typed. |
 | [`SearchFields.h`](SearchFields.h) | The search field: the magnifier, a placeholder or the query typed live, how many match, and Clear. |
 | [`Frames.h`](Frames.h) | A control's box and frame, outlines, a button's frame and ring, the step button, the selected bar, a row's look under the ray, a section's line, a tag, and where a popup opens. |
-| [`Rows.h`](Rows.h) | A row as wide as the rows of its list, the row of a heading that folds, the folding heading with its counts, and a section's heading with a rule. |
+| [`Rows.h`](Rows.h) | A row as wide as the rows of its list, the row of a heading that folds, the folding heading with its counts, a section's heading with a rule, and a long list's rows clipped to those shown. |
 | [`Labelled.h`](Labelled.h) | A control with its label in a row, in one call: the switcher, slider, stepper, dropdown, text input, button and a shown value, and the label alone. |
 | [`Tree.h`](Tree.h) | A tree's row, set in by its level, with its arrow, name, tag, dot and count, selected or disabled, and the row of a group of its nodes. |
 | [`TitleBars.h`](TitleBars.h) | A panel's title bar: breadcrumbs that shorten to fit, and buttons at the right. |
@@ -267,6 +267,10 @@ const auto at = ImGui::GetCursorScreenPos();
 const auto heading = controls::addFoldingRow("Advanced", _advancedFolded);
 const std::array counts{ controls::MarkedCount{ .mark = controls::CountMark::Error, .text = "1 invalid", .color = controls::get().colors().error } };
 if (heading.shown) { controls::drawFoldingHeading("Advanced", at, controls::rowWidth(), _advancedFolded, counts); }
+
+controls::clippedRows(items.size(), [&](const std::size_t index) {
+    controls::labelledValue(items[index].name, items[index].formId);
+}, _editedItem);
 ```
 
 - **A row** is as high as a control and as wide as `rowWidth()`: the window's width without the room of its scroll
@@ -283,6 +287,11 @@ if (heading.shown) { controls::drawFoldingHeading("Advanced", at, controls::rowW
   place.
 - **Text** in a row and a heading starts `headingTextInset()` in, so the headings and the rows' texts line up. The
   ranges `found` of a heading's text are underlined, as a search's matches.
+- **A long list:** a page adds every row, also one scrolled out, which draws nothing; that holds for a mod's settings
+  and not for every item of the game. `clippedRows(count, drawRow, keep)` calls `drawRow` only for the rows the window
+  shows, with ImGui's list clipper over rows of a control's height and the spacing between them, so the scroll bar is
+  that of all of them. Each call adds exactly one row, as `addRow` or a labelled control does. `keep` is a row drawn in
+  its place while scrolled out too, as one whose text is edited, which `textEdit` needs.
 
 ## Controls with their label
 

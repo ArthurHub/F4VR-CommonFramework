@@ -1,8 +1,10 @@
 #include <catch2/catch_test_macros.hpp>
 
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <functional>
+#include <optional>
 #include <span>
 #include <vector>
 
@@ -246,4 +248,92 @@ TEST_CASE("Controls rows: a folding heading draws its arrow, text and rule, and 
     });
     CHECK(plain > 0);
     CHECK(found > plain);
+}
+
+namespace
+{
+    constexpr std::size_t CLIPPED_COUNT = 10000;
+    constexpr float LIST_HEIGHT = 400.0f;
+
+    /**
+     * What a frame of a clipped list drew: each row's index and where it was from the top of the list, and how high the
+     * list's content was.
+     */
+    struct ClippedFrame
+    {
+        std::vector<std::size_t> indexes;
+        std::vector<float> tops;
+        float contentHeight = 0.0f;
+    };
+
+    /**
+     * A frame of 10,000 clipped rows in a list of its own, scrolled to a place first where one is given, keeping a row
+     * where one is given.
+     */
+    ClippedFrame clippedFrame(TestContext& context, const std::optional<std::size_t> keep = {}, const std::optional<float> scrollTo = {})
+    {
+        ClippedFrame drawn;
+        context.frame(ImVec2(-100.0f, -100.0f), false, [&] {
+            ImGui::BeginChild("list", ImVec2(0.0f, LIST_HEIGHT));
+            if (scrollTo) {
+                ImGui::SetScrollY(*scrollTo);
+            }
+            clippedRows(
+                CLIPPED_COUNT,
+                [&](const std::size_t index) {
+                    drawn.indexes.push_back(index);
+                    // from where the list's content starts on the screen, which moves up as it is scrolled
+                    drawn.tops.push_back(ImGui::GetCursorScreenPos().y - ImGui::GetCurrentWindow()->DC.CursorStartPos.y);
+                    addRow(true);
+                },
+                keep);
+            drawn.contentHeight = ImGui::GetCurrentWindow()->ContentSize.y;
+            ImGui::EndChild();
+        });
+        return drawn;
+    }
+
+    float rowPitch()
+    {
+        return get().theme().controlHeight + ImGui::GetStyle().ItemSpacing.y;
+    }
+}
+
+TEST_CASE("Controls rows: of 10,000 clipped rows only the shown ones are drawn, each in its place, and the list is as high as all")
+{
+    TestContext context;
+    clippedFrame(context);
+    const auto drawn = clippedFrame(context);
+    REQUIRE_FALSE(drawn.indexes.empty());
+    CHECK(drawn.indexes.front() == 0);
+    CHECK(drawn.indexes.size() <= static_cast<std::size_t>(LIST_HEIGHT / rowPitch()) + 2);
+    for (std::size_t i = 0; i < drawn.indexes.size(); ++i) {
+        CHECK(common::fEqual(drawn.tops[i], static_cast<float>(drawn.indexes[i]) * rowPitch(), 0.5f));
+    }
+    CHECK(common::fEqual(drawn.contentHeight, static_cast<float>(CLIPPED_COUNT) * rowPitch() - ImGui::GetStyle().ItemSpacing.y, 1.0f));
+}
+
+TEST_CASE("Controls rows: clipped rows scrolled to their middle draw the middle ones, and the row kept while it is scrolled out")
+{
+    TestContext context;
+    const float middle = static_cast<float>(CLIPPED_COUNT / 2) * rowPitch();
+    clippedFrame(context, 0, middle);
+    clippedFrame(context, 0);
+    const auto drawn = clippedFrame(context, 0);
+    REQUIRE(drawn.indexes.size() > 1);
+    CHECK(std::ranges::count(drawn.indexes, std::size_t{ 0 }) == 1);
+    for (std::size_t i = 0; i < drawn.indexes.size(); ++i) {
+        CHECK(common::fEqual(drawn.tops[i], static_cast<float>(drawn.indexes[i]) * rowPitch(), 0.5f));
+    }
+    const auto shown = std::ranges::find_if(drawn.indexes, [](const std::size_t index) {
+        return index != 0;
+    });
+    REQUIRE(shown != drawn.indexes.end());
+    CHECK(*shown >= CLIPPED_COUNT / 2 - 1);
+    CHECK(*shown <= CLIPPED_COUNT / 2 + 1);
+    CHECK(drawn.indexes.size() <= static_cast<std::size_t>(LIST_HEIGHT / rowPitch()) + 3);
+
+    // with no row kept, the first is not drawn there
+    const auto unkept = clippedFrame(context);
+    CHECK(std::ranges::count(unkept.indexes, std::size_t{ 0 }) == 0);
 }

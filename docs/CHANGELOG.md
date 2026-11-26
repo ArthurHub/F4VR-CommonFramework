@@ -57,6 +57,8 @@ major version is `0`, a minor bump may break the API; the **Upgrading** notes sa
 - **The press pulse**: `controls::get().pulse()` asks for a press's pulse, which the ImGui layer plays once after the
   frame on the pointing hand; `setPressPulse` sets its pattern, `Tick` by default, or none
   ([controls README](../src/imgui/controls/README.md#the-press-pulse)).
+- **A long list's rows**: `controls::clippedRows` draws only the rows a window shows, scrolled as for all of them, and
+  a row kept while it is scrolled out ([controls README](../src/imgui/controls/README.md#rows-and-headings)).
 
 ## 0.6.1 — unreleased
 
