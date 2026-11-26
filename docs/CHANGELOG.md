@@ -46,6 +46,9 @@ major version is `0`, a minor bump may break the API; the **Upgrading** notes sa
 - **A panel body's panes**: `controls::beginNavPane` and `beginNavRows` make a navigation pane, a plate with a header
   that stays and rows that scroll, and `beginContentPane` the pane beside it; each records its scroll for devbench
   ([controls README](../src/imgui/controls/README.md#panes)).
+- **A panel's title bar**: `controls::titleBar` draws breadcrumbs that shorten to fit, an ellipsis for the middle ones,
+  and buttons at the right, one of which can stand out; crumbs and buttons are `crumb` and `titleButton` targets
+  ([controls README](../src/imgui/controls/README.md#the-title-bar)).
 
 ## 0.6.1 — unreleased
 

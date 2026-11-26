@@ -18,6 +18,9 @@ namespace f4cf::imgui::controls
         inline constexpr std::string_view OPTION = "option";
         // a search field while it is not edited, Field, and its Clear while it has a query: `searchField`
         inline constexpr std::string_view SEARCH = "search";
+        // a crumb of a title bar by its text, and a button of it by its name: `titleBar`
+        inline constexpr std::string_view CRUMB = "crumb";
+        inline constexpr std::string_view TITLE_BUTTON = "titleButton";
         // the scroll of the list that is open
         inline constexpr std::string_view LIST_AREA = "list";
         // the scroll of a navigation pane's rows, and of the content's pane, unless they are given other areas

@@ -28,6 +28,7 @@
 #include "imgui/controls/Sliders.h"
 #include "imgui/controls/Text.h"
 #include "imgui/controls/TextInputs.h"
+#include "imgui/controls/TitleBars.h"
 #include "imgui/controls/Tree.h"
 
 // Every control in every state it has, drawn in one window, and a theme that tells a value read from it from any other.
@@ -337,6 +338,11 @@ namespace controls_gallery
             endNavRows();
         }
         endNavPane();
+
+        // a title bar with every look of crumb, a suffix, and a button that stands out
+        const std::array crumbs{ Crumb{ .text = "Menu", .look = CrumbLook::Selected }, Crumb{ .text = "Mod" }, Crumb{ .text = "Page", .look = CrumbLook::Current } };
+        const std::array titleButtons{ TitleButton{ .name = "Close", .icon = Icon::Cross }, TitleButton{ .name = "Help", .text = "?", .highlightText = "Help" } };
+        titleBar(TitleBar{ .crumbs = crumbs, .buttons = titleButtons, .suffix = " (filtered)" });
         ImGui::EndChild();
 
         // the list, over the rows, last but the dialog

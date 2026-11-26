@@ -4,7 +4,7 @@ Namespace: `f4cf::imgui::controls`
 
 What a panel's controls are drawn with, in one look: text cut with an ellipsis or wrapped, drawn marks and icons,
 frames and outlines, buttons, the switcher, dialogs, the slider, the stepper, the dropdown with its list, the text
-input, the search field, the panes of a panel's body, the rows of a list with the headings of its sections, and the rows of a tree. A panel on a
+input, the search field, the title bar, the panes of a panel's body, the rows of a list with the headings of its sections, and the rows of a tree. A panel on a
 [canvas](../README.md) builds its rows and controls from them, so two mods' panels read as one UI. They draw into the
 current ImGui window, inside a canvas's content.
 
@@ -28,6 +28,7 @@ current ImGui window, inside a canvas's content.
 | [`Frames.h`](Frames.h) | A control's box and frame, outlines, a button's frame and ring, the step button, the selected bar, a row's look under the ray, a section's line, a tag, and where a popup opens. |
 | [`Rows.h`](Rows.h) | A row as wide as the rows of its list, the row of a heading that folds, the folding heading with its counts, and a section's heading with a rule. |
 | [`Tree.h`](Tree.h) | A tree's row, set in by its level, with its arrow, name, tag, dot and count, selected or disabled, and the row of a group of its nodes. |
+| [`TitleBars.h`](TitleBars.h) | A panel's title bar: breadcrumbs that shorten to fit, and buttons at the right. |
 | [`Panes.h`](Panes.h) | A panel body's panes: the navigation pane, a plate with a header that stays and rows that scroll, and the content's pane beside it. |
 | [`Targets.h`](Targets.h) | `controls::targets()`: where the last frame's buttons, options and a mod's rows were, and how far its lists were scrolled, for devbench. |
 
@@ -309,6 +310,31 @@ if (controls::treeGroupRow("Weapons", weapons.size(), _weaponsOpen, false, width
 - **A group row** is muted: its arrow, its name, a rule, and the count of its nodes. A press is the caller's to open or
   close it.
 
+## The title bar
+
+```cpp
+#include "imgui/controls/TitleBars.h"
+
+const std::array crumbs{ controls::Crumb{ .text = "Menu" }, controls::Crumb{ .text = mod.name },
+    controls::Crumb{ .text = page.name, .look = controls::CrumbLook::Current } };
+const std::array buttons{ controls::TitleButton{ .name = "Close", .icon = controls::Icon::Cross },
+    controls::TitleButton{ .name = "Help", .text = "?", .highlightText = firstRun ? "Help" : "" } };
+const auto drawn = controls::titleBar({ .crumbs = crumbs, .buttons = buttons });
+if (drawn.pressedCrumb) { goTo(*drawn.pressedCrumb); }
+```
+
+- **The buttons** are from the bar's right edge, each an icon button as high as a control with its `icon` or its
+  `text`. One with a `highlightText` stands out, as a Help a new player has to find: wider, with both texts in the
+  important color, outlined, with a ring while pressed.
+- **The crumbs** are in the theme's `titleFontSize`, with `»` between them. A `Link` is pressed, the `Current` one is
+  not, and a `Selected` one is a solid accent fill. They shorten to fit before the buttons: with more than one after
+  the second, the ones between the second and the last become one `…`, which is not pressed; then the second shortens,
+  down to two control heights, unless it does not `shorten` and others follow it; the last ends in an ellipsis. The
+  first is never shortened. The `suffix` is said after the last crumb, dimmer, as " (filtered)".
+- A rule in the theme's `rule` ends the bar, which takes its `height`. It returns the places of a pressed crumb, a
+  pressed button and the button the ray is on; crumbs and buttons are targets, `crumb` by their text and `titleButton`
+  by their name.
+
 ## Panes
 
 ```cpp
@@ -358,7 +384,8 @@ so a test with the controllers asks for a button or a row by a key it knows and 
 - **The controls record themselves:** `button`, and each of `dialogButtons`, as `target::BUTTON` by its label;
   `drawList`'s options as `target::OPTION` by their text, its action entry by its own, and its scroll as
   `target::LIST_AREA`; `searchField` as `target::SEARCH`, `Field` while it is not edited and `Clear` while there is a
-  query; the [panes](#panes) their scrolls, as `target::TREE_AREA` and `target::PAGE_AREA` or the areas they are given.
+  query; `titleBar`'s crumbs as `target::CRUMB` by their text and its buttons as `target::TITLE_BUTTON` by their name;
+  the [panes](#panes) their scrolls, as `target::TREE_AREA` and `target::PAGE_AREA` or the areas they are given.
 - **A mod records** a row whose key is its own, by kinds it names and documents: a setting's row by its id, a tree's
   row by its node and path, a section by its text.
 - Each frame drops the last one's, as the controls' frame begins, and the layer gives each canvas its top left before
