@@ -72,7 +72,7 @@ namespace f4cf::vrui
 
     /**
      * The house style for buttons: the panel look with tight padding, since a 2x2 button has little
-     * room to give away. Matches the look the NIF buttons were drawn with.
+     * room to give away.
      *
      *     button->setStyle(vrui::F4VR_BUTTON_STYLE);
      */

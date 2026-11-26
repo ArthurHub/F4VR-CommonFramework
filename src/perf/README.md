@@ -124,7 +124,7 @@ gpuFrame.mark(blurSite, "gpu.myLayer.blurMs");
   overlap at its edges, so a very short span is mostly its edges. A lightly loaded GPU also clocks
   down, which inflates short times.
 - **Only the mod's own work.** What the engine renders because of the mod (a body, a light and its
-  shadow map, NIF widgets) is part of the frame context's GPU time and can't be timed from here.
+  shadow map, a mesh it attaches) is part of the frame context's GPU time and can't be timed from here.
 
 ## Tracy
 

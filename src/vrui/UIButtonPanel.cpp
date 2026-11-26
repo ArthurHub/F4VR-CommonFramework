@@ -16,8 +16,7 @@ namespace f4cf::vrui
     namespace
     {
         // How far the interaction bone must push the button in to fire it, and how far back in front
-        // of it the bone must come before it can fire again. UIWidget's own values, so a panel button
-        // and a NIF button take the same push.
+        // of it the bone must come before it can fire again.
         constexpr float PRESS_TRIGGER_DISTANCE = 2.0f;
         constexpr float PRESS_RELEASE_DISTANCE = 0.4f;
     }
@@ -83,6 +82,9 @@ namespace f4cf::vrui
         _onPressHandler = std::move(handler);
     }
 
+    /**
+     * A disabled button cannot be pressed and is drawn dimmed. Disabling lets go of a press in progress.
+     */
     void UIButtonPanel::setDisabled(const bool disabled)
     {
         _disabled = disabled;
@@ -94,7 +96,7 @@ namespace f4cf::vrui
     }
 
     /**
-     * The panel's visibility, then D for disabled and P for pressable - UIButton's letters.
+     * The panel's visibility, then D for disabled and P for pressable.
      */
     std::string UIButtonPanel::stateFlags() const
     {
@@ -215,15 +217,14 @@ namespace f4cf::vrui
     }
 
     /**
-     * UIWidget::handlePressEvent's soft press, measured against the panel's own rectangle rather than a
-     * mesh node: fire once when the interaction bone has pushed the button in far enough, and only
+     * A soft press, measured against the panel's own rectangle: fire once when the interaction bone has pushed the button in far enough, and only
      * re-arm once the bone is back in front of it.
      *
      * Only a finger that interacts with the button pushes it, see UIElement::updateFinger, and only from in
      * front of it: a finger that went in beside the button does not push it as it comes up under it.
      *
      * The world frame is composed from the attach node and this element's transform - the one the
-     * rectangle is drawn with, press offset included - and the NIF's bounding sphere becomes the
+     * rectangle is drawn with, press offset included - and the button's reach is the
      * rectangle's half diagonal.
      */
     void UIButtonPanel::handlePress(UIFrameUpdateContext* context)

@@ -293,7 +293,7 @@ namespace f4cf::vrui
     }
 
     /**
-     * The marker stays attached and is shrunk to nothing, as the NIF widgets are hidden.
+     * The marker stays attached and is shrunk to nothing to hide it.
      */
     void UISkeletonHandler::hideFingerTipMarker(FingerTipMarker& marker)
     {

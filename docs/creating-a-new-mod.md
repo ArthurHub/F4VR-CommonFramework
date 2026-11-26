@@ -44,7 +44,7 @@ You now have a complete mod that builds. It came with:
   precompiled header.
 - **`data/config/MyMod.toml`:** the shipped config, also embedded in the DLL as the default.
 - **`data/mod/`:** a game `Data` tree shipped beside the DLL, with the framework's meshes and textures.
-- **`data/resources/`:** the source PNGs of the UI atlases, not shipped.
+- **`data/resources/`:** the reference sheet of the framework's UI look, not shipped.
 - **`CMakeLists.txt`:** `NAME`, `FRIENDLY_NAME` and `VERSION` at the top. The version flows into the DLL
   and the package name, so bump it there and nowhere else.
 - **`CMakeUserPresets.json`:** your machine's paths, git-ignored.
@@ -84,21 +84,8 @@ mv data/mod/Textures/MyMod data/mod/Textures/HelloVR
 - **`f4cf\`, the framework's assets:** the activation-sphere mesh and textures, their icons, the binding
   prompts' controller icons, and shared VR UI button icons. Nothing in them names the mod, so renaming
   the folders is enough. Ship them as they came, and copy them again from `mod-template/` when you update
-  the framework. Your own assets go beside them, as `Textures\HelloVR\vrui\`.
-- **`ui-common` and `ui-example`, the NIF button atlases:** each `.nif` has its texture path inside it,
-  so after the `mv` it still points at `Textures\MyMod\`. Re-pack them under your name from
-  `data/resources/`, which overwrites them in place:
-
-  ```sh
-  python external/F4VR-CommonFramework/nif-tools/vrui_atlas.py pack \
-    --name ui-common --texture-subpath HelloVR data/resources/common --output data/mod
-  ```
-
-  `ui-example` is a demo: re-pack it the same way, replace it, or delete it. Each PNG's name is the
-  `.nif` name you give `UIButton` / `UIWidget`. All the options: [nif-tools](../nif-tools/README.md).
-
-You may need no atlas at all: a `vrui::UIButtonPanel` draws its face from text and a `.dds` at runtime,
-with no NIF ([vrui assets](../src/vrui/README.md#assets)).
+  the framework. Your own assets go beside them, as `Textures\HelloVR\vrui\`. A VR UI button draws its
+  face from text and a `.dds` at runtime ([vrui assets](../src/vrui/README.md#assets)).
 
 ## 4. Point the build at the game
 

@@ -59,6 +59,13 @@ major version is `0`, a minor bump may break the API; the **Upgrading** notes sa
   ([controls README](../src/imgui/controls/README.md#the-press-pulse)).
 - **A long list's rows**: `controls::clippedRows` draws only the rows a window shows, scrolled as for all of them, and
   a row kept while it is scrolled out ([controls README](../src/imgui/controls/README.md#rows-and-headings)).
+- **The VR UI's NIF widgets are gone**: every vrui element is a panel. **Upgrading:** `UIWidget`, `UIButton`,
+  `UIToggleButton` and `UIMultiStateToggleButton` are `UIButtonPanel`, `UIToggleButtonPanel` and
+  `UIMultiStateToggleButtonPanel`, whose face is text and an image
+  ([vrui README](../src/vrui/README.md#assets)). `UIPressable` and `UIToggleable` are folded into
+  `UIButtonPanel` and `UIToggleButtonPanel`, and a `UIToggleGroupContainer` holds `UIToggleButtonPanel`s. The `ui-common` and `ui-example` meshes and atlases, their source
+  PNGs and `nif-tools/vrui_atlas.py` are gone too: delete `Meshes\<ModName>\ui-common\`, `ui-example\` and their
+  `.DDS` from the mod's data.
 
 ## 0.6.1 — unreleased
 

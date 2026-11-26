@@ -249,7 +249,7 @@ namespace f4cf::vrui
         virtual std::string_view typeName() const = 0;
 
         /**
-         * The state letters toString prints after the name, in the NIF widgets' order: V or H for
+         * The state letters toString prints after the name: V or H for
          * visible or hidden here, and a subclass with more state - disabled, pressable, toggled - appends
          * its own.
          */

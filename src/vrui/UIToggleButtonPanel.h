@@ -5,25 +5,22 @@
 #include <string_view>
 
 #include "UIButtonPanel.h"
-#include "UIToggleable.h"
 
 namespace f4cf::vrui
 {
     /**
-     * Thickness of the frame drawn around a toggled-on panel button, in vrui units - btn-border.nif's
-     * white ring, 4 texels of a 200-texel, 2-unit button.
+     * Thickness of the frame drawn around a toggled-on panel button, in vrui units.
      */
     inline constexpr float TOGGLE_BUTTON_PANEL_FRAME_THICKNESS_UNITS = 0.04f;
 
     /**
-     * Clear space between the button's edge and its toggle frame, in vrui units - btn-border.nif's 6
-     * texels, so the frame's outer edge sits 0.1 units outside the button.
+     * Clear space between the button's edge and its toggle frame, in vrui units, so the
+     * frame's outer edge sits 0.1 units outside the button.
      */
     inline constexpr float TOGGLE_BUTTON_PANEL_FRAME_GAP_UNITS = 0.06f;
 
     /**
-     * A UIButtonPanel that stays on or off - the panel counterpart of UIToggleButton, composed from text
-     * and an image at runtime instead of a NIF.
+     * A UIButtonPanel that stays on or off, composed from text and an image at runtime.
      *
      *     auto shadows = std::make_shared<vrui::UIToggleButtonPanel>("Shadows");
      *     shadows->setTopText("BEAM");
@@ -33,39 +30,42 @@ namespace f4cf::vrui
      *
      * Each press flips the state, then calls the toggle handler with the new one. It is pressable only
      * with a toggle handler, and not while on when un-toggling is not allowed - which
-     * UIToggleGroupContainer turns off for every toggle it holds, NIF or panel, so pressing the selected
+     * UIToggleGroupContainer turns off for every toggle it holds, so pressing the selected
      * one does nothing.
      *
-     * While on it draws a frame AROUND the button, in addition to the button's own border, as
-     * UIToggleButton does with btn-border.nif: a white ring a small gap outside the button's edge, its
+     * While on it draws a frame AROUND the button, in addition to the button's own border: a
+     * white ring a small gap outside the button's edge, its
      * corners rounded to follow the button's. Being outside, it sits in the space the layout leaves
      * between the button and its neighbours, 0.1 units deep by default, so a container needs at least
      * that much padding. setToggleFrame changes its colour, thickness and gap. It follows the button in
      * when pushed, and dims with it when disabled.
      */
-    class UIToggleButtonPanel : public UIButtonPanel, public UIToggleable
+    class UIToggleButtonPanel : public UIButtonPanel
     {
     public:
         /**
          * @param name identifies the element in logs.
-         * @param width / height size in vrui units, border and padding included - 2x2 matches the NIF
-         *        buttons.
+         * @param width / height size in vrui units, border and padding included.
          */
         explicit UIToggleButtonPanel(const std::string& name, float width = 2.0f, float height = 2.0f);
 
-        bool isToggleOn() const override
+        bool isToggleOn() const
         {
             return _isToggleOn;
         }
 
-        void setToggleState(bool isToggleOn) override;
+        void setToggleState(bool isToggleOn);
 
-        bool isUnToggleAllowed() const override
+        /**
+         * Whether a press may turn the toggle off. A UIToggleGroupContainer turns this off for every
+         * toggle it holds, so its selection can move but never be cleared by a press.
+         */
+        bool isUnToggleAllowed() const
         {
             return _isUnToggleAllowed;
         }
 
-        void setUnToggleAllowed(bool allowUnToggle) override;
+        void setUnToggleAllowed(bool allowUnToggle);
 
         /**
          * Called on the game thread each time a press flips the state, with the new state. A toggle with

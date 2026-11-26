@@ -66,7 +66,7 @@ overrides `onModLoaded` (F4SE load: Papyrus, hooks), `onGameLoaded` (once), `onG
 | `src/ModBase.*`, `Logger.h` | `f4cf`, `f4cf::logger` | Lifecycle, `ModBase::Settings`, spdlog logging | [src/README.md](src/README.md) |
 | `src/config/` | `f4cf`, `f4cf::config` | `ConfigBase`: TOML load/save, hot-reload, overrides, migration | [src/config/README.md](src/config/README.md), [docs/debug-config.md](docs/debug-config.md) |
 | `src/vrcf/` | `f4cf::vrcf` | Controller input (`VRControllers`), suppression (`VRControllersSuppress`), haptics (`VRHaptics`), bindings | [src/vrcf/README.md](src/vrcf/README.md), [docs/input-binding.md](docs/input-binding.md) |
-| `src/vrui/` | `f4cf::vrui` | VR UI: NIF widgets and drawn panels, layout, `g_uiManager`, binding prompts | [src/vrui/README.md](src/vrui/README.md) |
+| `src/vrui/` | `f4cf::vrui` | VR UI: drawn panels and buttons, layout, `g_uiManager`, binding prompts | [src/vrui/README.md](src/vrui/README.md) |
 | `src/render/` | `f4cf::render` | Overlay drawing: the shared Submit hook, primitives, text, textures, scene-depth occlusion | [src/render/README.md](src/render/README.md), [docs/tech/scene-depth-occlusion.md](docs/tech/scene-depth-occlusion.md) |
 | `src/imgui/` | `f4cf::imgui` | Dear ImGui canvases on world-space quads, the wand pointer, the VR keyboard | [src/imgui/README.md](src/imgui/README.md), [docs/tech/vr-keyboard.md](docs/tech/vr-keyboard.md) |
 | `src/imgui/controls/` | `f4cf::imgui::controls` | A panel's small controls in one look: text, marks and icons, frames, in the `imgui::Theme`; their targets for devbench | [src/imgui/controls/README.md](src/imgui/controls/README.md) |

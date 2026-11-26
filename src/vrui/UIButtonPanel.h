@@ -7,7 +7,6 @@
 
 #include "../render/Texture.h"
 #include "UIPanel.h"
-#include "UIPressable.h"
 
 namespace f4cf::vrui
 {
@@ -44,7 +43,7 @@ namespace f4cf::vrui
 
     /**
      * A pressable vrui button drawn by the framework's own primitive renderer - text, an image, or both,
-     * composed at runtime - rather than baked into a NIF mesh and its texture.
+     * composed at runtime.
      *
      *     auto gobo = std::make_shared<vrui::UIButtonPanel>("SwitchGobo");
      *     gobo->setTopText("SWITCH");
@@ -70,7 +69,7 @@ namespace f4cf::vrui
      * Text is shrunk to fit rather than clipped, so a long label comes out smaller, never cut. Only if
      * the lines would overfill the height do both shrink, by the same factor.
      *
-     * It presses the way UIButton does: pushed in by the interaction bone past a short travel it fires
+     * It presses like a real button: pushed in by the interaction bone past a short travel it fires
      * once, and fires again only after the bone has backed away in front of it. While disabled it is
      * dimmed and cannot be pressed. It starts in vrui::F4VR_BUTTON_STYLE; the style's content colour is
      * the text colour, and the image is tinted by setImageTint alone.
@@ -78,13 +77,12 @@ namespace f4cf::vrui
      * Its size is fixed unless setFitWidth is on: then its height stays as given and its width follows
      * the content, so a long label widens the button instead of shrinking.
      */
-    class UIButtonPanel : public UIPanel, public UIPressable
+    class UIButtonPanel : public UIPanel
     {
     public:
         /**
          * @param name identifies the element in logs.
-         * @param width / height size in vrui units, border and padding included - 2x2 matches the NIF
-         *        buttons.
+         * @param width / height size in vrui units, border and padding included.
          */
         explicit UIButtonPanel(const std::string& name, float width = 2.0f, float height = 2.0f);
 
@@ -160,15 +158,12 @@ namespace f4cf::vrui
          */
         void setOnPressHandler(std::function<void(UIButtonPanel*)> handler);
 
-        bool isDisabled() const override
+        bool isDisabled() const
         {
             return _disabled;
         }
 
-        /**
-         * A disabled button cannot be pressed and is drawn dimmed.
-         */
-        void setDisabled(bool disabled) override;
+        void setDisabled(bool disabled);
 
         // Internal: press detection, run by the UI manager each frame.
         void onFrameUpdate(UIFrameUpdateContext* context) override;
@@ -211,7 +206,7 @@ namespace f4cf::vrui
         std::function<void(UIButtonPanel*)> _onPressHandler;
         bool _disabled = false;
 
-        // press state, kept the way UIWidget keeps it: whether the bone has been in front of the button
+        // press state: whether the bone has been in front of the button
         // since it last fired or went in beside it, so it can push it, and how far the button is pushed in
         bool _pressArmed = false;
         float _pressYOffset = 0.0f;

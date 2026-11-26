@@ -28,19 +28,19 @@ namespace f4cf::vrui
     }
 
     /**
-     * On toggle of one button, un-toggle all other buttons. Works on the UIToggleable interface, so NIF
-     * and panel toggles turn each other off; a change from anything that is not a toggle is ignored.
+     * On toggle of one button, un-toggle all other buttons. A change from anything that is not a toggle
+     * is ignored.
      */
     void UIToggleGroupContainer::onStateChanged(UIElement* element)
     {
         UIElement::onStateChanged(element);
 
-        const auto changedToggle = dynamic_cast<UIToggleable*>(element);
+        const auto changedToggle = dynamic_cast<UIToggleButtonPanel*>(element);
         if (!changedToggle || !changedToggle->isToggleOn()) {
             return;
         }
         for (const auto& otherElement : _childElements) {
-            const auto otherToggle = dynamic_cast<UIToggleable*>(otherElement.get());
+            const auto otherToggle = dynamic_cast<UIToggleButtonPanel*>(otherElement.get());
             if (otherToggle && otherToggle != changedToggle) {
                 otherToggle->setToggleState(false);
             }
@@ -53,7 +53,7 @@ namespace f4cf::vrui
     void UIToggleGroupContainer::clearToggleState() const
     {
         for (const auto& element : _childElements) {
-            if (const auto toggle = dynamic_cast<UIToggleable*>(element.get())) {
+            if (const auto toggle = dynamic_cast<UIToggleButtonPanel*>(element.get())) {
                 toggle->setToggleState(false);
             }
         }

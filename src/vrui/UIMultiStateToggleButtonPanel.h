@@ -27,9 +27,8 @@ namespace f4cf::vrui
     };
 
     /**
-     * A UIButtonPanel that cycles through a set of states - the panel counterpart of
-     * UIMultiStateToggleButton, with each state's look composed from text and an image at runtime instead
-     * of a NIF per state.
+     * A UIButtonPanel that cycles through a set of states, each state's look composed from text and an
+     * image at runtime.
      *
      *     const std::map<HeadgearRequirement, vrui::UIButtonPanelContent> states{
      *         { HeadgearRequirement::None, { .topText = "HEADGEAR", .bottomText = "ANY" } },
@@ -57,8 +56,7 @@ namespace f4cf::vrui
         /**
          * @param name identifies the element in logs.
          * @param contentPerState what to show in each state, in the order a press cycles through them.
-         * @param width / height size in vrui units, border and padding included - 2x2 matches the NIF
-         *        buttons.
+         * @param width / height size in vrui units, border and padding included.
          */
         UIMultiStateToggleButtonPanel(const std::string& name, const std::map<StateType, UIButtonPanelContent>& contentPerState, float width = 2.0f, float height = 2.0f);
 
