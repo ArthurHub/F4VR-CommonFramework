@@ -22,6 +22,7 @@
 #include "imgui/controls/Frames.h"
 #include "imgui/controls/Icons.h"
 #include "imgui/controls/Marks.h"
+#include "imgui/controls/Panes.h"
 #include "imgui/controls/Rows.h"
 #include "imgui/controls/SearchFields.h"
 #include "imgui/controls/Sliders.h"
@@ -321,6 +322,21 @@ namespace controls_gallery
         treeRow(TreeRow{ .name = "Found deeper", .level = 2, .found = treeFound }, rowWidth());
         ImGui::PopID();
         treeGroupRow("Group", 5, true, true, rowWidth());
+
+        // a navigation pane with a header's room and its rows
+        constexpr float NAV_WIDTH = 400.0f;
+        if (beginNavPane("nav", NAV_WIDTH, 200.0f)) {
+            ImGui::Dummy(ImVec2(navRowWidth(NAV_WIDTH), 40.0f));
+            if (beginNavRows("navRows", NAV_WIDTH)) {
+                for (int i = 0; i < 6; ++i) {
+                    ImGui::PushID(i);
+                    treeRow(TreeRow{ .name = "Nav row", .selected = i == 1 }, navRowWidth(NAV_WIDTH));
+                    ImGui::PopID();
+                }
+            }
+            endNavRows();
+        }
+        endNavPane();
         ImGui::EndChild();
 
         // the list, over the rows, last but the dialog

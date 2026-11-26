@@ -20,6 +20,9 @@ namespace f4cf::imgui::controls
         inline constexpr std::string_view SEARCH = "search";
         // the scroll of the list that is open
         inline constexpr std::string_view LIST_AREA = "list";
+        // the scroll of a navigation pane's rows, and of the content's pane, unless they are given other areas
+        inline constexpr std::string_view TREE_AREA = "tree";
+        inline constexpr std::string_view PAGE_AREA = "page";
     }
 
     /**

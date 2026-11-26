@@ -43,6 +43,9 @@ major version is `0`, a minor bump may break the API; the **Upgrading** notes sa
 - **Icons and a row's popup**: `controls::drawIcon` draws the panel's icons and a button's as one set, each in a box of
   any size from the box it is designed in ([controls README](../src/imgui/controls/README.md#icons)), and
   `controls::beginRowPopup` opens an editor's popup on a row, under or over it, inside its window.
+- **A panel body's panes**: `controls::beginNavPane` and `beginNavRows` make a navigation pane, a plate with a header
+  that stays and rows that scroll, and `beginContentPane` the pane beside it; each records its scroll for devbench
+  ([controls README](../src/imgui/controls/README.md#panes)).
 
 ## 0.6.1 — unreleased
 
