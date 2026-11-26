@@ -5,6 +5,8 @@
 #include <cmath>
 #include <vector>
 
+#include "Controls.h"
+
 namespace
 {
     using namespace f4cf::imgui::controls;
@@ -18,7 +20,10 @@ namespace
     constexpr float RANGE_UNDERLINE = 2.0f;
 
     // the room after a mark in a text, as a space
-    constexpr float MARK_SPACE = 8.0f;
+    float markSpace()
+    {
+        return get().theme().space2;
+    }
 
     /**
      * How a piece of text looks: its font size, its color, and its face.
@@ -81,7 +86,7 @@ namespace
                 .font = piece.font ? piece.font : ImGui::GetFont(),
                 .underline = piece.underline };
             if (piece.mark != Mark::None) {
-                words.push_back({ .text = {}, .width = MARK_WIDTH + MARK_SPACE, .inkWidth = MARK_WIDTH, .look = look, .mark = piece.mark });
+                words.push_back({ .text = {}, .width = MARK_WIDTH + markSpace(), .inkWidth = MARK_WIDTH, .look = look, .mark = piece.mark });
             } else {
                 addWords(piece.text, look, words);
             }

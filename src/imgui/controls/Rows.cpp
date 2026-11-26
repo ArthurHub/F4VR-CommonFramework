@@ -14,20 +14,32 @@ namespace
     using namespace f4cf::imgui::controls;
 
     // the room a row keeps on its right, past the scroll bar's
-    constexpr float ROW_RIGHT_GAP = 8.0f;
+    float rowRightGap()
+    {
+        return get().theme().space2;
+    }
 
     // the gap between a mark and its count, and between a heading's arrow or mark and its text: half the gap between
     // two counts
-    constexpr float MARK_GAP = 8.0f;
+    float markGap()
+    {
+        return get().theme().space2;
+    }
 
     // the room between a heading's text or its counts and its rule, and between the counts and the right edge
-    constexpr float RULE_GAP = 12.0f;
+    float ruleGap()
+    {
+        return get().theme().space3;
+    }
 
     // the room a heading's rule keeps at the least
     constexpr float RULE_MIN_WIDTH = 16.0f;
 
     // the room above and below a section heading's text
-    constexpr float HEADING_PADDING = 8.0f;
+    float headingPadding()
+    {
+        return get().theme().space2;
+    }
 
     /**
      * The width of a count's mark: the dot's, or a mark's.
@@ -41,13 +53,22 @@ namespace
 namespace f4cf::imgui::controls
 {
     /**
+     * Where a heading's text starts in its row, as a row's text does in its frame, so a heading lines up with the rows:
+     * the theme's space3.
+     */
+    float headingTextInset()
+    {
+        return get().theme().space3;
+    }
+
+    /**
      * The width of a row at the cursor, the same whether or not the window's scroll bar shows. A row of a section in a
      * section is set in, and ends where the other rows do.
      */
     float rowWidth()
     {
         const float indent = ImGui::GetCursorPosX() - ImGui::GetCursorStartPos().x;
-        return ImGui::GetWindowWidth() - ImGui::GetStyle().ScrollbarSize - ROW_RIGHT_GAP - indent;
+        return ImGui::GetWindowWidth() - ImGui::GetStyle().ScrollbarSize - rowRightGap() - indent;
     }
 
     /**
@@ -99,7 +120,7 @@ namespace f4cf::imgui::controls
     {
         float width = 0.0f;
         for (const auto& count : counts) {
-            width += (width > 0.0f ? MARK_GAP * 2.0f : 0.0f) + countMarkWidth(count.mark) + MARK_GAP + textWidth(count.text);
+            width += (width > 0.0f ? markGap() * 2.0f : 0.0f) + countMarkWidth(count.mark) + markGap() + textWidth(count.text);
         }
         const float left = std::floor(right - width);
         const float middle = top + get().theme().controlHeight * 0.5f;
@@ -117,9 +138,9 @@ namespace f4cf::imgui::controls
                 drawDot(center, get().colors().warning);
                 break;
             }
-            x += countMarkWidth(count.mark) + MARK_GAP;
+            x += countMarkWidth(count.mark) + markGap();
             drawText(x, right, top, get().theme().controlHeight, count.color, count.text);
-            x += textWidth(count.text) + MARK_GAP * 2.0f;
+            x += textWidth(count.text) + markGap() * 2.0f;
         }
         return left;
     }
@@ -141,23 +162,23 @@ namespace f4cf::imgui::controls
         } else if (mark == Mark::Warning) {
             color = colors.warning;
         }
-        const float arrowLeft = pos.x + HEADING_TEXT_INSET;
+        const float arrowLeft = pos.x + headingTextInset();
         drawFoldArrow(ImVec2(arrowLeft, pos.y + (theme.controlHeight - FOLD_ARROW_SIZE) * 0.5f), !folded, color);
         float ruleRight = pos.x + width;
         if (!counts.empty()) {
             ImGui::PushFont(nullptr, theme.detailFontSize);
-            ruleRight = drawMarkedCounts(ruleRight - RULE_GAP, pos.y, counts) - MARK_GAP;
+            ruleRight = drawMarkedCounts(ruleRight - ruleGap(), pos.y, counts) - markGap();
             ImGui::PopFont();
         }
-        float textLeft = arrowLeft + FOLD_ARROW_SIZE + MARK_GAP;
+        float textLeft = arrowLeft + FOLD_ARROW_SIZE + markGap();
         if (mark != Mark::None) {
             drawMark(mark, ImVec2(textLeft + MARK_WIDTH * 0.5f, pos.y + theme.controlHeight * 0.5f));
-            textLeft += MARK_WIDTH + MARK_GAP;
+            textLeft += MARK_WIDTH + markGap();
         }
-        const float textRight = (std::min)(textLeft + textWidth(text), ruleRight - RULE_MIN_WIDTH - RULE_GAP);
+        const float textRight = (std::min)(textLeft + textWidth(text), ruleRight - RULE_MIN_WIDTH - ruleGap());
         drawText(textLeft, textRight, pos.y, theme.controlHeight, color, text);
         drawUnderlines(textLeft, textRight, pos.y, theme.controlHeight, color, text, found);
-        const float ruleLeft = std::ceil(textRight) + RULE_GAP;
+        const float ruleLeft = std::ceil(textRight) + ruleGap();
         if (ruleLeft < ruleRight) {
             const float ruleTop = std::floor(pos.y + (theme.controlHeight - theme.frameBorderSize) * 0.5f);
             ImGui::GetWindowDrawList()->AddRectFilled(ImVec2(ruleLeft, ruleTop), ImVec2(ruleRight, ruleTop + theme.frameBorderSize), ImGui::GetColorU32(colors.rule));
@@ -169,7 +190,7 @@ namespace f4cf::imgui::controls
      * from it to a right edge, where the rows end. ImGui draws the rule to the right of the window's work area, past the
      * rows into the room of the scroll bar, so that edge is the heading's while it is drawn. The ranges `found` of the
      * text are underlined. It is as high as `height`, its text in the middle, or with no height as its text with
-     * `HEADING_PADDING` above and below.
+     * `headingPadding()` above and below.
      */
     void sectionHeading(const std::string_view text, const float right, const std::span<const TextRange> found, const float height)
     {
@@ -179,8 +200,8 @@ namespace f4cf::imgui::controls
         const float workRight = window->WorkRect.Max.x;
         window->WorkRect.Max.x = right;
         // the heading's own look, whatever the panel's ImGui style
-        const float padding = height > 0.0f ? (std::max)((height - ImGui::GetFontSize()) * 0.5f, 0.0f) : HEADING_PADDING;
-        ImGui::PushStyleVar(ImGuiStyleVar_SeparatorTextPadding, ImVec2(HEADING_TEXT_INSET, padding));
+        const float padding = height > 0.0f ? (std::max)((height - ImGui::GetFontSize()) * 0.5f, 0.0f) : headingPadding();
+        ImGui::PushStyleVar(ImGuiStyleVar_SeparatorTextPadding, ImVec2(headingTextInset(), padding));
         ImGui::PushStyleVar(ImGuiStyleVar_SeparatorTextBorderSize, theme.frameBorderSize);
         ImGui::PushStyleVar(ImGuiStyleVar_SeparatorTextAlign, ImVec2(0.0f, 0.5f));
         ImGui::PushStyleColor(ImGuiCol_Separator, colors.rule);
@@ -191,7 +212,7 @@ namespace f4cf::imgui::controls
         ImGui::PopStyleVar(3);
         window->WorkRect.Max.x = workRight;
         const auto min = ImGui::GetItemRectMin();
-        const float textLeft = min.x + HEADING_TEXT_INSET;
+        const float textLeft = min.x + headingTextInset();
         drawUnderlines(textLeft, textLeft + textWidth(text), min.y, ImGui::GetItemRectSize().y, colors.muted, text, found);
     }
 }

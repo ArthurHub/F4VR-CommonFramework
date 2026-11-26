@@ -66,8 +66,7 @@ namespace f4cf::imgui::controls
         bool withUnit = true;
     };
 
-    // the room between the box of a slider's value and its text
-    constexpr float SLIDER_VALUE_PADDING = 12.0f;
+    float sliderValuePadding();
 
     // The thumbstick steps a slider from this far off its center, of 1 for a full push. It is far, so a push that
     // scrolls the page and is a little to a side steps nothing.

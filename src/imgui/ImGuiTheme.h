@@ -1,5 +1,8 @@
 #pragma once
 
+#include <span>
+#include <string_view>
+
 #include <imgui.h>
 
 #include "../render/Color.h"
@@ -117,4 +120,16 @@ namespace f4cf::imgui
         vrui::UIPanelStyle panelStyle() const;
         KeyboardStyle keyboardStyle(const KeyboardStyle& base) const;
     };
+
+    /**
+     * A field of Theme by its name as in the struct: a color or a number, by its member, of which the other is null.
+     */
+    struct ThemeField
+    {
+        std::string_view name;
+        render::Color Theme::* color = nullptr;
+        float Theme::* number = nullptr;
+    };
+
+    std::span<const ThemeField> themeFields();
 }

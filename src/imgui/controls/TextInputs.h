@@ -38,8 +38,7 @@ namespace f4cf::imgui::controls
         bool live = false;
     };
 
-    // the room between the box of a text input and its text
-    constexpr float TEXT_INPUT_PADDING = 16.0f;
+    float textInputPadding();
 
     /**
      * How a text input that is edited looks: in a control's frame with an accent outline, or bare in a box its caller
@@ -48,7 +47,7 @@ namespace f4cf::imgui::controls
     struct TextLook
     {
         bool framed = true;
-        float padding = TEXT_INPUT_PADDING;
+        float padding = textInputPadding();
     };
 
     /**

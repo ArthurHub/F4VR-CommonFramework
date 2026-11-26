@@ -1,6 +1,7 @@
 #include "ImGuiTheme.h"
 
 #include <algorithm>
+#include <array>
 
 #include "../vrui/UIPanelStyle.h"
 #include "ImGuiKeyboard.h"
@@ -14,6 +15,74 @@ namespace
     {
         return { color.r, color.g, color.b, color.a };
     }
+
+    using imgui::Theme;
+    using imgui::ThemeField;
+
+    constexpr ThemeField colorField(const std::string_view name, render::Color Theme::* color)
+    {
+        return { .name = name, .color = color };
+    }
+
+    constexpr ThemeField numberField(const std::string_view name, float Theme::* number)
+    {
+        return { .name = name, .number = number };
+    }
+
+    // every field of Theme, in its order
+    constexpr std::array THEME_FIELDS{
+        colorField("accent", &Theme::accent),
+        colorField("muted", &Theme::muted),
+        colorField("track", &Theme::track),
+        colorField("hover", &Theme::hover),
+        colorField("pressed", &Theme::pressed),
+        colorField("glow", &Theme::glow),
+        colorField("rule", &Theme::rule),
+        colorField("frameBorder", &Theme::frameBorder),
+        colorField("onAccent", &Theme::onAccent),
+        colorField("warning", &Theme::warning),
+        colorField("onWarning", &Theme::onWarning),
+        colorField("error", &Theme::error),
+        colorField("onError", &Theme::onError),
+        colorField("popup", &Theme::popup),
+        colorField("scrim", &Theme::scrim),
+        colorField("glass", &Theme::glass),
+        colorField("plate", &Theme::plate),
+        colorField("important", &Theme::important),
+        numberField("controlHeight", &Theme::controlHeight),
+        numberField("frameRounding", &Theme::frameRounding),
+        numberField("frameBorderSize", &Theme::frameBorderSize),
+        numberField("popupRounding", &Theme::popupRounding),
+        numberField("titleFontSize", &Theme::titleFontSize),
+        numberField("bodyFontSize", &Theme::bodyFontSize),
+        numberField("detailFontSize", &Theme::detailFontSize),
+        numberField("scrollbarSize", &Theme::scrollbarSize),
+        numberField("grabWidth", &Theme::grabWidth),
+        numberField("grabRounding", &Theme::grabRounding),
+        numberField("disabledOpacity", &Theme::disabledOpacity),
+        numberField("space1", &Theme::space1),
+        numberField("space2", &Theme::space2),
+        numberField("space3", &Theme::space3),
+        numberField("space4", &Theme::space4),
+        numberField("space6", &Theme::space6),
+        numberField("space8", &Theme::space8),
+        numberField("space12", &Theme::space12),
+        numberField("panelBorderUnits", &Theme::panelBorderUnits),
+        numberField("panelCornerUnits", &Theme::panelCornerUnits),
+        numberField("panelPaddingUnits", &Theme::panelPaddingUnits),
+    };
+
+    constexpr std::size_t sizeOfFields()
+    {
+        std::size_t size = 0;
+        for (const auto& field : THEME_FIELDS) {
+            size += field.color ? sizeof(render::Color) : sizeof(float);
+        }
+        return size;
+    }
+
+    // a field of Theme the table lacks stops the build here
+    static_assert(sizeOfFields() == sizeof(Theme), "a field of imgui::Theme is not in THEME_FIELDS");
 }
 
 namespace f4cf::imgui
@@ -112,5 +181,14 @@ namespace f4cf::imgui
         style.accentText = onAccent;
         style.selection = render::Color{ accent.r, accent.g, accent.b, 90.0f / 255.0f };
         return style;
+    }
+
+    /**
+     * Every field of Theme, in its order, by its name and member: what reads or sets a theme field by field, as a test's
+     * probe theme. A field added to Theme and not to the table stops the build.
+     */
+    std::span<const ThemeField> themeFields()
+    {
+        return THEME_FIELDS;
     }
 }

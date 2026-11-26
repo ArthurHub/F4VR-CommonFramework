@@ -32,8 +32,8 @@ current ImGui window, inside a canvas's content.
 The controls draw in the [`imgui::Theme`](../README.md#theme): its colors by role (accent, muted, track, hover,
 pressed, glow, rule, frame border, the warning and error tones with the text on each, the popup and the scrim behind
 a dialog, the glass, the plate of a navigation pane, an important button), the control's height, the frame's rounding
-and border, the popup's rounding, and the detail font size. Its defaults are the framework's green, the look of
-`vrui::F4VR_PANEL_STYLE`. Sizes are in the canvas's pixels.
+and border, the popup's rounding, the detail font size, a slider's grab, and the spacing scale. Its defaults are the
+framework's green, the look of `vrui::F4VR_PANEL_STYLE`. Sizes are in the canvas's pixels.
 
 ```cpp
 #include "imgui/controls/Controls.h"
@@ -49,6 +49,13 @@ controls::get().setTheme(theme);
   it as the next frame begins. `colors()` has the colors as ImGui's `ImU32`. The controls read both as they draw, so
   the next frame is in a new theme, with a slider's drag or an open list kept.
 - A test's own ImGui context gets the theme's style with `applyImGuiStyle()`, before its first frame.
+- **Gaps** inside a control and between its parts are steps of the theme's spacing scale (`space1` to `space6`): a
+  list is padded `space2` with `space1` between its options, a dialog padded `space6`, a tree's level set in `space4`.
+  The four a caller lines up with are functions of the theme: `headingTextInset()`, `sliderValuePadding()`,
+  `textInputPadding()` and `treeIndent()`. A slider's grab is the theme's `grabWidth` and `grabRounding`, as high as
+  `controlHeight` less `space2`.
+- What stays a constant is the size of a drawn part or of one control's design: the marks, arrows and icons, a
+  switcher's cell, a dialog's width, a tag's line, the tree's arrow column, and the timings.
 - A `Tone` picks a value's colors: `Normal` the accent, `Warning` and `Error` their own. `tone(t)` gives the color and
   the color of a text on its fill. A frame of the `Error` tone has an outline in the error color.
 - The marks, icons and arrows have the sizes of their design (`MARK_WIDTH`, `ARROW_SIZE`, ...), and the color of their
@@ -202,7 +209,7 @@ controls::sectionHeading("Display", ImGui::GetCursorScreenPos().x + controls::ro
 
 const auto pos = ImGui::GetCursorScreenPos();
 const auto row = controls::addRow(true);
-if (row.shown) { controls::drawText(pos.x + controls::HEADING_TEXT_INSET, pos.x + controls::rowWidth(), pos.y, 48.0f, color, "Quality"); }
+if (row.shown) { controls::drawText(pos.x + controls::headingTextInset(), pos.x + controls::rowWidth(), pos.y, 48.0f, color, "Quality"); }
 
 const auto at = ImGui::GetCursorScreenPos();
 const auto heading = controls::addFoldingRow("Advanced", _advancedFolded);
@@ -222,7 +229,7 @@ if (heading.shown) { controls::drawFoldingHeading("Advanced", at, controls::rowW
   end, not in the room of the scroll bar. It is ImGui's separator text in the controls' look, in any ImGui style. It
   is its text with 8 px above and below, or as high as the `height` given, as a row's height for a heading in a row's
   place.
-- **Text** in a row and a heading starts `HEADING_TEXT_INSET` in, so the headings and the rows' texts line up. The
+- **Text** in a row and a heading starts `headingTextInset()` in, so the headings and the rows' texts line up. The
   ranges `found` of a heading's text are underlined, as a search's matches.
 
 ## The tree's rows
@@ -242,7 +249,7 @@ if (controls::treeGroupRow("Weapons", weapons.size(), _weaponsOpen, false, width
 - **Only the row:** the caller walks its nodes, keeps which are open and selected, and gives each row its level and
   arrow; a row is the last item, so the caller takes its rect (for devbench). Each row needs its own ID, as
   `ImGui::PushID` of its node gives.
-- **The look:** the name is set in `TREE_INDENT` for each level, up to `TREE_MAX_INDENT_LEVEL`, after an arrow column
+- **The look:** the name is set in `treeIndent()` for each level, up to `TREE_MAX_INDENT_LEVEL`, after an arrow column
   every row keeps, so the names of a level line up. The selected row is the selected bar, any other a row under the
   ray. A `tag` is a small outlined word at the row's right, a `count` in the detail size before it, and the `dot`
   follows the name, which ends in an ellipsis before all of them. The ranges `found` of the name are underlined.

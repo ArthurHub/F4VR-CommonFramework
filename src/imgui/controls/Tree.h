@@ -10,8 +10,7 @@
 // The rows of a tree: a node's row, set in by its level, and the row of a group of nodes.
 namespace f4cf::imgui::controls
 {
-    // how far each level of a tree sets its rows in, up to the deepest that sets a row in
-    constexpr float TREE_INDENT = 16.0f;
+    float treeIndent();
     constexpr int TREE_MAX_INDENT_LEVEL = 3;
 
     /**

@@ -14,14 +14,35 @@ namespace
 
     // the sizes of a slider's parts
     constexpr float FILL_HEIGHT = 8.0f;
-    constexpr float GRAB_WIDTH = 20.0f;
-    constexpr float GRAB_HEIGHT = 40.0f;
-    constexpr float GRAB_ROUNDING = 2.0f;
+
+    float grabWidth()
+    {
+        return get().theme().grabWidth;
+    }
+
+    float grabHeight()
+    {
+        const auto& theme = get().theme();
+        return theme.controlHeight - theme.space2;
+    }
+
+    float grabRounding()
+    {
+        return get().theme().grabRounding;
+    }
+
     constexpr float STEP_ARROW_WIDTH = 24.0f;
 
     // the gap between an arrow and the track, which presses the arrow, and between the track and the box of the value
-    constexpr float ARROW_GAP = 4.0f;
-    constexpr float VALUE_GAP = 8.0f;
+    float arrowGap()
+    {
+        return get().theme().space1;
+    }
+
+    float valueGap()
+    {
+        return get().theme().space2;
+    }
 
     // the triangle of a step arrow is 10 pixels, of the 14 of a stepper's
     constexpr float STEP_ARROW_SCALE = 10.0f / ARROW_SIZE;
@@ -43,12 +64,12 @@ namespace
         float grabMost = 0.0f;
 
         Boxes(const float right, const float top, const SliderLayout& layout)
-            : previous(controlBox(right - layout.valueWidth - VALUE_GAP - layout.trackWidth, top, STEP_ARROW_WIDTH)),
-              track(controlBox(previous.Max.x + ARROW_GAP, top, layout.trackWidth - (STEP_ARROW_WIDTH + ARROW_GAP) * 2.0f)),
-              next(controlBox(track.Max.x + ARROW_GAP, top, STEP_ARROW_WIDTH)),
+            : previous(controlBox(right - layout.valueWidth - valueGap() - layout.trackWidth, top, STEP_ARROW_WIDTH)),
+              track(controlBox(previous.Max.x + arrowGap(), top, layout.trackWidth - (STEP_ARROW_WIDTH + arrowGap()) * 2.0f)),
+              next(controlBox(track.Max.x + arrowGap(), top, STEP_ARROW_WIDTH)),
               valueBox(controlBox(right - layout.valueWidth, top, layout.valueWidth)),
-              grabLeast(track.Min.x + get().theme().frameBorderSize + GRAB_WIDTH * 0.5f),
-              grabMost(track.Max.x - get().theme().frameBorderSize - GRAB_WIDTH * 0.5f)
+              grabLeast(track.Min.x + get().theme().frameBorderSize + grabWidth() * 0.5f),
+              grabMost(track.Max.x - get().theme().frameBorderSize - grabWidth() * 0.5f)
         {}
 
         /**
@@ -57,10 +78,10 @@ namespace
          */
         int arrowAt(const float x) const
         {
-            if (x >= previous.Min.x - ARROW_GAP && x < track.Min.x) {
+            if (x >= previous.Min.x - arrowGap() && x < track.Min.x) {
                 return -1;
             }
-            return x >= track.Max.x && x < next.Max.x + ARROW_GAP ? 1 : 0;
+            return x >= track.Max.x && x < next.Max.x + arrowGap() ? 1 : 0;
         }
 
         /**
@@ -109,6 +130,14 @@ namespace
 namespace f4cf::imgui::controls
 {
     /**
+     * The room between the box of a slider's value and its text: the theme's space3.
+     */
+    float sliderValuePadding()
+    {
+        return get().theme().space3;
+    }
+
+    /**
      * Whether a press that is held steps in this frame: as it begins, and again after a delay and then faster.
      */
     bool StepRepeat::step(const float seconds)
@@ -133,7 +162,7 @@ namespace f4cf::imgui::controls
      */
     ValueText fitValueText(std::string withUnit, std::string numberOnly, const SliderLayout& layout)
     {
-        const float room = layout.valueWidth - SLIDER_VALUE_PADDING * 2.0f;
+        const float room = layout.valueWidth - sliderValuePadding() * 2.0f;
         const float detailSize = get().theme().detailFontSize;
         const auto widthAt = [](const std::string& text, const float size) {
             ImGui::PushFont(nullptr, size);
@@ -171,7 +200,7 @@ namespace f4cf::imgui::controls
             const float grab = boxes.grabAt(range, value);
             state.dragged = id;
             state.dragValue = value;
-            state.grabOffset = std::abs(io.MousePos.x - grab) <= GRAB_WIDTH * 0.5f ? io.MousePos.x - grab : 0.0f;
+            state.grabOffset = std::abs(io.MousePos.x - grab) <= grabWidth() * 0.5f ? io.MousePos.x - grab : 0.0f;
             state.dragCancelled = false;
             edit.pulse = true;
         }
@@ -259,15 +288,15 @@ namespace f4cf::imgui::controls
         const auto color = ImGui::GetColorU32(toneColor);
         auto* drawList = ImGui::GetWindowDrawList();
         if (grab > boxes.grabLeast) {
-            drawList->AddRectFilled(ImVec2(boxes.grabLeast, middle - FILL_HEIGHT * 0.5f), ImVec2(grab, middle + FILL_HEIGHT * 0.5f), color, GRAB_ROUNDING);
+            drawList->AddRectFilled(ImVec2(boxes.grabLeast, middle - FILL_HEIGHT * 0.5f), ImVec2(grab, middle + FILL_HEIGHT * 0.5f), color, grabRounding());
         }
-        drawList->AddRectFilled(ImVec2(grab - GRAB_WIDTH * 0.5f, middle - GRAB_HEIGHT * 0.5f),
-            ImVec2(grab + GRAB_WIDTH * 0.5f, middle + GRAB_HEIGHT * 0.5f),
+        drawList->AddRectFilled(ImVec2(grab - grabWidth() * 0.5f, middle - grabHeight() * 0.5f),
+            ImVec2(grab + grabWidth() * 0.5f, middle + grabHeight() * 0.5f),
             dragged ? ImGui::GetColorU32(colors.glow) : color,
-            GRAB_ROUNDING);
+            grabRounding());
 
         ImGui::PushFont(nullptr, text.fontSize);
-        drawTextIn(boxes.valueBox, text.text, toneColor, 1.0f, SLIDER_VALUE_PADDING);
+        drawTextIn(boxes.valueBox, text.text, toneColor, 1.0f, sliderValuePadding());
         ImGui::PopFont();
         return boxes.previous.Min.x;
     }

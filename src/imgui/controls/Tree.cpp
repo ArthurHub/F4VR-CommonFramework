@@ -16,33 +16,50 @@ namespace
     using namespace f4cf::imgui::controls;
 
     // the room between a row's left edge and its arrow's column
-    constexpr float ROW_INSET = 8.0f;
+    float rowInset()
+    {
+        return get().theme().space2;
+    }
 
     // the column the arrow of a row is in the middle of, which every row keeps, and the gap from it to the name
     constexpr float ARROW_COLUMN = 16.0f;
     constexpr float ARROW_GAP = 6.0f;
 
     // the room between a name and what is after it: its dot, its count, its tag
-    constexpr float NAME_GAP = 8.0f;
+    float nameGap()
+    {
+        return get().theme().space2;
+    }
 
     // the room a row keeps at its right after its name or its count
-    constexpr float ROW_RIGHT_INSET = 12.0f;
+    float rowRightInset()
+    {
+        return get().theme().space3;
+    }
 
     // a tag's font size, the room between its text and its outline, and its gap from the row's right edge
     constexpr float TAG_FONT_SIZE = 10.0f;
     constexpr float TAG_PADDING = 1.0f;
-    constexpr float TAG_GAP = 8.0f;
+
+    float tagGap()
+    {
+        return get().theme().space2;
+    }
 
     // the room a group row's rule keeps at the least, and the room on each side of it
     constexpr float GROUP_RULE_MIN_WIDTH = 16.0f;
-    constexpr float GROUP_RULE_GAP = 12.0f;
+
+    float groupRuleGap()
+    {
+        return get().theme().space3;
+    }
 
     /**
      * How far a row of a level is set in, from the top level at 0: a step for each level, up to the deepest.
      */
     float indentOf(const int level)
     {
-        return TREE_INDENT * static_cast<float>((std::min)(level, TREE_MAX_INDENT_LEVEL));
+        return treeIndent() * static_cast<float>((std::min)(level, TREE_MAX_INDENT_LEVEL));
     }
 
     /**
@@ -87,9 +104,9 @@ namespace
             drawText(left, right, top, height, color, name);
             return (std::min)(left + textWidth(name), right);
         }
-        const float nameRight = right - NAME_GAP - DOT_WIDTH;
+        const float nameRight = right - nameGap() - DOT_WIDTH;
         drawText(left, nameRight, top, height, color, name);
-        const float dotLeft = (std::min)(left + textWidth(name), nameRight) + NAME_GAP;
+        const float dotLeft = (std::min)(left + textWidth(name), nameRight) + nameGap();
         drawDot(ImVec2(dotLeft + DOT_WIDTH * 0.5f, top + height * 0.5f), onFill ? get().colors().onAccent : get().colors().warning);
         return dotLeft + DOT_WIDTH;
     }
@@ -102,9 +119,9 @@ namespace
     void drawName(const float left, const ImVec2& min, const ImVec2& max, const ImU32 color, const TreeRow& row, const bool onFill)
     {
         const auto& theme = get().theme();
-        float right = max.x - ROW_RIGHT_INSET;
+        float right = max.x - rowRightInset();
         if (!row.tag.empty()) {
-            right = drawRowTag(max.x - TAG_GAP, min.y, row.tag, onFill) - NAME_GAP;
+            right = drawRowTag(max.x - tagGap(), min.y, row.tag, onFill) - nameGap();
         }
         if (row.count > 0) {
             ImGui::PushFont(nullptr, theme.detailFontSize);
@@ -112,7 +129,7 @@ namespace
             const float countLeft = right - textWidth(count);
             drawText(countLeft, right, min.y, theme.controlHeight, onFill ? get().colors().onAccent : get().colors().muted, count);
             ImGui::PopFont();
-            right = countLeft - NAME_GAP;
+            right = countLeft - nameGap();
         }
         const float nameLeft = left + ARROW_COLUMN + ARROW_GAP;
         drawNameWithDot(nameLeft, right, min.y, color, row.name, row.dot, onFill);
@@ -135,7 +152,7 @@ namespace
         drawRowState();
 
         ImGui::BeginDisabled();
-        const float left = min.x + ROW_INSET + indentOf(row.level);
+        const float left = min.x + rowInset() + indentOf(row.level);
         if (row.arrow != TreeArrow::None) {
             drawArrow(left, min.y, false, get().colors().accent);
         }
@@ -147,6 +164,14 @@ namespace
 
 namespace f4cf::imgui::controls
 {
+    /**
+     * How far each level of a tree sets its rows in, up to the deepest that sets a row in: the theme's space4.
+     */
+    float treeIndent()
+    {
+        return get().theme().space4;
+    }
+
     /**
      * A row of a tree at the cursor, in the width given, which every row of the tree has: its name is set in by its
      * level, after the column of its arrow, which every row keeps, so the names of a level line up whether or not they
@@ -179,7 +204,7 @@ namespace f4cf::imgui::controls
             drawRowState();
         }
         const auto color = row.selected ? get().colors().onAccent : get().colors().accent;
-        const float left = min.x + ROW_INSET + indentOf(row.level);
+        const float left = min.x + rowInset() + indentOf(row.level);
         if (row.arrow != TreeArrow::None) {
             drawArrow(left, min.y, row.arrow == TreeArrow::Open, color);
         }
@@ -207,22 +232,22 @@ namespace f4cf::imgui::controls
         }
         const auto color = colors.muted;
         drawRowState();
-        const float left = min.x + ROW_INSET;
+        const float left = min.x + rowInset();
         drawArrow(left, min.y, open, color);
 
         ImGui::PushFont(nullptr, theme.detailFontSize);
         const auto countText = std::to_string(count);
-        const float countRight = max.x - ROW_RIGHT_INSET;
+        const float countRight = max.x - rowRightInset();
         const float countLeft = countRight - textWidth(countText);
         drawText(countLeft, countRight, min.y, theme.controlHeight, color, countText);
         ImGui::PopFont();
 
-        const float ruleRight = countLeft - NAME_GAP;
+        const float ruleRight = countLeft - nameGap();
         const float nameLeft = left + ARROW_COLUMN + ARROW_GAP;
-        const float dotWidth = dot ? NAME_GAP + DOT_WIDTH : 0.0f;
-        const float nameRight = (std::min)(nameLeft + textWidth(name) + dotWidth, ruleRight - GROUP_RULE_MIN_WIDTH - GROUP_RULE_GAP);
+        const float dotWidth = dot ? nameGap() + DOT_WIDTH : 0.0f;
+        const float nameRight = (std::min)(nameLeft + textWidth(name) + dotWidth, ruleRight - GROUP_RULE_MIN_WIDTH - groupRuleGap());
         const float drawnRight = drawNameWithDot(nameLeft, nameRight, min.y, color, name, dot, false);
-        const float ruleLeft = std::ceil(drawnRight) + GROUP_RULE_GAP;
+        const float ruleLeft = std::ceil(drawnRight) + groupRuleGap();
         if (ruleLeft < ruleRight) {
             const float ruleTop = std::floor(min.y + (theme.controlHeight - theme.frameBorderSize) * 0.5f);
             ImGui::GetWindowDrawList()->AddRectFilled(ImVec2(ruleLeft, ruleTop), ImVec2(ruleRight, ruleTop + theme.frameBorderSize), ImGui::GetColorU32(colors.rule));

@@ -206,6 +206,8 @@ panel->setStyle(controls::get().theme().panelStyle());
 - **A panel's look** is `panelStyle()`, which the mod gives its panel: the content and edge in the accent,
   the background the glass.
 - **The pointer** is not the theme's: a ray is the player's to set, in `PointerStyle`.
+- **`themeFields()`** lists every field by its name and member, for code that reads or sets a theme field by
+  field.
 
 `setTheme` is called at any time, as a mod's config changes, and the next frame is drawn in it: the controls
 read it as they draw, ImGui's style is set again before the frame begins, and the keyboard in the call. A

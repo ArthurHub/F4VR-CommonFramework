@@ -9,17 +9,32 @@
 
 namespace
 {
+    using namespace f4cf::imgui::controls;
+
     // the room inside a dialog, around its content
-    constexpr float DIALOG_PADDING = 24.0f;
+    float dialogPadding()
+    {
+        return get().theme().space6;
+    }
 
     // the spacing of a dialog's window, across and down
-    constexpr ImVec2 DIALOG_ITEM_SPACING(8.0f, 16.0f);
+    ImVec2 dialogItemSpacing()
+    {
+        const auto& theme = get().theme();
+        return { theme.space2, theme.space4 };
+    }
 
     // between the buttons of a dialog, and how much further they are from its text than its text is from its title
-    constexpr float DIALOG_BUTTON_GAP = 8.0f;
+    float dialogButtonGap()
+    {
+        return get().theme().space2;
+    }
 
     // the room on each side of a dialog button's label
-    constexpr float DIALOG_BUTTON_PADDING = 16.0f;
+    float dialogButtonPadding()
+    {
+        return get().theme().space4;
+    }
 }
 
 namespace f4cf::imgui::controls
@@ -44,8 +59,8 @@ namespace f4cf::imgui::controls
         const auto& colors = get().colors();
         ImGui::SetNextWindowPos(ImGui::GetMainViewport()->GetCenter(), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
         ImGui::SetNextWindowSize(ImVec2(width, 0.0f));
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(DIALOG_PADDING, DIALOG_PADDING));
-        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, DIALOG_ITEM_SPACING);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(dialogPadding(), dialogPadding()));
+        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, dialogItemSpacing());
         ImGui::PushStyleVar(ImGuiStyleVar_PopupRounding, theme.popupRounding);
         ImGui::PushStyleVar(ImGuiStyleVar_PopupBorderSize, theme.frameBorderSize);
         ImGui::PushStyleColor(ImGuiCol_Border, get().tone(tone).color);
@@ -74,18 +89,18 @@ namespace f4cf::imgui::controls
      */
     int dialogButtons(const std::span<const DialogButton> buttons, const std::span<ImRect> boxes)
     {
-        ImGui::SetCursorPosY(ImGui::GetCursorPosY() + DIALOG_BUTTON_GAP);
+        ImGui::SetCursorPosY(ImGui::GetCursorPosY() + dialogButtonGap());
         const auto pos = ImGui::GetCursorScreenPos();
         float right = pos.x + ImGui::GetContentRegionAvail().x;
         int pressed = -1;
         for (std::size_t place = 0; place < buttons.size(); ++place) {
             const auto& dialogButton = buttons[place];
-            const float width = (std::max)(DIALOG_BUTTON_MIN_WIDTH, std::ceil(textWidth(dialogButton.label) + DIALOG_BUTTON_PADDING * 2.0f));
+            const float width = (std::max)(DIALOG_BUTTON_MIN_WIDTH, std::ceil(textWidth(dialogButton.label) + dialogButtonPadding() * 2.0f));
             const auto box = controlBox(right - width, pos.y, width);
             if (place < boxes.size()) {
                 boxes[place] = box;
             }
-            right -= width + DIALOG_BUTTON_GAP;
+            right -= width + dialogButtonGap();
             ImGui::BeginDisabled(dialogButton.disabled);
             if (button(std::string(dialogButton.label).c_str(), box, dialogButton.look)) {
                 pressed = static_cast<int>(place);

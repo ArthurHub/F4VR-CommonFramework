@@ -24,6 +24,11 @@ major version is `0`, a minor bump may break the API; the **Upgrading** notes sa
     that styled ImGui itself sets its theme instead.
   - The keyboard's default background is the default theme's glass, alpha 166 and not 235, and the text of a key in
     the accent is the default `onAccent`.
+- **The controls' gaps are the theme's spacing scale**, and a slider's grab its `grabWidth` and `grabRounding`, so a
+  mod's design sets them too; the default theme's steps are the gaps of before. `imgui::themeFields()` lists the
+  theme's fields by name. **Upgrading:** `controls::HEADING_TEXT_INSET`, `SLIDER_VALUE_PADDING`,
+  `TEXT_INPUT_PADDING` and `TREE_INDENT` are the functions `headingTextInset()`, `sliderValuePadding()`,
+  `textInputPadding()` and `treeIndent()`.
 
 ## 0.6.1 — unreleased
 

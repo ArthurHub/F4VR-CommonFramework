@@ -13,8 +13,7 @@
 // The rows of a list that scrolls, and the headings of its sections, plain or folding.
 namespace f4cf::imgui::controls
 {
-    // where a heading's text starts in its row, as a row's text does in its frame, so a heading lines up with the rows
-    constexpr float HEADING_TEXT_INSET = 12.0f;
+    float headingTextInset();
 
     /**
      * What a row tells of the pointer in the frame that is drawn.

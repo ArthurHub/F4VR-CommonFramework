@@ -8,6 +8,8 @@
 
 namespace
 {
+    using namespace f4cf::imgui::controls;
+
     // the ring around a button, outside its box
     constexpr float BUTTON_RING = 2.0f;
 
@@ -15,7 +17,10 @@ namespace
     constexpr float TAG_LINE_HEIGHT = 22.0f;
 
     // the room between a tag's outline and its text
-    constexpr float TAG_PADDING = 8.0f;
+    float tagPadding()
+    {
+        return get().theme().space2;
+    }
 }
 
 namespace f4cf::imgui::controls
@@ -204,7 +209,7 @@ namespace f4cf::imgui::controls
         ImGui::PushFont(nullptr, theme.detailFontSize);
         const float width = textWidth(text);
         ImGui::PopFont();
-        return std::ceil(width + (TAG_PADDING + theme.frameBorderSize) * 2.0f);
+        return std::ceil(width + (tagPadding() + theme.frameBorderSize) * 2.0f);
     }
 
     /**
@@ -219,7 +224,7 @@ namespace f4cf::imgui::controls
         const ImVec2 max(min.x + tagWidth(text), min.y + height);
         drawOutline(min, max, get().colors().frameBorder);
         ImGui::PushFont(nullptr, theme.detailFontSize);
-        drawText(min.x + theme.frameBorderSize + TAG_PADDING, max.x, min.y, height, get().colors().muted, text);
+        drawText(min.x + theme.frameBorderSize + tagPadding(), max.x, min.y, height, get().colors().muted, text);
         ImGui::PopFont();
     }
 }

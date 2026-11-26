@@ -50,6 +50,14 @@ namespace
 namespace f4cf::imgui::controls
 {
     /**
+     * The room between the box of a text input and its text: the theme's space4.
+     */
+    float textInputPadding()
+    {
+        return get().theme().space4;
+    }
+
+    /**
      * Edits a text input in a box: a press starts the edit, and ImGui's field takes it from the next frame, with the
      * caret at the end of the text, which the framework shows its keyboard for. Called in every frame while it is
      * edited, also while its box is scrolled out of sight, else the edit ends as the frame does, with nothing written.
@@ -159,6 +167,6 @@ namespace f4cf::imgui::controls
     void drawTextInput(const ImRect& box, const std::string_view text, const Tone tone)
     {
         drawFrame(box, tone);
-        drawTextIn(box, text, get().tone(tone).color, 0.0f, TEXT_INPUT_PADDING);
+        drawTextIn(box, text, get().tone(tone).color, 0.0f, textInputPadding());
     }
 }

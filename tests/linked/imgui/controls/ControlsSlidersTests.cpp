@@ -215,7 +215,7 @@ TEST_CASE("Controls sliders: a value's text fits its box with its unit, smaller,
     ImGui::PopFont();
     REQUIRE(detailWidth < bodyWidth);
     const auto boxFor = [](const float room) {
-        return SliderLayout{ .valueWidth = room + SLIDER_VALUE_PADDING * 2.0f };
+        return SliderLayout{ .valueWidth = room + sliderValuePadding() * 2.0f };
     };
 
     auto text = fitValueText(withUnit, number, boxFor(bodyWidth + 1.0f));
