@@ -2,6 +2,12 @@
 
 #include <algorithm>
 #include <array>
+#include <cmath>
+#include <cstdint>
+#include <format>
+#include <optional>
+
+#include <nlohmann/json.hpp>
 
 #include "../vrui/UIPanelStyle.h"
 #include "ImGuiKeyboard.h"
@@ -83,6 +89,33 @@ namespace
 
     // a field of Theme the table lacks stops the build here
     static_assert(sizeOfFields() == sizeof(Theme), "a field of imgui::Theme is not in THEME_FIELDS");
+
+    /**
+     * The field of the table by its name, or null.
+     */
+    const ThemeField* findField(const std::string_view name)
+    {
+        const auto it = std::ranges::find(THEME_FIELDS, name, &ThemeField::name);
+        return it == THEME_FIELDS.end() ? nullptr : &*it;
+    }
+
+    /**
+     * A color from its JSON, [r, g, b, a] of integers from 0 to 255, or none in another shape.
+     */
+    std::optional<render::Color> colorOf(const nlohmann::json& value)
+    {
+        if (!value.is_array() || value.size() != 4) {
+            return std::nullopt;
+        }
+        std::array<int, 4> bytes{};
+        for (std::size_t i = 0; i < bytes.size(); ++i) {
+            if (!value[i].is_number_integer() || value[i].get<std::int64_t>() < 0 || value[i].get<std::int64_t>() > 255) {
+                return std::nullopt;
+            }
+            bytes[i] = value[i].get<int>();
+        }
+        return render::Color::rgba(bytes[0], bytes[1], bytes[2], bytes[3]);
+    }
 }
 
 namespace f4cf::imgui
@@ -190,5 +223,53 @@ namespace f4cf::imgui
     std::span<const ThemeField> themeFields()
     {
         return THEME_FIELDS;
+    }
+
+    /**
+     * The theme as JSON, each field by its name: a color as [r, g, b, a] from 0 to 255, a number as the shortest text
+     * that reads back as its float, so 0.05 is not 0.0500000007.
+     */
+    nlohmann::json themeJson(const Theme& theme)
+    {
+        auto fields = nlohmann::json::object();
+        for (const auto& field : THEME_FIELDS) {
+            if (field.color) {
+                fields[std::string(field.name)] = (theme.*field.color).bytes();
+            } else {
+                fields[std::string(field.name)] = std::stod(std::format("{}", theme.*field.number));
+            }
+        }
+        return fields;
+    }
+
+    /**
+     * The theme with the given fields set, an object of names and values in themeJson's shapes. A name that is no field,
+     * a value of the wrong shape, or no object of fields is an error that names it, and no field is set.
+     */
+    std::expected<Theme, std::string> themeWithFields(const Theme& theme, const nlohmann::json& fields)
+    {
+        if (!fields.is_object() || fields.empty()) {
+            return std::unexpected("the fields to set must be an object of at least one field and its value");
+        }
+        auto result = theme;
+        for (const auto& [name, value] : fields.items()) {
+            const auto* field = findField(name);
+            if (!field) {
+                return std::unexpected(std::format("the theme has no field '{}'", name));
+            }
+            if (field->color) {
+                const auto color = colorOf(value);
+                if (!color) {
+                    return std::unexpected(std::format("field '{}' must be [r, g, b, a], each an integer from 0 to 255", name));
+                }
+                result.*field->color = *color;
+            } else {
+                if (!value.is_number() || !std::isfinite(value.get<double>())) {
+                    return std::unexpected(std::format("field '{}' must be a number", name));
+                }
+                result.*field->number = value.get<float>();
+            }
+        }
+        return result;
     }
 }

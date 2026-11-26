@@ -1,6 +1,11 @@
 #include <catch2/catch_test_macros.hpp>
 
+#include <string>
+#include <string_view>
+#include <vector>
+
 #include <imgui.h>
+#include <nlohmann/json.hpp>
 
 #include "common/CommonUtils.h"
 #include "imgui/ImGuiKeyboard.h"
@@ -12,12 +17,14 @@ using namespace f4cf::imgui::controls;
 namespace
 {
     /**
-     * Sets the default theme and keyboard style back as a test ends, so one test's look does not reach the next.
+     * Sets the default theme and keyboard style back as a test ends, with no field overridden, so one test's look does
+     * not reach the next.
      */
     struct DefaultTheme
     {
         ~DefaultTheme()
         {
+            get().clearThemeOverride();
             get().setTheme({});
             imgui::keyboard().setStyle({});
         }
@@ -108,4 +115,76 @@ TEST_CASE("Controls: applyImGuiStyle sets the current context's style from the t
     get().applyImGuiStyle();
     CHECK(common::fEqual(ImGui::GetStyle().ItemSpacing.y, 6.0f));
     CHECK(common::fEqual(ImGui::GetStyle().FontSizeBase, imgui::Theme{}.bodyFontSize));
+}
+
+TEST_CASE("Controls: an override's fields are drawn from the next frame, and no other changes")
+{
+    const DefaultTheme restore;
+    const TestContext context;
+    get().setTheme(amberTheme());
+    get().updateImGuiStyle();
+
+    REQUIRE(get().overrideTheme({ { "accent", { 200, 10, 20, 255 } }, { "space2", 3 } }).has_value());
+    CHECK(get().theme().accent.bytes() == render::Color::rgba(200, 10, 20).bytes());
+    CHECK(common::fEqual(get().theme().space2, 3.0f));
+    CHECK(get().colors().accent == IM_COL32(200, 10, 20, 255));
+    CHECK(imgui::keyboard().style().accent.bytes() == render::Color::rgba(200, 10, 20).bytes());
+    get().updateImGuiStyle();
+    CHECK(common::fEqual(ImGui::GetStyle().ItemSpacing.y, 3.0f));
+    CHECK(ImGui::ColorConvertFloat4ToU32(ImGui::GetStyle().Colors[ImGuiCol_Text]) == IM_COL32(200, 10, 20, 255));
+
+    // the rest is the mod's theme, and the fields add up over two calls
+    CHECK(get().theme().glass.bytes() == amberTheme().glass.bytes());
+    CHECK(common::fEqual(get().theme().space3, amberTheme().space3));
+    REQUIRE(get().overrideTheme({ { "space3", 5 } }).has_value());
+    CHECK(get().overriddenThemeFields() == std::vector<std::string_view>{ "accent", "space2", "space3" });
+    CHECK(get().theme().accent.bytes() == render::Color::rgba(200, 10, 20).bytes());
+}
+
+TEST_CASE("Controls: an override that is not valid sets nothing")
+{
+    const DefaultTheme restore;
+    get().setTheme(amberTheme());
+    const auto overridden = get().overrideTheme({ { "space2", 3 }, { "accent", { 1, 2, 3 } } });
+    REQUIRE_FALSE(overridden.has_value());
+    CHECK(overridden.error().find("'accent'") != std::string::npos);
+    CHECK(get().overriddenThemeFields().empty());
+    CHECK(common::fEqual(get().theme().space2, amberTheme().space2));
+    CHECK(get().colors().accent == IM_COL32(255, 180, 60, 255));
+}
+
+TEST_CASE("Controls: an override stays over a new theme of the mod, whose other fields are drawn")
+{
+    const DefaultTheme restore;
+    get().setTheme({});
+    REQUIRE(get().overrideTheme({ { "accent", { 200, 10, 20, 255 } } }).has_value());
+
+    get().setTheme(amberTheme());
+    CHECK(get().theme().accent.bytes() == render::Color::rgba(200, 10, 20).bytes());
+    CHECK(get().theme().glass.bytes() == amberTheme().glass.bytes());
+    CHECK(common::fEqual(get().theme().space2, amberTheme().space2));
+    CHECK(get().colors().glass == IM_COL32(20, 15, 10, 200));
+    CHECK(get().overriddenThemeFields() == std::vector<std::string_view>{ "accent" });
+}
+
+TEST_CASE("Controls: clearing the override draws the mod's theme as it set it")
+{
+    const DefaultTheme restore;
+    const TestContext context;
+    get().setTheme(amberTheme());
+    REQUIRE(get().overrideTheme({ { "accent", { 200, 10, 20, 255 } }, { "space2", 3 } }).has_value());
+    get().updateImGuiStyle();
+
+    get().clearThemeOverride();
+    CHECK(get().overriddenThemeFields().empty());
+    CHECK(get().theme().accent.bytes() == amberTheme().accent.bytes());
+    CHECK(get().colors().accent == IM_COL32(255, 180, 60, 255));
+    CHECK(imgui::keyboard().style().accent.bytes() == amberTheme().accent.bytes());
+    get().updateImGuiStyle();
+    CHECK(common::fEqual(ImGui::GetStyle().ItemSpacing.y, 6.0f));
+
+    // a field set again after a clear is drawn alone
+    REQUIRE(get().overrideTheme({ { "space2", 4 } }).has_value());
+    CHECK(get().overriddenThemeFields() == std::vector<std::string_view>{ "space2" });
+    CHECK(get().theme().accent.bytes() == amberTheme().accent.bytes());
 }

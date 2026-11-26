@@ -1,10 +1,12 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <set>
+#include <string>
 #include <utility>
 #include <vector>
 
 #include <imgui.h>
+#include <nlohmann/json.hpp>
 
 #include "common/CommonUtils.h"
 #include "imgui/ImGuiKeyboard.h"
@@ -95,6 +97,21 @@ namespace
         theme.panelCornerUnits = 0.4f;
         theme.panelPaddingUnits = 0.25f;
         return theme;
+    }
+
+    /**
+     * Whether two themes are the same field by field: their colors by their bytes, their numbers within fEqual.
+     */
+    bool sameTheme(const Theme& left, const Theme& right)
+    {
+        for (const auto& field : themeFields()) {
+            const bool same = field.color ? sameColor(left.*field.color, right.*field.color) : common::fEqual(left.*field.number, right.*field.number);
+            if (!same) {
+                UNSCOPED_INFO("differs in " << field.name);
+                return false;
+            }
+        }
+        return true;
     }
 }
 
@@ -239,6 +256,74 @@ TEST_CASE("Theme: ImGui's colors are the theme's, and the rest as StyleColorsDar
     }
     CHECK(samePair(style.CellPadding, dark.CellPadding.x, dark.CellPadding.y));
     CHECK(common::fEqual(style.TabRounding, dark.TabRounding));
+}
+
+TEST_CASE("Theme: as JSON, every field of the table in its shape")
+{
+    const auto theme = probeTheme();
+    const auto json = themeJson(theme);
+    CHECK(json.size() == themeFields().size());
+    for (const auto& field : themeFields()) {
+        const std::string name(field.name);
+        INFO(name);
+        REQUIRE(json.contains(name));
+        if (field.color) {
+            CHECK(json[name] == nlohmann::json((theme.*field.color).bytes()));
+        } else {
+            REQUIRE(json[name].is_number());
+            CHECK(common::fEqual(json[name].get<float>(), theme.*field.number));
+        }
+    }
+    // a number is the shortest text of its float
+    CHECK(themeJson(Theme{})["panelBorderUnits"].dump() == "0.05");
+}
+
+TEST_CASE("Theme: a theme's JSON set on another theme gives that theme")
+{
+    const auto theme = probeTheme();
+    const auto set = themeWithFields(Theme{}, themeJson(theme));
+    REQUIRE(set.has_value());
+    CHECK(sameTheme(*set, theme));
+}
+
+TEST_CASE("Theme: setting fields changes those fields and no other")
+{
+    const auto base = probeTheme();
+    const auto set = themeWithFields(base, { { "accent", { 255, 180, 60, 128 } }, { "space2", 6 }, { "panelCornerUnits", 0.3 } });
+    REQUIRE(set.has_value());
+    CHECK(sameColor(set->accent, render::Color::rgba(255, 180, 60, 128)));
+    CHECK(common::fEqual(set->space2, 6.0f));
+    CHECK(common::fEqual(set->panelCornerUnits, 0.3f));
+
+    auto expected = base;
+    expected.accent = set->accent;
+    expected.space2 = set->space2;
+    expected.panelCornerUnits = set->panelCornerUnits;
+    CHECK(sameTheme(*set, expected));
+}
+
+TEST_CASE("Theme: an unknown field or a value of the wrong shape sets nothing and is named")
+{
+    const std::vector<std::pair<nlohmann::json, std::string>> wrong{
+        { { { "accent", { 1, 2, 3, 4 } }, { "nope", 1 } }, "'nope'" },
+        { { { "accent", { 1, 2, 3 } } }, "'accent'" },
+        { { { "accent", { 1, 2, 3, 256 } } }, "'accent'" },
+        { { { "accent", { 1, 2, -1, 4 } } }, "'accent'" },
+        { { { "accent", { 1, 2, 3.5, 4 } } }, "'accent'" },
+        { { { "accent", "#ffffff" } }, "'accent'" },
+        { { { "space2", "6" } }, "'space2'" },
+        { { { "space2", true } }, "'space2'" },
+        { { { "space2", nlohmann::json::array({ 6 }) } }, "'space2'" },
+        { { { "space2", 6 }, { "glass", 3 } }, "'glass'" },
+        { nlohmann::json::object(), "object" },
+        { nlohmann::json::array({ 1 }), "object" },
+    };
+    for (const auto& [fields, named] : wrong) {
+        INFO(fields.dump());
+        const auto set = themeWithFields(Theme{}, fields);
+        REQUIRE_FALSE(set.has_value());
+        CHECK(set.error().find(named) != std::string::npos);
+    }
 }
 
 TEST_CASE("Theme: the body font size is clamped")

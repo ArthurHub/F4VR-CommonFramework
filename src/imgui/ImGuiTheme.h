@@ -1,9 +1,12 @@
 #pragma once
 
+#include <expected>
 #include <span>
+#include <string>
 #include <string_view>
 
 #include <imgui.h>
+#include <nlohmann/json_fwd.hpp>
 
 #include "../render/Color.h"
 
@@ -132,4 +135,7 @@ namespace f4cf::imgui
     };
 
     std::span<const ThemeField> themeFields();
+
+    nlohmann::json themeJson(const Theme& theme);
+    std::expected<Theme, std::string> themeWithFields(const Theme& theme, const nlohmann::json& fields);
 }

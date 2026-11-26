@@ -1,6 +1,9 @@
 #include "Controls.h"
 
+#include <algorithm>
 #include <cmath>
+
+#include <nlohmann/json.hpp>
 
 #include "../../vrcf/VRControllersManager.h"
 #include "../ImGuiKeyboard.h"
@@ -57,10 +60,63 @@ namespace f4cf::imgui::controls
      * Sets the whole theme, which the next frame is drawn in: packs its colors once for drawing, gives the keyboard its
      * colors, and marks ImGui's style to be set from it as the next frame begins. A mod that wants its own keyboard look
      * sets it after this. Game thread, as the frames are built there.
+     * The fields devbench's theme action set stay over it, until that action's reset.
      */
     void Controls::setTheme(const Theme& theme)
     {
-        _theme = theme;
+        _modTheme = theme;
+        drawTheme();
+    }
+
+    /**
+     * Sets the given fields over the mod's theme, in themeJson's shapes, which the next frame is drawn in: devbench's
+     * theme action, tuning a look live. They stay over every theme the mod sets until clearThemeOverride. A field that is
+     * no field or a value of the wrong shape is an error, and nothing is set.
+     */
+    std::expected<void, std::string> Controls::overrideTheme(const nlohmann::json& fields)
+    {
+        const auto values = themeWithFields(_overrideValues, fields);
+        if (!values) {
+            return std::unexpected(values.error());
+        }
+        _overrideValues = *values;
+        std::vector<std::string_view> overridden;
+        for (const auto& field : themeFields()) {
+            if (std::ranges::contains(_overridden, field.name) || fields.contains(std::string(field.name))) {
+                overridden.push_back(field.name);
+            }
+        }
+        _overridden = std::move(overridden);
+        drawTheme();
+        return {};
+    }
+
+    /**
+     * Drops the fields devbench set, so the mod's theme is drawn as it set it.
+     */
+    void Controls::clearThemeOverride()
+    {
+        _overridden.clear();
+        drawTheme();
+    }
+
+    /**
+     * Makes the theme drawn from the mod's and the fields set over it: packs its colors once for drawing, gives the
+     * keyboard its colors, and marks ImGui's style to be set from it as the next frame begins.
+     */
+    void Controls::drawTheme()
+    {
+        _theme = _modTheme;
+        for (const auto& field : themeFields()) {
+            if (!std::ranges::contains(_overridden, field.name)) {
+                continue;
+            }
+            if (field.color) {
+                _theme.*field.color = _overrideValues.*field.color;
+            } else {
+                _theme.*field.number = _overrideValues.*field.number;
+            }
+        }
         _colors = packedColors(_theme);
         _imGuiStyleApplied = false;
         keyboard().setStyle(_theme.keyboardStyle(keyboard().style()));

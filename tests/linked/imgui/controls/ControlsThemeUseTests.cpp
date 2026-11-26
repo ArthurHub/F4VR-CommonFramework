@@ -7,6 +7,8 @@
 #include <string>
 #include <vector>
 
+#include <nlohmann/json.hpp>
+
 #include "ControlsGallery.h"
 #include "common/CommonUtils.h"
 
@@ -215,4 +217,18 @@ TEST_CASE("Controls theme use: a new theme is drawn in the next frame, with a li
     CHECK(get().isListOpen());
     CHECK(get().isDragging());
     CHECK(common::fEqual(ImGui::GetStyle().ItemSpacing.y, theme.space2));
+}
+
+TEST_CASE("Controls theme use: an override of every field is drawn in the next frame")
+{
+    get().setTheme({});
+    GalleryContext context;
+    context.frame({});
+
+    const auto theme = probeTheme();
+    REQUIRE(get().overrideTheme(imgui::themeJson(theme)).has_value());
+    context.frame({});
+    checkOnlyThemeColors(theme, "after an override");
+    CHECK(common::fEqual(ImGui::GetStyle().ItemSpacing.y, theme.space2));
+    get().clearThemeOverride();
 }

@@ -22,6 +22,7 @@
 #if F4CF_WITH_IMGUI_UI
 #include "imgui/ImGuiKeyboard.h"
 #include "imgui/ImGuiSnapshot.h"
+#include "imgui/controls/Controls.h"
 #endif
 
 namespace f4cf::devbench
@@ -37,7 +38,8 @@ namespace f4cf::devbench
         // 4: snapshot saves the texture of the ImGui canvases as a PNG
         // 5: input answers the controller input suppressed now, in place of the input.suppression event
         // 6: keyboard reports the framework's VR keyboard and presses its keys
-        constexpr int TOOL_CONTRACT = 6;
+        // 7: theme reports the controls' theme and sets its fields live
+        constexpr int TOOL_CONTRACT = 7;
 
         // the owner of the session overrides that the tool's set action sets, see ConfigBase::setConfigOverride
         constexpr auto OVERRIDE_OWNER = "devbench";
@@ -660,6 +662,19 @@ namespace f4cf::devbench
                               { { "key", argument("string", "keyboard: the key to press, by its label or action") } },
                               handler(&Tool::keyboard) },
                     true);
+                addAction({ "theme",
+                              "the theme the framework's ImGui controls are drawn in, which tunes a look live: fields, each field by its name, a color "
+                              "as [r, g, b, a] from 0 to 255 and a size as a number, and overridden, the names of the fields set here. reset drops "
+                              "them first; set sets fields over the mod's theme, which stay over each theme the mod sets until a reset. The controls, "
+                              "ImGui's style and the keyboard follow from the next frame; a panel's edge and background as the mod gives the panel "
+                              "its style again",
+                              { { "set",
+                                    argument("object",
+                                        "theme: the fields to set and their values, as fields answers them, e.g. {\"accent\": [255, 180, 60, 255], "
+                                        "\"space2\": 6}; a name that is no field or a value of the wrong shape is an error, and nothing is set") },
+                                  { "reset", argument("boolean", "theme: drop the fields set here first, so the mod's theme is drawn as it set it") } },
+                              handler(&Tool::theme) },
+                    true);
 #endif
             }
 
@@ -837,6 +852,35 @@ namespace f4cf::devbench
                     { "height", report.height },
                     { "hands", hands },
                     { "keys", keys } };
+            }
+
+            /**
+             * Game thread, as the frames read the theme: drops the fields set here with reset, then sets those of set, and
+             * answers the theme drawn. A set that is not valid is an error before anything, the reset too, is done.
+             */
+            json theme(const json& args) const
+            {
+                auto& controls = imgui::controls::get();
+                const auto set = args.find("set");
+                const bool hasSet = set != args.end() && !set->is_null();
+                if (hasSet) {
+                    if (const auto valid = imgui::themeWithFields({}, *set); !valid) {
+                        throw std::invalid_argument(valid.error() + ": nothing is set");
+                    }
+                }
+                if (argBool(args, "reset")) {
+                    controls.clearThemeOverride();
+                }
+                if (hasSet) {
+                    if (const auto overridden = controls.overrideTheme(*set); !overridden) {
+                        throw std::invalid_argument(overridden.error() + ": nothing is set");
+                    }
+                }
+                json overridden = json::array();
+                for (const auto name : controls.overriddenThemeFields()) {
+                    overridden.push_back(std::string(name));
+                }
+                return { { "fields", imgui::themeJson(controls.theme()) }, { "overridden", overridden } };
             }
 #endif
 

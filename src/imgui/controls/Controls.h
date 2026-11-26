@@ -1,7 +1,10 @@
 #pragma once
 
 #include <cstdint>
+#include <expected>
 #include <string>
+#include <string_view>
+#include <vector>
 
 #include <imgui.h>
 
@@ -227,6 +230,15 @@ namespace f4cf::imgui::controls
         // Internal: used by the layer before the main context's frame begins
         void updateImGuiStyle();
 
+        // Internal: used by devbench's theme action
+        std::expected<void, std::string> overrideTheme(const nlohmann::json& fields);
+        void clearThemeOverride();
+
+        const std::vector<std::string_view>& overriddenThemeFields() const
+        {
+            return _overridden;
+        }
+
         // Internal: used by the layer around the content of every canvas, or by a test's frame
         void updateInput();
         void beginFrame(float deltaSeconds);
@@ -255,6 +267,13 @@ namespace f4cf::imgui::controls
     private:
         Controls();
 
+        void drawTheme();
+
+        // the theme the mod set, the fields devbench set over it and their values, and the theme drawn: the mod's with
+        // those fields replaced
+        Theme _modTheme;
+        Theme _overrideValues;
+        std::vector<std::string_view> _overridden;
         Theme _theme;
         ControlsColors _colors;
 

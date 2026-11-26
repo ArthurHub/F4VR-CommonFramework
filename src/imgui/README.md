@@ -207,7 +207,11 @@ panel->setStyle(controls::get().theme().panelStyle());
   the background the glass.
 - **The pointer** is not the theme's: a ray is the player's to set, in `PointerStyle`.
 - **`themeFields()`** lists every field by its name and member, for code that reads or sets a theme field by
-  field.
+  field. `themeJson(theme)` is a theme as JSON, each field by its name, a color as `[r, g, b, a]` from 0 to 255 and
+  a size as a number, and `themeWithFields(theme, fields)` sets such fields on a theme, or names the first that is
+  no field or not in its shape.
+- **Tuned live** with devbench's [`theme` action](../devbench/README.md): the fields it sets are drawn over the
+  mod's theme, and stay over each theme the mod sets until its `reset`. `theme()` is the theme drawn, with them.
 
 `setTheme` is called at any time, as a mod's config changes, and the next frame is drawn in it: the controls
 read it as they draw, ImGui's style is set again before the frame begins, and the keyboard in the call. A

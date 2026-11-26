@@ -49,6 +49,8 @@ controls::get().setTheme(theme);
   it as the next frame begins. `colors()` has the colors as ImGui's `ImU32`. The controls read both as they draw, so
   the next frame is in a new theme, with a slider's drag or an open list kept.
 - A test's own ImGui context gets the theme's style with `applyImGuiStyle()`, before its first frame.
+- devbench's `theme` action sets fields over the mod's theme (`overrideTheme`, internal), which stay over each
+  `setTheme` until its `reset` (`clearThemeOverride`). `theme()` is the theme drawn, with those fields.
 - **Gaps** inside a control and between its parts are steps of the theme's spacing scale (`space1` to `space6`): a
   list is padded `space2` with `space1` between its options, a dialog padded `space6`, a tree's level set in `space4`.
   The four a caller lines up with are functions of the theme: `headingTextInset()`, `sliderValuePadding()`,

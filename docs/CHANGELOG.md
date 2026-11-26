@@ -29,6 +29,9 @@ major version is `0`, a minor bump may break the API; the **Upgrading** notes sa
   theme's fields by name. **Upgrading:** `controls::HEADING_TEXT_INSET`, `SLIDER_VALUE_PADDING`,
   `TEXT_INPUT_PADDING` and `TREE_INDENT` are the functions `headingTextInset()`, `sliderValuePadding()`,
   `textInputPadding()` and `treeIndent()`.
+- **A look tuned live**: devbench's `theme` action answers the theme's fields and sets them over the mod's theme,
+  drawn from the next frame and kept over each `setTheme` until its `reset`
+  ([devbench README](../src/devbench/README.md)). The tool's contract is 7.
 
 ## 0.6.1 — unreleased
 
