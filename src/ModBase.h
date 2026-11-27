@@ -21,6 +21,25 @@ namespace f4cf
      */
     void registerFrameEndCallback(void (*callback)());
 
+    /**
+     * The plugin's version data, which F4SE for 1.10.980 and later loads a plugin by, in place of F4SEPlugin_Query: its
+     * name and version, through the Address Library with CommonLibF4VR's struct layouts, on 1.10.984. F4SE reads it
+     * from the DLL mapped as data, so no code has run yet: the mod exports it constant-initialized, beside
+     * F4SEPlugin_Query and F4SEPlugin_Load, as `extern "C" DLLEXPORT constinit auto F4SEPlugin_Version =
+     * f4cf::pluginVersionData(Version::PROJECT, { Version::MAJOR, Version::MINOR, Version::PATCH });`.
+     */
+    constexpr F4SE::PluginVersionData pluginVersionData(const std::string_view name, const REL::Version version)
+    {
+        F4SE::PluginVersionData data{};
+        data.PluginVersion(version);
+        data.PluginName(name);
+        data.UsesAddressLibrary(true);
+        data.UsesSigScanning(false);
+        data.IsLayoutDependent(true);
+        data.CompatibleVersions({ F4SE::RUNTIME_1_10_984 });
+        return data;
+    }
+
     class ModBase
     {
     public:

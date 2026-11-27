@@ -17,13 +17,6 @@
 #include "f4vr/PlayerNodes.h"
 #include "render/TextFont.h"
 
-/**
- * The plugin's version data, which F4SE for 1.10.980 and later reads instead of calling F4SEPlugin_Query; F4SE for
- * 1.10.163 and for VR ignores it. ModBase's constructor fills it from the mod's Settings, as the DLL loads and before
- * F4SE reads it, so a mod exports nothing for it.
- */
-extern "C" __declspec(dllexport) F4SE::PluginVersionData F4SEPlugin_Version{};
-
 namespace f4cf
 {
     ModBase::Settings::Settings(const std::string_view& name, const std::string_view& version, ConfigBase* config)
@@ -74,14 +67,6 @@ namespace f4cf
             throw std::runtime_error("mod already initialized for " + g_mod->_settings.name);
         }
         g_mod = this;
-
-        // through the Address Library, with CommonLibF4VR's struct layouts, on the runtimes of 1.10.980 and later
-        F4SEPlugin_Version.PluginVersion(REL::Version(_settings.version));
-        F4SEPlugin_Version.PluginName(_settings.f4seName);
-        F4SEPlugin_Version.UsesAddressLibrary(true);
-        F4SEPlugin_Version.UsesSigScanning(false);
-        F4SEPlugin_Version.IsLayoutDependent(true);
-        F4SEPlugin_Version.CompatibleVersions({ F4SE::RUNTIME_1_10_984 });
     }
 
     const std::string& ModBase::getName() const

@@ -10,6 +10,9 @@ extern "C" DLLEXPORT bool F4SEAPI F4SEPlugin_Query(const F4SE::QueryInterface* a
     return g_mod->onF4SEPluginQuery(a_f4se, a_info);
 }
 
+// F4SE for flat Fallout 4 1.10.980 and later reads this in place of the query, before any of the DLL's code runs
+extern "C" DLLEXPORT constinit auto F4SEPlugin_Version = f4cf::pluginVersionData(Version::PROJECT, { Version::MAJOR, Version::MINOR, Version::PATCH });
+
 // F4SE loads the plugin: the framework sets up logging and the config, then calls onModLoaded
 extern "C" DLLEXPORT bool F4SEAPI F4SEPlugin_Load(const F4SE::LoadInterface* a_f4se)
 {
