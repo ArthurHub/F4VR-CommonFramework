@@ -1,7 +1,6 @@
 #include "DrawHost.h"
 
-// Flat's side of the draw-callback API. VR's is the Submit hook (SubmitHook.cpp), which the flat build leaves out.
-#ifndef ENABLE_FALLOUT_VR
+// Flat's side of the draw-callback API, built for flat only. VR's is the Submit hook (SubmitHook.cpp).
 namespace f4cf::render
 {
     /**
@@ -25,4 +24,3 @@ namespace f4cf::render
         return false;
     }
 }
-#endif

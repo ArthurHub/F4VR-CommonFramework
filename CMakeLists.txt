@@ -154,9 +154,11 @@ endif()
 # values), the debug adjuster they drive, the player's VR skeleton, turning, weapon tracking, wands and activation
 # spheres, the world-space drawing (debug draw, primitives) with the Submit hook and the scene depth, the wand pointer
 # and the VR keyboard. A shared file guards its VR lines with #ifdef ENABLE_FALLOUT_VR, as perf/FrameSampler does the
-# compositor timing.
+# compositor timing. Each runtime's side of an API shared by both (GameRuntime, the draw host) is a file of its own,
+# which the other runtime's build leaves out.
 if(F4CF_RUNTIME STREQUAL "FLAT")
-  set(_F4CF_VR_ONLY
+  set(_F4CF_OTHER_RUNTIME
+    "/src/GameRuntimeVR\\."
     "/src/vrui/"
     "/src/vrcf/(AxisRepeat|VRControllersManager|VRControllersSuppressor)\\."
     "/src/DebugAdjuster\\."
@@ -165,12 +167,17 @@ if(F4CF_RUNTIME STREQUAL "FLAT")
     "/src/render/(SubmitHook|CallSiteHook|PrimitiveDrawRenderer|SceneDepth[A-Za-z]*)\\."
     "/src/imgui/(ImGuiPointer|ImGuiPointerLogic|ImGuiKeyboard|ImGuiKeyboardLogic|UIImGuiPanel)\\."
   )
-  foreach(_F4CF_PATTERN ${_F4CF_VR_ONLY})
-    list(FILTER headers EXCLUDE REGEX "${_F4CF_PATTERN}")
-    list(FILTER sources EXCLUDE REGEX "${_F4CF_PATTERN}")
-    list(FILTER inls    EXCLUDE REGEX "${_F4CF_PATTERN}")
-  endforeach()
+else()
+  set(_F4CF_OTHER_RUNTIME
+    "/src/GameRuntimeFlat\\."
+    "/src/render/FlatDrawHost\\."
+  )
 endif()
+foreach(_F4CF_PATTERN ${_F4CF_OTHER_RUNTIME})
+  list(FILTER headers EXCLUDE REGEX "${_F4CF_PATTERN}")
+  list(FILTER sources EXCLUDE REGEX "${_F4CF_PATTERN}")
+  list(FILTER inls    EXCLUDE REGEX "${_F4CF_PATTERN}")
+endforeach()
 
 source_group(TREE ${ROOT_DIR} FILES ${headers} ${sources} ${inls})
 

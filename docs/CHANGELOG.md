@@ -17,6 +17,9 @@ major version is `0`, a minor bump may break the API; the **Upgrading** notes sa
   and later loads a plugin by, filled from `Settings` (`f4seName` and `version` from its constructor). CommonLibF4VR is upstream's latest, whose NiObject virtuals from 0x15 on and those
   its subclasses add are called through each runtime's slot and can't be overridden. **Upgrading:** a mod that
   overrides one of them calls it instead, or patches the vtable.
+- **The frame tick on flat**: a flat build runs the mod's frame from `Main::OnIdle`'s call of `DemoteQueuedActors`, VR's
+  place in the frame, or on from another mod's frame hook there. What differs per runtime in `ModBase` is `GameRuntime`.
+  **Upgrading:** `ModBase`'s unused `_debugAdjuster` member is gone; `DebugAdjuster` is static.
 
 ## 0.7.0 — 2026-11-26
 

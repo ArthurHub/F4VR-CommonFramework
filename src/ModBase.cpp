@@ -2,6 +2,8 @@
 
 #include <cpptrace/from_current.hpp>
 
+#include "GameRuntime.h"
+#include "MainLoopHook.h"
 #include "common/CommonUtils.h"
 #include "devbench/DevBench.h"
 #include "f4vr/DebugDump.h"
@@ -14,21 +16,6 @@
 
 #include "f4vr/PlayerNodes.h"
 #include "render/TextFont.h"
-#include "vrcf/VRControllersHaptic.h"
-
-#ifdef ENABLE_FALLOUT_VR
-#include "MainLoopHook.h"
-#include "debug/DebugDraw.h"
-#include "f4vr/WandMovement.h"
-#include "render/PrimitiveDrawRenderer.h"
-#include "render/SubmitHook.h"
-#include "vrcf/VRControllersManager.h"
-#include "vrcf/VRControllersSuppressor.h"
-#include "vrui/UIDevLayout.h"
-#include "vrui/UIManager.h"
-#endif
-
-#include <shellapi.h>
 
 /**
  * The plugin's version data, which F4SE for 1.10.980 and later reads instead of calling F4SEPlugin_Query; F4SE for
@@ -39,30 +26,6 @@ extern "C" __declspec(dllexport) F4SE::PluginVersionData F4SEPlugin_Version{};
 
 namespace f4cf
 {
-#ifdef ENABLE_FALLOUT_VR
-    namespace
-    {
-        /**
-         * Opens the VR UI dev layout's file with Windows' default handler for it, on the desktop. The file is
-         * there only once the dev layout is on and a VR UI has been shown since, so a press before then says so.
-         */
-        mods_config::api::FunctionResult openDevLayoutFile()
-        {
-            const auto path = vrui::UIDevLayout::filePath();
-            std::error_code error;
-            if (!std::filesystem::exists(path, error)) {
-                return { .done = false, .message = "The file is made once the dev layout is on, saved, and a VR UI is shown." };
-            }
-            const auto result = reinterpret_cast<INT_PTR>(ShellExecuteW(nullptr, L"open", path.c_str(), nullptr, nullptr, SW_SHOWNORMAL));
-            if (result <= 32) {
-                logger::warn("Windows did not open the dev layout file '{}' (error {})", path.string(), result);
-                return { .done = false, .message = "Windows did not open the file. The mod's log has its path." };
-            }
-            return { .done = true, .message = {} };
-        }
-    }
-#endif
-
     ModBase::Settings::Settings(const std::string_view& name, const std::string_view& version, ConfigBase* config)
         : name(name),
           f4seName(name),
@@ -121,18 +84,6 @@ namespace f4cf
         F4SEPlugin_Version.CompatibleVersions({ F4SE::RUNTIME_1_10_984 });
     }
 
-    /**
-     * Whether the build runs on the game F4SE reports: VR from 1.2.72 on, flat 1.10.163 and 1.10.984.
-     */
-    bool ModBase::isRuntimeSupported(const REL::Version& runtime)
-    {
-#ifdef ENABLE_FALLOUT_VR
-        return runtime >= F4SE::RUNTIME_LATEST_VR;
-#else
-        return runtime == F4SE::RUNTIME_1_10_163 || runtime == F4SE::RUNTIME_1_10_984;
-#endif
-    }
-
     const std::string& ModBase::getName() const
     {
         return _settings.name;
@@ -163,7 +114,7 @@ namespace f4cf
             if (skse->IsEditor()) {
                 logger::critical("Loaded in editor, marking as incompatible");
                 // ReSharper disable once CppUnreachableCode
-            } else if (!isRuntimeSupported(skse->RuntimeVersion())) {
+            } else if (!GameRuntime::get().supports(skse->RuntimeVersion())) {
                 logger::critical("Unsupported runtime version {}", skse->RuntimeVersion().string());
             } else {
                 logger::info("F4SE Plugin Query v{} compatible: {} v{}", skse->F4SEVersion().string(), info->name, info->version);
@@ -216,11 +167,9 @@ namespace f4cf
             logger::info("Load Mod...");
             onModLoaded(f4se);
 
-#ifdef ENABLE_FALLOUT_VR
             if (_settings.setupMainGameLoop && !_settings.setupMainGameLoopLate) {
                 main_hook::hook();
             }
-#endif
 
             logger::info("Load successful");
             success = true;
@@ -271,14 +220,6 @@ namespace f4cf
                 perf::tracyThreadName("game");
             }
         }
-#ifdef ENABLE_FALLOUT_VR
-        // the thread the Submit hook checks it is called on
-        static bool s_gameThreadNoted = false;
-        if (!s_gameThreadNoted) {
-            s_gameThreadNoted = true;
-            render::internal::noteGameThread();
-        }
-#endif
 
         // the mod's whole frame: perf readers count frames by it and call its thread the game thread
         const perf::Scope perfScope(perf::declareFrameSite(__FUNCTION__));
@@ -290,17 +231,8 @@ namespace f4cf
 
         CPPTRACE_TRY
         {
-#ifdef ENABLE_FALLOUT_VR
-            const bool leftHanded = RE::VRSettings::IsLeftHandedMode();
-            vrcf::VRControllers.update(leftHanded);
-            vrcf::VRControllersSuppress.update(leftHanded);
-            vrcf::VRHaptics.update(leftHanded);
-            f4vr::WandMovement::onFrameStart();
-
-            // debug-draw frame boundary around the mod update; both calls are a single atomic
-            // read until the mod issues its first draw call ever (the zero-cost-when-unused contract)
-            debug::DebugDraw::onFrameStart();
-#endif
+            // the game's input and the game-specific state of the frame, before anything reads them
+            GameRuntime::get().onFrameStart();
 
             // devbench actions queued since the last frame, so they read and change state before the mod's update
             // consumes it; a single relaxed load when nothing is queued
@@ -311,31 +243,16 @@ namespace f4cf
             // the mod's update; one atomic exchange when it was not
             _settings.config->notifySubscribersOfReload();
 
-#ifdef ENABLE_FALLOUT_VR
-            // the VR UI's frame update runs once in a frame, and from here it can run again
-            if (vrui::g_uiManager) {
-                vrui::g_uiManager->onFrameStart();
-            }
-#endif
+            GameRuntime::get().beforeModUpdate();
 
             onFrameUpdate();
 
-#ifdef ENABLE_FALLOUT_VR
-            // the VR UI's frame update, which does nothing if the mod ran it at a point of its own in its update; after
-            // the mod's update so a UI it attached is laid out and drawn in this frame, and before the panels are
-            // published below
-            if (vrui::g_uiManager) {
-                vrui::g_uiManager->onFrameUpdate();
-            }
-#endif
+            // after the mod's update, so what it changed is laid out and drawn in this frame
+            GameRuntime::get().afterModUpdate(*_settings.config);
 
             // this frame's devbench state snapshot, after every exit path of the mod's update; a single relaxed load
             // (two in a Tracy build) until the mod's devbench tool is armed
             devbench::internal::onFrameEnd();
-
-#ifdef ENABLE_FALLOUT_VR
-            DebugAdjuster::onFrameUpdate(*_settings.config);
-#endif
 
             // Optional subsystems that self-registered (see registerFrameEndCallback); empty unless
             // the mod actually uses one, which is what keeps them out of binaries that do not.
@@ -347,9 +264,7 @@ namespace f4cf
                 }
             }
 
-#ifdef ENABLE_FALLOUT_VR
-            debug::DebugDraw::onFrameEnd();
-#endif
+            GameRuntime::get().onFrameEnd();
 
             checkDebugDump();
             checkDebugAddItems();
@@ -413,11 +328,7 @@ namespace f4cf
                 const auto path = std::filesystem::path(config->getConfigFilePath()).u8string();
                 return std::optional<mods_config::api::Value>(std::string(path.begin(), path.end()));
             });
-#ifdef ENABLE_FALLOUT_VR
-            client.addFunction("openDevLayoutFile", [](const mods_config::api::Params&) {
-                return openDevLayoutFile();
-            });
-#endif
+            GameRuntime::get().addModsConfigFunctions(client);
             _configPreviews.emplace(*_settings.config);
             _configPreviews->subscribe(client);
         }
@@ -459,18 +370,11 @@ namespace f4cf
     {
         CPPTRACE_TRY
         {
-#ifdef ENABLE_FALLOUT_VR
-            vrui::initUIManager();
-
-            if (_settings.preloadRendering) {
-                // needs the game's D3D device, which is up by the main menu
-                render::PrimitiveDrawRenderer::preload();
-            }
+            GameRuntime::get().onGameLoaded(_settings.preloadRendering);
 
             if (_settings.setupMainGameLoop && _settings.setupMainGameLoopLate) {
                 main_hook::hook();
             }
-#endif
 
             onGameLoaded();
 
@@ -495,15 +399,11 @@ namespace f4cf
     {
         CPPTRACE_TRY
         {
-#ifdef ENABLE_FALLOUT_VR
             if (_settings.setupMainGameLoop) {
                 main_hook::validate();
             }
 
-            vrcf::VRControllers.reset();
-            vrcf::VRControllersSuppress.reset();
-            vrcf::VRHaptics.reset();
-#endif
+            GameRuntime::get().onGameSessionLoaded();
 
             logger::info("Reload config...");
             _settings.config->load();
@@ -565,14 +465,7 @@ namespace f4cf
         if (_settings.config->checkDebugDumpDataOnceFor("all_nodes")) {
             f4vr::DebugDump::printAllNodes();
         }
-#ifdef ENABLE_FALLOUT_VR
-        if (_settings.config->checkDebugDumpDataOnceFor("pipboy")) {
-            f4vr::DebugDump::printNodes(f4vr::getVRPlayerNodes()->pipboyRootNIFOnlyNode);
-        }
-        if (_settings.config->checkDebugDumpDataOnceFor("world")) {
-            f4vr::DebugDump::printNodes(f4vr::getVRPlayerNodes()->primaryWeaponScopeCamera->parent->parent->parent->parent->parent->parent);
-        }
-#endif
+        GameRuntime::get().checkDebugDump(*_settings.config);
         if (_settings.config->checkDebugDumpDataOnceFor("fp_skelly")) {
             f4vr::DebugDump::printNodes(f4vr::getFirstPersonSkeleton());
         }

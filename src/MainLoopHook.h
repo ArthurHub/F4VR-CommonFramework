@@ -1,16 +1,16 @@
 #pragma once
 
+#include "GameRuntime.h"
 #include "ModBase.h"
 
 namespace f4cf::main_hook
 {
     namespace internal
     {
-        // Hook into a random function call inside the game loop function
-        // By overriding the address of one of the calls we can inject our own code to run
-        // on every frame.
+        // Redirect a call inside the game's main loop, whose site the runtime gives (GameRuntime::frameCallSite), to run
+        // the mod's frame before the call it replaces.
         using HookFunc = void (*)(uint64_t rcx);
-        inline REL::Relocation _hookFuncCallSite{ RE::VRHookSites::MainUpdateFrameTick.address() };
+        inline std::uintptr_t _hookFuncCallSite = 0;
         inline HookFunc _hookFuncOriginal = nullptr;
         inline uintptr_t _hookFuncThisHook = 0;
 
@@ -34,15 +34,21 @@ namespace f4cf::main_hook
     }
 
     /**
-     * Hook into the main game loop by overriding a function call inside it.
+     * Hook into the main game loop by overriding a function call inside it. A runtime that gives no site, as one whose
+     * call is not what the game has there, gets no frame: it is logged, and the game is left alone.
      */
     inline void hook()
     {
-        logger::info("Hook into main loop at (0x{:X})...", internal::_hookFuncCallSite.address());
+        internal::_hookFuncCallSite = GameRuntime::get().frameCallSite();
+        if (!internal::_hookFuncCallSite) {
+            logger::error("Main loop hook: the game's call is not at its place, so the mod gets no frame update");
+            return;
+        }
+        logger::info("Hook into main loop at (0x{:X})...", internal::_hookFuncCallSite);
         auto& trampoline = F4SE::GetTrampoline();
-        const auto hookFuncOriginal = trampoline.write_call<5>(internal::_hookFuncCallSite.address(), &internal::onGameFrameUpdateHook);
+        const auto hookFuncOriginal = trampoline.write_call<5>(internal::_hookFuncCallSite, &internal::onGameFrameUpdateHook);
 
-        internal::_hookFuncThisHook = internal::getCallTarget(internal::_hookFuncCallSite.address());
+        internal::_hookFuncThisHook = internal::getCallTarget(internal::_hookFuncCallSite);
         logger::info("Hook into main loop successful, original: (0x{:X}), new: (0x{:X})", hookFuncOriginal, internal::_hookFuncThisHook);
         internal::_hookFuncOriginal = reinterpret_cast<internal::HookFunc>(hookFuncOriginal); // NOLINT(performance-no-int-to-ptr)
     }
@@ -54,7 +60,10 @@ namespace f4cf::main_hook
      */
     inline void validate()
     {
-        const auto current = internal::getCallTarget(internal::_hookFuncCallSite.address());
+        if (!internal::_hookFuncCallSite) {
+            return;
+        }
+        const auto current = internal::getCallTarget(internal::_hookFuncCallSite);
         if (current != internal::_hookFuncThisHook) {
             logger::warn("Main Loop Hook validation failed! Expected: (0x{:X}), Current: (0x{:X})", internal::_hookFuncThisHook, current);
         }
