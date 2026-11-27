@@ -22,6 +22,7 @@ detail; this page is the map and the traps.
 | [`WandActivationSphere.h`](WandActivationSphere.h) | A gesture zone around a node, and its config section. See [Activation spheres](#activation-spheres). |
 | [`SphereStyle.h`](SphereStyle.h) | How a sphere visual looks (activation spheres, the vrui fingertip marker): a mesh, and the color, glow, falloff and texture set on its shader at runtime. The presets (`findSphereStylePreset`). |
 | [`EffectShaderMaterials.h`](EffectShaderMaterials.h) | Live values on a cloned mesh's effect shaders (glows, beams, spheres): `makeEffectShaderMaterialsPrivate` on a fresh clone, before it is attached, then `forEachEffectShaderMaterial` to tint or fade it in place. |
+| [`Console.h`](Console.h) | The game console: `startCapture()` copies every line it prints from then on, and the lines waiting in its buffer, into `lines()` (`ConsoleLines`: numbered in order, the last 4000, `since(n)` for those after a number); `executeCommand(command)` gives a command to the game as typed, which runs it on a later frame ([Console](#console)). |
 | [`GameMenusHandler.h`](GameMenusHandler.h) | Menu open and close events, and `isVatsActive`, `isInScopeMenu`, `isFavoritesMenuOpen`. |
 | [`ScaleformUtils.h`](ScaleformUtils.h) | GFx menus and the HUD: read values, show and hide, drive list menus, dispatch events. |
 | [`F4VRThumbstickControls.h`](F4VRThumbstickControls.h) | Turns the player's thumbstick movement off and on, through the controls' deadzone settings. |
@@ -65,6 +66,35 @@ accessors such as `getPrimaryWandNode()`:
 ```cpp
 RE::NiNode* hmd = getVRPlayerNodes()->hmdNode;
 ```
+
+## Console
+
+```cpp
+#include "f4vr/Console.h"
+
+f4vr::console::startCapture();                       // game thread, once; false where it could not install
+const auto after = f4vr::console::executeCommand("player.getpos x");  // its lines come after this number
+for (const auto& line : f4vr::console::lines().since(after)) { ... }  // a frame later: "player.getpos x", "GetPos: X >> 2048.00"
+```
+
+- **Copied at the call, on demand.** `startCapture` redirects the call in `ConsoleLog::Print` that hands each line to
+  `AddString` (`RE::VRHookSites::ConsolePrintAddString`), through the mod's trampoline: 14 bytes of it must be free,
+  so a mod that captures allocates them in `ModBase::Settings`. It is installed on the first call, not at load, so a
+  game that never asks pays nothing; a failed install is logged once and not tried again.
+- **Chained.** Another plugin's hook of the same call, another framework mod's too, is called through, and the log
+  names it.
+- **What came before.** The lines waiting in the console's buffer are taken first. The Console menu empties that buffer
+  as it takes lines, so before the menu is first made it holds everything printed since the game started (up to 64 KB,
+  past which `AddString` drops prints), and after it little or nothing.
+- **A command runs later.** `executeCommand` is `RE::Console::ExecuteCommand`: the game prints the command at once and
+  queues it, then runs it on a later frame against the console's selected reference, as a command typed into the
+  console. Its output comes then, in `lines()`, after the number `executeCommand` returned, with whatever else was
+  printed meanwhile. As the game runs it from its own queue, a command that leaves the world (`load`, `coc`, `qqq`)
+  is safe to give from anywhere on the game thread. To have a command's output at once, devbench's `console` tool
+  compiles and runs it in place (`Script::CompileAndRun`).
+- **Threads.** A print can come from any thread, so `lines()` is safe from any thread. `startCapture` and
+  `executeCommand` are game thread calls.
+- **Text** comes in the game's ANSI code page and is kept in UTF-8; a command is given in UTF-8.
 
 ## Papyrus
 

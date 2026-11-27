@@ -7,6 +7,15 @@ and tooling tweaks are left to the git history.
 Versions follow `set(VERSION ...)` in the root [`CMakeLists.txt`](../CMakeLists.txt). While the
 major version is `0`, a minor bump may break the API; the **Upgrading** notes say what to change.
 
+## 0.8.0 — 2026-11-27
+
+- **The game console**: `f4vr::console` copies every line the console prints, from the first `startCapture()`, with
+  the lines waiting in its buffer, into a numbered ring that any thread reads, and `executeCommand` gives a command to
+  the game, which runs it on a later frame, its output coming into the ring then. It chains onto another plugin's hook of the same call
+  ([f4vr README](../src/f4vr/README.md#console)). **Upgrading:** a mod that captures has 14 bytes of trampoline free
+  for it in `ModBase::Settings`.
+- CommonLibF4VR: `VRHookSites::ConsolePrintAddString`, and the console's functions tagged for VR.
+
 ## 0.7.0 — 2026-11-26
 
 - **One theme for a mod's look**: `imgui::Theme` holds the colors by role, the sizes, the font sizes, the spacing
