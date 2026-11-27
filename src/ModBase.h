@@ -81,6 +81,7 @@ namespace f4cf
         void onFrameUpdateSafe();
 
     private:
+        static bool isRuntimeSupported(const REL::Version& runtime);
         void logPluginGameStart() const;
         static void onF4VRSEMessage(F4SE::MessagingInterface::Message* msg);
         static void connectToModsConfigFO4(const std::string& name, std::uint32_t minVersion);

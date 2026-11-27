@@ -30,6 +30,13 @@
 
 #include <shellapi.h>
 
+/**
+ * The plugin's version data, which F4SE for 1.10.980 and later reads instead of calling F4SEPlugin_Query; F4SE for
+ * 1.10.163 and for VR ignores it. ModBase's constructor fills it from the mod's Settings, as the DLL loads and before
+ * F4SE reads it, so a mod exports nothing for it.
+ */
+extern "C" __declspec(dllexport) F4SE::PluginVersionData F4SEPlugin_Version{};
+
 namespace f4cf
 {
 #ifdef ENABLE_FALLOUT_VR
@@ -104,6 +111,26 @@ namespace f4cf
             throw std::runtime_error("mod already initialized for " + g_mod->_settings.name);
         }
         g_mod = this;
+
+        // through the Address Library, with CommonLibF4VR's struct layouts, on the runtimes of 1.10.980 and later
+        F4SEPlugin_Version.PluginVersion(REL::Version(_settings.version));
+        F4SEPlugin_Version.PluginName(_settings.f4seName);
+        F4SEPlugin_Version.UsesAddressLibrary(true);
+        F4SEPlugin_Version.UsesSigScanning(false);
+        F4SEPlugin_Version.IsLayoutDependent(true);
+        F4SEPlugin_Version.CompatibleVersions({ F4SE::RUNTIME_1_10_984 });
+    }
+
+    /**
+     * Whether the build runs on the game F4SE reports: VR from 1.2.72 on, flat 1.10.163 and 1.10.984.
+     */
+    bool ModBase::isRuntimeSupported(const REL::Version& runtime)
+    {
+#ifdef ENABLE_FALLOUT_VR
+        return runtime >= F4SE::RUNTIME_LATEST_VR;
+#else
+        return runtime == F4SE::RUNTIME_1_10_163 || runtime == F4SE::RUNTIME_1_10_984;
+#endif
     }
 
     const std::string& ModBase::getName() const
@@ -136,7 +163,7 @@ namespace f4cf
             if (skse->IsEditor()) {
                 logger::critical("Loaded in editor, marking as incompatible");
                 // ReSharper disable once CppUnreachableCode
-            } else if (skse->RuntimeVersion() < (REL::Module::IsF4() ? F4SE::RUNTIME_LATEST : F4SE::RUNTIME_LATEST_VR)) {
+            } else if (!isRuntimeSupported(skse->RuntimeVersion())) {
                 logger::critical("Unsupported runtime version {}", skse->RuntimeVersion().string());
             } else {
                 logger::info("F4SE Plugin Query v{} compatible: {} v{}", skse->F4SEVersion().string(), info->name, info->version);
@@ -160,6 +187,11 @@ namespace f4cf
         bool success = false;
         CPPTRACE_TRY
         {
+            if (!logger::internal::_logger) {
+                // F4SE for 1.10.980 and later read F4SEPlugin_Version and never called F4SEPlugin_Query
+                logger::init(_settings.logFileName);
+                logPluginGameStart();
+            }
             logger::info("Init CommonLibF4 F4SE...");
             F4SE::Init(f4se, false);
 

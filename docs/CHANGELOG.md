@@ -13,7 +13,8 @@ major version is `0`, a minor bump may break the API; the **Upgrading** notes sa
   CommonLibF4VR for flat Fallout 4 (1.10.163 and 1.10.984), links no OpenVR and leaves the VR-only files out
   ([README](../README.md#build-the-framework-standalone)); on flat no draw callback of
   `render/DrawHost.h` is drawn, as there is no host. An activation sphere's config values are `f4vr/ActivationSphereConfig.h`,
-  which `WandActivationSphere.h` includes. CommonLibF4VR is upstream's latest, whose NiObject virtuals from 0x15 on and those
+  which `WandActivationSphere.h` includes. The framework exports `F4SEPlugin_Version`, which flat F4SE for 1.10.980
+  and later loads a plugin by, filled from `Settings` (`f4seName` and `version` from its constructor). CommonLibF4VR is upstream's latest, whose NiObject virtuals from 0x15 on and those
   its subclasses add are called through each runtime's slot and can't be overridden. **Upgrading:** a mod that
   overrides one of them calls it instead, or patches the vtable.
 

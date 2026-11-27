@@ -100,12 +100,16 @@ extern "C" DLLEXPORT bool F4SEAPI F4SEPlugin_Load(const F4SE::LoadInterface* f4s
 }
 ```
 
+The framework exports `F4SEPlugin_Version` itself, filled from `Settings` as `ModBase` is constructed: F4SE for
+1.10.980 and later reads it instead of calling `F4SEPlugin_Query`, and `onF4SEPluginLoad` then sets up the logging
+that the query would have. A flat build runs on 1.10.163 and 1.10.984, a VR build on 1.2.72.
+
 `setupMainGameLoop = true` installs the frame hook that runs `onFrameUpdate()`. The other
 [`Settings`](ModBase.h) fields are set in the constructor's body (`_settings.x = ...;`):
 
 | Field | Default | What it does |
 |-------|---------|--------------|
-| `f4seName`, `logFileName` | `name` | The name reported to F4SE, and the log file's. |
+| `f4seName`, `logFileName` | `name` | The name reported to F4SE, and the log file's. `f4seName` and `version` are given in the `Settings` constructor, as the version data reads them while `ModBase` is constructed. |
 | `trampolineAllocationSize` | 256 | Bytes of trampoline for the mod's hooks. |
 | `setupMainGameLoopLate` | `false` | Install the frame hook at game loaded, so this mod's frame runs before every other's (FRIK, which updates the skeleton). |
 | `preloadRendering` | `false` | Build the font (from plugin load, in the background) and the render pipeline (at game loaded) ahead, instead of stalling the first frame that draws (~0.1 s). On for a mod that draws panels, activation-sphere icons or overlays. |
