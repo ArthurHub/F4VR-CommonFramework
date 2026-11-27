@@ -2,7 +2,9 @@
 
 #include <optional>
 
+#ifdef ENABLE_FALLOUT_VR
 #include "DebugAdjuster.h"
+#endif
 #include "config/ConfigBase.h"
 #include "modsconfig/ConfigPreviews.h"
 
@@ -107,7 +109,9 @@ namespace f4cf
 
         Settings _settings;
         const F4SE::MessagingInterface* _messaging = nullptr;
+#ifdef ENABLE_FALLOUT_VR
         DebugAdjuster _debugAdjuster;
+#endif
 
     private:
         // Mods Config FO4 VR's live preview of the mod's config, while the mod is its client and has a config

@@ -151,8 +151,9 @@ if(NOT F4CF_WITH_IMGUI_UI)
 endif()
 
 # The VR-only files: the VR UI, the controllers but the binding parser and the haptic patterns (a mod edits both as
-# values), the debug adjuster they drive, the player's VR nodes, wands and activation spheres, the world-space drawing
-# (debug draw, primitives) with the Submit hook and the scene depth, the wand pointer and the VR keyboard, and the
+# values), the debug adjuster they drive, the player's VR skeleton, turning, weapon tracking, wands and activation
+# spheres, the world-space drawing (debug draw, primitives) with the Submit hook and the scene depth, the wand pointer
+# and the VR keyboard. A shared file guards its VR lines with #ifdef ENABLE_FALLOUT_VR, as perf/FrameSampler does the
 # compositor timing.
 if(F4CF_RUNTIME STREQUAL "FLAT")
   set(_F4CF_VR_ONLY
@@ -160,10 +161,9 @@ if(F4CF_RUNTIME STREQUAL "FLAT")
     "/src/vrcf/(AxisRepeat|VRControllersManager|VRControllersSuppressor)\\."
     "/src/DebugAdjuster\\."
     "/src/debug/"
-    "/src/f4vr/(PlayerNodes|F4VRSkelly|F4VRThumbstickControls|WandMovement|WandActivationSphere|SphereStyle)\\."
+    "/src/f4vr/(F4VRSkelly|F4VRThumbstickControls|EquippedWeaponHandler|PlayerRotation|WandMovement|WandActivationSphere)\\."
     "/src/render/(SubmitHook|CallSiteHook|PrimitiveDrawRenderer|SceneDepth[A-Za-z]*)\\."
     "/src/imgui/(ImGuiPointer|ImGuiPointerLogic|ImGuiKeyboard|ImGuiKeyboardLogic|UIImGuiPanel)\\."
-    "/src/perf/(FrameContext|FrameSampler)\\."
   )
   foreach(_F4CF_PATTERN ${_F4CF_VR_ONLY})
     list(FILTER headers EXCLUDE REGEX "${_F4CF_PATTERN}")

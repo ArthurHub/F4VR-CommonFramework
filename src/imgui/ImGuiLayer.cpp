@@ -174,7 +174,9 @@ namespace f4cf::imgui::internal
                 ImGui::DestroyContext();
                 return false;
             }
+#ifdef ENABLE_FALLOUT_VR
             keyboard().install();
+#endif
 
             s_lastFrameTime = std::chrono::steady_clock::now();
             s_contextReady = true;
@@ -233,8 +235,12 @@ namespace f4cf::imgui::internal
 
         RE::NiPoint3 viewerPosition()
         {
+#ifdef ENABLE_FALLOUT_VR
             const auto* nodes = f4vr::getVRPlayerNodes();
             return nodes && nodes->hmdNode ? nodes->hmdNode->world.translate : RE::NiPoint3();
+#else
+            return f4vr::getCameraPosition();
+#endif
         }
 
         /**
@@ -368,7 +374,9 @@ namespace f4cf::imgui::internal
     void unregisterCanvas(Canvas* canvas)
     {
         std::erase(canvases(), canvas);
+#ifdef ENABLE_FALLOUT_VR
         pointer().onCanvasRemoved(canvas);
+#endif
     }
 
     namespace
@@ -532,7 +540,9 @@ namespace f4cf::imgui::internal
                 }
                 ImGui::NewFrame();
                 if (mainContext) {
+#ifdef ENABLE_FALLOUT_VR
                     pointer().setWanted(io.WantCaptureMouse);
+#endif
                     // the controls' state of the frame, as every canvas's content is drawn in it
                     controls::get().beginFrame(deltaSeconds);
                 }
@@ -608,8 +618,10 @@ namespace f4cf::imgui::internal
         if (active.empty()) {
             // no ImGui frame is built: the pointer is on nothing, and only a press that is still held is waited
             // out, and the keyboard is hidden
+#ifdef ENABLE_FALLOUT_VR
             pointer().update({});
             keyboard().update({}, 0.0f);
+#endif
             controls::get().setThumbstickSide(0.0f);
             renderer::publish({});
             return;
@@ -677,8 +689,10 @@ namespace f4cf::imgui::internal
         }
         // the own context's canvas is drawn beside the mod's canvases, and not alone: see ensureOwnContext
         if (packed.empty()) {
+#ifdef ENABLE_FALLOUT_VR
             pointer().update({});
             keyboard().update({}, 0.0f);
+#endif
             controls::get().setThumbstickSide(0.0f);
             renderer::publish({});
             return;
@@ -717,18 +731,22 @@ namespace f4cf::imgui::internal
         const float deltaSeconds = frameDeltaSeconds();
         {
             F4CF_PERF_SCOPE("pointer");
+#ifdef ENABLE_FALLOUT_VR
             pointer().update(pointerTargets);
             keyboard().update(pointerTargets, deltaSeconds);
+#endif
             controls::get().updateInput();
         }
 
         // the main context's frame, with every canvas's content in it, then the own context's beside it
         RenderFrame frame;
         frame.passes.push_back(buildPass(packed, display, deltaSeconds, true, viewer, frame.textureWrites));
+#ifdef ENABLE_FALLOUT_VR
         // a press of the frame asked for its pulse: once, on the hand that points
         if (const auto pattern = controls::get().pressPulse(); pattern && controls::get().pulsed()) {
             vrcf::VRHaptics.trigger(pointer().state().primaryHand ? vrcf::Hand::Primary : vrcf::Hand::Offhand, *pattern);
         }
+#endif
         if (!ownPacked.empty() && ensureOwnContext()) {
             F4CF_PERF_SCOPE("ownContext");
             ImGuiContext* main = ImGui::GetCurrentContext();

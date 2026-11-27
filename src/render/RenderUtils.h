@@ -5,6 +5,7 @@
 
 namespace f4cf::render
 {
+#ifdef ENABLE_FALLOUT_VR
     /**
      * Per-frame stereo camera constants, uploaded to vertex-shader register b0 by the Submit hook
      * host before it invokes any draw callback: the engine's own per-eye view-projection matrices
@@ -18,6 +19,7 @@ namespace f4cf::render
         DirectX::XMMATRIX viewProj[2];
         DirectX::XMFLOAT4 posAdjust[2];
     };
+#endif
 
     /**
      * The game's own D3D11 device / immediate context, straight off the renderer singleton - no
@@ -26,11 +28,13 @@ namespace f4cf::render
     ID3D11Device* getDevice();
     ID3D11DeviceContext* getContext();
 
+#ifdef ENABLE_FALLOUT_VR
     /**
      * Read the engine's per-eye view-projection + posAdjust for the frame being submitted. False
      * when the camera globals are not populated yet.
      */
     bool getStereoCameraConstants(StereoCameraConstants& out);
+#endif
 
     /**
      * RAII snapshot of the D3D11 pipeline state, taken before any overlay drawing and restored on

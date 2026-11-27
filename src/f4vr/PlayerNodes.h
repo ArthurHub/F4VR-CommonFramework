@@ -9,16 +9,6 @@ namespace f4cf::f4vr
         return RE::PlayerCharacter::GetSingleton();
     }
 
-    /**
-     * The VR node table at PlayerCharacter + 0x6E0, typed by CommonLibF4 as a real PlayerCharacter member,
-     * so the offsets are checked by the compiler rather than by a cast.
-     */
-    inline RE::VRPlayerNodes* getVRPlayerNodes()
-    {
-        const auto player = RE::PlayerCharacter::GetSingleton();
-        return player ? &player->vrNodes : nullptr;
-    }
-
     inline RE::NiNode* getWorldRootNode()
     {
         const auto player = getPlayer();
@@ -63,6 +53,27 @@ namespace f4cf::f4vr
         return RE::NiNodeUtils::FindNode(getFirstPersonSkeleton(), "Weapon");
     }
 
+    inline RE::PlayerCamera* getPlayerCamera()
+    {
+        return RE::PlayerCamera::GetSingleton();
+    }
+
+    inline RE::NiPoint3 getCameraPosition()
+    {
+        return getPlayerCamera()->cameraRoot->world.translate;
+    }
+
+#ifdef ENABLE_FALLOUT_VR
+    /**
+     * The VR node table at PlayerCharacter + 0x6E0, typed by CommonLibF4 as a real PlayerCharacter member,
+     * so the offsets are checked by the compiler rather than by a cast.
+     */
+    inline RE::VRPlayerNodes* getVRPlayerNodes()
+    {
+        const auto player = RE::PlayerCharacter::GetSingleton();
+        return player ? &player->vrNodes : nullptr;
+    }
+
     inline RE::NiNode* getPrimaryWandNode()
     {
         return RE::NiNodeUtils::FindNode(getVRPlayerNodes()->primaryUIAttachNode, "world_primaryWand.nif");
@@ -78,16 +89,6 @@ namespace f4cf::f4vr
         return !meleeNode->children.empty() ? meleeNode->children[0]->IsNode() : nullptr;
     }
 
-    inline RE::PlayerCamera* getPlayerCamera()
-    {
-        return RE::PlayerCamera::GetSingleton();
-    }
-
-    inline RE::NiPoint3 getCameraPosition()
-    {
-        return getPlayerCamera()->cameraRoot->world.translate;
-    }
-
     inline RE::NiNode* getOffhandWandNode()
     {
         return getVRPlayerNodes()->secondaryWandNode;
@@ -97,4 +98,5 @@ namespace f4cf::f4vr
     {
         return getVRPlayerNodes()->primaryWandNode;
     }
+#endif
 }

@@ -8,7 +8,9 @@
 #include <nlohmann/json.hpp>
 
 #include "common/CommonUtils.h"
+#ifdef ENABLE_FALLOUT_VR
 #include "imgui/ImGuiKeyboard.h"
+#endif
 #include "imgui/controls/Controls.h"
 
 using namespace f4cf;
@@ -26,7 +28,9 @@ namespace
         {
             get().clearThemeOverride();
             get().setTheme({});
+#ifdef ENABLE_FALLOUT_VR
             imgui::keyboard().setStyle({});
+#endif
         }
     };
 
@@ -69,6 +73,7 @@ TEST_CASE("Controls: setTheme packs the theme's own colors too")
     CHECK(get().colors().important == IM_COL32(80, 200, 255, 255));
 }
 
+#ifdef ENABLE_FALLOUT_VR
 TEST_CASE("Controls: setTheme gives the keyboard the theme's colors and keeps the rest of its style")
 {
     const DefaultTheme restore;
@@ -85,6 +90,7 @@ TEST_CASE("Controls: setTheme gives the keyboard the theme's colors and keeps th
     CHECK(common::fEqual(style.widthShare, 0.5f));
     CHECK(style.key.bytes() == render::Color::rgba(1, 2, 3).bytes());
 }
+#endif
 
 TEST_CASE("Controls: setTheme marks ImGui's style, which the next update sets once")
 {
@@ -128,7 +134,9 @@ TEST_CASE("Controls: an override's fields are drawn from the next frame, and no 
     CHECK(get().theme().accent.bytes() == render::Color::rgba(200, 10, 20).bytes());
     CHECK(common::fEqual(get().theme().space2, 3.0f));
     CHECK(get().colors().accent == IM_COL32(200, 10, 20, 255));
+#ifdef ENABLE_FALLOUT_VR
     CHECK(imgui::keyboard().style().accent.bytes() == render::Color::rgba(200, 10, 20).bytes());
+#endif
     get().updateImGuiStyle();
     CHECK(common::fEqual(ImGui::GetStyle().ItemSpacing.y, 3.0f));
     CHECK(ImGui::ColorConvertFloat4ToU32(ImGui::GetStyle().Colors[ImGuiCol_Text]) == IM_COL32(200, 10, 20, 255));
@@ -179,7 +187,9 @@ TEST_CASE("Controls: clearing the override draws the mod's theme as it set it")
     CHECK(get().overriddenThemeFields().empty());
     CHECK(get().theme().accent.bytes() == amberTheme().accent.bytes());
     CHECK(get().colors().accent == IM_COL32(255, 180, 60, 255));
+#ifdef ENABLE_FALLOUT_VR
     CHECK(imgui::keyboard().style().accent.bytes() == amberTheme().accent.bytes());
+#endif
     get().updateImGuiStyle();
     CHECK(common::fEqual(ImGui::GetStyle().ItemSpacing.y, 6.0f));
 

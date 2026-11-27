@@ -21,7 +21,8 @@ activation-sphere icons. Read it to write a layer of your own, or to know why so
 | [`Color.h`](Color.h) | `Color`: 0..1 floats, from 0..255 bytes with `rgba`, back with `bytes`, and `colors::`. Plain std, so the config parsers use it. |
 | [`PrimitiveDraw.h`](PrimitiveDraw.h) | The frame a producer fills: `lines`, `triangles`, `images`, `texts`, the `add*` helpers, the budgets, the text enums. |
 | [`PrimitiveDrawRenderer.h`](PrimitiveDrawRenderer.h) | One **layer**: takes frames on the game thread, replays them on the render thread, in its draw order. Dormant with nothing to draw. |
-| [`SubmitHook.h`](SubmitHook.h) | The shared Submit hook, the player-space pass hook ([under the game's menus](#under-the-games-menus)), and the draw-callback table. The eye texture's RTV, the camera constants, the pipeline save and restore, the painter order. |
+| [`DrawHost.h`](DrawHost.h) | The draw-callback API, on both runtimes: `SubmitFrame`, the painter order, registering a callback and turning it on. VR's host is the Submit hook; flat has none, so `ensureInstalled` answers false there. |
+| [`SubmitHook.h`](SubmitHook.h) | VR only. The shared Submit hook, the player-space pass hook ([under the game's menus](#under-the-games-menus)), and the draw-callback table. The eye texture's RTV, the camera constants, the pipeline save and restore, the painter order. |
 | [`RenderUtils.h`](RenderUtils.h) | The game's D3D11 device and context, the per-eye `StereoCameraConstants`, and `ScopedPipelineState`. |
 | [`TextFont.h`](TextFont.h) | The font as a distance-field atlas, and text measuring (`measureText`, `fitText`, `textDescent`, `measureTextRun`). |
 | [`Texture.h`](Texture.h) | Images through the engine's own loader, shared per path (loose and BA2), and images from pixels. |

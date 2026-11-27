@@ -634,6 +634,7 @@ namespace f4cf::devbench
                               handler(&Tool::readPerf),
                               RunOn::Listener },
                     true);
+#ifdef ENABLE_FALLOUT_VR
                 addAction({ "input",
                               "the controller input suppressed or inverted now, so the game and other mods do not see it as it is: each owner (a "
                               "part of this mod that suppresses input, as ImGuiPointer) with its buttons, axes and invertedAxes per physical hand, "
@@ -642,6 +643,7 @@ namespace f4cf::devbench
                               json::object(),
                               handler(&Tool::readInputSuppression) },
                     true);
+#endif
 #if F4CF_WITH_IMGUI_UI
                 addAction({ "snapshot",
                               "save the texture the mod's ImGui canvases are drawn into as a PNG: a dedicated panel's own texture is that panel, the "
@@ -654,6 +656,7 @@ namespace f4cf::devbench
                               handler(&Tool::saveCanvasSnapshot),
                               RunOn::Listener },
                     true);
+#ifdef ENABLE_FALLOUT_VR
                 addAction({ "keyboard",
                               "the framework's VR keyboard, shown while a text field of an ImGui canvas is edited: open, page (letters, symbols, "
                               "accents), shift, caps, the field's text and cursor as its line shows them, width and height of its canvas, each hand "
@@ -664,6 +667,7 @@ namespace f4cf::devbench
                               { { "key", argument("string", "keyboard: the key to press, by its label or action") } },
                               handler(&Tool::keyboard) },
                     true);
+#endif
                 addAction({ "theme",
                               "the theme the framework's ImGui controls are drawn in, which tunes a look live: fields, each field by its name, a color "
                               "as [r, g, b, a] from 0 to 255 and a size as a number, and overridden, the names of the fields set here. reset drops "
@@ -806,6 +810,7 @@ namespace f4cf::devbench
                 return { { "overrides", overrides } };
             }
 
+#ifdef ENABLE_FALLOUT_VR
             /**
              * Game thread: the controller input the mod suppresses now, which only the game thread changes.
              */
@@ -813,6 +818,7 @@ namespace f4cf::devbench
             {
                 return vrcf::VRControllersSuppress.toJson();
             }
+#endif
 
 #if F4CF_WITH_IMGUI_UI
             /**
@@ -839,6 +845,7 @@ namespace f4cf::devbench
                 return { { "path", saved->path.string() }, { "width", saved->width }, { "height", saved->height }, { "dedicated", saved->dedicated } };
             }
 
+#ifdef ENABLE_FALLOUT_VR
             /**
              * The framework's VR keyboard as it is now, after pressing the key asked for, if any: a key the page does not
              * have, or a keyboard that is not shown, is an error and presses nothing.
@@ -869,6 +876,7 @@ namespace f4cf::devbench
                     { "hands", hands },
                     { "keys", keys } };
             }
+#endif
 
             /**
              * Game thread, as the frames read the theme: drops the fields set here with reset, then sets those of set, and

@@ -87,6 +87,7 @@ TEST_CASE("VRControllersHaptic: the click patterns are that many taps with pause
     REQUIRE(VRControllersHaptic::getPattern(HapticPattern::TripleClick).size() == 5);
 }
 
+#ifdef ENABLE_FALLOUT_VR
 TEST_CASE("VRControllersHaptic: nothing plays on a hand until a pattern is triggered on it")
 {
     const VRControllersHaptic haptics;
@@ -94,3 +95,4 @@ TEST_CASE("VRControllersHaptic: nothing plays on a hand until a pattern is trigg
     REQUIRE_FALSE(haptics.isPlaying(vr::TrackedControllerRole_LeftHand));
     REQUIRE_FALSE(haptics.isPlaying(vr::TrackedControllerRole_RightHand));
 }
+#endif

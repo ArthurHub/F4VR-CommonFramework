@@ -5,7 +5,9 @@ namespace f4cf::f4vr
     struct DebugDump
     {
         static void printMatrix(const RE::NiMatrix3* mat);
+#ifdef ENABLE_FALLOUT_VR
         static void positionDiff();
+#endif
         static void printAllNodes();
         static void printNodes(RE::NiAVObject* node, bool printAncestors = true);
         static void printNodesTransform(RE::NiAVObject* node, bool printAncestors = true);

@@ -1,9 +1,11 @@
 #pragma once
 
+#ifdef ENABLE_FALLOUT_VR
 namespace f4cf::vrcf
 {
     enum class Hand : std::uint8_t;
 }
+#endif
 
 namespace f4cf::f4vr
 {
@@ -20,8 +22,10 @@ namespace f4cf::f4vr
     void closeFavoriteMenu();
 
     // Weapons/Armor/Player
+#ifdef ENABLE_FALLOUT_VR
     bool isPrimaryHand(const vrcf::Hand hand);
     void setWandsVisibility(bool show, bool leftWand);
+#endif
     bool isWeaponDrawn();
     bool isMeleeWeaponDrawn();
     bool isUnarmedWeaponDrawn();

@@ -19,7 +19,8 @@ detail; this page is the map and the traps.
 | [`PlayerNodes.h`](PlayerNodes.h) | `getVRPlayerNodes()`, CommonLibF4's `RE::VRPlayerNodes` (wands, HMD, Pip-Boy, scope...), and accessors such as `getPrimaryWandNode()`. |
 | [`F4VRSkelly.h`](F4VRSkelly.h) | `Skelly`: a bone's world transform by name, from the player's `RE::BSFlattenedBoneTree`, and a hand's index fingertip. The bone names are `RE::SkeletonBones`. |
 | [`PlayerRotation.h`](PlayerRotation.h) | Turns the player the way their comfort settings say, also where the game won't (dialogue, menus): `turnByThumbstick(axisX)` each frame, or `snapTurn` / `smoothTurn`. It rotates the VR room, not the actor ([design](../../docs/tech/vr-player-rotation.md)). |
-| [`WandActivationSphere.h`](WandActivationSphere.h) | A gesture zone around a node, and its config section. See [Activation spheres](#activation-spheres). |
+| [`ActivationSphereConfig.h`](ActivationSphereConfig.h) | An activation sphere's config section as values (`WandActivationConfig`, its visibility, orientation and icons), on both runtimes. |
+| [`WandActivationSphere.h`](WandActivationSphere.h) | VR only. A gesture zone around a node. See [Activation spheres](#activation-spheres). |
 | [`SphereStyle.h`](SphereStyle.h) | How a sphere visual looks (activation spheres, the vrui fingertip marker): a mesh, and the color, glow, falloff and texture set on its shader at runtime. The presets (`findSphereStylePreset`). |
 | [`EffectShaderMaterials.h`](EffectShaderMaterials.h) | Live values on a cloned mesh's effect shaders (glows, beams, spheres): `makeEffectShaderMaterialsPrivate` on a fresh clone, before it is attached, then `forEachEffectShaderMaterial` to tint or fade it in place. |
 | [`GameMenusHandler.h`](GameMenusHandler.h) | Menu open and close events, and `isVatsActive`, `isInScopeMenu`, `isFavoritesMenuOpen`. |

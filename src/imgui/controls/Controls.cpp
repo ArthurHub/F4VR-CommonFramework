@@ -140,7 +140,9 @@ namespace f4cf::imgui::controls
         }
         _colors = packedColors(_theme);
         _imGuiStyleApplied = false;
+#ifdef ENABLE_FALLOUT_VR
         keyboard().setStyle(_theme.keyboardStyle(keyboard().style()));
+#endif
     }
 
     /**
@@ -250,6 +252,10 @@ namespace f4cf::imgui::controls
      */
     void Controls::updateInput()
     {
+#ifndef ENABLE_FALLOUT_VR
+        // flat has no thumbstick
+        _thumbstickSide = 0.0f;
+#else
         const auto& state = pointer().state();
         if (!state.canvas) {
             _thumbstickSide = 0.0f;
@@ -257,6 +263,7 @@ namespace f4cf::imgui::controls
         }
         const auto push = vrcf::VRControllers.getThumbstickValue(state.primaryHand ? vrcf::Hand::Primary : vrcf::Hand::Offhand);
         _thumbstickSide = std::abs(push.x) > std::abs(push.y) ? push.x : 0.0f;
+#endif
     }
 
     /**

@@ -105,6 +105,7 @@ namespace f4cf::f4vr
         }
     }
 
+#ifdef ENABLE_FALLOUT_VR
     /**
      * Is the given hand is player primary hand.
      */
@@ -146,6 +147,7 @@ namespace f4cf::f4vr
             }
         }
     }
+#endif
 
     /**
      * @return true if the player has any weapon in the hand (including fists).

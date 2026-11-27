@@ -109,12 +109,14 @@ namespace f4cf::f4vr
         }
     }
 
+#ifdef ENABLE_FALLOUT_VR
     void DebugDump::positionDiff()
     {
         const auto firstpos = f4vr::getVRPlayerNodes()->hmdNode->world.translate;
         const auto skellypos = f4vr::getRootNode()->world.translate;
         logger::info("difference = {} {} {}", firstpos.x - skellypos.x, firstpos.y - skellypos.y, firstpos.z - skellypos.z);
     }
+#endif
 
     void DebugDump::printAllNodes()
     {

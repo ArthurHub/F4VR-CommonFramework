@@ -16,6 +16,7 @@ namespace f4cf::render
         return renderer ? reinterpret_cast<ID3D11DeviceContext*>(renderer->context) : nullptr;
     }
 
+#ifdef ENABLE_FALLOUT_VR
     /**
      * Read the engine's own per-eye view-projection + posAdjust for the frame being submitted, from CommonLibF4VR's
      * RE::VRRenderCamera; if overlay geometry ever reads as garbage after a runtime change, that block is the first suspect.
@@ -36,6 +37,7 @@ namespace f4cf::render
         out.posAdjust[1] = DirectX::XMFLOAT4(adjust1[0], adjust1[1], adjust1[2], 0.0f);
         return true;
     }
+#endif
 
     /**
      * Snapshot every pipeline field an overlay callback may touch, then unbind the stages none of

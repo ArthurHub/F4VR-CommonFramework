@@ -71,6 +71,8 @@ namespace
 
 namespace f4cf::vrcf
 {
+    // The player of the patterns, through OpenVR: VR only. The patterns themselves are values, on both runtimes.
+#ifdef ENABLE_FALLOUT_VR
     /**
      * Refresh controller indexes and advance both hands' active patterns; must be called each frame.
      */
@@ -173,6 +175,7 @@ namespace f4cf::vrcf
     {
         return get(hand).active;
     }
+#endif
 
     /**
      * The keyframes behind a named pattern.
@@ -263,6 +266,7 @@ namespace f4cf::vrcf
         return std::nullopt;
     }
 
+#ifdef ENABLE_FALLOUT_VR
     /**
      * Maps a logical hand to the physical controller role using the cached left-handed flag.
      * Mirrors VRControllersManager::getHand.
@@ -360,4 +364,5 @@ namespace f4cf::vrcf
         const std::chrono::duration<float> elapsed = std::chrono::steady_clock::now() - START;
         return elapsed.count();
     }
+#endif
 }

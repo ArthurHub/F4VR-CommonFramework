@@ -5,7 +5,9 @@
 #include <chrono>
 #include <optional>
 
+#ifdef ENABLE_FALLOUT_VR
 #include "../../external/openvr/openvr.h"
+#endif
 #include "FrameContext.h"
 #include "Perf.h"
 #include "Tracy.h"
@@ -16,6 +18,7 @@ namespace f4cf::perf::internal
     {
         using Clock = std::chrono::steady_clock;
 
+#ifdef ENABLE_FALLOUT_VR
         // well inside the compositor's history at any refresh rate, so no frame falls out of it between reads
         constexpr auto POLL_INTERVAL = std::chrono::milliseconds(500);
 
@@ -161,6 +164,7 @@ namespace f4cf::perf::internal
             Clock::time_point _nextPoll{};
             std::uint32_t _lastFrame = 0;
         };
+#endif
     }
 
     void sampleFrame()
@@ -175,7 +179,7 @@ namespace f4cf::perf::internal
         }
         // what measuring the frame costs it
         F4CF_PERF_FUNCTION();
-        const bool resumed = !previousFrameSampled;
+        [[maybe_unused]] const bool resumed = !previousFrameSampled; // the compositor's, read on VR only
         const auto now = Clock::now();
         // an interval only between two frames that were both sampled, so switching sampling on doesn't add one spanning
         // the whole time it was off
@@ -191,7 +195,9 @@ namespace f4cf::perf::internal
         previousFrame = now;
         previousFrameSampled = true;
 
+#ifdef ENABLE_FALLOUT_VR
         static CompositorPoller compositor;
         compositor.poll(now, recording, plotting, resumed);
+#endif
     }
 }
