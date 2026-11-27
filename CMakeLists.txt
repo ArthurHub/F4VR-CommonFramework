@@ -107,14 +107,25 @@ if(F4CF_WITH_TRACY)
   mark_as_advanced(CMAKE_MAP_IMPORTED_CONFIG_TRACY)
 endif()
 
-# >>> Configure CLF4 for Fallout 4 VR before add_subdirectory
-set(F4SE_SUPPORT_XBYAK ON CACHE BOOL "" FORCE)
-set(ENABLE_FALLOUT_NG OFF CACHE BOOL "" FORCE)
-set(ENABLE_FALLOUT_F4 OFF CACHE BOOL "" FORCE)
-set(ENABLE_FALLOUT_VR ON  CACHE BOOL "" FORCE)
+# >>> The game the build is for. VR: Fallout 4 VR. FLAT: flat Fallout 4, 1.10.163 and 1.10.984 in one build. CommonLibF4VR
+# compiles each game's struct layouts in, so one build runs in one game only, and the VR-only files stay out of FLAT.
+set(F4CF_RUNTIME "VR" CACHE STRING "The game the build is for: VR (Fallout 4 VR) or FLAT (flat Fallout 4)")
+set_property(CACHE F4CF_RUNTIME PROPERTY STRINGS VR FLAT)
+if(NOT F4CF_RUNTIME MATCHES "^(VR|FLAT)$")
+  message(FATAL_ERROR ">> F4CF_RUNTIME is '${F4CF_RUNTIME}': VR or FLAT.")
+endif()
+message(">>> Runtime: ${F4CF_RUNTIME}")
 
-if(NOT F4SE_SUPPORT_XBYAK OR ENABLE_FALLOUT_F4 OR ENABLE_FALLOUT_NG OR NOT ENABLE_FALLOUT_VR)
-  message(FATAL_ERROR ">> Invalid CommonLibF4 config, try deleting build and rebuilding.")
+# >>> Configure CLF4 for the runtime before add_subdirectory
+set(F4SE_SUPPORT_XBYAK ON CACHE BOOL "" FORCE)
+if(F4CF_RUNTIME STREQUAL "VR")
+  set(ENABLE_FALLOUT_NG OFF CACHE BOOL "" FORCE)
+  set(ENABLE_FALLOUT_F4 OFF CACHE BOOL "" FORCE)
+  set(ENABLE_FALLOUT_VR ON  CACHE BOOL "" FORCE)
+else()
+  set(ENABLE_FALLOUT_NG ON  CACHE BOOL "" FORCE)
+  set(ENABLE_FALLOUT_F4 ON  CACHE BOOL "" FORCE)
+  set(ENABLE_FALLOUT_VR OFF CACHE BOOL "" FORCE)
 endif()
 
 # Bring in CLF4 (expects it to export CommonLibF4::CommonLibF4)
@@ -137,6 +148,28 @@ if(NOT F4CF_WITH_IMGUI_UI)
   list(FILTER headers EXCLUDE REGEX "/src/imgui/")
   list(FILTER sources EXCLUDE REGEX "/src/imgui/")
   list(FILTER inls    EXCLUDE REGEX "/src/imgui/")
+endif()
+
+# The VR-only files: the VR UI, the controllers but the binding parser and the haptic patterns (a mod edits both as
+# values), the debug adjuster they drive, the player's VR nodes, wands and activation spheres, the world-space drawing
+# (debug draw, primitives) with the Submit hook and the scene depth, the wand pointer and the VR keyboard, and the
+# compositor timing.
+if(F4CF_RUNTIME STREQUAL "FLAT")
+  set(_F4CF_VR_ONLY
+    "/src/vrui/"
+    "/src/vrcf/(AxisRepeat|VRControllersManager|VRControllersSuppressor)\\."
+    "/src/DebugAdjuster\\."
+    "/src/debug/"
+    "/src/f4vr/(PlayerNodes|F4VRSkelly|F4VRThumbstickControls|WandMovement|WandActivationSphere|SphereStyle)\\."
+    "/src/render/(SubmitHook|CallSiteHook|PrimitiveDrawRenderer|SceneDepth[A-Za-z]*)\\."
+    "/src/imgui/(ImGuiPointer|ImGuiPointerLogic|ImGuiKeyboard|ImGuiKeyboardLogic|UIImGuiPanel)\\."
+    "/src/perf/(FrameContext|FrameSampler)\\."
+  )
+  foreach(_F4CF_PATTERN ${_F4CF_VR_ONLY})
+    list(FILTER headers EXCLUDE REGEX "${_F4CF_PATTERN}")
+    list(FILTER sources EXCLUDE REGEX "${_F4CF_PATTERN}")
+    list(FILTER inls    EXCLUDE REGEX "${_F4CF_PATTERN}")
+  endforeach()
 endif()
 
 source_group(TREE ${ROOT_DIR} FILES ${headers} ${sources} ${inls})
@@ -322,7 +355,8 @@ endif()
 
 # >>> OpenVR (vcpkg first, then vendored fallback)
 option(F4VR_WITH_OPENVR "Enable OpenVR in the framework" ON)
-if(F4VR_WITH_OPENVR)
+# flat Fallout 4 has no openvr_api.dll to load
+if(F4VR_WITH_OPENVR AND F4CF_RUNTIME STREQUAL "VR")
   # Prefer vcpkg port if available
   find_package(openvr CONFIG QUIET)
 

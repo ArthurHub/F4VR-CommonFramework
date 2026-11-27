@@ -87,6 +87,11 @@ unit tests run with `ctest --test-dir build -C Release`.
 
 Build options:
 
+- `F4CF_RUNTIME` (`VR`): the game the build is for, `VR` (Fallout 4 VR) or `FLAT` (flat Fallout 4, 1.10.163 and
+  1.10.984 in one build). One build runs in one game. `FLAT` leaves out the VR-only parts, listed in
+  `CMakeLists.txt`: the VR UI, the controllers (but the binding parser and the haptic patterns), the debug adjuster,
+  the player's VR nodes, wands and activation spheres, the world-space drawing (debug draw, primitives, the Submit
+  hook, scene depth), the wand pointer, the VR keyboard and the compositor timing.
 - `F4CF_WITH_IMGUI_UI` (`ON`): `OFF` drops the Dear ImGui UI layer and its vcpkg port.
 - `F4CF_WITH_TRACY` (`ON`): adds the `Tracy` configuration, a Release build with the Tracy profiler client.
 - `F4CF_BUILD_TESTS`: builds the unit tests in `tests/`, `ON` for a standalone build and `OFF` in a mod's.

@@ -15,6 +15,9 @@ from [`mod-template/`](mod-template/), following [`docs/creating-a-new-mod.md`](
   `CMakeLists.txt`. Build with `cmake --build build --config Release`, test with
   `ctest --test-dir build -C Release`.
 - CMake options:
+  - `F4CF_RUNTIME` (VR): `VR` or `FLAT` (flat Fallout 4, 1.10.163 and 1.10.984). `FLAT` builds CommonLibF4VR for
+    flat, links no OpenVR, and leaves out the VR-only files and their linked tests (`_F4CF_VR_ONLY` in
+    `CMakeLists.txt`); a shared file guards its VR lines with `#ifdef ENABLE_FALLOUT_VR`.
   - `F4CF_WITH_IMGUI_UI` (ON): OFF drops `f4cf::imgui` and its headers, so code using it fails to compile.
   - `F4CF_WITH_TRACY` (ON): adds the `Tracy` configuration, Release plus the Tracy client ([perf README](src/perf/README.md#tracy)). A mod's `CMakeLists.txt` writes `$<CONFIG:Release,Tracy>` wherever it means Release.
   - `F4CF_BUILD_TESTS`: ON when top-level, OFF under a mod's `add_subdirectory`, where turning it on needs `catch2` in the mod's `vcpkg.json`.

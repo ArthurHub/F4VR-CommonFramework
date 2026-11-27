@@ -94,14 +94,9 @@ add_executable(${PROJECT_NAME}_linked_tests
   linked/config/DebugSectionTests.cpp
   linked/config/OffsetsFilesTests.cpp
   linked/f4vr/DebugInventoryTests.cpp
-  linked/f4vr/SphereStyleTests.cpp
-  linked/f4vr/WandActivationSphereTests.cpp
   linked/modsconfig/ConfigPreviewsTests.cpp
   linked/render/TextureTests.cpp
   linked/vrcf/VRControllersHapticTests.cpp
-  linked/vrui/BindingPromptTests.cpp
-  linked/vrui/UIContainerTests.cpp
-  linked/vrui/UIToggleGroupContainerTests.cpp
   # the files the tests read from the executable, embedded as a mod's are in its DLL
   linked/Resources.rc
 )
@@ -115,9 +110,14 @@ target_include_directories(${PROJECT_NAME}_linked_tests PRIVATE ${CMAKE_CURRENT_
 target_compile_options(${PROJECT_NAME}_linked_tests PRIVATE /utf-8 /permissive- /W4 /external:anglebrackets /external:W0)
 target_link_libraries(${PROJECT_NAME}_linked_tests PRIVATE ${PROJECT_NAME} F4VRCommon::test_main F4VRCommon::test_no_game delayimp)
 
-# openvr_api.dll is in the game's folder and not here, and the executable would not start without it. So it is
-# loaded on its first call, which no test makes. Release drops the unused import whole, hence the ignored warning.
-target_link_options(${PROJECT_NAME}_linked_tests PRIVATE /DELAYLOAD:openvr_api.dll /IGNORE:4199)
+# the tests of the VR-only files, which the flat build does not have
+if(F4CF_RUNTIME STREQUAL "VR")
+  target_sources(${PROJECT_NAME}_linked_tests PRIVATE linked/f4vr/SphereStyleTests.cpp linked/f4vr/WandActivationSphereTests.cpp
+    linked/vrui/BindingPromptTests.cpp linked/vrui/UIContainerTests.cpp linked/vrui/UIToggleGroupContainerTests.cpp)
+  # openvr_api.dll is in the game's folder and not here, and the executable would not start without it. So it is
+  # loaded on its first call, which no test makes. Release drops the unused import whole, hence the ignored warning.
+  target_link_options(${PROJECT_NAME}_linked_tests PRIVATE /DELAYLOAD:openvr_api.dll /IGNORE:4199)
+endif()
 
 # the tests of the Dear ImGui UI layer, which a build without it does not have
 if(F4CF_WITH_IMGUI_UI)
