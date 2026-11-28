@@ -178,7 +178,8 @@ namespace f4cf::f4vr
     /**
      * Whether the event is stopped: while a canvas takes the input, each button, character and thumbstick event. A button
      * pressed then stays stopped until it is released, also once the canvas no longer takes the input, so the game never
-     * sees only its release: Escape, which closes a panel, would open the pause menu as it is let go of.
+     * sees only its release: Escape, which closes a panel, would open the pause menu as it is let go of. The release of a
+     * button pressed before is not stopped, so the game, which saw it go down, sees it go up.
      */
     bool GameInput::stop(const RE::InputEvent& event, const bool stopping)
     {
@@ -188,16 +189,20 @@ namespace f4cf::f4vr
         }
         const auto key = std::pair{ static_cast<std::int32_t>(button->device.get()), button->idCode };
         const auto held = std::ranges::find(_stoppedButtons, key);
-        const bool stopped = stopping || held != _stoppedButtons.end();
-        if (!stopped) {
-            return false;
-        }
-        if (button->QJustPressed() && held == _stoppedButtons.end()) {
-            _stoppedButtons.push_back(key);
-        } else if (!button->QPressed() && held != _stoppedButtons.end()) {
+        if (!button->QPressed()) {
+            if (held == _stoppedButtons.end()) {
+                return false;
+            }
             _stoppedButtons.erase(held);
+            return true;
         }
-        return true;
+        if (held != _stoppedButtons.end()) {
+            return true;
+        }
+        if (stopping && button->QJustPressed()) {
+            _stoppedButtons.push_back(key);
+        }
+        return stopping;
     }
 
     /**

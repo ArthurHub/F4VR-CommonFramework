@@ -75,7 +75,8 @@ namespace f4cf::f4vr
         std::vector<ButtonEdge> _pendingEdges;
         std::vector<ButtonEdge> _frameEdges;
 
-        // the events read since the frame began, by their address and time code: the receivers read the same queue
+        // the events read last, by their address and time code, so each is read once: the receivers read the same queue,
+        // and the game reuses an event's place for a later event, with its own time code
         std::vector<std::pair<const RE::InputEvent*, std::uint32_t>> _read;
 
         // the buttons pressed while the queue was stopped and not released since, by device and id: their release is

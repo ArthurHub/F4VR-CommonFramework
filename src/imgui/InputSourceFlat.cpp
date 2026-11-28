@@ -231,7 +231,7 @@ namespace f4cf::imgui::internal
                     io.AddMouseButtonEvent(edge.button, edge.down);
                     return true;
                 });
-                if (_wheel != 0.0f) {
+                if (!common::fEqual(_wheel, 0.0f)) {
                     io.AddMouseWheelEvent(0.0f, _wheel);
                     _wheel = 0.0f;
                 }
@@ -243,23 +243,20 @@ namespace f4cf::imgui::internal
              */
             void release()
             {
-                if (!ImGui::GetCurrentContext()) {
-                    return;
-                }
-                auto& io = ImGui::GetIO();
-                for (int button = 0; button < MOUSE_BUTTONS; ++button) {
-                    if (_down[button]) {
-                        io.AddMouseButtonEvent(button, false);
-                        _down[button] = false;
-                    }
-                }
-                if (_onCanvas) {
-                    io.AddMousePosEvent(-FLT_MAX, -FLT_MAX);
-                    _onCanvas = false;
-                }
                 _pendingEdges.clear();
                 _wheel = 0.0f;
                 _pressCanvas = nullptr;
+                auto* io = ImGui::GetCurrentContext() ? &ImGui::GetIO() : nullptr;
+                for (int button = 0; button < MOUSE_BUTTONS; ++button) {
+                    if (_down[button] && io) {
+                        io->AddMouseButtonEvent(button, false);
+                    }
+                    _down[button] = false;
+                }
+                if (_onCanvas && io) {
+                    io->AddMousePosEvent(-FLT_MAX, -FLT_MAX);
+                }
+                _onCanvas = false;
             }
 
             void onCanvasRemoved(const Canvas* canvas)
