@@ -133,8 +133,6 @@ content is written as on VR.
 - **A menu above takes over:** while a menu that shows the cursor, is modal or pauses is above the input menu,
   the canvases stay shown and take no input, and nothing is stopped. The bar of button hints under a menu
   (`ButtonBarMenu`) is not one. The log says each time the canvases take the input or give it up, and why.
-- **A menu's depth** is the low byte of `IMenu::depthPriority`: the game keeps it in one byte, and the
-  bytes after it are not part of it.
 - **Two mods:** each framework mod opens its own input menu and stops the queue while its canvases take the
   input; two mods' interactive canvases shown at once both take it.
 

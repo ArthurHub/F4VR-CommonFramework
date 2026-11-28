@@ -33,14 +33,6 @@ namespace f4cf::imgui::internal
         constexpr std::string_view BUTTON_BAR_MENU = "ButtonBarMenu";
 
         /**
-         * A menu's depth. The game keeps it in the field's low byte, and the bytes after it are not part of it.
-         */
-        std::uint8_t depthOf(const RE::IMenu& menu)
-        {
-            return static_cast<std::uint8_t>(std::to_underlying(menu.depthPriority) & 0xFF);
-        }
-
-        /**
          * The input menu: open while an interactive canvas is shown, so the game shows its cursor and keeps the controls
          * from the player, without pausing. Above the main menu and the pause menu, which stay under it when the panel
          * opens over them, and under a message box and the console.
@@ -158,9 +150,8 @@ namespace f4cf::imgui::internal
              */
             static bool isInputMenuAbove(const RE::IMenu& menu)
             {
-                const auto depth = depthOf(menu);
-                return depth >= std::to_underlying(INPUT_MENU_DEPTH) && depth != std::to_underlying(RE::UI_DEPTH_PRIORITY::kCursor) &&
-                       std::string_view(menu.menuName.c_str()) != BUTTON_BAR_MENU &&
+                const auto depth = menu.depthPriority.get();
+                return depth >= INPUT_MENU_DEPTH && depth != RE::UI_DEPTH_PRIORITY::kCursor && std::string_view(menu.menuName.c_str()) != BUTTON_BAR_MENU &&
                        menu.menuFlags.any(RE::UI_MENU_FLAGS::kUsesCursor, RE::UI_MENU_FLAGS::kModal, RE::UI_MENU_FLAGS::kPausesGame);
             }
 
