@@ -15,6 +15,12 @@ major version is `0`, a minor bump may break the API; the **Upgrading** notes sa
   ([f4vr README](../src/f4vr/README.md#console)). **Upgrading:** a mod that captures has 14 bytes of trampoline free
   for it in `ModBase::Settings`.
 - CommonLibF4VR: `VRHookSites::ConsolePrintAddString`, and the console's functions tagged for VR.
+- **A list's details, leads and rule**: `ListExtras` has a muted `details` text at each option's right (a count),
+  `leads` in the room of its mark (a load-order index, shown on the chosen option in place of the check), and
+  `ruleAfter`, a rule that sets the options up to it apart; `drawDropdown` takes a `detail` at its right, before the
+  arrow ([controls README](../src/imgui/controls/README.md#the-stepper-and-the-dropdown)).
+- **A count with no mark**: `CountMark::None` ends a folding heading's rule with a count alone, as how many rows
+  its section holds.
 
 ## 0.7.0 — 2026-11-26
 

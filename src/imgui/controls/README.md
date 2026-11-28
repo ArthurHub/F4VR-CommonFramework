@@ -193,8 +193,11 @@ if (drawn.picked) { _quality = *drawn.picked; }
 - **A dropdown** only draws its box; the caller opens its list with `ImGui::OpenPopupEx` on a press of its row.
 - **The list** is a popup at the box, under it or over it as `popupTop` places it, showing at most
   `LIST_MAX_OPTIONS` before it scrolls, from the chosen option as it opens. A press on an option picks it and closes
-  it. `ListExtras` gives each option a muted suffix, a line over the options that stays as they scroll, and an action
-  entry under a rule, which is the place after the options. A decoration draws more of each option.
+  it. `ListExtras` gives each option a muted suffix, a muted detail at its right (as a count) and a lead in the room of
+  its mark (as a load-order index; a list with leads has no check), a rule after an option that sets the ones
+  before it apart, a line over the options that stays as they scroll, and an action entry under a rule, which is the
+  place after the options. A decoration draws more of each option. A dropdown's box takes a `detail` too, muted at its
+  right before the arrow, as the chosen option's count.
 - **What it gives back:** `ListDrawn` has the option picked and the one under the ray, each option's box with the
   action's last, and the scroll of the options, so the caller can record them (for devbench).
 - **Back:** `controls::get().back()` closes the open list as the next frame begins, with nothing picked, after a
@@ -280,7 +283,8 @@ controls::clippedRows(items.size(), [&](const std::size_t index) {
 - **A folding heading:** `addFoldingRow(id, folded)` is a pressable row whose press flips `folded`, which the caller
   keeps, so it can fold or open a section by other means too. `drawFoldingHeading` draws the heading in it: the arrow,
   the text in the muted color, or in a mark's color after the error or warning mark, and a rule to the right edge,
-  ended by its `MarkedCount`s in the detail size, as what a folded section hides.
+  ended by its `MarkedCount`s in the detail size, as what a folded section hides; `CountMark::None` is a count
+  alone, as how many rows it holds.
 - **A section's heading:** `sectionHeading` is its muted text and a rule that ends at the edge given, where the rows
   end, not in the room of the scroll bar. It is ImGui's separator text in the controls' look, in any ImGui style. It
   is its text with 8 px above and below, or as high as the `height` given, as a row's height for a heading in a row's

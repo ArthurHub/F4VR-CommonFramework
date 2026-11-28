@@ -45,6 +45,8 @@ namespace f4cf::imgui::controls
         Error,
         Warning,
         Dot,
+        // a count alone, as how many rows a folded section holds
+        None,
     };
 
     /**

@@ -42,11 +42,14 @@ namespace
     }
 
     /**
-     * The width of a count's mark: the dot's, or a mark's.
+     * The room of a count's mark, with the gap after it: the dot's, a mark's, or none for a count alone.
      */
-    float countMarkWidth(const CountMark mark)
+    float countMarkRoom(const CountMark mark)
     {
-        return mark == CountMark::Dot ? DOT_WIDTH : MARK_WIDTH;
+        if (mark == CountMark::None) {
+            return 0.0f;
+        }
+        return (mark == CountMark::Dot ? DOT_WIDTH : MARK_WIDTH) + markGap();
     }
 }
 
@@ -120,13 +123,13 @@ namespace f4cf::imgui::controls
     {
         float width = 0.0f;
         for (const auto& count : counts) {
-            width += (width > 0.0f ? markGap() * 2.0f : 0.0f) + countMarkWidth(count.mark) + markGap() + textWidth(count.text);
+            width += (width > 0.0f ? markGap() * 2.0f : 0.0f) + countMarkRoom(count.mark) + textWidth(count.text);
         }
         const float left = std::floor(right - width);
         const float middle = top + get().theme().controlHeight * 0.5f;
         float x = left;
         for (const auto& count : counts) {
-            const ImVec2 center(x + countMarkWidth(count.mark) * 0.5f, middle);
+            const ImVec2 center(x + (countMarkRoom(count.mark) - markGap()) * 0.5f, middle);
             switch (count.mark) {
             case CountMark::Error:
                 drawErrorMark(center);
@@ -137,8 +140,10 @@ namespace f4cf::imgui::controls
             case CountMark::Dot:
                 drawDot(center, get().colors().warning);
                 break;
+            case CountMark::None:
+                break;
             }
-            x += countMarkWidth(count.mark) + markGap();
+            x += countMarkRoom(count.mark);
             drawText(x, right, top, get().theme().controlHeight, count.color, count.text);
             x += textWidth(count.text) + markGap() * 2.0f;
         }

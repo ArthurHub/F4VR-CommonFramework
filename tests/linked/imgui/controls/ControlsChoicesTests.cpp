@@ -166,6 +166,38 @@ TEST_CASE("Controls choices: a pick in a list returns its option and closes the 
     CHECK_FALSE(get().isListOpen());
 }
 
+TEST_CASE("Controls choices: a list's rule sets the options up to it apart, with details and leads beside their texts")
+{
+    TestContext context;
+    const ImRect box(100.0f, 100.0f, 400.0f, 148.0f);
+    constexpr std::array<std::string_view, 3> details{ "18204", "9812", "486" };
+    constexpr std::array<std::string_view, 3> leads{ "", "00", "01" };
+    ListDrawn drawn;
+    const auto list = [&](const bool open, const std::optional<std::size_t> ruleAfter) {
+        return [&, open, ruleAfter] {
+            const auto id = ImGui::GetID("list");
+            if (open) {
+                ImGui::OpenPopupEx(id);
+            }
+            drawn = drawList(id, box, TEXTS, 1, {}, ListExtras{ .details = details, .leads = leads, .ruleAfter = ruleAfter });
+        };
+    };
+
+    context.frame(ImVec2(-100.0f, -100.0f), false, list(true, std::nullopt));
+    REQUIRE(drawn.boxes.size() == TEXTS.size());
+    const float plainGap = drawn.boxes[1].Min.y - drawn.boxes[0].Max.y;
+    const float secondGap = drawn.boxes[2].Min.y - drawn.boxes[1].Max.y;
+    CHECK(plainGap == secondGap);
+    context.frame(ImVec2(-100.0f, -100.0f), false, list(false, std::nullopt));
+    get().reset();
+    context.frame(ImVec2(-100.0f, -100.0f), false, list(false, std::nullopt));
+
+    context.frame(ImVec2(-100.0f, -100.0f), false, list(true, 0));
+    REQUIRE(drawn.boxes.size() == TEXTS.size());
+    CHECK(drawn.boxes[1].Min.y - drawn.boxes[0].Max.y > plainGap);
+    CHECK(drawn.boxes[2].Min.y - drawn.boxes[1].Max.y == plainGap);
+}
+
 TEST_CASE("Controls choices: Back closes the list as the next frame begins, and not the popup it is over")
 {
     TestContext context;

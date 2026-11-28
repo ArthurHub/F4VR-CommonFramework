@@ -55,14 +55,27 @@ namespace f4cf::imgui::controls
     using OptionDecoration = std::function<void(std::size_t option, const ImRect& box, bool chosen)>;
 
     /**
-     * What a list of options has beside its options' texts: a muted text after each, as a file's extension, a line over
-     * them that is not pressed, with a text at its left and one at its right, as a folder and how many files it has, and
-     * an entry after them that does something other than pick, as typing a new value.
+     * What a list of options has beside its options' texts: a muted text after each, as a file's extension; a muted
+     * text at each one's right, as how many it holds; a muted text in the room of each one's mark, as a load-order
+     * index; a rule after an option, which sets the ones before it apart; a line over them that is not pressed, with a
+     * text at its left and one at its right, as a folder and how many files it has; and an entry after them that does
+     * something other than pick, as typing a new value.
      */
     struct ListExtras
     {
         // one for each option, and none for a list with none
         std::span<const std::string_view> suffixes;
+
+        // at each option's right, in the detail size: one for each option, and none for a list with none
+        std::span<const std::string_view> details;
+
+        // in the room of each option's mark, in the detail size, which is as wide as the widest: one for each option,
+        // and none for a list with none. A list with leads has no check: the chosen option shows its own lead, or
+        // nothing for an empty one
+        std::span<const std::string_view> leads;
+
+        // the option after which a rule sets the options before it apart from the rest
+        std::optional<std::size_t> ruleAfter;
 
         // the line over the options: none while both are empty
         std::string_view headerLeft;
@@ -80,7 +93,7 @@ namespace f4cf::imgui::controls
         const StepperLayout& layout = {});
     float drawStepper(float right, float top, const ChoiceRow& row, std::string_view text, Tone tone, std::optional<std::size_t> chosen, std::size_t count,
         bool noneStepsBackToLast = false, const StepperLayout& layout = {});
-    void drawDropdown(const ImRect& box, std::string_view text, std::string_view suffix, Tone tone, bool listOpen);
+    void drawDropdown(const ImRect& box, std::string_view text, std::string_view suffix, Tone tone, bool listOpen, std::string_view detail = {});
     bool listOption(std::string_view text, bool chosen, float width, std::string_view suffix = {});
     bool listAction(std::string_view text, float width);
     ListDrawn drawList(ImGuiID id, const ImRect& box, std::span<const std::string_view> texts, std::optional<std::size_t> chosen, const OptionDecoration& decorate = {},

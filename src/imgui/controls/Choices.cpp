@@ -69,6 +69,80 @@ namespace
     // on the chosen option's solid fill, the muted text is the color on the accent at this alpha, of 255
     constexpr ImU32 MUTED_ON_ACCENT_ALPHA = 153;
 
+    // between a text and the detail at its right
+    float detailGap()
+    {
+        return get().theme().space3;
+    }
+
+    /**
+     * A muted text in the detail size, ending at the right given, in a box of a control's height from the top given.
+     * Returns its left edge, the right itself for none.
+     */
+    float drawDetail(const float right, const float top, const float height, const ImU32 color, const std::string_view text)
+    {
+        if (text.empty()) {
+            return right;
+        }
+        ImGui::PushFont(nullptr, get().theme().detailFontSize);
+        const float width = textWidth(text);
+        drawText(right - width, right, top, height, color, text);
+        ImGui::PopFont();
+        return right - width;
+    }
+
+    /**
+     * The room of the mark at an option's left: the check's, or the widest lead's where the options have leads.
+     */
+    float leadWidth(const std::span<const std::string_view> leads)
+    {
+        float width = CHECK_SIZE;
+        if (!leads.empty()) {
+            ImGui::PushFont(nullptr, get().theme().detailFontSize);
+            for (const auto lead : leads) {
+                width = (std::max)(width, textWidth(lead));
+            }
+            ImGui::PopFont();
+        }
+        return width;
+    }
+
+    /**
+     * An option of the list that is open, at the cursor, as `listOption` draws one, with the room of its mark as wide
+     * as given and its detail at its right. In a list with leads the room holds its lead, the chosen one's too, and no
+     * check. Returns whether it was pressed.
+     */
+    bool drawOption(const std::string_view text, const bool chosen, const float width, const std::string_view suffix, const float markWidth, const bool withLeads,
+        const std::string_view lead, const std::string_view detail)
+    {
+        const auto& theme = get().theme();
+        const auto& colors = get().colors();
+        const auto pos = ImGui::GetCursorScreenPos();
+        const ImVec2 max(pos.x + width, pos.y + theme.controlHeight);
+        const bool pressed = ImGui::InvisibleButton("option", ImVec2(width, theme.controlHeight));
+        auto color = colors.accent;
+        auto muted = colors.muted;
+        if (chosen) {
+            ImGui::GetWindowDrawList()->AddRectFilled(pos, max, ImGui::GetColorU32(colors.accent), theme.frameRounding);
+            color = colors.onAccent;
+            muted = (colors.onAccent & ~IM_COL32_A_MASK) | (MUTED_ON_ACCENT_ALPHA << IM_COL32_A_SHIFT);
+            if (!withLeads) {
+                drawCheck(ImVec2(pos.x + optionPadding(), pos.y + (theme.controlHeight - CHECK_SIZE) * 0.5f), colors.onAccent);
+            }
+        } else {
+            drawRowState();
+        }
+        if (!lead.empty()) {
+            ImGui::PushFont(nullptr, theme.detailFontSize);
+            drawText(pos.x + optionPadding(), pos.x + optionPadding() + markWidth, pos.y, theme.controlHeight, chosen ? color : muted, lead);
+            ImGui::PopFont();
+        }
+        const float detailLeft = drawDetail(max.x - optionEndPadding(), pos.y, theme.controlHeight, muted, detail);
+        const float textRight = detail.empty() ? detailLeft : detailLeft - detailGap();
+        drawTextWithSuffix(pos.x + optionPadding() + markWidth + optionPadding(), textRight, pos.y, theme.controlHeight, color, text, muted, suffix);
+        return pressed;
+    }
+
     // the line over the options of a list: its text in the detail size, with this room above and under it
     float headerAbove()
     {
@@ -128,16 +202,16 @@ namespace
 
     /**
      * Where the list of a dropdown is, by the box of the dropdown and the number of its entries: as wide as the box, and
-     * as high as its entries, up to the most it shows, its header, and the room of the rule over an entry that does
-     * something other than pick, placed as `popupTop` places it in the window it is in.
+     * as high as its entries, up to the most it shows, its header, and the room of the rules over an entry that does
+     * something other than pick and after an option, placed as `popupTop` places it in the window it is in.
      */
-    ImRect listBox(const ImRect& box, const std::size_t entries, const bool header, const bool action)
+    ImRect listBox(const ImRect& box, const std::size_t entries, const bool header, const bool action, const bool rule)
     {
         const auto& theme = get().theme();
         const auto& window = ImGui::GetCurrentWindow()->InnerRect;
         const auto shown = static_cast<float>((std::min)(entries, LIST_MAX_OPTIONS));
         const float headerRoom = header ? headerHeight() + theme.frameBorderSize + listGap() : 0.0f;
-        const float actionRoom = action ? actionGap() : 0.0f;
+        const float actionRoom = (action ? actionGap() : 0.0f) + (rule ? actionGap() : 0.0f);
         const float height = (std::min)(shown * (theme.controlHeight + listGap()) - listGap() + listPadding() * 2.0f + headerRoom + actionRoom, window.GetHeight());
         const float top = popupTop(box, height, window);
         return { box.Min.x, top, box.Max.x, top + height };
@@ -202,7 +276,7 @@ namespace f4cf::imgui::controls
      * file's extension, and an arrow at its right. Its outline is in the accent while its list is open. It only draws:
      * the caller opens its list.
      */
-    void drawDropdown(const ImRect& box, const std::string_view text, const std::string_view suffix, const Tone tone, const bool listOpen)
+    void drawDropdown(const ImRect& box, const std::string_view text, const std::string_view suffix, const Tone tone, const bool listOpen, const std::string_view detail)
     {
         const auto& colors = get().colors();
         const float arrowLeft = box.Max.x - dropdownTextPadding() - ARROW_SIZE;
@@ -210,7 +284,9 @@ namespace f4cf::imgui::controls
         if (listOpen) {
             drawOutline(box.Min, box.Max, colors.accent);
         }
-        drawTextWithSuffix(box.Min.x + dropdownTextPadding(), arrowLeft - dropdownArrowGap(), box.Min.y, box.GetHeight(), get().tone(tone).color, text, colors.muted, suffix);
+        const float detailLeft = drawDetail(arrowLeft - dropdownArrowGap(), box.Min.y, box.GetHeight(), colors.muted, detail);
+        const float textRight = detail.empty() ? detailLeft : detailLeft - detailGap();
+        drawTextWithSuffix(box.Min.x + dropdownTextPadding(), textRight, box.Min.y, box.GetHeight(), get().tone(tone).color, text, colors.muted, suffix);
         drawControlArrow(ImVec2(arrowLeft + ARROW_SIZE * 0.5f, box.GetCenter().y), Arrow::Down);
     }
 
@@ -221,23 +297,7 @@ namespace f4cf::imgui::controls
      */
     bool listOption(const std::string_view text, const bool chosen, const float width, const std::string_view suffix)
     {
-        const auto& theme = get().theme();
-        const auto& colors = get().colors();
-        const auto pos = ImGui::GetCursorScreenPos();
-        const ImVec2 max(pos.x + width, pos.y + theme.controlHeight);
-        const bool pressed = ImGui::InvisibleButton("option", ImVec2(width, theme.controlHeight));
-        auto color = colors.accent;
-        auto muted = colors.muted;
-        if (chosen) {
-            ImGui::GetWindowDrawList()->AddRectFilled(pos, max, ImGui::GetColorU32(colors.accent), theme.frameRounding);
-            drawCheck(ImVec2(pos.x + optionPadding(), pos.y + (theme.controlHeight - CHECK_SIZE) * 0.5f), colors.onAccent);
-            color = colors.onAccent;
-            muted = (colors.onAccent & ~IM_COL32_A_MASK) | (MUTED_ON_ACCENT_ALPHA << IM_COL32_A_SHIFT);
-        } else {
-            drawRowState();
-        }
-        drawTextWithSuffix(pos.x + optionPadding() + CHECK_SIZE + optionPadding(), max.x - optionEndPadding(), pos.y, theme.controlHeight, color, text, muted, suffix);
-        return pressed;
+        return drawOption(text, chosen, width, suffix, CHECK_SIZE, false, {}, {});
     }
 
     /**
@@ -276,7 +336,8 @@ namespace f4cf::imgui::controls
         const auto& colors = get().colors();
         const bool header = !extras.headerLeft.empty() || !extras.headerRight.empty();
         const bool action = !extras.action.empty();
-        const auto list = listBox(box, texts.size() + (action ? 1 : 0), header, action);
+        const bool rule = extras.ruleAfter && *extras.ruleAfter + 1 < texts.size();
+        const auto list = listBox(box, texts.size() + (action ? 1 : 0), header, action, rule);
         ImGui::SetNextWindowPos(list.Min);
         ImGui::SetNextWindowSize(list.GetSize());
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(listPadding(), listPadding()));
@@ -312,9 +373,19 @@ namespace f4cf::imgui::controls
         }
         // the options end a little before a scroll bar
         const float width = ImGui::GetContentRegionAvail().x - (ImGui::GetCurrentWindow()->ScrollbarY ? listPadding() : 0.0f);
+        const float markWidth = leadWidth(extras.leads);
         for (std::size_t i = 0; i < texts.size(); ++i) {
+            if (rule && i == *extras.ruleAfter + 1) {
+                ImGui::Dummy(ImVec2(0.0f, actionGap() - listGap()));
+                const float ruleY = ImGui::GetCursorScreenPos().y - (listGap() + actionGap()) * 0.5f;
+                const float ruleLeft = ImGui::GetCursorScreenPos().x;
+                ImGui::GetWindowDrawList()->AddLine(ImVec2(ruleLeft + listPadding(), ruleY), ImVec2(ruleLeft + width - listPadding(), ruleY), colors.rule, theme.frameBorderSize);
+            }
             ImGui::PushID(static_cast<int>(i));
-            if (listOption(texts[i], chosen == i, width, i < extras.suffixes.size() ? extras.suffixes[i] : std::string_view())) {
+            const auto at = [i](const std::span<const std::string_view> of) {
+                return i < of.size() ? of[i] : std::string_view();
+            };
+            if (drawOption(texts[i], chosen == i, width, at(extras.suffixes), markWidth, !extras.leads.empty(), at(extras.leads), at(extras.details))) {
                 drawn.picked = i;
                 ImGui::CloseCurrentPopup();
             }
