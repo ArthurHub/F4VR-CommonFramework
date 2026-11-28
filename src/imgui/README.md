@@ -86,6 +86,29 @@ _canvas->setPlacement([this](imgui::CanvasPlacement& out) {
 - **Padding and border** are the canvas's. A combo, popup or child window the content opens has ImGui's
   own.
 
+## A canvas on the flat screen
+
+On flat Fallout 4 a canvas is a rectangle of the screen, drawn in the game's UI pass
+([render on flat](../render/README.md#on-flat)): over the HUD and the game's menus, under the cursor.
+
+```cpp
+_canvas = std::make_unique<imgui::Canvas>("BeamTuning", 600, 400); // also its size on the screen
+_canvas->setContent([this] { ImGui::SliderFloat("FOV", &_fov, 10.0f, 120.0f); });
+_canvas->setPlacement([this](imgui::CanvasPlacement& out) {
+    const auto screen = render::screenSize();
+    out.screenX = (static_cast<float>(screen.width) - 600.0f) * 0.5f; // its top-left corner, in screen pixels
+    out.screenY = (static_cast<float>(screen.height) - 400.0f) * 0.5f;
+    return isOpen();
+});
+```
+
+- **Drawn 1:1:** one canvas pixel is one screen pixel, so its pixel size is its size on the screen; a canvas
+  that takes a share of the screen sets its pixel size from `render::screenSize()`. The corner is rounded to
+  a whole pixel, and the atlas is rasterized at 1x, `setSupersample` aside, so the text is as sharp as the
+  game's.
+- **Placement:** `screenX` and `screenY` in place of the world fields, which are VR-only. Occlusion, curving
+  and the wand's pointer are VR's. A canvas takes no mouse or key input on flat yet.
+
 ## Interactive canvases
 
 `setInteractive(true)` makes a wand's ray the pointer: where it meets the canvas is ImGui's mouse, the
@@ -363,6 +386,8 @@ imgui::internal::onFrameEnd()                   draw callback (DRAW_ORDER_PANELS
   shares the first's font atlas, which the first updates as its frame begins, so it is drawn only in a
   frame the first drew, and the first's DX11 backend data, so the render thread draws either frame with
   either context current. Where the two frames' canvases overlap, the farther frame is drawn first.
+- **On flat,** the quads are rectangles in screen pixels, converted to the target's coordinates as they are
+  drawn, one draw with no depth test and the same premultiplied blend.
 - **Rasterized flat first,** because ImGui clips with 2D scissor rectangles (scrolling, child windows,
   tables), which have no meaning on a turned 3D quad.
 - **The draw data is cloned** (`ImDrawList::CloneOutput`): the next `NewFrame` reuses ImGui's buffers,

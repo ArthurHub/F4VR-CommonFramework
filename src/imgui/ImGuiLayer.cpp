@@ -53,7 +53,13 @@ namespace f4cf::imgui::internal
             if (s_atlasTextureSize > 0) {
                 return;
             }
-            s_atlasTextureSize = static_cast<int>(std::ceil(static_cast<float>(ATLAS_WIDTH) * supersample()));
+#ifdef ENABLE_FALLOUT_VR
+            const float factor = supersample();
+#else
+            // drawn 1:1 on the screen, where a larger texture would only be shrunk back and soften the text
+            constexpr float factor = 1.0f;
+#endif
+            s_atlasTextureSize = static_cast<int>(std::ceil(static_cast<float>(ATLAS_WIDTH) * factor));
             s_atlasScale = static_cast<float>(s_atlasTextureSize) / static_cast<float>(ATLAS_WIDTH);
         }
 
@@ -233,46 +239,65 @@ namespace f4cf::imgui::internal
             return std::clamp(delta, MIN_DELTA_SECONDS, MAX_DELTA_SECONDS);
         }
 
+        /**
+         * Where the canvases are seen from, which orders overlapping quads: the headset on VR. The screen has no
+         * viewer distance.
+         */
         RE::NiPoint3 viewerPosition()
         {
 #ifdef ENABLE_FALLOUT_VR
             const auto* nodes = f4vr::getVRPlayerNodes();
             return nodes && nodes->hmdNode ? nodes->hmdNode->world.translate : RE::NiPoint3();
 #else
-            return f4vr::getCameraPosition();
+            return {};
 #endif
         }
 
         /**
-         * The canvas's four world corners from its placement: local +X is right, local +Z is up, and
-         * the quad is centred on the transform's translate. Its part of the display's texture is the
-         * canvas's rectangle in the display, at the atlas scale.
-         * For a curved canvas this is the quad as it is when flat: see appendDrawnQuads.
+         * The canvas's four corners from its placement. VR: in the world, local +X is right, local +Z is up, and
+         * the quad is centred on the transform's translate; for a curved canvas this is the quad as it is when
+         * flat, see appendDrawnQuads. Flat: on the screen, in its pixels, from the placement's corner, at the
+         * canvas's own size. Its part of the display's texture is the canvas's rectangle in the display, at the
+         * atlas scale.
          */
         CanvasQuad buildQuad(const CanvasPlacement& placement, const FrameDisplay& display, const int x, const int y, const int width, const int height, const RE::NiPoint3& viewer,
             const bool occluded)
         {
+            CanvasQuad quad;
+#ifdef ENABLE_FALLOUT_VR
             const RE::NiMatrix3 toWorld = placement.transform.rotate.Transpose(); // the codebase's local->world convention
             const RE::NiPoint3 right = toWorld * RE::NiPoint3(1, 0, 0) * (placement.worldWidth * 0.5f);
             const RE::NiPoint3 up = toWorld * RE::NiPoint3(0, 0, 1) * (placement.worldHeight * 0.5f);
             const RE::NiPoint3 centre = placement.transform.translate;
-
-            CanvasQuad quad;
             quad.topLeft = centre - right + up;
             quad.topRight = centre + right + up;
             quad.bottomRight = centre + right - up;
             quad.bottomLeft = centre - right - up;
+            quad.viewerDistance = common::MatrixUtils::vec3Len(centre - viewer);
+#else
+            // whole pixels, so each canvas pixel lands on one screen pixel; the screen has no viewer distance, so
+            // overlapping canvases keep the order they were packed in
+            const float left = std::round(placement.screenX);
+            const float top = std::round(placement.screenY);
+            const auto right = left + static_cast<float>(width);
+            const auto bottom = top + static_cast<float>(height);
+            quad.topLeft = RE::NiPoint3(left, top, 0.0f);
+            quad.topRight = RE::NiPoint3(right, top, 0.0f);
+            quad.bottomRight = RE::NiPoint3(right, bottom, 0.0f);
+            quad.bottomLeft = RE::NiPoint3(left, bottom, 0.0f);
+            (void)viewer;
+#endif
             const float toU = s_atlasScale / static_cast<float>(display.textureWidth);
             const float toV = s_atlasScale / static_cast<float>(display.textureHeight);
             quad.u0 = static_cast<float>(x) * toU;
             quad.v0 = static_cast<float>(y) * toV;
             quad.u1 = static_cast<float>(x + width) * toU;
             quad.v1 = static_cast<float>(y + height) * toV;
-            quad.viewerDistance = common::MatrixUtils::vec3Len(centre - viewer);
             quad.occluded = occluded;
             return quad;
         }
 
+#ifdef ENABLE_FALLOUT_VR
         // a curved canvas is drawn as flat pieces side by side, each turned this much from the one beside it
         constexpr float CURVE_PIECE_DEGREES = 2.0f;
 
@@ -315,6 +340,7 @@ namespace f4cf::imgui::internal
                 bottom = nextBottom;
             }
         }
+#endif
     }
 
     ClonedDrawData::~ClonedDrawData()
@@ -523,8 +549,8 @@ namespace f4cf::imgui::internal
          * texture. Its texture writes are added to the given ones. The main context's frame also tells the pointer
          * whether ImGui uses the mouse, which it does as the frame begins.
          */
-        FramePass buildPass(const std::vector<PackedCanvas>& packed, const FrameDisplay& display, const float deltaSeconds, const bool mainContext, const RE::NiPoint3& viewer,
-            std::vector<TextureWrite>& textureWrites)
+        FramePass buildPass(const std::vector<PackedCanvas>& packed, const FrameDisplay& display, const float deltaSeconds, const bool mainContext,
+            [[maybe_unused]] const RE::NiPoint3& viewer, std::vector<TextureWrite>& textureWrites)
         {
             // ImGui keeps what the content opens inside its display: a combo's list, a popup, a dialog
             auto& io = ImGui::GetIO();
@@ -587,14 +613,18 @@ namespace f4cf::imgui::internal
                     if (!entry.placement.show) {
                         continue; // laid out to be measured, not to be seen
                     }
+#ifdef ENABLE_FALLOUT_VR
                     appendDrawnQuads(pass.quads, entry.quad, entry.placement.curveRadius, viewer);
+#else
+                    pass.quads.push_back(entry.quad);
+#endif
                 }
 
                 // Occluded quads first, so each group is one contiguous run the renderer can draw with one
                 // pipeline state - and so a canvas that opted out of being hidden is not then hidden by a
                 // canvas that did not. Within a group: no depth write, so quads do not occlude each other,
                 // and far ones have to be drawn first.
-                std::ranges::sort(pass.quads, [](const CanvasQuad& lhs, const CanvasQuad& rhs) {
+                std::ranges::stable_sort(pass.quads, [](const CanvasQuad& lhs, const CanvasQuad& rhs) {
                     if (lhs.occluded != rhs.occluded) {
                         return lhs.occluded;
                     }
@@ -702,6 +732,7 @@ namespace f4cf::imgui::internal
         // which allocates nothing, and nothing is read from the game for the pointer. While a game menu takes the
         // controllers' input it is on none: the canvases are shown, and the game's menu has the ray and the trigger.
         // The own context's canvas is a target too, whose hands are the keyboard's and not ImGui's mouse.
+#ifdef ENABLE_FALLOUT_VR
         std::vector<PointerTarget> pointerTargets;
         const bool gameMenuTakesInput = f4vr::isGameMenuTakingInput();
         for (const auto& entry : packed) {
@@ -725,6 +756,7 @@ namespace f4cf::imgui::internal
                     .ownContext = true });
             }
         }
+#endif
 
         // before the frame begins, so its widgets see where the pointer is now and what was typed: the pointer first,
         // then the keyboard, which reads the hands on it

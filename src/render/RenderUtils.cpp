@@ -16,6 +16,21 @@ namespace f4cf::render
         return renderer ? reinterpret_cast<ID3D11DeviceContext*>(renderer->context) : nullptr;
     }
 
+#ifndef ENABLE_FALLOUT_VR
+    /**
+     * The client area of the game's window, found by Main::hwnd: the screen the game's UI pass draws, in its pixels.
+     */
+    ScreenSize screenSize()
+    {
+        const auto* main = RE::Main::GetSingleton();
+        RECT client{};
+        if (!main || !main->hwnd || !GetClientRect(reinterpret_cast<HWND>(main->hwnd), &client)) {
+            return {};
+        }
+        return { .width = static_cast<int>(client.right - client.left), .height = static_cast<int>(client.bottom - client.top) };
+    }
+#endif
+
 #ifdef ENABLE_FALLOUT_VR
     /**
      * Read the engine's own per-eye view-projection + posAdjust for the frame being submitted, from CommonLibF4VR's

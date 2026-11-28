@@ -41,6 +41,7 @@ namespace f4cf::imgui::internal::renderer
         constexpr UINT MAX_QUADS = 256;
         constexpr UINT MAX_QUAD_VERTICES = MAX_QUADS * VERTICES_PER_QUAD;
 
+#ifdef ENABLE_FALLOUT_VR
         // Same stereo split the rest of the framework's overlays use: FO4VR renders both eyes into
         // one double-wide target, so each quad is drawn instanced x2 and the shader picks the eye by
         // SV_InstanceID, then packs X into that eye's half with a clip/cull split.
@@ -81,6 +82,28 @@ VS_OUTPUT main(VS_INPUT input) {
     return output;
 }
 )";
+#else
+        // Flat: the quads' corners arrive in the target's normalized coordinates, converted from screen pixels as
+        // they are drawn (drawQuads), so they pass through.
+        const char* K_QUAD_VERTEX_SHADER = R"(
+struct VS_INPUT {
+    float3 vPos : POS;
+    float2 vUV : TEXCOORD0;
+};
+
+struct VS_OUTPUT {
+    float4 vPos : SV_POSITION;
+    float2 vUV : TEXCOORD0;
+};
+
+VS_OUTPUT main(VS_INPUT input) {
+    VS_OUTPUT output;
+    output.vPos = float4(input.vPos.xy, 0.0f, 1.0f);
+    output.vUV = input.vUV;
+    return output;
+}
+)";
+#endif
 
         const char* K_QUAD_PIXEL_SHADER = R"(
 Texture2D atlas : register(t0);
@@ -395,6 +418,7 @@ float4 main(PS_INPUT input) : SV_Target {
             vertices.push_back(bottomLeft);
         }
 
+#ifdef ENABLE_FALLOUT_VR
         /**
          * The state that lets the world hide a canvas: test against the engine's own depth with its
          * own comparison, and never write. The write mask matters as much as the read-only view the
@@ -419,12 +443,29 @@ float4 main(PS_INPUT input) : SV_Target {
             }
             return s_quadDepthTestStates[index];
         }
+#endif
+
+#ifndef ENABLE_FALLOUT_VR
+        /**
+         * Flat: a quad whose corners are screen pixels, in the target's normalized coordinates, where the
+         * target's top left is (-1, 1).
+         */
+        CanvasQuad toTargetCoordinates(CanvasQuad quad, const float width, const float height)
+        {
+            for (RE::NiPoint3* corner : { &quad.topLeft, &quad.topRight, &quad.bottomRight, &quad.bottomLeft }) {
+                corner->x = corner->x / width * 2.0f - 1.0f;
+                corner->y = 1.0f - corner->y / height * 2.0f;
+            }
+            return quad;
+        }
+#endif
 
         /**
          * Composite the canvases: every quad samples the same texture with the same shaders, so the only
          * thing that splits a draw is whether the world may hide it. The quads arrive sorted with the
          * occluded ones first, so that is at most two draws (x2 each for the eye split) - and exactly
-         * one whenever every canvas agrees, which is the usual case.
+         * one whenever every canvas agrees, which is the usual case. Flat has no scene depth and one
+         * view: one draw, on top.
          */
         void drawQuads(const render::SubmitFrame& submitFrame, const std::vector<CanvasQuad>& quads, ID3D11ShaderResourceView* texture)
         {
@@ -435,7 +476,11 @@ float4 main(PS_INPUT input) : SV_Target {
                 if (vertices.size() + VERTICES_PER_QUAD > MAX_QUAD_VERTICES) {
                     break;
                 }
+#ifdef ENABLE_FALLOUT_VR
                 appendQuad(vertices, quad);
+#else
+                appendQuad(vertices, toTargetCoordinates(quad, submitFrame.width, submitFrame.height));
+#endif
                 if (quad.occluded) {
                     occludedVertices = vertices.size(); // the sort keeps these contiguous, at the front
                 }
@@ -467,6 +512,11 @@ float4 main(PS_INPUT input) : SV_Target {
             FLOAT blendFactor[4] = {};
             context->OMSetBlendState(s_quadBlend, blendFactor, 0xFFFFFFFF);
 
+#ifndef ENABLE_FALLOUT_VR
+            (void)occludedVertices;
+            context->OMSetDepthStencilState(s_quadDepthStencil, 0);
+            context->Draw(static_cast<UINT>(vertices.size()), 0);
+#else
             // with no scene depth captured there is nothing to test against, so everything draws on
             // top exactly as it did before occlusion existed
             const std::size_t occludedCount = submitFrame.sceneDepth ? occludedVertices : 0;
@@ -478,6 +528,7 @@ float4 main(PS_INPUT input) : SV_Target {
                 context->OMSetDepthStencilState(s_quadDepthStencil, 0);
                 context->DrawInstanced(static_cast<UINT>(vertices.size() - occludedCount), 2, static_cast<UINT>(occludedCount), 0);
             }
+#endif
         }
 
         /**

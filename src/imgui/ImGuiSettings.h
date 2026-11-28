@@ -27,7 +27,8 @@ namespace f4cf::imgui
      * The texture of a dedicated canvas is the canvas's own pixels times this on each side.
      *
      * Process-wide, and read when the first canvas draws, since the atlas texture is built from it then
-     * and ImGui is set to rasterize at it: set it before that - later calls do nothing.
+     * and ImGui is set to rasterize at it: set it before that - later calls do nothing. Flat ignores it: a
+     * canvas is drawn 1:1 on the screen, where a larger texture would only be shrunk back.
      */
     void setSupersample(float factor);
 }

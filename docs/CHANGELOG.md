@@ -23,6 +23,10 @@ major version is `0`, a minor bump may break the API; the **Upgrading** notes sa
 - **Drawing on flat**: the draw callbacks of `render/DrawHost.h` draw in the game's screen-space UI pass, over the HUD
   and the game's menus and under its cursor, through a hidden menu of the framework's own, `F4CF_<mod name>`, and
   `CursorMenu`'s render condition ([render README](../src/render/README.md#on-flat)).
+- **ImGui canvases on flat**: a canvas is a rectangle of the screen, drawn 1:1 at its pixel size and rasterized
+  at 1x. `CanvasPlacement` has `screenX` and `screenY`, its top-left corner in screen pixels, in place of the
+  world fields, which are VR-only; `render::screenSize()` is the screen's size
+  ([imgui README](../src/imgui/README.md#a-canvas-on-the-flat-screen)).
 - **The configs' folder on flat**: a flat build's configs are in `Documents\My Games\Fallout4\Mods_Config`, VR's stay
   in `My Games\Fallout4VR`. `MY_GAMES_PATH` (`config/ConfigBase.h`) is the build's game's folder of `My Games`, named
   by `MY_GAMES_FOLDER`, for a mod's other files there.

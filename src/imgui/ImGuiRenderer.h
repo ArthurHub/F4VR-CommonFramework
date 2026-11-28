@@ -13,7 +13,7 @@ namespace f4cf::imgui::internal
      * Render-thread half of the ImGui layer: rasterizes each published ImGui frame into an offscreen
      * texture, the atlas the canvases share, the dedicated canvas's own or the own context's canvas's,
      * then composites each canvas's slice of its texture as a world-space quad on the submitted eye
-     * texture, through the engine's own per-eye matrices.
+     * texture, through the engine's own per-eye matrices; on flat as a rectangle of the screen, 1:1.
      *
      * ImGui emits per-command SCISSOR RECTANGLES in 2D screen space - that is how scrolling regions,
      * child windows and tables clip - and there is no scissor for an arbitrarily oriented 3D quad.

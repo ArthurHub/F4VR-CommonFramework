@@ -24,7 +24,7 @@ activation-sphere icons. Read it to write a layer of your own, or to know why so
 | [`DrawHost.h`](DrawHost.h) | The draw-callback API, on both runtimes: `SubmitFrame`, the painter order, registering a callback and turning it on. VR's host is the Submit hook, flat's the game's UI pass ([on flat](#on-flat)). |
 | `DrawCallbacks.h` | Internal: the draw-callback table both hosts draw, in painter order, a callback that throws dropped. |
 | [`SubmitHook.h`](SubmitHook.h) | VR only. The shared Submit hook and the player-space pass hook ([under the game's menus](#under-the-games-menus)). The eye texture's RTV, the camera constants, the pipeline save and restore. |
-| [`RenderUtils.h`](RenderUtils.h) | The game's D3D11 device and context, the per-eye `StereoCameraConstants`, and `ScopedPipelineState`. |
+| [`RenderUtils.h`](RenderUtils.h) | The game's D3D11 device and context, the per-eye `StereoCameraConstants` (VR), the screen's size (`screenSize`, flat), and `ScopedPipelineState`. |
 | [`TextFont.h`](TextFont.h) | The font as a distance-field atlas, and text measuring (`measureText`, `fitText`, `textDescent`, `measureTextRun`). |
 | [`Texture.h`](Texture.h) | Images through the engine's own loader, shared per path (loose and BA2), and images from pixels. |
 | [`CallSiteHook.h`](CallSiteHook.h) | Whether a call site the hooks patch still calls its function, or another plugin's hook they chain onto, and whose. |

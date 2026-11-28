@@ -59,15 +59,21 @@ namespace f4cf::imgui
     };
 
     /**
-     * Where a canvas's quad sits in the world, resolved on the GAME thread each frame.
+     * Where a canvas sits, resolved on the GAME thread each frame: a quad in the world on VR, a rectangle on the
+     * screen on flat.
      *
-     * `transform.rotate` defines the quad's plane using the game's own axes: local +X is the canvas's
+     * VR: `transform.rotate` defines the quad's plane using the game's own axes: local +X is the canvas's
      * right, local +Z is its up, and local +Y is the normal it faces along. `transform.translate` is
      * the canvas's centre. Scale is ignored - size comes from the world extents below, so canvas
      * pixels and world size are set independently (together they are the canvas's legibility).
+     *
+     * Flat: the canvas's top-left corner on the screen, in the screen's pixels (render::screenSize). It is drawn
+     * at its own pixel size, one canvas pixel to one screen pixel, so a canvas that takes a share of the screen
+     * sets its pixel size to that share. The corner is rounded to a whole pixel, which keeps the text sharp.
      */
     struct CanvasPlacement
     {
+#ifdef ENABLE_FALLOUT_VR
         RE::NiTransform transform;
         float worldWidth = 30.0f;
         float worldHeight = 20.0f;
@@ -79,6 +85,10 @@ namespace f4cf::imgui
         // its sides come toward the viewer, and its width is kept along the curve.
         // A radius under the width over pi is taken as that: the canvas is at most half of a cylinder.
         float curveRadius = 0.0f;
+#else
+        float screenX = 0.0f;
+        float screenY = 0.0f;
+#endif
 
         // false still lays the content out and measures it, but shows nothing this frame - how a canvas
         // sized to its content stays out of sight until it knows that size
@@ -100,7 +110,8 @@ namespace f4cf::imgui
     using ContentCallback = std::function<void()>;
 
     /**
-     * A Dear ImGui canvas drawn over the VR view as a world-space quad.
+     * A Dear ImGui canvas drawn over the VR view as a world-space quad, or on flat as a rectangle of the screen,
+     * placed by CanvasPlacement's screen corner.
      *
      * Canvases share one ImGui context and one atlas texture: each canvas is an ImGui window packed
      * into its own sub-rect of that atlas, and each is composited as one textured quad. So N canvases

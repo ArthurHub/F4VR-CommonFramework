@@ -28,6 +28,23 @@ namespace f4cf::render
     ID3D11Device* getDevice();
     ID3D11DeviceContext* getContext();
 
+#ifndef ENABLE_FALLOUT_VR
+    /**
+     * A width and height in screen pixels.
+     */
+    struct ScreenSize
+    {
+        int width = 0;
+        int height = 0;
+    };
+
+    /**
+     * Flat: the size of the screen the game's UI pass draws, in pixels, which a canvas's placement is in (any thread).
+     * Zero before the game's window exists.
+     */
+    ScreenSize screenSize();
+#endif
+
 #ifdef ENABLE_FALLOUT_VR
     /**
      * Read the engine's per-eye view-projection + posAdjust for the frame being submitted. False
