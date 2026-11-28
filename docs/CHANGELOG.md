@@ -11,8 +11,7 @@ major version is `0`, a minor bump may break the API; the **Upgrading** notes sa
 
 - **The game a build is for**: the `F4CF_RUNTIME` CMake option is `VR`, the default, or `FLAT`, which builds
   CommonLibF4VR for flat Fallout 4 (1.10.163 and 1.10.984), links no OpenVR and leaves the VR-only files out
-  ([README](../README.md#build-the-framework-standalone)); on flat no draw callback of
-  `render/DrawHost.h` is drawn, as there is no host. An activation sphere's config values are `f4vr/ActivationSphereConfig.h`,
+  ([README](../README.md#build-the-framework-standalone)). An activation sphere's config values are `f4vr/ActivationSphereConfig.h`,
   which `WandActivationSphere.h` includes. `f4cf::pluginVersionData` builds the `F4SEPlugin_Version` that flat F4SE
   for 1.10.980 and later loads a plugin by. **Upgrading:** a mod for flat exports it beside `F4SEPlugin_Query`, as the
   template's `MyMod.cpp` does. CommonLibF4VR is upstream's latest, whose NiObject virtuals from 0x15 on and those
@@ -21,6 +20,9 @@ major version is `0`, a minor bump may break the API; the **Upgrading** notes sa
 - **The frame tick on flat**: a flat build runs the mod's frame from `Main::OnIdle`'s call of `DemoteQueuedActors`, VR's
   place in the frame, or on from another mod's frame hook there. What differs per runtime in `ModBase` is `GameRuntime`.
   **Upgrading:** `ModBase`'s unused `_debugAdjuster` member is gone; `DebugAdjuster` is static.
+- **Drawing on flat**: the draw callbacks of `render/DrawHost.h` draw in the game's screen-space UI pass, over the HUD
+  and the game's menus and under its cursor, through a hidden menu of the framework's own, `F4CF_<mod name>`, and
+  `CursorMenu`'s render condition ([render README](../src/render/README.md#on-flat)).
 - **The configs' folder on flat**: a flat build's configs are in `Documents\My Games\Fallout4\Mods_Config`, VR's stay
   in `My Games\Fallout4VR`. `MY_GAMES_PATH` (`config/ConfigBase.h`) is the build's game's folder of `My Games`, named
   by `MY_GAMES_FOLDER`, for a mod's other files there.

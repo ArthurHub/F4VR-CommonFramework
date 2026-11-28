@@ -21,8 +21,9 @@ activation-sphere icons. Read it to write a layer of your own, or to know why so
 | [`Color.h`](Color.h) | `Color`: 0..1 floats, from 0..255 bytes with `rgba`, back with `bytes`, and `colors::`. Plain std, so the config parsers use it. |
 | [`PrimitiveDraw.h`](PrimitiveDraw.h) | The frame a producer fills: `lines`, `triangles`, `images`, `texts`, the `add*` helpers, the budgets, the text enums. |
 | [`PrimitiveDrawRenderer.h`](PrimitiveDrawRenderer.h) | One **layer**: takes frames on the game thread, replays them on the render thread, in its draw order. Dormant with nothing to draw. |
-| [`DrawHost.h`](DrawHost.h) | The draw-callback API, on both runtimes: `SubmitFrame`, the painter order, registering a callback and turning it on. VR's host is the Submit hook; flat has none, so `ensureInstalled` answers false there. |
-| [`SubmitHook.h`](SubmitHook.h) | VR only. The shared Submit hook, the player-space pass hook ([under the game's menus](#under-the-games-menus)), and the draw-callback table. The eye texture's RTV, the camera constants, the pipeline save and restore, the painter order. |
+| [`DrawHost.h`](DrawHost.h) | The draw-callback API, on both runtimes: `SubmitFrame`, the painter order, registering a callback and turning it on. VR's host is the Submit hook, flat's the game's UI pass ([on flat](#on-flat)). |
+| `DrawCallbacks.h` | Internal: the draw-callback table both hosts draw, in painter order, a callback that throws dropped. |
+| [`SubmitHook.h`](SubmitHook.h) | VR only. The shared Submit hook and the player-space pass hook ([under the game's menus](#under-the-games-menus)). The eye texture's RTV, the camera constants, the pipeline save and restore. |
 | [`RenderUtils.h`](RenderUtils.h) | The game's D3D11 device and context, the per-eye `StereoCameraConstants`, and `ScopedPipelineState`. |
 | [`TextFont.h`](TextFont.h) | The font as a distance-field atlas, and text measuring (`measureText`, `fitText`, `textDescent`, `measureTextRun`). |
 | [`Texture.h`](Texture.h) | Images through the engine's own loader, shared per path (loose and BA2), and images from pixels. |
@@ -234,7 +235,22 @@ records or Tracy is connected, events only while a capture tool is attached.
   the same frame, so the slot swap is serialized by a process-wide named mutex: losing that race would
   orphan the first writer for good. `ensureInstalled()` also drives the orphan check, so an active layer
   keeps calling it.
-- **VR only:** flat Fallout 4 has no compositor; the overlay logs once and stays inert.
+- **VR only:** flat Fallout 4 has no compositor; its host is the UI pass, below.
+
+## On flat
+
+Flat's host (`FlatDrawHost.cpp`) draws every callback in the game's screen-space UI pass, into the target the pass
+has bound, the debug ones too. Nothing hooks the swapchain, so an upscaler, frame generation, ENB or ReShade treat the
+overlays as the game's own menus, and screenshots have them.
+
+- **The hidden menu:** `ensureInstalled()` registers a menu of the framework's own, `F4CF_<mod name>`, and opens it.
+  It is always open, at the HUD's depth, and loads the game's `CursorMenu.swf` and never shows it. When the pass asks
+  it whether it renders, it draws the callbacks and answers no. Loading a save closes every menu, so it reopens.
+- **Under the cursor:** while the game's cursor shows, `CursorMenu`'s own answer draws them instead, swapped in its
+  vtable, so they are over every menu and the cursor is over them. Each framework mod chains its swap onto the last.
+- **No input:** the menu takes no input event. The game's `IMenu` takes every button event that is not stopped, and a
+  menu like the main menu stops taking input while another menu is above it, which is why the menu sits low.
+- **Loading screens:** the pass does not run, so nothing draws.
 
 ## Addresses
 

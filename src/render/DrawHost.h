@@ -45,8 +45,12 @@ namespace f4cf::render
      * under a loading screen, does not draw it. A debug one is invoked from inside the Submit hook, on top of
      * everything, on whatever thread the game submits from. In FO4VR both are the game thread during play, and Submit
      * is the loading screen's own thread while one is up. The hook logs each thread it is called on once. Where the
-     * pass cannot be hooked, every callback is invoked from Submit, over the game's menus. Flat has no host, so no
-     * callback is invoked there.
+     * pass cannot be hooked, every callback is invoked from Submit, over the game's menus.
+     *
+     * On flat, every callback, a debug one too, is invoked in the game's screen-space UI pass, into the target it has
+     * bound (FlatDrawHost.cpp): over the HUD and the game's menus, and under the game's cursor while it shows. A frame
+     * the pass does not run, as under a loading screen, does not draw it. The camera is VR-only and the scene depth
+     * always null.
      *
      * Contract, and it is not negotiable:
      * - Never touch game-thread-owned state (nodes, forms, config). Snapshot it game-side and hand
@@ -99,7 +103,8 @@ namespace f4cf::render
      * Install the host if not already installed. On VR: the D3D resources and the OpenVR IVRCompositor::Submit vtable
      * hook. Idempotent and safe to call every frame from the game thread - each unavailable dependency (VR runtime, D3D
      * device, compositor) just retries - and it also drives the orphan-detection heartbeat, so an active consumer
-     * should keep calling it. On flat it answers false: there is no host.
+     * should keep calling it. On flat: the framework's hidden menu, registered as F4CF_<mod name> and opened, and the
+     * swap of CursorMenu's render condition.
      */
     bool ensureInstalled();
 
