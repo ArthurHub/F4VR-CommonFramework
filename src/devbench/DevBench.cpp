@@ -651,8 +651,8 @@ namespace f4cf::devbench
                               "while none is shown. Answers the path, width, height and dedicated",
                               { { "path",
                                   argument("string",
-                                      "snapshot: the PNG file to write; by default a new one in the mod's snapshots folder under My "
-                                      "Games\\Fallout4VR\\Mods_Config") } },
+                                      "snapshot: the PNG file to write; by default a new one in the mod's snapshots folder under "
+                                      "Mods_Config in My Games") } },
                               handler(&Tool::saveCanvasSnapshot),
                               RunOn::Listener },
                     true);
@@ -823,7 +823,7 @@ namespace f4cf::devbench
 #if F4CF_WITH_IMGUI_UI
             /**
              * Listener thread: saves the texture the mod's ImGui canvases are drawn into as a PNG, at the path asked or
-             * as a new file in the mod's folder of My Games\Fallout4VR\Mods_Config. It waits here for the render thread
+             * as a new file in the mod's folder of BASE_PATH. It waits here for the render thread
              * to read it back, so neither the game thread nor a frame waits for it.
              */
             json saveCanvasSnapshot(const json& args) const

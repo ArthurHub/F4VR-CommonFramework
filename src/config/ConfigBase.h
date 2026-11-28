@@ -22,7 +22,14 @@
 
 namespace f4cf
 {
-    static const auto BASE_PATH = common::getRelativePathInDocuments(R"(\My Games\Fallout4VR\Mods_Config)");
+    // the game's folder in `Documents\My Games`, the build's game: the runtime is known as the DLL loads, before the game runs
+    constexpr std::string_view MY_GAMES_FOLDER = REL::Module::IsVR() ? "Fallout4VR" : "Fallout4";
+
+    // `Documents\My Games\<MY_GAMES_FOLDER>`, located through Windows, so a redirected Documents folder is followed
+    static const auto MY_GAMES_PATH = common::getRelativePathInDocuments(std::format(R"(\My Games\{})", MY_GAMES_FOLDER));
+
+    // the folder of the mods' configs, a folder per mod
+    static const auto BASE_PATH = MY_GAMES_PATH + R"(\Mods_Config)";
 
     class ConfigBase : protected config::ConfigReaders, protected config::OffsetsFiles
     {

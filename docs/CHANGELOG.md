@@ -21,6 +21,9 @@ major version is `0`, a minor bump may break the API; the **Upgrading** notes sa
 - **The frame tick on flat**: a flat build runs the mod's frame from `Main::OnIdle`'s call of `DemoteQueuedActors`, VR's
   place in the frame, or on from another mod's frame hook there. What differs per runtime in `ModBase` is `GameRuntime`.
   **Upgrading:** `ModBase`'s unused `_debugAdjuster` member is gone; `DebugAdjuster` is static.
+- **The configs' folder on flat**: a flat build's configs are in `Documents\My Games\Fallout4\Mods_Config`, VR's stay
+  in `My Games\Fallout4VR`. `MY_GAMES_PATH` (`config/ConfigBase.h`) is the build's game's folder of `My Games`, named
+  by `MY_GAMES_FOLDER`, for a mod's other files there.
 
 ## 0.7.0 — 2026-11-26
 

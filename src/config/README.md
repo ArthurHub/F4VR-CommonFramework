@@ -32,7 +32,9 @@ uses the framework's toml++ as it is.
 
 ## The file
 
-- The path is `%USERPROFILE%\Documents\My Games\Fallout4VR\Mods_Config\{ModName}\{ModName}.toml`.
+- The path is `%USERPROFILE%\Documents\My Games\Fallout4VR\Mods_Config\{ModName}\{ModName}.toml`, and
+  `My Games\Fallout4` in a flat build: `BASE_PATH` (`ConfigBase.h`) is the `Mods_Config` folder of
+  `MY_GAMES_PATH`, the build's game's folder of `My Games`, which `MY_GAMES_FOLDER` names.
 - The shipped default is embedded in the DLL as RCDATA (resource 101, `IDR_CONFIG`) and written on
   first run.
 - A file that is not TOML (a person in the middle of editing it, a string without its quotes) is
