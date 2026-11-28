@@ -18,8 +18,9 @@ from [`mod-template/`](mod-template/), following [`docs/creating-a-new-mod.md`](
   - `F4CF_RUNTIME` (VR): `VR` or `FLAT` (flat Fallout 4, 1.10.163 and 1.10.984). `FLAT` builds CommonLibF4VR for
     flat, links no OpenVR, and leaves out the VR-only files and their linked tests (`_F4CF_OTHER_RUNTIME` in
     `CMakeLists.txt`); a shared file guards its VR lines with `#ifdef ENABLE_FALLOUT_VR`. What differs per runtime in
-    `ModBase`'s lifecycle and frame is `GameRuntime` (`GameRuntimeVR.cpp`, `GameRuntimeFlat.cpp`), and drawing is
-    `render/DrawHost.h`: one side per runtime, each a file of its own.
+    `ModBase`'s lifecycle and frame is `GameRuntime` (`GameRuntimeVR.cpp`, `GameRuntimeFlat.cpp`), drawing is
+    `render/DrawHost.h`, and what ImGui canvases are used with is `imgui/InputSource.h`: one side per runtime, each a
+    file of its own.
   - `F4CF_WITH_IMGUI_UI` (ON): OFF drops `f4cf::imgui` and its headers, so code using it fails to compile.
   - `F4CF_WITH_TRACY` (ON): adds the `Tracy` configuration, Release plus the Tracy client ([perf README](src/perf/README.md#tracy)). A mod's `CMakeLists.txt` writes `$<CONFIG:Release,Tracy>` wherever it means Release.
   - `F4CF_BUILD_TESTS`: ON when top-level, OFF under a mod's `add_subdirectory`, where turning it on needs `catch2` in the mod's `vcpkg.json`.
@@ -79,7 +80,7 @@ overrides `onModLoaded` (F4SE load: Papyrus, hooks), `onGameLoaded` (once), `onG
 | `src/vrcf/` | `f4cf::vrcf` | Controller input (`VRControllers`), suppression (`VRControllersSuppress`), haptics (`VRHaptics`), bindings | [src/vrcf/README.md](src/vrcf/README.md), [docs/input-binding.md](docs/input-binding.md) |
 | `src/vrui/` | `f4cf::vrui` | VR UI: drawn panels and buttons, layout, `g_uiManager`, binding prompts | [src/vrui/README.md](src/vrui/README.md) |
 | `src/render/` | `f4cf::render` | Overlay drawing: the shared Submit hook, primitives, text, textures, scene-depth occlusion | [src/render/README.md](src/render/README.md), [docs/tech/scene-depth-occlusion.md](docs/tech/scene-depth-occlusion.md) |
-| `src/imgui/` | `f4cf::imgui` | Dear ImGui canvases on world-space quads, the wand pointer, the VR keyboard | [src/imgui/README.md](src/imgui/README.md), [docs/tech/vr-keyboard.md](docs/tech/vr-keyboard.md) |
+| `src/imgui/` | `f4cf::imgui` | Dear ImGui canvases on world-space quads, the wand pointer, the VR keyboard; on flat, canvases on the screen with the game's cursor | [src/imgui/README.md](src/imgui/README.md), [docs/tech/vr-keyboard.md](docs/tech/vr-keyboard.md) |
 | `src/imgui/controls/` | `f4cf::imgui::controls` | A panel's small controls in one look: text, marks and icons, frames, in the `imgui::Theme`; their targets for devbench | [src/imgui/controls/README.md](src/imgui/controls/README.md) |
 | `src/debug/` | `f4cf::debug` | Immediate-mode in-world debug draw (`debug::dd()`) | [src/debug/README.md](src/debug/README.md) |
 | `src/f4vr/` | `f4cf::f4vr` | Game state: nodes, skeleton, menus, Scaleform, player rotation, activation spheres, Papyrus through CommonLibF4VR; no addresses of its own, those are CommonLibF4VR's | [src/f4vr/README.md](src/f4vr/README.md), [docs/activation-spheres.md](docs/activation-spheres.md) |

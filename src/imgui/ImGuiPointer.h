@@ -7,6 +7,7 @@
 #include "../common/MatrixUtils.h"
 #include "ImGuiCanvas.h"
 #include "ImGuiPointerLogic.h"
+#include "InputSource.h"
 
 namespace f4cf::imgui
 {
@@ -120,28 +121,6 @@ namespace f4cf::imgui::internal
         RE::NiPoint3 direction;
 
         bool down = false;
-    };
-
-    /**
-     * An interactive canvas the pointer can be on in a frame: three corners of its quad in the world, the
-     * radius it is curved at, and where its pixels start in ImGui's display.
-     */
-    struct PointerTarget
-    {
-        const Canvas* canvas = nullptr;
-        RE::NiPoint3 topLeft;
-        RE::NiPoint3 topRight;
-        RE::NiPoint3 bottomLeft;
-
-        // 0 for a flat canvas. The corners of a curved one are of its quad as it is when flat (CurvedQuad).
-        float curveRadius = 0.0f;
-
-        float displayX = 0.0f;
-        float displayY = 0.0f;
-
-        // the canvas of the own context (Canvas::setOwnContext): a hand on it is not ImGui's mouse, and is told
-        // apart for each hand (Pointer::ownCanvasHand)
-        bool ownContext = false;
     };
 
     /**

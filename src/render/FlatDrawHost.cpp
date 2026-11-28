@@ -9,6 +9,7 @@
 #include <wrl/client.h>
 
 #include "../ModBase.h"
+#include "../f4vr/HiddenMenu.h"
 #include "../perf/GpuTimer.h"
 #include "DrawCallbacks.h"
 
@@ -27,9 +28,6 @@ namespace f4cf::render
 
         // IMenu::PassesRenderConditionText, the question the UI pass asks each menu
         constexpr std::size_t RENDER_CONDITION_SLOT = 7;
-
-        // a movie the game ships, so the menu is a menu the game knows how to keep; it is never shown
-        constexpr auto HIDDEN_MOVIE = "Interface/CursorMenu.swf";
 
         using RenderCondition_t = bool (*)(const RE::IMenu*, RE::MENU_RENDER_CONTEXT, const RE::BSFixedString&);
 
@@ -162,23 +160,14 @@ namespace f4cf::render
         }
 
         /**
-         * Ask the game to open the hidden menu, between frames.
+         * The framework's draw menu: always open, and drawing the callbacks when the UI pass asks it whether it renders.
+         * It takes no input and keeps saving allowed.
          */
-        void requestOpen()
-        {
-            if (auto* queue = RE::UIMessageQueue::GetSingleton()) {
-                queue->AddMessage(RE::BSFixedString(s_menuName), RE::UI_MESSAGE_TYPE::kShow);
-            }
-        }
-
-        /**
-         * The framework's hidden menu: always open, its movie loaded and never shown, and drawing the callbacks when the
-         * UI pass asks it whether it renders. It takes no input and keeps saving allowed.
-         */
-        class HiddenMenu final : public RE::IMenu
+        class DrawMenu final : public f4vr::HiddenMenu
         {
         public:
-            HiddenMenu()
+            DrawMenu()
+                : HiddenMenu(s_menuName)
             {
                 // With the HUD, under every menu that takes input: a menu like the main menu stops taking it while another
                 // menu is above it. While the cursor shows, CursorMenu draws the callbacks instead, over every menu.
@@ -191,37 +180,11 @@ namespace f4cf::render
                     RE::UI_MENU_FLAGS::kCompanionAppAllowed,
                     RE::UI_MENU_FLAGS::kAdvancesUnderPauseMenu,
                     RE::UI_MENU_FLAGS::kRendersUnderPauseMenu);
-                inputEventHandlingEnabled = false;
-                auto* scaleform = RE::BSScaleformManager::GetSingleton();
-                if (scaleform && scaleform->LoadMovieEx(*this, HIDDEN_MOVIE) && uiMovie) {
-                    uiMovie->SetVisible(false);
-                } else {
-                    logger::error("{} could not load {}; the overlays draw only while the game's cursor shows", s_menuName, HIDDEN_MOVIE);
-                }
             }
 
             static RE::IMenu* create(const RE::UIMessage&)
             {
-                return new HiddenMenu();
-            }
-
-            /**
-             * None: the game's IMenu takes every button event that is not stopped, whatever inputEventHandlingEnabled
-             * says, and this menu, opened over the main menu, would be asked first and swallow its keys and clicks.
-             */
-            bool ShouldHandleEvent(const RE::InputEvent*) override
-            {
-                return false;
-            }
-
-            void AdvanceMovie(float, std::uint64_t) override
-            {}
-
-            void PreDisplay() override
-            {
-                if (uiMovie) {
-                    uiMovie->SetVisible(false);
-                }
+                return new DrawMenu();
             }
 
             bool PassesRenderConditionText(const RE::MENU_RENDER_CONTEXT reason, const RE::BSFixedString& rendererName) const override
@@ -245,7 +208,7 @@ namespace f4cf::render
                     return;
                 }
                 logger::info("The game closed {}; reopening it", s_menuName);
-                requestOpen();
+                f4vr::showMenu(s_menuName);
             }
         };
 
@@ -263,13 +226,12 @@ namespace f4cf::render
         }
 
         /**
-         * Register the hidden menu under the mod's name and ask the game to open it. A name another menu holds is left
-         * to it.
+         * Register the draw menu under the mod's name and ask the game to open it. A name another menu holds is left to it,
+         * and the overlays draw only while the cursor shows. False while the UI is not up yet.
          */
-        bool registerHiddenMenu()
+        bool registerDrawMenu()
         {
-            auto* ui = RE::UI::GetSingleton();
-            if (!ui) {
+            if (!RE::UI::GetSingleton()) {
                 if (!s_loggedNoUI) {
                     s_loggedNoUI = true;
                     logger::warn("UI unavailable; will retry on frame update");
@@ -277,17 +239,9 @@ namespace f4cf::render
                 return false;
             }
             s_menuName = std::format("F4CF_{}", g_mod ? g_mod->getName() : std::string("F4CF"));
-            const RE::BSFixedString name{ s_menuName };
-            {
-                const RE::BSAutoReadLock lock{ RE::UI::GetMenuMapRWLock() };
-                if (ui->menuMap.find(name) != ui->menuMap.end()) {
-                    logger::error("Menu {} is registered already; the overlays draw only while the game's cursor shows", s_menuName);
-                    return true;
-                }
+            if (f4vr::registerHiddenMenu(s_menuName, &DrawMenu::create)) {
+                f4vr::showMenu(s_menuName);
             }
-            ui->RegisterMenu(s_menuName.c_str(), &HiddenMenu::create);
-            requestOpen();
-            logger::info("Menu {} registered", s_menuName);
             return true;
         }
 
@@ -336,7 +290,7 @@ namespace f4cf::render
             return false;
         }
         if (!s_menuRegistered) {
-            if (!registerHiddenMenu()) {
+            if (!registerDrawMenu()) {
                 return false;
             }
             s_menuRegistered = true;

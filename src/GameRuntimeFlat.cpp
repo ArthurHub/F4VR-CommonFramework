@@ -1,6 +1,9 @@
 #include "GameRuntime.h"
 
-// Flat Fallout 4's side of GameRuntime: its frame tick's place, and nothing of VR's per frame.
+#include "f4vr/GameInput.h"
+
+// Flat Fallout 4's side of GameRuntime: its frame tick's place, and the game's input queue, read for a mod's keys and the
+// ImGui canvases.
 namespace f4cf
 {
     /**
@@ -37,14 +40,24 @@ namespace f4cf
         return at;
     }
 
+    /**
+     * The game's input queue is read from now on.
+     */
     void GameRuntime::onGameLoaded(bool)
-    {}
+    {
+        f4vr::GameInput::get().install();
+    }
 
     void GameRuntime::onGameSessionLoaded()
     {}
 
+    /**
+     * The keys and mouse buttons the queue had since the frame before are the frame's.
+     */
     void GameRuntime::onFrameStart()
-    {}
+    {
+        f4vr::GameInput::get().onFrameStart();
+    }
 
     void GameRuntime::beforeModUpdate()
     {}

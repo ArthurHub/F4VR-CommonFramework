@@ -121,6 +121,11 @@ when its messages come on the thread that builds the ImGui frame: ImGui's input 
 thread-safe. The window is made by the thread that runs the game's main loop, so they do; were they
 not, the framework would log it and hand no keys on.
 
+ImGui is given them only while a canvas takes input: an interactive canvas is shown and no game menu takes
+the controllers' input. ImGui keeps every key it is given until its next frame, which is not built while no
+canvas is shown. On flat the window is the one `Main::hwnd` names, and Escape is not given to ImGui, as it is
+the mod's Back there (`imgui/ImGuiWindowKeys.cpp`).
+
 When the window loses focus (`WM_KILLFOCUS`), the keys ImGui holds down are let go, as the release of a
 key then goes to another window: a Backspace that stayed down would repeat in the field. ImGui's own
 answer to a lost focus is not used, as it lets go of the mouse button too, which is the pointer's.

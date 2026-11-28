@@ -20,7 +20,10 @@ rules, and is drawn under the game's menus. The font is the framework's, so an I
 | [`ImGuiCanvas.h`](ImGuiCanvas.h) | `Canvas`: one ImGui window, placed by a provider you write. Content, placement, curve, chrome, sizing, occlusion, dedicated. |
 | [`ImGuiPointer.h`](ImGuiPointer.h) | `imgui::pointer()`: a wand's ray as ImGui's mouse, its state and its `PointerStyle`. |
 | [`ImGuiPointerLogic.h`](ImGuiPointerLogic.h) | The pointer's logic, unit tested: ray and quad, the curved quad, which hand owns it, scrolling. |
-| [`ImGuiKeyboard.h`](ImGuiKeyboard.h) | `imgui::keyboard()`: the framework's VR keyboard while a text field is edited, and the game window's key messages to ImGui ([VR keyboard](../../docs/tech/vr-keyboard.md)). |
+| [`ImGuiKeyboard.h`](ImGuiKeyboard.h) | `imgui::keyboard()`: the framework's VR keyboard while a text field is edited ([VR keyboard](../../docs/tech/vr-keyboard.md)). |
+| [`InputSource.h`](InputSource.h) | Internal: what the canvases are used with, one side per runtime: the pointer, thumbstick and VR keyboard (`InputSourceVR.cpp`), or the game's cursor, mouse and keys (`InputSourceFlat.cpp`). |
+| [`ImGuiWindowKeys.h`](ImGuiWindowKeys.h) | Internal: the game window's key messages to ImGui, while a canvas takes input, on both runtimes. |
+| [`ImGuiCursorLogic.h`](ImGuiCursorLogic.h) | Flat: the canvas under the cursor, unit tested. |
 | [`ImGuiKeyboardLogic.h`](ImGuiKeyboardLogic.h) | The keyboard's logic, unit tested: its pages, the key a point hits, Shift, Caps, a held key's repeat, the strokes ImGui is given. |
 | [`ImGuiTheme.h`](ImGuiTheme.h) | `Theme`: a mod's look in one value, for the controls, ImGui's style, the keyboard and a panel's edge. |
 | [`controls/`](controls/README.md) | The small controls of a panel, in one look: text, drawn marks and icons, frames, and the theme they are drawn in. |
@@ -106,8 +109,34 @@ _canvas->setPlacement([this](imgui::CanvasPlacement& out) {
   that takes a share of the screen sets its pixel size from `render::screenSize()`. The corner is rounded to
   a whole pixel, and the atlas is rasterized at 1x, `setSupersample` aside, so the text is as sharp as the
   game's.
-- **Placement:** `screenX` and `screenY` in place of the world fields, which are VR-only. Occlusion, curving
-  and the wand's pointer are VR's. A canvas takes no mouse or key input on flat yet.
+- **Placement:** `screenX` and `screenY` in place of the world fields, which are VR-only. Occlusion and
+  curving are VR's.
+
+### Input on flat
+
+An interactive canvas (`setInteractive(true)`) is used with the game's cursor, the mouse and the keys. The
+content is written as on VR.
+
+- **The input menu:** while an interactive canvas is shown, a menu of the framework's own,
+  `F4CF_<mod name>_Input`, is open: the game shows its cursor and keeps the controls from the player, and the
+  game runs on, unpaused. It is at the main menu's depth, opened after it and the pause menu, so a panel over
+  either takes the input, and under a message box and the console. It is not opened under a loading screen.
+- **What a canvas takes:** the cursor's place on the canvas under it (the one drawn last where canvases
+  overlap), the left, right and middle buttons, the wheel, and the keys and typed text of the game's window.
+  A press stays on its canvas until the button is released, so a slider drags past its edge.
+- **What the game loses:** every button, typed character and thumbstick in its input queue is stopped while a
+  canvas takes the input: no movement, no shooting, no Pip-Boy or console. A key pressed then stays stopped
+  until it is released, so the game never sees only its release. Mouse moves go on, as they move the cursor.
+- **Esc is the mod's Back:** ImGui never gets the Escape key. The mod reads Esc from
+  [`f4vr::GameInput`](../f4vr/README.md) and calls `controls::get().back()` first, as for VR's Back binding:
+  it closes an open list, then ends a text edit, before the mod closes its panel.
+- **A menu above takes over:** while a menu that shows the cursor, is modal or pauses is above the input menu,
+  the canvases stay shown and take no input, and nothing is stopped. The bar of button hints under a menu
+  (`ButtonBarMenu`) is not one. The log says each time the canvases take the input or give it up, and why.
+- **A menu's depth** is the low byte of `IMenu::depthPriority`: the game keeps it in one byte, and the
+  bytes after it are not part of it.
+- **Two mods:** each framework mod opens its own input menu and stops the queue while its canvases take the
+  input; two mods' interactive canvases shown at once both take it.
 
 ## Interactive canvases
 
@@ -189,7 +218,8 @@ The framework has no config keys for it. A mod that lets the player set them rea
 
 A focused `ImGui::InputText` on an interactive canvas is typed into, with nothing to call: while ImGui edits
 it, the framework shows its keyboard under the field's canvas, typed with the rays, both hands at once, on
-every runtime. A physical keyboard types into it too. See [VR keyboard](../../docs/tech/vr-keyboard.md).
+every VR runtime. A physical keyboard types into it too, and on flat only that. See
+[VR keyboard](../../docs/tech/vr-keyboard.md).
 
 ```cpp
 imgui::keyboard().setCloseBinding(backBinding); // Back closes it, as its Done does

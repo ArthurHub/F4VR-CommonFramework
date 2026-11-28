@@ -27,6 +27,7 @@ add_executable(${PROJECT_NAME}_tests
   config/ConfigReloadSubscribersTests.cpp
   config/ConfigValueParsersTests.cpp
   config/ConfigValueTests.cpp
+  imgui/ImGuiCursorLogicTests.cpp
   imgui/ImGuiKeyboardLogicTests.cpp
   imgui/ImGuiPointerLogicTests.cpp
   perf/FrameContextTests.cpp
@@ -46,6 +47,7 @@ add_executable(${PROJECT_NAME}_tests
   ${SOURCE_DIR}/config/Overrides.cpp
   ${SOURCE_DIR}/config/ReloadSubscribers.cpp
   ${SOURCE_DIR}/config/ValueParsers.cpp
+  ${SOURCE_DIR}/imgui/ImGuiCursorLogic.cpp
   ${SOURCE_DIR}/imgui/ImGuiKeyboardLogic.cpp
   ${SOURCE_DIR}/perf/FrameContext.cpp
   ${SOURCE_DIR}/perf/Perf.cpp

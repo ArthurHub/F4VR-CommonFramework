@@ -27,6 +27,11 @@ major version is `0`, a minor bump may break the API; the **Upgrading** notes sa
   at 1x. `CanvasPlacement` has `screenX` and `screenY`, its top-left corner in screen pixels, in place of the
   world fields, which are VR-only; `render::screenSize()` is the screen's size
   ([imgui README](../src/imgui/README.md#a-canvas-on-the-flat-screen)).
+- **ImGui input on flat**: an interactive canvas takes the game's cursor, the mouse buttons and wheel and the keys
+  and typed text, while a menu of the framework's own, `F4CF_<mod name>_Input`, shows the cursor and the game's input
+  queue is stopped for the player, unpaused ([imgui README](../src/imgui/README.md#input-on-flat)).
+  `f4vr::GameInput::get().wasPressed` is a key or mouse button pressed in the queue, by F4SE's code, for a mod's own
+  keys and for Esc as Back. On both runtimes the game window's keys reach ImGui only while a canvas takes input.
 - **The configs' folder on flat**: a flat build's configs are in `Documents\My Games\Fallout4\Mods_Config`, VR's stay
   in `My Games\Fallout4VR`. `MY_GAMES_PATH` (`config/ConfigBase.h`) is the build's game's folder of `My Games`, named
   by `MY_GAMES_FOLDER`, for a mod's other files there.

@@ -8,18 +8,16 @@
 #include <imgui_internal.h>
 
 #include "../common/MatrixUtils.h"
-#include "../f4vr/F4VRUtils.h"
 #include "../f4vr/PlayerNodes.h"
 #include "../perf/Perf.h"
 #include "../render/RenderUtils.h"
-#include "../vrcf/VRControllersHaptic.h"
 #include "ImGuiFonts.h"
 #include "ImGuiImage.h"
-#include "ImGuiKeyboard.h"
-#include "ImGuiPointer.h"
+#include "ImGuiPointerLogic.h"
 #include "ImGuiRenderer.h"
 #include "ImGuiSettings.h"
 #include "ImGuiTextures.h"
+#include "InputSource.h"
 #include "controls/Controls.h"
 #include "controls/Targets.h"
 
@@ -180,9 +178,7 @@ namespace f4cf::imgui::internal
                 ImGui::DestroyContext();
                 return false;
             }
-#ifdef ENABLE_FALLOUT_VR
-            keyboard().install();
-#endif
+            InputSource::get().install();
 
             s_lastFrameTime = std::chrono::steady_clock::now();
             s_contextReady = true;
@@ -308,6 +304,11 @@ namespace f4cf::imgui::internal
          * A piece has its own distance to the viewer, so the far pieces of a canvas are drawn before its near
          * ones.
          */
+        float curveRadiusOf(const CanvasPlacement& placement)
+        {
+            return placement.curveRadius;
+        }
+
         void appendDrawnQuads(std::vector<CanvasQuad>& quads, const CanvasQuad& quad, const float curveRadius, const RE::NiPoint3& viewer)
         {
             if (!(curveRadius > 0.0f)) {
@@ -339,6 +340,12 @@ namespace f4cf::imgui::internal
                 top = nextTop;
                 bottom = nextBottom;
             }
+        }
+#else
+        // the screen does not curve a canvas
+        float curveRadiusOf(const CanvasPlacement&)
+        {
+            return 0.0f;
         }
 #endif
     }
@@ -400,9 +407,7 @@ namespace f4cf::imgui::internal
     void unregisterCanvas(Canvas* canvas)
     {
         std::erase(canvases(), canvas);
-#ifdef ENABLE_FALLOUT_VR
-        pointer().onCanvasRemoved(canvas);
-#endif
+        InputSource::get().onCanvasRemoved(canvas);
     }
 
     namespace
@@ -546,7 +551,7 @@ namespace f4cf::imgui::internal
 
         /**
          * One ImGui frame of the current context, with the given canvases in it, rasterized into the display's
-         * texture. Its texture writes are added to the given ones. The main context's frame also tells the pointer
+         * texture. Its texture writes are added to the given ones. The main context's frame also tells the input source
          * whether ImGui uses the mouse, which it does as the frame begins.
          */
         FramePass buildPass(const std::vector<PackedCanvas>& packed, const FrameDisplay& display, const float deltaSeconds, const bool mainContext,
@@ -566,9 +571,7 @@ namespace f4cf::imgui::internal
                 }
                 ImGui::NewFrame();
                 if (mainContext) {
-#ifdef ENABLE_FALLOUT_VR
-                    pointer().setWanted(io.WantCaptureMouse);
-#endif
+                    InputSource::get().setWanted(io.WantCaptureMouse);
                     // the controls' state of the frame, as every canvas's content is drawn in it
                     controls::get().beginFrame(deltaSeconds);
                 }
@@ -646,12 +649,8 @@ namespace f4cf::imgui::internal
             }
         }
         if (active.empty()) {
-            // no ImGui frame is built: the pointer is on nothing, and only a press that is still held is waited
-            // out, and the keyboard is hidden
-#ifdef ENABLE_FALLOUT_VR
-            pointer().update({});
-            keyboard().update({}, 0.0f);
-#endif
+            // no ImGui frame is built: the input source is on no canvas
+            InputSource::get().update({}, 0.0f);
             controls::get().setThumbstickSide(0.0f);
             renderer::publish({});
             return;
@@ -719,66 +718,50 @@ namespace f4cf::imgui::internal
         }
         // the own context's canvas is drawn beside the mod's canvases, and not alone: see ensureOwnContext
         if (packed.empty()) {
-#ifdef ENABLE_FALLOUT_VR
-            pointer().update({});
-            keyboard().update({}, 0.0f);
-#endif
+            InputSource::get().update({}, 0.0f);
             controls::get().setThumbstickSide(0.0f);
             renderer::publish({});
             return;
         }
 
-        // The pointer can be on the interactive canvases that are shown. With none the vector stays empty,
-        // which allocates nothing, and nothing is read from the game for the pointer. While a game menu takes the
-        // controllers' input it is on none: the canvases are shown, and the game's menu has the ray and the trigger.
-        // The own context's canvas is a target too, whose hands are the keyboard's and not ImGui's mouse.
-#ifdef ENABLE_FALLOUT_VR
-        std::vector<PointerTarget> pointerTargets;
-        const bool gameMenuTakesInput = f4vr::isGameMenuTakingInput();
+        // The input source can be on the interactive canvases that are shown. With none the vector stays empty, which
+        // allocates nothing. The own context's canvas is a target too, whose hands are the VR keyboard's and not ImGui's
+        // mouse.
+        std::vector<PointerTarget> inputTargets;
         for (const auto& entry : packed) {
-            if (entry.canvas->isInteractive() && entry.placement.show && !gameMenuTakesInput) {
-                pointerTargets.push_back(PointerTarget{ .canvas = entry.canvas,
+            if (entry.canvas->isInteractive() && entry.placement.show) {
+                inputTargets.push_back(PointerTarget{ .canvas = entry.canvas,
                     .topLeft = entry.quad.topLeft,
                     .topRight = entry.quad.topRight,
                     .bottomLeft = entry.quad.bottomLeft,
-                    .curveRadius = entry.placement.curveRadius,
+                    .curveRadius = curveRadiusOf(entry.placement),
                     .displayX = static_cast<float>(entry.x),
                     .displayY = static_cast<float>(entry.y) });
             }
         }
         for (const auto& entry : ownPacked) {
-            if (entry.canvas->isInteractive() && entry.placement.show && !gameMenuTakesInput) {
-                pointerTargets.push_back(PointerTarget{ .canvas = entry.canvas,
+            if (entry.canvas->isInteractive() && entry.placement.show) {
+                inputTargets.push_back(PointerTarget{ .canvas = entry.canvas,
                     .topLeft = entry.quad.topLeft,
                     .topRight = entry.quad.topRight,
                     .bottomLeft = entry.quad.bottomLeft,
-                    .curveRadius = entry.placement.curveRadius,
+                    .curveRadius = curveRadiusOf(entry.placement),
                     .ownContext = true });
             }
         }
-#endif
 
-        // before the frame begins, so its widgets see where the pointer is now and what was typed: the pointer first,
-        // then the keyboard, which reads the hands on it
+        // before the frame begins, so its widgets see where the pointer or the cursor is now and what was typed
         const float deltaSeconds = frameDeltaSeconds();
         {
             F4CF_PERF_SCOPE("pointer");
-#ifdef ENABLE_FALLOUT_VR
-            pointer().update(pointerTargets);
-            keyboard().update(pointerTargets, deltaSeconds);
-#endif
+            InputSource::get().update(inputTargets, deltaSeconds);
             controls::get().updateInput();
         }
 
         // the main context's frame, with every canvas's content in it, then the own context's beside it
         RenderFrame frame;
         frame.passes.push_back(buildPass(packed, display, deltaSeconds, true, viewer, frame.textureWrites));
-#ifdef ENABLE_FALLOUT_VR
-        // a press of the frame asked for its pulse: once, on the hand that points
-        if (const auto pattern = controls::get().pressPulse(); pattern && controls::get().pulsed()) {
-            vrcf::VRHaptics.trigger(pointer().state().primaryHand ? vrcf::Hand::Primary : vrcf::Hand::Offhand, *pattern);
-        }
-#endif
+        InputSource::get().afterFrame();
         if (!ownPacked.empty() && ensureOwnContext()) {
             F4CF_PERF_SCOPE("ownContext");
             ImGuiContext* main = ImGui::GetCurrentContext();

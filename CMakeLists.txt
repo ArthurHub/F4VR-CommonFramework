@@ -154,8 +154,8 @@ endif()
 # values), the debug adjuster they drive, the player's VR skeleton, turning, weapon tracking, wands and activation
 # spheres, the world-space drawing (debug draw, primitives) with the Submit hook and the scene depth, the wand pointer
 # and the VR keyboard. A shared file guards its VR lines with #ifdef ENABLE_FALLOUT_VR, as perf/FrameSampler does the
-# compositor timing. Each runtime's side of an API shared by both (GameRuntime, the draw host) is a file of its own,
-# which the other runtime's build leaves out.
+# compositor timing. Each runtime's side of an API shared by both (GameRuntime, the draw host, the ImGui input source) is
+# a file of its own, which the other runtime's build leaves out, as are flat's game input and hidden menus.
 if(F4CF_RUNTIME STREQUAL "FLAT")
   set(_F4CF_OTHER_RUNTIME
     "/src/GameRuntimeVR\\."
@@ -165,12 +165,14 @@ if(F4CF_RUNTIME STREQUAL "FLAT")
     "/src/debug/"
     "/src/f4vr/(F4VRSkelly|F4VRThumbstickControls|EquippedWeaponHandler|PlayerRotation|WandMovement|WandActivationSphere)\\."
     "/src/render/(SubmitHook|CallSiteHook|PrimitiveDrawRenderer|SceneDepth[A-Za-z]*)\\."
-    "/src/imgui/(ImGuiPointer|ImGuiPointerLogic|ImGuiKeyboard|ImGuiKeyboardLogic|UIImGuiPanel)\\."
+    "/src/imgui/(ImGuiPointer|ImGuiPointerLogic|ImGuiKeyboard|ImGuiKeyboardLogic|UIImGuiPanel|InputSourceVR)\\."
   )
 else()
   set(_F4CF_OTHER_RUNTIME
     "/src/GameRuntimeFlat\\."
     "/src/render/FlatDrawHost\\."
+    "/src/f4vr/(GameInput|HiddenMenu)\\."
+    "/src/imgui/(InputSourceFlat|ImGuiCursorLogic)\\."
   )
 endif()
 foreach(_F4CF_PATTERN ${_F4CF_OTHER_RUNTIME})

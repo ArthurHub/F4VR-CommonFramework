@@ -104,8 +104,7 @@ namespace f4cf::imgui
             return _open;
         }
 
-        // Internal: used by the layer once its ImGui context is ready, and before each ImGui frame.
-        void install();
+        // Internal: used by the input source before each ImGui frame.
         void update(std::span<const internal::PointerTarget> canvases, float deltaSeconds);
 
         /**
@@ -181,9 +180,6 @@ namespace f4cf::imgui
 
         Keyboard() = default;
 
-        static LRESULT CALLBACK windowProc(HWND window, UINT message, WPARAM wParam, LPARAM lParam);
-        static void releaseKeys();
-
         Layout layout() const;
         void refreshKeys();
         const internal::PointerTarget* fieldCanvas(std::span<const internal::PointerTarget> canvases) const;
@@ -198,12 +194,6 @@ namespace f4cf::imgui
         void draw();
         void drawField(ImDrawList* drawList, ImVec2 fieldMin, ImVec2 fieldMax);
         void drawKeys(ImDrawList* drawList, const Layout& layout);
-
-        // the game's window procedure, which every message is passed on to. Null while none is hooked.
-        WNDPROC _gameWindowProc = nullptr;
-
-        // install was called: it looks for the window once
-        bool _installTried = false;
 
         KeyboardStyle _style;
         vrcf::InputBinding _closeBinding = vrcf::VRControllersManager::DisabledBinding;

@@ -6,9 +6,7 @@
 #include <nlohmann/json.hpp>
 
 #include "../../vrcf/VRControllersHaptic.h"
-#include "../../vrcf/VRControllersManager.h"
-#include "../ImGuiKeyboard.h"
-#include "../ImGuiPointer.h"
+#include "../InputSource.h"
 #include "Sliders.h"
 #include "Targets.h"
 
@@ -140,9 +138,7 @@ namespace f4cf::imgui::controls
         }
         _colors = packedColors(_theme);
         _imGuiStyleApplied = false;
-#ifdef ENABLE_FALLOUT_VR
-        keyboard().setStyle(_theme.keyboardStyle(keyboard().style()));
-#endif
+        imgui::internal::InputSource::get().applyTheme(_theme);
     }
 
     /**
@@ -247,23 +243,12 @@ namespace f4cf::imgui::controls
     }
 
     /**
-     * Reads the thumbstick of the hand that points, before the frame: how far it is pushed to a side. None while no hand
-     * points, as the thumbstick is the game's then, and none for a push that is more up or down, which scrolls.
+     * Reads the thumbstick of the hand that points, before the frame: how far it is pushed to a side (InputSource). None
+     * on flat.
      */
     void Controls::updateInput()
     {
-#ifndef ENABLE_FALLOUT_VR
-        // flat has no thumbstick
-        _thumbstickSide = 0.0f;
-#else
-        const auto& state = pointer().state();
-        if (!state.canvas) {
-            _thumbstickSide = 0.0f;
-            return;
-        }
-        const auto push = vrcf::VRControllers.getThumbstickValue(state.primaryHand ? vrcf::Hand::Primary : vrcf::Hand::Offhand);
-        _thumbstickSide = std::abs(push.x) > std::abs(push.y) ? push.x : 0.0f;
-#endif
+        _thumbstickSide = imgui::internal::InputSource::get().thumbstickSide();
     }
 
     /**
